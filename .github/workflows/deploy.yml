@@ -1,31 +1,24 @@
-name: Deploy Website
+name: Deploy to InfinityFree
 
 on:
   push:
     branches:
-      - main
+      - main  # Cambia esto si deseas desplegar desde otra rama
 
 jobs:
-  deploy:
+  ftp-deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout the code
-      uses: actions/checkout@v3  # Actualizado a v3
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Install FTP client
-      run: sudo apt-get install -y ftp
+      - name: Install lftp
+        run: sudo apt-get install lftp
 
-    - name: Upload files via FTP
-      env:
-        FTP_HOST: ${{ secrets.FTP_HOST }}
-        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-      run: |
-        ftp -inv $FTP_HOST <<EOF
-        user $FTP_USERNAME $FTP_PASSWORD
-        binary
-        cd htdocs
-        mput *    # Sube todos los archivos
-        bye
-        EOF
+      - name: FTP Deploy
+        env:
+          FTP_SERVER: ftpupload.net  # Cambia esto al servidor FTP de InfinityFree
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          lftp -c "set ftp:ssl-allow no; open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER; mirror -R ./ /htdocs/"
