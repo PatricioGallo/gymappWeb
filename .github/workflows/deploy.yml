@@ -10,15 +10,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Paso 1: Chequear el código fuente
     - name: Checkout the code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3  # Actualizado a v3
 
-    # Paso 2: Instalar una herramienta de FTP
     - name: Install FTP client
       run: sudo apt-get install -y ftp
 
-    # Paso 3: Subir los archivos al servidor FTP
     - name: Upload files via FTP
       env:
         FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -29,7 +26,6 @@ jobs:
         user $FTP_USERNAME $FTP_PASSWORD
         binary
         cd htdocs
-        lcd htdocs # Cambiar a la carpeta htdocs local en el repositorio
-        mput * # Sube todos los archivos de la carpeta local htdocs
+        mput *    # Sube todos los archivos
         bye
         EOF
