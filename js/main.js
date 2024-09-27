@@ -11,7 +11,7 @@ function createUserCard(user) {
     card.innerHTML = `
         <h2>${user.nombre} ${user.apellido}</h2>
         <p><strong>Edad:</strong> ${user.edad}</p>
-        <p><strong>Rutina:</strong> ${user.rutina ? 'Sí' : 'No'}</p>
+        <p><strong>Rutina:</strong> ${user.rutinas ? 'Sí' : 'No'}</p>
     `;
 
     // Agregar la tarjeta al contenedor
@@ -19,7 +19,7 @@ function createUserCard(user) {
 
     // Agregar funcionalidad al hacer click en la tarjeta
     card.addEventListener('click', () => {
-        alert(`Nombre: ${user.nombre} ${user.apellido}\nEdad: ${user.edad}\nTiene Rutina: ${user.rutina ? 'Sí' : 'No'}`);
+        alert(`Nombre: ${user.nombre} ${user.apellido}\nEdad: ${user.edad}\nTiene Rutina: ${user.rutinas ? 'Sí' : 'No'}`);
     });
 
     // Manejo del hover para agrandar la tarjeta
