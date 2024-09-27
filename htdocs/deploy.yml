@@ -1,0 +1,35 @@
+name: Deploy Website
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Paso 1: Chequear el código fuente
+    - name: Checkout the code
+      uses: actions/checkout@v2
+
+    # Paso 2: Instalar una herramienta de FTP
+    - name: Install FTP client
+      run: sudo apt-get install -y ftp
+
+    # Paso 3: Subir los archivos al servidor FTP
+    - name: Upload files via FTP
+      env:
+        FTP_HOST: ${{ secrets.FTP_HOST }}
+        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      run: |
+        ftp -inv $FTP_HOST <<EOF
+        user $FTP_USERNAME $FTP_PASSWORD
+        binary
+        cd htdocs
+        lcd htdocs # Cambiar a la carpeta htdocs local en el repositorio
+        mput * # Subir todos los archivos del proyecto
+        bye
+        EOF
