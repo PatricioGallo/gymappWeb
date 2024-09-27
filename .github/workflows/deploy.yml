@@ -30,6 +30,6 @@ jobs:
         binary
         cd htdocs
         lcd htdocs # Cambiar a la carpeta htdocs local en el repositorio
-        mput * # Subir todos los archivos del proyecto
+        mput * # Sube todos los archivos de la carpeta local htdocs
         bye
         EOF
