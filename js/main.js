@@ -6,6 +6,7 @@ function createUserCard(user) {
     const card = document.createElement('div');
     let has_click = false;
     let rutinas = []
+    let has_print_exc = false;
 
     // Crear el contenido de la tarjeta
     card.classList.add('card');
@@ -16,7 +17,7 @@ function createUserCard(user) {
                 </div>
                 <div class="body_card">
                     <h3>Edad: ${user.edad} años</h3>
-                    <h3>Rutinas: ${rutinas_count(user.rutinas)}</h3>
+                    <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
                     <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
                 </div>
     `;
@@ -33,192 +34,89 @@ function createUserCard(user) {
                     <img src="img/default_profile.webp" alt="">
                     <h1>${user.nombre} ${user.apellido}</h1>
                 </div>
-                <div class="body_card">
-                    <h3>Nombre: ${user.rutinas[0].nombre}</h3>
-                    <h3>Cantidad: 3 semanas</h3>
-                    <h3>Dias: 5 dias</h3>
-                    <h3>Cantidad de ejercicios:</h3>
-                    <h3><a href="">Ver ejercicios</a></h3>
-                </div>
-                <div class="tabla">
-                    <table class="training-table">
-                        <thead>
-                            <tr>
-                                <th>Día</th>
-                                <th>Ejercicio</th>
-                                <th>Series</th>
-                                <th>Repes</th>
-                                <th>Último peso</th>
-                                <th>Última fecha de entreno</th>
-                            </tr>
-                        </thead>
-                        <tbody>
             `;
-
-            // Generar las filas de la tabla con los ejercicios
-            user.rutinas[0].semanas[1].dias.forEach((dia) => {
-                let exc_count = 0;
-                dia.ejercicios.forEach((ejercicio) => {
-                    if(exc_count == 0 ){
-                        tableContent += `
-                        <tr>
-                            <td rowspan="${day_counts(dia.ejercicios)}">${dia.nombre}</td>
-                            <td>${ejercicio.nombre}</td>
-                            <td>${ejercicio.serie}</td>
-                            <td>${ejercicio.repe}</td>
-                            <td>${ejercicio.peso}kg</td>
-                            <td>${ejercicio.fecha}</td>
-                        </tr>`;
-                        exc_count++;
-                    }else{
-                        tableContent += `
-                        <tr>
-                            <td>${ejercicio.nombre}</td>
-                            <td>${ejercicio.serie}</td>
-                            <td>${ejercicio.repe}</td>
-                            <td>${ejercicio.peso}kg</td>
-                            <td>${ejercicio.fecha}</td>
-                        </tr>
+            user.rutinas.forEach( rutina =>{
+                tableContent+=`
+                   <div class="body_card">
+                        <h3>Nombre: ${rutina.nombre}</h3>
+                        <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
+                        <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
+                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
+                `;
+                //Init table
+                if(has_print_exc == true){
+                    tableContent +=`
+                            <div class="main_button_class"><button id="printTable">Ocultar ejercicios</button><button>Modificar ejercicios</button></div>
+                        </div> 
+                        <div class="tabla">
+                            <table class="training-table">
+                                <thead>
+                                    <tr>
+                                        <th>Día</th>
+                                        <th>Ejercicio</th>
+                                        <th>Series</th>
+                                        <th>Repes</th>
+                                        <th>Último peso</th>
+                                        <th>Última fecha de entreno</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                     `;
-                    }
-                });
-            });
 
-            // Cerrar la tabla
-            tableContent += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            card.innerHTML = tableContent;
-            // card.innerHTML = `
-            //     <div class="header_card">
-            //         <img src="img/default_profile.webp" alt="">
-            //         <h1>Patricio Gallo</h1>
-            //     </div>
-            //     <div class="body_card">
-            //         <h3>Nombre: Rutina de fuerza</h3>
-            //         <h3>Cantidad: 3 semanas</h3>
-            //         <h3>Dias: 5 dias</h3>
-            //         <h3>Cantidad de ejercicios:</h3>
-            //         <h3><a href="">Ver ejercicios</a></h3>
-            //     </div>
-            //     <div class="tabla">
-            //         <table class="training-table">
-            //             <thead>
-            //                 <tr>
-            //                     <th>Día</th>
-            //                     <th>Ejercicio</th>
-            //                     <th>Series</th>
-            //                     <th>Repes</th>
-            //                     <th>Ultimo peso</th>
-            //                     <th>Ultima fecha de entreno</th>
-            //                 </tr>
-            //             </thead>
-            //             <tbody>
-            //                 <!-- Ejercicios del lunes -->
-            //                 <tr>
-            //                     <td rowspan="2">Lunes</td> <!-- Combina dos filas para Lunes -->
-            //                     <td>Press de banca</td>
-            //                     <td>4</td>
-            //                     <td>10</td>
-            //                     <td>60kg</td>
-            //                     <td>03/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Sentadilla</td>
-            //                     <td>3</td>
-            //                     <td>12</td>
-            //                     <td>80kg</td>
-            //                     <td>03/10/2024</td>
-            //                 </tr>
-                
-            //                 <!-- Ejercicios del martes -->
-            //                 <tr>
-            //                     <td rowspan="5">Martes</td> <!-- Combina tres filas para Martes -->
-            //                     <td>Deadlift</td>
-            //                     <td>3</td>
-            //                     <td>8</td>
-            //                     <td>100kg</td>
-            //                     <td>04/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Press militar</td>
-            //                     <td>3</td>
-            //                     <td>10</td>
-            //                     <td>40kg</td>
-            //                     <td>04/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Curl de bíceps</td>
-            //                     <td>4</td>
-            //                     <td>12</td>
-            //                     <td>15kg</td>
-            //                     <td>04/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Curl de bíceps</td>
-            //                     <td>4</td>
-            //                     <td>12</td>
-            //                     <td>15kg</td>
-            //                     <td>04/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Curl de bíceps</td>
-            //                     <td>4</td>
-            //                     <td>12</td>
-            //                     <td>15kg</td>
-            //                     <td>04/10/2024</td>
-            //                 </tr>
-                            
-                
-            //                 <!-- Ejercicios del miércoles -->
-            //                 <tr>
-            //                     <td>Miércoles</td>
-            //                     <td>Remo con barra</td>
-            //                     <td>3</td>
-            //                     <td>10</td>
-            //                     <td>70kg</td>
-            //                     <td>05/10/2024</td>
-            //                 </tr>
-                
-            //                 <!-- Ejercicios del jueves -->
-            //                 <tr>
-            //                     <td rowspan="2">Jueves</td>
-            //                     <td>Press de hombro</td>
-            //                     <td>4</td>
-            //                     <td>10</td>
-            //                     <td>50kg</td>
-            //                     <td>06/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Elevaciones laterales</td>
-            //                     <td>3</td>
-            //                     <td>15</td>
-            //                     <td>10kg</td>
-            //                     <td>06/10/2024</td>
-            //                 </tr>
-                
-            //                 <!-- Ejercicios del viernes -->
-            //                 <tr>
-            //                     <td rowspan="2">Viernes</td>
-            //                     <td>Dominadas</td>
-            //                     <td>3</td>
-            //                     <td>Max</td>
-            //                     <td>-</td>
-            //                     <td>07/10/2024</td>
-            //                 </tr>
-            //                 <tr>
-            //                     <td>Curl de bíceps</td>
-            //                     <td>4</td>
-            //                     <td>12</td>
-            //                     <td>15kg</td>
-            //                     <td>07/10/2024</td>
-            //                 </tr>
-            //             </tbody>
-            //         </table>
-            //     </div> 
-            // `;
+                    
+                    // Generar las filas de la tabla con los ejercicios
+                        rutina.semanas[0].dias.forEach((dia, diaIndex) => {
+                            let exc_count = 0;
+                            // Alternamos las clases de color según el índice de los días
+                            let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
+
+                            dia.ejercicios.forEach((ejercicio) => {
+                                if (exc_count == 0) {
+                                    tableContent += `
+                                    <tr class="${dayClass}">
+                                        <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
+                                        <td>${ejercicio.nombre}</td>
+                                        <td>${ejercicio.serie}</td>
+                                        <td>${ejercicio.repe}</td>
+                                        <td>${ejercicio.peso}kg</td>
+                                        <td>${ejercicio.fecha}</td>
+                                    </tr>`;
+                                    exc_count++;
+                                } else {
+                                    tableContent += `
+                                    <tr class="${dayClass}">
+                                        <td>${ejercicio.nombre}</td>
+                                        <td>${ejercicio.serie}</td>
+                                        <td>${ejercicio.repe}</td>
+                                        <td>${ejercicio.peso}kg</td>
+                                        <td>${ejercicio.fecha}</td>
+                                    </tr>
+                                `;
+                                }
+                            });
+                        });
+
+                        // Cerrar la tabla
+                        tableContent += `
+                                    </tbody>
+                                </table>
+                            </div>
+                            <hr class="custom-line"></hr>
+                        `;
+                    }else{
+                        tableContent +=`
+                            <div class="main_button_class"><button id="printTable">Mostrar ejercicios</button><button>Modificar ejercicios</button></div>
+                            <hr class="custom-line"></hr>
+                        </div> `
+                    }
+
+                card.innerHTML = tableContent;
+            });//End foreach rutinas   
+            const button = document.getElementById("printTable");
+            button.addEventListener("click", () =>{
+                has_print_exc = !has_print_exc;
+                has_click = !has_click;
+            })
         }
         else{
             card.classList.remove("bigCard");
@@ -230,7 +128,7 @@ function createUserCard(user) {
                 </div>
                 <div class="body_card">
                     <h3>Edad: ${user.edad} años</h3>
-                    <h3>Rutinas: ${rutinas_count(user.rutinas)}</h3>
+                    <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
                     <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
                 </div>
         `; 
@@ -251,9 +149,9 @@ function createUserCard(user) {
         }
     });
 
-    function rutinas_count(rutinas){
+    function arraysCount(arrays){
         let count = 0;
-        rutinas.forEach( rutina => {
+        arrays.forEach( () => {
             count++;
         })
         return count
@@ -262,10 +160,22 @@ function createUserCard(user) {
         let last_train = historial.at(-1)
         return last_train.fecha
     }
-    function day_counts(ejercicios){
+    function excCount(dias){
         let count = 0;
-        ejercicios.forEach( ()=>{
-            count++;
+        let id_array = [];
+        dias.forEach( (dia) =>{
+            dia.ejercicios.forEach( (ejercicio) =>{
+                let same_id = 0;
+                id_array.forEach( (item) =>{
+                    if(item == ejercicio.id_array){
+                        same_id = 1;
+                    }
+                })
+                if(same_id == 0){
+                    count++;
+                    id_array.push(ejercicio.id_exc);
+                }
+            })
         })
         return count
     }

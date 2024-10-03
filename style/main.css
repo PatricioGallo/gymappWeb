@@ -67,7 +67,7 @@ main {
     height: 150px;
     width: 250px;
     background-color: rgb(255, 255, 255);
-    border: 2px solid #ffffab;
+    border: 1px solid #a1e1ff;
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
@@ -122,7 +122,7 @@ main {
     min-height: 1800px;
     width: 600px;
     background-color: white;
-    border: 1px solid #ccc;
+    border: 1px solid #a1e1ff;
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
@@ -140,6 +140,28 @@ main {
     cursor: pointer; /* Cambia a la mano cuando pasas sobre la tarjeta */
 }
 
+.main_button_class{
+    display: flex;
+    flex-direction: row;
+    margin-top: 20px;
+}
+.main_button_class button{
+    background-color: #19b3fa;
+    color: #ffffff;
+    height: 40px;
+    width: 80px;
+    margin-right: 20px;
+    border: 1px solid #a1e1ff;
+    border-radius: 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.main_button_class button:hover{
+    background-color: #00aeffb9;
+
+}
+
 .training-table {
     width: 100%;
     border-collapse: collapse;
@@ -147,7 +169,7 @@ main {
 }
 
 .training-table th, .training-table td {
-    border: 1px solid #ddd;
+    border: 1px solid #ffffff;
     padding: 8px;
     text-align: center;
     font-size: 14px;
@@ -158,21 +180,25 @@ main {
     color: white;
 }
 
-.training-table tr:nth-child(even) {
-    background-color: #f2f2f2;
+.day-dark {
+    background-color: #e0e0e0; /* Color gris oscuro */
+}
+
+.day-light {
+    background-color: #f2f2f2; /* Color gris claro */
 }
 
 .training-table td {
     color: #333;
 }
 
-/* Contenedor de tarjetas que ajusta el contenido */
-.person-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    width: 100%; /* Asegura que ocupe todo el ancho del main */
+.custom-line {
+    border: none; 
+    height: 2px; 
+    background-color: #b1b1b1; 
+    margin: 20px 0; 
 }
+
 
 /* Footer */
 footer {
