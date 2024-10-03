@@ -5,7 +5,6 @@ const userCardsContainer = document.getElementById('user-cards');
 function createUserCard(user) {
     const card = document.createElement('div');
     let has_click = false;
-    let rutinas = []
     let has_print_exc = false;
 
     // Crear el contenido de la tarjeta
@@ -46,7 +45,7 @@ function createUserCard(user) {
                 //Init table
                 if(has_print_exc == true){
                     tableContent +=`
-                            <div class="main_button_class"><button id="printTable">Ocultar ejercicios</button><button>Modificar ejercicios</button></div>
+                            <div class="main_button_class"><button id="printTable">Ocultar ejercicios</button> <button id="modExc">Modificar ejercicios</button></div>
                         </div> 
                         <div class="tabla">
                             <table class="training-table">
@@ -105,18 +104,27 @@ function createUserCard(user) {
                         `;
                     }else{
                         tableContent +=`
-                            <div class="main_button_class"><button id="printTable">Mostrar ejercicios</button><button>Modificar ejercicios</button></div>
+                            <div class="main_button_class"><button id="printTable">Mostrar ejercicios</button><button id="modExc">Modificar ejercicios</button></div>
                             <hr class="custom-line"></hr>
                         </div> `
                     }
 
                 card.innerHTML = tableContent;
             });//End foreach rutinas   
-            const button = document.getElementById("printTable");
-            button.addEventListener("click", () =>{
+
+            const table_button = document.getElementById("printTable");
+            const exc_button = document.getElementById("modExc");
+
+            table_button.addEventListener("click", () =>{
                 has_print_exc = !has_print_exc;
                 has_click = !has_click;
-            })
+            });
+
+            exc_button.addEventListener("click", () =>{
+                window.location.href='excView.html?nombre=Juan&edad=30'
+                has_click = !has_click;
+            });
+
         }
         else{
             card.classList.remove("bigCard");
