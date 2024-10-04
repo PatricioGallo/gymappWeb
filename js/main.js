@@ -2,10 +2,11 @@
 const userCardsContainer = document.getElementById('user-cards');
 
 // Función para crear y agregar las tarjetas de los usuarios
-function createUserCard(user) {
+function createUserCard(user, index) {
     const card = document.createElement('div');
     let has_click = false;
     let has_print_exc = false;
+    let user_id = index
 
     // Crear el contenido de la tarjeta
     card.classList.add('card');
@@ -34,7 +35,7 @@ function createUserCard(user) {
                     <h1>${user.nombre} ${user.apellido}</h1>
                 </div>
             `;
-            user.rutinas.forEach( rutina =>{
+            user.rutinas.forEach( (rutina,index) =>{
                 tableContent+=`
                    <div class="body_card">
                         <h3>Nombre: ${rutina.nombre}</h3>
@@ -45,7 +46,10 @@ function createUserCard(user) {
                 //Init table
                 if(has_print_exc == true){
                     tableContent +=`
-                            <div class="main_button_class"><button id="printTable">Ocultar ejercicios</button> <button id="modExc">Modificar ejercicios</button></div>
+                            <div class="main_button_class">
+                                <button id="printTable">Ocultar ejercicios</button> 
+                                <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                            </div>
                         </div> 
                         <div class="tabla">
                             <table class="training-table">
@@ -104,7 +108,10 @@ function createUserCard(user) {
                         `;
                     }else{
                         tableContent +=`
-                            <div class="main_button_class"><button id="printTable">Mostrar ejercicios</button><button id="modExc">Modificar ejercicios</button></div>
+                            <div class="main_button_class">
+                                <button id="printTable">Mostrar ejercicios</button>
+                                <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                            </div>
                             <hr class="custom-line"></hr>
                         </div> `
                     }
@@ -113,16 +120,20 @@ function createUserCard(user) {
             });//End foreach rutinas   
 
             const table_button = document.getElementById("printTable");
-            const exc_button = document.getElementById("modExc");
+            const modExcButtons = document.querySelectorAll('.modExc');
 
             table_button.addEventListener("click", () =>{
                 has_print_exc = !has_print_exc;
                 has_click = !has_click;
             });
 
-            exc_button.addEventListener("click", () =>{
-                window.location.href='excView.html?nombre=Juan&edad=30'
-                has_click = !has_click;
+            modExcButtons.forEach((button, index) => {
+                button.addEventListener('click', () => {
+                    has_click = !has_click;
+                    const userId = user_id;  
+                    const rutinaId = index;  
+                    window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
+                });
             });
 
         }
@@ -197,7 +208,7 @@ async function fetchUsers() {
         const users = await response.json();
 
         // Crear una tarjeta por cada usuario
-        users.forEach(user => createUserCard(user));
+        users.forEach((user,index) => createUserCard(user,index));
     } catch (error) {
         console.error('Error al obtener los usuarios:', error);
     }
