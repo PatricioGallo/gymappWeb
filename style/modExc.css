@@ -1,0 +1,54 @@
+.configBody{
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.configFace{
+    width: 70%;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+}
+.configHeader{
+    width: 100%;
+    margin-bottom: 20px;
+}
+.configForm{
+    width: 100%;
+}
+
+/* Estilo para las entradas de texto */
+input[type="text"], input[type="number"] {
+    width: 90%;                  /* Ancho de las entradas */
+    padding: 4px;               /* Espacio interno */
+    margin: 10px 0;               /* Espaciado entre los campos */
+    display: block;              /* Mostrar cada input como bloque */
+    border: 1px solid #ccc;      /* Bordes de los inputs */
+    border-radius: 4px;          /* Bordes redondeados */
+    box-sizing: border-box;      /* Incluir el padding y border en el tamaño total */
+}
+
+/* Estilo para el botón de envío */
+button[type="submit"] {
+    background-color: #4CAF50;   /* Color de fondo del botón */
+    color: white;                /* Color del texto del botón */
+    padding: 12px 20px;          /* Espacio interno del botón */
+    border: none;                /* Sin bordes */
+    border-radius: 4px;          /* Bordes redondeados */
+    cursor: pointer;             /* Cambiar el cursor cuando se pase sobre el botón */
+    font-size: 16px;             /* Tamaño de fuente */
+    margin-top: 20px;
+}
+
+button[type="submit"]:hover {
+    background-color: #45a049;   /* Color de fondo al pasar el ratón */
+}
+select {
+    width: 90%;
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}

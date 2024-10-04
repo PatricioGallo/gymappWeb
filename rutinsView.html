@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>GymApp - Tu Gimnasio Moderno</title>
+    <link rel="stylesheet" href="style/main.css">
+    <link rel="stylesheet" href="style/rutins.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <img src="img/gymapp_logo.webp" alt="">
+        </div>
+        <nav class="nav-menu">
+            <ul>
+                <li><a href="index.html">Inicio</a></li>
+                <li><a href="#">Salir</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Main content -->
+    <main>
+        <!-- Contenedor de tarjetas que se llenará dinámicamente -->
+        <section class="person-cards" id="user-cards">
+            <!-- <div class="form_body">
+                <div class="header_form">
+                    <h1>${user.nombre} agrega una nueva rutina</h1>
+                </div>
+                <div class="form">
+                    <form id="myForm">
+                        <label for="name">Nombre de la rutina</label>
+                        <input type="text" id="name" name="name" required><br>
+
+                        <label for="weeks">Cantidad de semanas</label>
+                        <input type="number" id="weeks" name="weeks" min="1" max="10" required><br>
+
+                        <label for="days">Cantidad de dias</label>
+                        <input type="number" id="days" name="days" min="1" max="7" required><br>
+
+                        <button type="submit">Crear tabla</button>
+                    </form>
+                </div>
+
+                <div class="table_body">
+                    <form id="table_form">
+                        <table class="training-table">
+                            <thead>
+                                <tr>
+                                    <th>Día</th>
+                                    <th>Ejercicio</th>
+                                    <th>Series</th>
+                                    <th>Repes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="${dayClass}">
+                                    <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
+                                    <td><select id="frutas" name="frutas" required>
+                                        <option value="${ejercicio.nombre}">${ejercicio.nombre}</option>
+                                        <option value="manzana">Manzana</option>
+                                        <option value="banana">Banana</option>
+                                        <option value="naranja">Naranja</option>
+                                        <option value="fresa">Fresa</option>
+                                        <option value="pera">Pera</option>
+                                    </select></td>
+                                    <td><input type="number" id="serie-id" name="series" placeholder="${ejercicio.serie}"></td>
+                                    <td><input type="number" id="repe-id" name="repeticiones" placeholder="${ejercicio.repe}"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <button type="submit">Guardar Cambios</button>
+                    </form>
+                </div>
+
+            </div> -->
+        </section>
+    </main>
+    <!-- Footer -->
+    <footer>
+        <div class="footer-left">
+            <p>&copy; 2024. All rights reserved reserved GymApp. Created by pg</p>
+        </div>
+        <div class="footer-right">
+            <a href="#"><img src="img/facebook.webp" alt="Facebook"></a>
+            <a href="#"><img src="img/ig.webp" alt="Instagram"></a>
+            <a href="#"><img src="img/twitter.webp" alt="Twitter"></a>
+        </div>
+    </footer>
+
+    <!-- Conexión al archivo de JavaScript -->
+    <script src="js/rutins.js"></script>
+</body>
+</html>

@@ -33,6 +33,7 @@ function createUserCard(user, index) {
                 <div class="header_card">
                     <img src="img/default_profile.webp" alt="">
                     <h1>${user.nombre} ${user.apellido}</h1>
+                    <button id="addRutins" title="Agregar una nueva rutina">+</button>
                 </div>
             `;
             user.rutinas.forEach( (rutina,index) =>{
@@ -119,8 +120,9 @@ function createUserCard(user, index) {
                 card.innerHTML = tableContent;
             });//End foreach rutinas   
 
-            const table_button = document.getElementById("printTable");
+            const table_button  = document.getElementById("printTable");
             const modExcButtons = document.querySelectorAll('.modExc');
+            const addRutins     = document.getElementById("addRutins")
 
             table_button.addEventListener("click", () =>{
                 has_print_exc = !has_print_exc;
@@ -135,7 +137,11 @@ function createUserCard(user, index) {
                     window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
                 });
             });
-
+            
+            addRutins.addEventListener("click",() =>{
+                has_click = !has_click;
+                window.location.href = `rutinsView.html?id=${user_id}`;
+            })
         }
         else{
             card.classList.remove("bigCard");

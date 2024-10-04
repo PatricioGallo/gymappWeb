@@ -98,6 +98,17 @@ main {
     border: 1px solid #ccc;
     border-radius: 10px;
 }
+.header_card button{
+    background-color: #4CAF50;
+    color: #ffffff;
+    height: 23px;
+    width: 23px;
+    border: 1px solid #4CAF50;
+    border-radius: 10px;
+    font-size: 20px;
+    cursor: pointer;
+    margin-left: 10px;
+}
 .body_card{
     width: 100%;
     display: flex;
@@ -146,19 +157,19 @@ main {
     margin-top: 20px;
 }
 .main_button_class button{
-    background-color: #19b3fa;
+    background-color: #4CAF50;
     color: #ffffff;
     height: 40px;
     width: 80px;
     margin-right: 20px;
-    border: 1px solid #a1e1ff;
+    border: 1px solid #4CAF50;
     border-radius: 10px;
     font-size: 12px;
     cursor: pointer;
 }
 
 .main_button_class button:hover{
-    background-color: #00aeffb9;
+    background-color: #45a049;
 
 }
 
@@ -176,7 +187,7 @@ main {
 }
 
 .training-table th {
-    background-color: #757575;
+    background-color: #69ad6b;
     color: white;
 }
 
