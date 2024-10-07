@@ -6,6 +6,10 @@ let printTable = false;
 let weeks = 0;
 let rut_name = "";
 let days = 0;
+let excArray = [1,1,1,1,1,1.1];
+let max_num_exc = 20;
+let weeks_array = []
+let days_array = []
 
 function addRutins(user){
     const body = document.createElement('div');
@@ -56,32 +60,119 @@ function addRutins(user){
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr class="day-dark ">
-                                    <td rowspan="1"><input type="text" id="serie-id" name="day" placeholder="Ingrese el dia"></td>
-                                    <td><select id="frutas" name="frutas" required>
-                                        <option value="a">a</option>
-                                        <option value="manzana">Manzana</option>
-                                        <option value="banana">Banana</option>
-                                        <option value="naranja">Naranja</option>
-                                        <option value="fresa">Fresa</option>
-                                        <option value="pera">Pera</option>
-                                    </select></td>
-                                    <td><input type="number" id="serie-id" name="series" placeholder="3"></td>
-                                    <td><input type="number" id="repe-id" name="repeticiones" placeholder="3"></td>
-                                </tr>
+                `
+                for (let i = 0; i < days; i++) {
+                    let dayClass = i % 2 === 0 ? 'day-dark' : 'day-light';
+                    main_body += `
+                        <tr class="${dayClass}">
+                            <td rowspan="${max_num_exc}"><select id="day-${i}" name="day-${i}" placeholder="Ingrese dia" required>
+                                <option value="Lunes">Lunes</option>
+                                <option value="Martes">Martes</option>
+                                <option value="Miercoles">Miercoles</option>
+                                <option value="Jueves">Jueves</option>
+                                <option value="Viernes">Viernes</option>
+                                <option value="Sabado">Sabado</option>
+                                <option value="Domingo">Domingo</option>
+                            </select></td>
+                            <td><select id="exc-0-${i}" name="exc-0-${i}" required>
+                                <option value="pecho plano">Pecho Plano</option>
+                                <option value="pecho inclinado">Pecho Inclinado</option>
+                            </select></td>
+                            <td><input type="number" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></td>
+                            <td><input type="number" id="repe-0-${i}" name="repe-0-${i}" placeholder="repeticiones" required></td>
+                        </tr>`
+                        for (let j = 0; j < max_num_exc; j++) {
+                            main_body +=`<tr id="row-${j+1}-${i}" class="${dayClass}"></tr>`
+                        }
+                    main_body +=`    
+                        <tr class="${dayClass}">
+                            <td colspan="4">
+                                <button class="addButton" id="addRow" title="Agregar una nueva fila">+<button>
+                            </td>
+                        </tr>`
+                }
+            
+                main_body += `
                             </tbody>
                         </table>
                         <button type="submit">Guardar Cambios</button>
                     </form>
-                </div>
-            
-            `;
+                </div>`
+
             body.innerHTML = main_body;
             document.getElementById('table_form').addEventListener('submit', (event) =>{
                 event.preventDefault();
-                alert("Click")
+                for (let d = 0; d < days; d++) { 
+                    let day_obj = {
+                        nombre: "",
+                        ejercicios: []
+                    }
+                    let exc_array =[]
+                    for (let e= 0; e < excArray[d]; e++) {
+                        let exc_obj = {
+                            nombre: "",
+                            peso_anterior: 0,
+                            peso: 0,
+                            serie: 0,
+                            fecha: "",
+                            repe: 0,
+                            info: "",
+                            id_exc: 4
+                        }
+                        exc_obj.nombre  = document.getElementById("exc-"+e+"-"+d).value;
+                        exc_obj.serie   = document.getElementById("serie-"+e+"-"+d).value;
+                        exc_obj.repe    = document.getElementById("repe-"+e+"-"+d).value;
+                        exc_array.push(exc_obj);
+                    }
+                    day_obj.ejercicios = exc_array;
+                    day_obj.nombre = document.getElementById("day-"+d).value;
+                    days_array.push(day_obj)
+                }
+
+                for (let w = 0; w < weeks; w++) {
+                    let week_obj ={
+                        numero: 0,
+                        dias: []
+                    }
+                    week_obj.numero = w+1;
+                    week_obj.dias = days_array;
+                    weeks_array.push(week_obj);
+                }
+
+                let rutina_obj = {
+                    nombre: "",
+                    semanas: [],
+                }
+
+                rutina_obj.nombre = rut_name;
+                rutina_obj.semanas = weeks_array;
+
+                console.log(JSON.stringify(rutina_obj))
+                alert("Se guardo correctamente");
+                window.location.href = `index.html`;
             })
-        });
+            
+            // Agregar el evento de agregar fila
+            document.querySelectorAll('.addButton').forEach((button, index) => {
+                button.addEventListener('click', function() {
+                    let rowName = ("row-"+ (excArray[index])+"-"+index)
+                    console.log(rowName)
+                    const actualRow = document.getElementById(rowName);
+                    const newRow = `
+                        <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" required>
+                            <option value="pecho plano">Pecho Plano</option>
+                            <option value="pecho inclinado">Pecho Inclinado</option>
+                        </select></td>
+                        <td><input type="number" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series"></td>
+                        <td><input type="number" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones"></td>
+                        `;
+                    excArray[index] += 1;
+                    console.log(excArray[index]);
+                    actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
+                });
+            });
+
+        });//GET ELEMENT
 }
 
 // Función para obtener los usuarios desde la API

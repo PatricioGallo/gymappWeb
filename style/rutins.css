@@ -19,7 +19,7 @@
 
 /* Estilo general del contenedor del formulario */
 .form {
-    width: 500px;           /* Ancho máximo del formulario */
+    width: 400px;           /* Ancho máximo del formulario */
     margin: 50px auto;          /* Centramos el formulario */
     padding: 20px;              /* Espacio interno */
     background-color: #f9f9f9;  /* Fondo claro */
@@ -29,20 +29,20 @@
 }
 
 /* Estilo de los campos de entrada */
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"],select {
     width: 100%;                /* Ancho completo del campo */
-    padding: 10px;              /* Espacio interno */
-    margin: 10px 0 20px 0;      /* Margen superior e inferior */
+    padding: 5px;              /* Espacio interno */
+    margin: 10px 0 10px 0;      /* Margen superior e inferior */
     display: block;             /* Hacer que el input sea un bloque */
     border: 1px solid #ccc;     /* Borde gris claro */
     border-radius: 5px;         /* Bordes redondeados */
     box-sizing: border-box;     /* Incluir padding y border en el tamaño total */
-    font-size: 16px;            /* Tamaño de fuente */
+    font-size: 14px;            /* Tamaño de fuente */
     transition: border-color 0.3s ease; /* Transición suave en el borde */
 }
 
 /* Efecto de enfoque en los campos de entrada */
-input[type="text"]:focus, input[type="number"]:focus {
+input[type="text"]:focus, input[type="number"]:focus,select:focus {
     border-color: #4CAF50;      /* Color verde en el borde al enfocarse */
     outline: none;              /* Eliminar el contorno por defecto */
 }
@@ -68,6 +68,7 @@ button[type="submit"] {
     font-size: 16px;            /* Tamaño de fuente */
     font-weight: bold;          /* Texto en negrita */
     transition: background-color 0.3s ease; /* Transición suave en el color */
+    margin-top: 20px;
 }
 
 /* Efecto hover para el botón */
@@ -80,4 +81,16 @@ button[type="submit"]:hover {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.addButton{
+    background-color: #4CAF50;
+    color: #ffffff;
+    height: 23px;
+    width: 23px;
+    border: 1px solid #4CAF50;
+    border-radius: 10px;
+    font-size: 20px;
+    cursor: pointer;
+    margin-left: 10px;
 }
