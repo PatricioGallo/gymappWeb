@@ -35,6 +35,7 @@ function createUserCard(user, index) {
                     <h1>${user.nombre} ${user.apellido}</h1>
                     <button id="addRutins" title="Agregar una nueva rutina">+</button>
                 </div>
+                <hr class="custom-line"></hr>
             `;
             if(user.rutinas.length != 0){ //En caso de rutinas vacias
                 user.rutinas.forEach( (rutina,index) =>{
@@ -123,7 +124,6 @@ function createUserCard(user, index) {
 
                 const table_button  = document.getElementById("printTable");
                 const modExcButtons = document.querySelectorAll('.modExc');
-                const addRutins     = document.getElementById("addRutins")
 
                 table_button.addEventListener("click", () =>{
                     has_print_exc = !has_print_exc;
@@ -140,6 +140,13 @@ function createUserCard(user, index) {
                 });
                 
             }else{ //end if lenght != 0
+                tableContent+=`
+                    <div class="body_card">
+                            <h3>Actualmente no posee rutinas</h3>
+                            <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
+                            <hr class="custom-line"></hr>
+                    `;
+                
                 card.innerHTML = tableContent;
             }
             

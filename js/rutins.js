@@ -6,7 +6,7 @@ let printTable = false;
 let weeks = 0;
 let rut_name = "";
 let days = 0;
-let excArray = [1,1,1,1,1,1.1];
+let excArray = [1,1,1,1,1,1,1];
 let max_num_exc = 20;
 let weeks_array = []
 let days_array = []
@@ -119,6 +119,7 @@ function addRutins(user){
                             info: "",
                             id_exc: 4
                         }
+                        console.log("exc-"+e+"-"+d)
                         exc_obj.nombre  = document.getElementById("exc-"+e+"-"+d).value;
                         exc_obj.serie   = document.getElementById("serie-"+e+"-"+d).value;
                         exc_obj.repe    = document.getElementById("repe-"+e+"-"+d).value;
