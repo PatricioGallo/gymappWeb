@@ -1,0 +1,96 @@
+.body{
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.form_body{
+    width: 80%;
+    display: flex;
+    flex-direction: column;
+}
+.header_form{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* Estilo general del contenedor del formulario */
+.form {
+    width: 400px;           /* Ancho máximo del formulario */
+    margin: 50px auto;          /* Centramos el formulario */
+    padding: 20px;              /* Espacio interno */
+    background-color: #f9f9f9;  /* Fondo claro */
+    border-radius: 10px;        /* Bordes redondeados */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);  /* Sombra suave */
+    font-family: 'Arial', sans-serif; /* Fuente moderna */
+}
+
+/* Estilo de los campos de entrada */
+input[type="text"], input[type="number"],select {
+    width: 100%;                /* Ancho completo del campo */
+    padding: 5px;              /* Espacio interno */
+    margin: 10px 0 10px 0;      /* Margen superior e inferior */
+    display: block;             /* Hacer que el input sea un bloque */
+    border: 1px solid #ccc;     /* Borde gris claro */
+    border-radius: 5px;         /* Bordes redondeados */
+    box-sizing: border-box;     /* Incluir padding y border en el tamaño total */
+    font-size: 14px;            /* Tamaño de fuente */
+    transition: border-color 0.3s ease; /* Transición suave en el borde */
+}
+
+/* Efecto de enfoque en los campos de entrada */
+input[type="text"]:focus, input[type="number"]:focus,select:focus {
+    border-color: #4CAF50;      /* Color verde en el borde al enfocarse */
+    outline: none;              /* Eliminar el contorno por defecto */
+}
+
+/* Estilo de las etiquetas */
+label {
+    font-size: 16px;            /* Tamaño de fuente */
+    font-weight: bold;          /* Texto en negrita */
+    color: #333;                /* Color de texto oscuro */
+    display: block;             /* Colocar las etiquetas en bloque */
+    margin-bottom: 8px;         /* Espacio debajo de las etiquetas */
+}
+
+/* Estilo del botón de envío */
+button[type="submit"] {
+    width: 100%;                /* Ancho completo */
+    padding: 12px;              /* Espacio interno */
+    background-color: #4CAF50;  /* Color de fondo verde */
+    color: white;               /* Texto blanco */
+    border: none;               /* Sin bordes */
+    border-radius: 5px;         /* Bordes redondeados */
+    cursor: pointer;            /* Cambia el cursor al pasar por el botón */
+    font-size: 16px;            /* Tamaño de fuente */
+    font-weight: bold;          /* Texto en negrita */
+    transition: background-color 0.3s ease; /* Transición suave en el color */
+    margin-top: 20px;
+}
+
+/* Efecto hover para el botón */
+button[type="submit"]:hover {
+    background-color: #45a049;  /* Cambia a un verde más oscuro al pasar el mouse */
+}
+
+.table_body{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.addButton{
+    background-color: #4CAF50;
+    color: #ffffff;
+    height: 23px;
+    width: 23px;
+    border: 1px solid #4CAF50;
+    border-radius: 10px;
+    font-size: 20px;
+    cursor: pointer;
+    margin-left: 10px;
+}
