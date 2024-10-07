@@ -146,10 +146,9 @@ function addRutins(user){
 
                 rutina_obj.nombre = rut_name;
                 rutina_obj.semanas = weeks_array;
-
-                console.log(JSON.stringify(rutina_obj))
-                alert("Se guardo correctamente");
-                window.location.href = `index.html`;
+                user.rutinas.push(rutina_obj)
+                let actID = (parseInt(user_id) + 1)
+                subirRutina(actID,user)
             })
             
             // Agregar el evento de agregar fila
@@ -185,6 +184,31 @@ async function fetchUsers() {
         addRutins(users[user_id]);
     } catch (error) {
         console.error('Error al obtener los usuarios:', error);
+    }
+}
+
+async function subirRutina(userId, user) {
+    try {
+        const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
+            method: 'PUT',  // Utiliza POST para crear un nuevo recurso
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(user)  // Convierte la rutina a formato JSON
+        });
+
+        if (response.ok) {
+            const datos = await response.json();
+            console.log('Rutina subida con éxito:', datos);
+            alert("Rutina subida con éxito.");
+            window.location.href = `index.html`;
+        } else {
+            console.error('Error al subir la rutina:', response.statusText);
+            alert("Error al subir la rutina.");
+        }
+    } catch (error) {
+        console.error('Hubo un problema con la solicitud:', error);
+        alert("Error en la conexión.");
     }
 }
 

@@ -36,114 +36,119 @@ function createUserCard(user, index) {
                     <button id="addRutins" title="Agregar una nueva rutina">+</button>
                 </div>
             `;
-            user.rutinas.forEach( (rutina,index) =>{
-                tableContent+=`
-                   <div class="body_card">
-                        <h3>Nombre: ${rutina.nombre}</h3>
-                        <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
-                        <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
-                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
-                `;
-                //Init table
-                if(has_print_exc == true){
-                    tableContent +=`
-                            <div class="main_button_class">
-                                <button id="printTable">Ocultar ejercicios</button> 
-                                <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                            </div>
-                        </div> 
-                        <div class="tabla">
-                            <table class="training-table">
-                                <thead>
-                                    <tr>
-                                        <th>Día</th>
-                                        <th>Ejercicio</th>
-                                        <th>Series</th>
-                                        <th>Repes</th>
-                                        <th>Último peso</th>
-                                        <th>Última fecha de entreno</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+            if(user.rutinas.length != 0){ //En caso de rutinas vacias
+                user.rutinas.forEach( (rutina,index) =>{
+                    tableContent+=`
+                    <div class="body_card">
+                            <h3>Nombre: ${rutina.nombre}</h3>
+                            <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
+                            <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
+                            <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
                     `;
-
-                    
-                    // Generar las filas de la tabla con los ejercicios
-                        rutina.semanas[0].dias.forEach((dia, diaIndex) => {
-                            let exc_count = 0;
-                            // Alternamos las clases de color según el índice de los días
-                            let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
-
-                            dia.ejercicios.forEach((ejercicio) => {
-                                if (exc_count == 0) {
-                                    tableContent += `
-                                    <tr class="${dayClass}">
-                                        <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                                        <td>${ejercicio.nombre}</td>
-                                        <td>${ejercicio.serie}</td>
-                                        <td>${ejercicio.repe}</td>
-                                        <td>${ejercicio.peso}kg</td>
-                                        <td>${ejercicio.fecha}</td>
-                                    </tr>`;
-                                    exc_count++;
-                                } else {
-                                    tableContent += `
-                                    <tr class="${dayClass}">
-                                        <td>${ejercicio.nombre}</td>
-                                        <td>${ejercicio.serie}</td>
-                                        <td>${ejercicio.repe}</td>
-                                        <td>${ejercicio.peso}kg</td>
-                                        <td>${ejercicio.fecha}</td>
-                                    </tr>
-                                `;
-                                }
-                            });
-                        });
-
-                        // Cerrar la tabla
-                        tableContent += `
-                                    </tbody>
-                                </table>
-                            </div>
-                            <hr class="custom-line"></hr>
-                        `;
-                    }else{
+                    //Init table
+                    if(has_print_exc == true){
                         tableContent +=`
-                            <div class="main_button_class">
-                                <button id="printTable">Mostrar ejercicios</button>
-                                <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                            </div>
-                            <hr class="custom-line"></hr>
-                        </div> `
-                    }
+                                <div class="main_button_class">
+                                    <button id="printTable">Ocultar ejercicios</button> 
+                                    <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                                </div>
+                            </div> 
+                            <div class="tabla">
+                                <table class="training-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Día</th>
+                                            <th>Ejercicio</th>
+                                            <th>Series</th>
+                                            <th>Repes</th>
+                                            <th>Último peso</th>
+                                            <th>Última fecha de entreno</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
 
-                card.innerHTML = tableContent;
-            });//End foreach rutinas   
+                        
+                        // Generar las filas de la tabla con los ejercicios
+                            rutina.semanas[0].dias.forEach((dia, diaIndex) => {
+                                let exc_count = 0;
+                                // Alternamos las clases de color según el índice de los días
+                                let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
 
-            const table_button  = document.getElementById("printTable");
-            const modExcButtons = document.querySelectorAll('.modExc');
-            const addRutins     = document.getElementById("addRutins")
+                                dia.ejercicios.forEach((ejercicio) => {
+                                    if (exc_count == 0) {
+                                        tableContent += `
+                                        <tr class="${dayClass}">
+                                            <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
+                                            <td>${ejercicio.nombre}</td>
+                                            <td>${ejercicio.serie}</td>
+                                            <td>${ejercicio.repe}</td>
+                                            <td>${ejercicio.peso}kg</td>
+                                            <td>${ejercicio.fecha}</td>
+                                        </tr>`;
+                                        exc_count++;
+                                    } else {
+                                        tableContent += `
+                                        <tr class="${dayClass}">
+                                            <td>${ejercicio.nombre}</td>
+                                            <td>${ejercicio.serie}</td>
+                                            <td>${ejercicio.repe}</td>
+                                            <td>${ejercicio.peso}kg</td>
+                                            <td>${ejercicio.fecha}</td>
+                                        </tr>
+                                    `;
+                                    }
+                                });
+                            });
 
-            table_button.addEventListener("click", () =>{
-                has_print_exc = !has_print_exc;
-                has_click = !has_click;
-            });
+                            // Cerrar la tabla
+                            tableContent += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <hr class="custom-line"></hr>
+                            `;
+                        }else{
+                            tableContent +=`
+                                <div class="main_button_class">
+                                    <button id="printTable">Mostrar ejercicios</button>
+                                    <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                                </div>
+                                <hr class="custom-line"></hr>
+                            </div> `
+                        }
 
-            modExcButtons.forEach((button, index) => {
-                button.addEventListener('click', () => {
+                    card.innerHTML = tableContent;
+                });//End foreach rutinas   
+
+                const table_button  = document.getElementById("printTable");
+                const modExcButtons = document.querySelectorAll('.modExc');
+                const addRutins     = document.getElementById("addRutins")
+
+                table_button.addEventListener("click", () =>{
+                    has_print_exc = !has_print_exc;
                     has_click = !has_click;
-                    const userId = user_id;  
-                    const rutinaId = index;  
-                    window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
                 });
-            });
+
+                modExcButtons.forEach((button, index) => {
+                    button.addEventListener('click', () => {
+                        has_click = !has_click;
+                        const userId = user_id;  
+                        const rutinaId = index;  
+                        window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
+                    });
+                });
+                
+            }else{ //end if lenght != 0
+                card.innerHTML = tableContent;
+            }
             
             addRutins.addEventListener("click",() =>{
                 has_click = !has_click;
                 window.location.href = `rutinsView.html?id=${user_id}`;
             })
-        }
-        else{
+
+        }else{
             card.classList.remove("bigCard");
             card.classList.add('card');
             card.innerHTML = `
@@ -182,8 +187,12 @@ function createUserCard(user, index) {
         return count
     }
     function last_training(historial){
-        let last_train = historial.at(-1)
-        return last_train.fecha
+        if(historial.length != 0){
+            let last_train = historial.at(-1)
+            return last_train.fecha
+        } else{
+            return "Sin entrenos previos"
+        }
     }
     function excCount(dias){
         let count = 0;
