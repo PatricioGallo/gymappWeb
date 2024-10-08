@@ -1,5 +1,3 @@
-
-
 const params = new URLSearchParams(window.location.search);
 const userCardsContainer = document.getElementById('user-cards');
 
@@ -29,7 +27,7 @@ function printExc(user){
     })
     main_body +=`
                             
-                        </select><br><br>
+                        </select><br>
                         <button type="submit">Ver Ejercicios</button>
                     </form>
                 </div>
