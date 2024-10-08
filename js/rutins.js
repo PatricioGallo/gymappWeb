@@ -119,7 +119,6 @@ function addRutins(user){
                             info: "",
                             id_exc: 4
                         }
-                        console.log("exc-"+e+"-"+d)
                         exc_obj.nombre  = document.getElementById("exc-"+e+"-"+d).value;
                         exc_obj.serie   = document.getElementById("serie-"+e+"-"+d).value;
                         exc_obj.repe    = document.getElementById("repe-"+e+"-"+d).value;

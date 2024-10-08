@@ -6,6 +6,7 @@ const userCardsContainer = document.getElementById('user-cards');
 // Acceder a un parámetro específico
 const user_id = params.get('id');
 const rutina_id = params.get('rutina');
+let weekId = 0
 
 function printExc(user){
     const configBody = document.createElement('div');
@@ -30,41 +31,35 @@ function printExc(user){
 
         `
         // Generar las filas de la tabla con los ejercicios
-        user.rutinas[rutina_id].semanas[0].dias.forEach((dia, diaIndex) => {
+        user.rutinas[rutina_id].semanas[weekId].dias.forEach((dia, diaIndex) => {
             let exc_count = 0;
             // Alternamos las clases de color según el índice de los días
             let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
 
-            dia.ejercicios.forEach((ejercicio) => {
+            dia.ejercicios.forEach((exc,excIndex) => {
                 if (exc_count == 0) {
                     main_body += `
                     <tr class="${dayClass}">
                         <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                        <td><select id="frutas" name="frutas" required>
-                            <option value="${ejercicio.nombre}">${ejercicio.nombre}</option>
-                            <option value="manzana">Manzana</option>
-                            <option value="banana">Banana</option>
-                            <option value="naranja">Naranja</option>
-                            <option value="fresa">Fresa</option>
-                            <option value="pera">Pera</option>
+                        <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex} required>
+                            <option value="${exc.nombre}">${exc.nombre}</option>
+                            <option value="pecho plano">Pecho Plano</option>
+                            <option value="pecho inclinado">Pecho Inclinado</option>
                         </select></td>
-                        <td><input type="number" id="serie-id" name="series" placeholder="${ejercicio.serie}"></td>
-                        <td><input type="number" id="repe-id" name="repeticiones" placeholder="${ejercicio.repe}"></td>
+                        <td><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" ></td>
+                        <td><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}"></td>
                     </tr>`;
                     exc_count++;
                 } else {
                     main_body += `
                     <tr class="${dayClass}">
-                        <td><select id="frutas" name="frutas" required>
-                            <option value="${ejercicio.nombre}">${ejercicio.nombre}</option>
-                            <option value="manzana">Manzana</option>
-                            <option value="banana">Banana</option>
-                            <option value="naranja">Naranja</option>
-                            <option value="fresa">Fresa</option>
-                            <option value="pera">Pera</option>
+                        <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex} required>
+                            <option value="${exc.nombre}">${exc.nombre}</option>
+                            <option value="pecho plano">Pecho Plano</option>
+                            <option value="pecho inclinado">Pecho Inclinado</option>
                         </select></td>
-                        <td><input type="number" id="serie-id" name="series" placeholder="${ejercicio.serie}"></td>
-                        <td><input type="number" id="repe-id" name="repeticiones" placeholder="${ejercicio.repe}"></td>
+                        <td><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}"></td>
+                        <td><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}"></td>
                     </tr>
                 `;
                 }
@@ -94,7 +89,50 @@ function printExc(user){
 
     document.getElementById('myForm').addEventListener('submit', (event) =>{
         event.preventDefault();
-        alert(`Usuario actualizado con esito!`);
+        //VARIABLES
+        let userPath = user.rutinas[parseInt(rutina_id)].semanas[weekId];
+        let dayCount = userPath.dias.length;
+        let days_array = []
+
+        for (let d = 0; d < dayCount; d++) { 
+            //VARIABLES
+            let excPath  = user.rutinas[parseInt(rutina_id)].semanas[weekId].dias[d].ejercicios;
+            let excCount = excPath.length;
+            let day_obj = {
+                nombre: "",
+                ejercicios: []
+            }
+            let exc_array =[]
+
+            for (let e= 0; e < excCount; e++) {
+                let exc_obj = {
+                    nombre: "",
+                    peso_anterior: 0,
+                    peso: 0,
+                    serie: 0,
+                    fecha: "",
+                    repe: 0,
+                    info: "",
+                    id_exc: 4
+                }
+                exc_obj.peso_anterior   = excPath[e].peso_anterior;
+                exc_obj.peso            = excPath[e].peso;
+                exc_obj.fecha           = excPath[e].fecha;
+                exc_obj.info            = excPath[e].info;
+                exc_obj.id_exc          = excPath[e].id_exc;
+                exc_obj.nombre          = document.getElementById("exc-"+e+"-"+d).value;
+                exc_obj.serie           = document.getElementById("serie-"+e+"-"+d).value;
+                exc_obj.repe            = document.getElementById("repe-"+e+"-"+d).value;
+                exc_array.push(exc_obj);
+            }
+            day_obj.ejercicios = exc_array;
+            day_obj.nombre = userPath.dias[d].nombre;
+            days_array.push(day_obj)
+        }
+
+        user.rutinas[parseInt(rutina_id)].semanas[weekId].dias = days_array;
+        let actID = (parseInt(user_id) + 1)
+        actRutina(actID,user);
     });
 }
 
@@ -108,6 +146,31 @@ async function fetchUsers() {
         printExc(users[user_id]);
     } catch (error) {
         console.error('Error al obtener los usuarios:', error);
+    }
+}
+
+
+async function actRutina(userId, user) {
+    try {
+        const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
+            method: 'PUT',  
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(user)  
+        });
+
+        if (response.ok) {
+            const datos = await response.json();
+            alert("Rutina actualizada con éxito.");
+            window.location.href = `index.html`;
+        } else {
+            console.error('Error al subir la rutina:', response.statusText);
+            alert("Error al actulizar la rutina.");
+        }
+    } catch (error) {
+        console.error('Hubo un problema con la solicitud:', error);
+        alert("Error en la conexión.");
     }
 }
 
