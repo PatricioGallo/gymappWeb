@@ -5,7 +5,6 @@ myForm.addEventListener("submit", async (event)=>{
     mail = document.getElementById("mail").value;
     pass = document.getElementById("pass").value;
     let switch_resp = await fetchUsers(mail, pass);
-    console.log(switch_resp)
 
     switch (switch_resp) {
         case 0:

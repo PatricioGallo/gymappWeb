@@ -43,7 +43,7 @@
 }
 
 /* Estilo de los campos de entrada */
-input[type="text"], input[type="number"],input[type="password"], select {
+input[type="text"], input[type="number"],input[type="password"],input[type="email"], select {
     width: 100%;                /* Ancho completo del campo */
     padding: 10px;              /* Espacio interno */
     margin: 10px 0 10px 0;      /* Margen superior e inferior */
@@ -56,7 +56,7 @@ input[type="text"], input[type="number"],input[type="password"], select {
 }
 
 /* Efecto de enfoque en los campos de entrada */
-input[type="text"]:focus, input[type="number"]:focus,input[type="password"]:focus,select:focus {
+input[type="text"]:focus, input[type="number"]:focus,input[type="password"]:focus,input[type="email"]:focus,select:focus {
     border-color: #4CAF50;      /* Color verde en el borde al enfocarse */
     outline: none;              /* Eliminar el contorno por defecto */
 }
