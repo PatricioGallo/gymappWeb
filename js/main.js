@@ -231,8 +231,20 @@ if(gymapp_id != null){
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
             const users = await response.json();
 
-            // Crear una tarjeta por cada usuario
-            users.forEach((user,index) => createUserCard(user,index));
+            switch (users[gymapp_id].user_type) {
+            case 0:
+                users.forEach((user,index) => createUserCard(user,index));
+                break;
+            case 1:
+                alert("tipo 1"); //TODO completar logica
+                break;
+            case 2:
+                createUserCard(users[gymapp_id],gymapp_id);
+                break;
+            default:
+                console.log("Error: sin coincidencias en el case");
+            }
+
         } catch (error) {
             console.error('Error al obtener los usuarios:', error);
         }

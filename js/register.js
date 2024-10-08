@@ -58,6 +58,7 @@ async function addUser(mail,pass,userName,sur,age) {
         apellido: sur,
         edad: age,
         historial: [],
+        user_type : 2,
         rutinas: []
     };
 
