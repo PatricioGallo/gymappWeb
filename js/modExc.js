@@ -41,7 +41,7 @@ function printExc(user){
                     main_body += `
                     <tr class="${dayClass}">
                         <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                        <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex} required>
+                        <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex}" required>
                             <option value="${exc.nombre}">${exc.nombre}</option>
                             <option value="pecho plano">Pecho Plano</option>
                             <option value="pecho inclinado">Pecho Inclinado</option>
@@ -53,7 +53,7 @@ function printExc(user){
                 } else {
                     main_body += `
                     <tr class="${dayClass}">
-                        <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex} required>
+                        <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex}" required>
                             <option value="${exc.nombre}">${exc.nombre}</option>
                             <option value="pecho plano">Pecho Plano</option>
                             <option value="pecho inclinado">Pecho Inclinado</option>
