@@ -9,7 +9,8 @@ let days = 0;
 let excArray = [1,1,1,1,1,1,1];
 let max_num_exc = 20;
 let weeks_array = []
-let days_array = []
+let days_array = [];
+let exc_api_array;
 
 function addRutins(user){
     const body = document.createElement('div');
@@ -75,8 +76,12 @@ function addRutins(user){
                                 <option value="Domingo">Domingo</option>
                             </select></td>
                             <td><select id="exc-0-${i}" name="exc-0-${i}" required>
-                                <option value="pecho plano">Pecho Plano</option>
-                                <option value="pecho inclinado">Pecho Inclinado</option>
+                            `
+                            exc_api_array.forEach(exc => {
+                                main_body += `<option value="${exc.id}">${exc.name}</option>`
+                            });
+
+                            main_body +=`
                             </select></td>
                             <td><input type="number" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></td>
                             <td><input type="number" id="repe-0-${i}" name="repe-0-${i}" placeholder="repeticiones" required></td>
@@ -212,5 +217,18 @@ async function subirRutina(userId, user) {
     }
 }
 
+async function fetchExc() {
+    try {
+        // Hacer la solicitud a la API
+        const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
+        const exc = await response.json();
+        exc_api_array = exc;
+
+    } catch (error) {
+        console.error('Error al obtener los usuarios:', error);
+    }
+}
+
 // Llamar a la función para obtener los usuarios al cargar la página
 fetchUsers();
+fetchExc();

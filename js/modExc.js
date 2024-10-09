@@ -5,6 +5,7 @@ const userCardsContainer = document.getElementById('user-cards');
 const user_id = params.get('id');
 const rutina_id = params.get('rutina');
 let weekId = 0
+let exc_api_array;
 
 function printExc(user){
     const configBody = document.createElement('div');
@@ -72,8 +73,11 @@ function printExc(user){
                             <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
                             <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex}" required>
                                 <option value="${exc.nombre}">${exc.nombre}</option>
-                                <option value="pecho plano">Pecho Plano</option>
-                                <option value="pecho inclinado">Pecho Inclinado</option>
+                        `
+                        exc_api_array.forEach((exc)=>{
+                            main_body += `<option value="${exc.id}">${exc.name}</option>`
+                        })
+                        main_body +=`
                             </select></td>
                             <td><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" ></td>
                             <td><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}"></td>
@@ -178,6 +182,18 @@ async function fetchUsers() {
     }
 }
 
+async function fetchExc() {
+    try {
+        // Hacer la solicitud a la API
+        const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
+        const exc = await response.json();
+        exc_api_array = exc;
+
+    } catch (error) {
+        console.error('Error al obtener los usuarios:', error);
+    }
+}
+
 
 async function actRutina(userId, user) {
     try {
@@ -205,3 +221,4 @@ async function actRutina(userId, user) {
 
 // Llamar a la función para obtener los usuarios al cargar la página
 fetchUsers();
+fetchExc();
