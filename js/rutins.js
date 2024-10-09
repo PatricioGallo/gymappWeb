@@ -124,9 +124,11 @@ function addRutins(user){
                             info: "",
                             id_exc: 4
                         }
-                        exc_obj.nombre  = document.getElementById("exc-"+e+"-"+d).value;
-                        exc_obj.serie   = document.getElementById("serie-"+e+"-"+d).value;
-                        exc_obj.repe    = document.getElementById("repe-"+e+"-"+d).value;
+                        exc_obj.id_exc  = parseInt(document.getElementById("exc-"+e+"-"+d).value)//recibo el id
+                        exc_obj.nombre  = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].name; 
+                        exc_obj.info    = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].info;
+                        exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
+                        exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
                         exc_array.push(exc_obj);
                     }
                     day_obj.ejercicios = exc_array;
@@ -160,18 +162,20 @@ function addRutins(user){
             document.querySelectorAll('.addButton').forEach((button, index) => {
                 button.addEventListener('click', function() {
                     let rowName = ("row-"+ (excArray[index])+"-"+index)
-                    console.log(rowName)
                     const actualRow = document.getElementById(rowName);
-                    const newRow = `
-                        <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" required>
-                            <option value="pecho plano">Pecho Plano</option>
-                            <option value="pecho inclinado">Pecho Inclinado</option>
+                    let newRow = `
+                        <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" required>`
+
+                        exc_api_array.forEach(exc => {
+                            newRow += `<option value="${exc.id}">${exc.name}</option>`
+                        });
+                            
+                        newRow +=`    
                         </select></td>
                         <td><input type="number" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series"></td>
                         <td><input type="number" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones"></td>
                         `;
                     excArray[index] += 1;
-                    console.log(excArray[index]);
                     actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
                 });
             });
