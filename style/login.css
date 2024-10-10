@@ -1,4 +1,4 @@
-.body{
+.mainBody {
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -6,12 +6,12 @@
     align-items: center;
 }
 
-.form_body{
-    width: 80%;
+.form_body {
+    width: 100%;
     display: flex;
     flex-direction: column;
 }
-.header_form{
+.header_form {
     width: 100%;
     display: flex;
     justify-content: center;
@@ -19,7 +19,7 @@
 
 /* Estilo general del contenedor del formulario */
 .form {
-    width: 400px;           /* Ancho máximo del formulario */
+    width: 400px;
     margin: 50px auto;          /* Centramos el formulario */
     padding: 20px;              /* Espacio interno */
     background-color: #f9f9f9;  /* Fondo claro */
@@ -27,26 +27,26 @@
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);  /* Sombra suave */
     font-family: 'Arial', sans-serif; /* Fuente moderna */
 }
-.form p{
+.form p {
     width: 100%;
     font-size: 13px;
     color: black;
     margin-top: 20px;
     text-align: center;
 }
-.form a{
+.form a {
     text-decoration: none;
     color: black;
 }
-.form a:hover{
-    color: #333
+.form a:hover {
+    color: #333;
 }
 
 /* Estilo de los campos de entrada */
-input[type="text"], input[type="number"],input[type="password"],input[type="email"], select {
+input[type="text"], input[type="number"], input[type="password"], input[type="email"], select {
     width: 100%;                /* Ancho completo del campo */
     padding: 10px;              /* Espacio interno */
-    margin: 10px 0 10px 0;      /* Margen superior e inferior */
+    margin: 10px 0;             /* Margen superior e inferior */
     display: block;             /* Hacer que el input sea un bloque */
     border: 1px solid #ccc;     /* Borde gris claro */
     border-radius: 5px;         /* Bordes redondeados */
@@ -56,7 +56,7 @@ input[type="text"], input[type="number"],input[type="password"],input[type="emai
 }
 
 /* Efecto de enfoque en los campos de entrada */
-input[type="text"]:focus, input[type="number"]:focus,input[type="password"]:focus,input[type="email"]:focus,select:focus {
+input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, input[type="email"]:focus, select:focus {
     border-color: #4CAF50;      /* Color verde en el borde al enfocarse */
     outline: none;              /* Eliminar el contorno por defecto */
 }
@@ -88,4 +88,26 @@ button[type="submit"] {
 /* Efecto hover para el botón */
 button[type="submit"]:hover {
     background-color: #45a049;  /* Cambia a un verde más oscuro al pasar el mouse */
+}
+
+/* Adaptación para dispositivos móviles */
+@media (max-width: 600px) {
+    .form {
+        width: 90%;             /* Hacemos el formulario más estrecho */
+        margin: 20px auto;      /* Reducimos el margen superior */
+    }
+
+    input[type="text"], input[type="number"], input[type="password"], input[type="email"], select {
+        font-size: 16px;        /* Aumentamos el tamaño de la fuente para facilitar la lectura en móviles */
+        padding: 12px;          /* Aumentamos el padding para hacer los campos más grandes */
+    }
+
+    label {
+        font-size: 18px;        /* Aumentamos el tamaño de las etiquetas en móviles */
+    }
+
+    button[type="submit"] {
+        font-size: 18px;        /* Aumentamos el tamaño del texto del botón en móviles */
+        padding: 14px;          /* Aumentamos el padding del botón para hacerlo más grande */
+    }
 }

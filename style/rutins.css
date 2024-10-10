@@ -1,4 +1,4 @@
-.body{
+.body {
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -6,12 +6,12 @@
     align-items: center;
 }
 
-.form_body{
+.form_body {
     width: 80%;
     display: flex;
     flex-direction: column;
 }
-.header_form{
+.header_form {
     width: 100%;
     display: flex;
     justify-content: center;
@@ -29,10 +29,10 @@
 }
 
 /* Estilo de los campos de entrada */
-input[type="text"], input[type="number"],select {
+input[type="text"], input[type="number"], select {
     width: 100%;                /* Ancho completo del campo */
-    padding: 5px;              /* Espacio interno */
-    margin: 10px 0 10px 0;      /* Margen superior e inferior */
+    padding: 5px;               /* Espacio interno */
+    margin: 10px 0;             /* Margen superior e inferior */
     display: block;             /* Hacer que el input sea un bloque */
     border: 1px solid #ccc;     /* Borde gris claro */
     border-radius: 5px;         /* Bordes redondeados */
@@ -42,7 +42,7 @@ input[type="text"], input[type="number"],select {
 }
 
 /* Efecto de enfoque en los campos de entrada */
-input[type="text"]:focus, input[type="number"]:focus,select:focus {
+input[type="text"]:focus, input[type="number"]:focus, select:focus {
     border-color: #4CAF50;      /* Color verde en el borde al enfocarse */
     outline: none;              /* Eliminar el contorno por defecto */
 }
@@ -76,14 +76,16 @@ button[type="submit"]:hover {
     background-color: #45a049;  /* Cambia a un verde más oscuro al pasar el mouse */
 }
 
-.table_body{
+/* Estilo para la tabla */
+.table_body {
     width: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
-.addButton{
+/* Estilo para el botón de agregar */
+.addButton {
     background-color: #4CAF50;
     color: #ffffff;
     height: 23px;
@@ -93,4 +95,59 @@ button[type="submit"]:hover {
     font-size: 20px;
     cursor: pointer;
     margin-left: 10px;
+}
+
+.addButton:hover {
+    background-color: #45a049;
+}
+
+/* Adaptación para dispositivos móviles */
+@media (max-width: 600px) {
+    .form {
+        width: 90%; /* Hacemos que el formulario ocupe casi todo el ancho en móviles */
+        margin: 20px auto; /* Reducimos el margen superior en móviles */
+        padding: 15px; /* Ajustamos el padding */
+    }
+
+    input[type="text"], input[type="number"], select {
+        width: 100%; /* Hacemos que los inputs y selects ocupen todo el ancho disponible */
+        padding: 3px; /* Aumentamos el padding para facilitar la interacción en pantallas táctiles */
+        font-size: 10px; /* Aumentamos el tamaño de la fuente para mejorar la legibilidad en móviles */
+    }
+
+    button[type="submit"] {
+        width: 100%; /* Botón ocupará todo el ancho disponible */
+        padding: 8px; /* Aumentamos el padding del botón */
+        font-size: 15px; /* Tamaño de la fuente más grande para facilitar su uso en móviles */
+    }
+
+    .header_form {
+        text-align: center; /* Centrar el contenido del header en móviles */
+    }
+
+    .addButton {
+        height: 40px; /* Aumentamos el tamaño del botón en móviles */
+        width: 40px; /* Aumentamos el ancho del botón */
+        font-size: 24px; /* Aumentamos el tamaño de la fuente */
+    }
+
+    .table_body {
+        flex-direction: column; /* Alineamos las tablas verticalmente en móviles */
+    }
+    .header_form h1{
+        font-size: 18px;
+    }
+    .configHeader h1{
+        font-size: 18px;
+    }
+    .addButton {
+        height: 20px;
+        width: 20px;
+        border-radius: 10px;
+        font-size: 15px;
+        margin-left: 0px;
+    }
+    .label {
+        font-size: 12px;          
+    }
 }
