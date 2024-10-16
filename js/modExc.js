@@ -153,8 +153,8 @@ function printExc(user){
                     exc_obj.info            = excPath[e].info;
                     exc_obj.id_exc          = excPath[e].id_exc;
                     exc_obj.nombre          = document.getElementById("exc-"+e+"-"+d).value;
-                    exc_obj.serie           = document.getElementById("serie-"+e+"-"+d).value;
-                    exc_obj.repe            = document.getElementById("repe-"+e+"-"+d).value;
+                    exc_obj.serie           = parseInt(document.getElementById("serie-"+e+"-"+d).value);
+                    exc_obj.repe            = parseInt(document.getElementById("repe-"+e+"-"+d).value);
                     exc_array.push(exc_obj);
                 }
                 day_obj.ejercicios = exc_array;
