@@ -54,6 +54,7 @@ if(gymapp_id != null){
                                     <div class="main_button_class">
                                         <button id="printTable">Ocultar ejercicios</button> 
                                         <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                                        <button class="addPeso" data-index="${index}">Agregar pesos</button>
                                     </div>
                                 </div> 
                                 <div class="tabla">
@@ -116,6 +117,7 @@ if(gymapp_id != null){
                                     <div class="main_button_class">
                                         <button id="printTable">Mostrar ejercicios</button>
                                         <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                                        <button class="addPeso" data-index="${index}">Pesos semanales</button>
                                     </div>
                                     <hr class="custom-line"></hr>
                                 </div> `
@@ -126,6 +128,7 @@ if(gymapp_id != null){
 
                     const table_button  = document.getElementById("printTable");
                     const modExcButtons = document.querySelectorAll('.modExc');
+                    const addPesoButton = document.querySelectorAll('.addPeso');
 
                     table_button.addEventListener("click", () =>{
                         has_print_exc = !has_print_exc;
@@ -138,6 +141,15 @@ if(gymapp_id != null){
                             const userId = user_id;  
                             const rutinaId = index;  
                             window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
+                        });
+                    });
+
+                    addPesoButton.forEach((button, index) => {
+                        button.addEventListener('click', () => {
+                            has_click = !has_click;
+                            const userId = user_id;  
+                            const rutinaId = index;  
+                            window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
                         });
                     });
                     
