@@ -15,11 +15,11 @@ function printExc(user){
     main_body = `
         <div class="form_body">
                     <div class="header_form">
-                        <h1>${user.nombre} puedes modificar: ${user.rutinas[rutina_id].nombre}</h1>
+                        <h1>${user.nombre} agregar pesos diarios en: ${user.rutinas[rutina_id].nombre}</h1>
                     </div>
         <div class="form">
                     <form id="myForm">
-                        <br><label for="name">Selecciona la semana y el dia de la rutina a modificar</label></br></br>
+                        <br><label for="name">Selecciona la semana y el dia de la rutina para agregar tus pesos</label></br></br>
                         <select id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
         `
     user.rutinas[rutina_id].semanas.forEach((week,index) => {
