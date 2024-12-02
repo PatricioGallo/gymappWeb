@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="format-detection" content="telephone=no">
     <title>GymApp - Tu Gimnasio Moderno</title>
     <link rel="stylesheet" href="style/main.css">
+    <link rel="stylesheet" href="style/addExc.css">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
         </div>
         <nav class="nav-menu">
             <ul>
-                <li><a href="">Inicio</a></li>
+                <li><a href="index.html">Inicio</a></li>
                 <li><a href="addExc.html">Ejercicio</a></li>
                 <li><a href="exit.html">Salir</a></li>
             </ul>
@@ -28,6 +28,25 @@
     <main>
         <!-- Contenedor de tarjetas que se llenará dinámicamente -->
         <section class="person-cards" id="user-cards">
+            <div class="mainBody">
+                <div class="form_body">\
+                    <div class="form_body">
+                        <div class="header_form">
+                            <h1>Agregar nuevos ejercicios</h1>
+                        </div>
+                    <div class="form">
+                        <form id="myForm">
+                            <label for="excName">Nombre del ejericio</label>
+                            <input type="text" id="excName" name="excName" required><br>
+    
+                            <label for="description">Descripción</label>
+                            <textarea id="description" name="description" rows="4" cols="50" placeholder="Escribe una descripción..." required></textarea><br>
+    
+                            <button type="submit">Subir</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
     <!-- Footer -->
@@ -43,6 +62,6 @@
     </footer>
 
     <!-- Conexión al archivo de JavaScript -->
-    <script src="js/main.js"></script>
+    <script src="js/addExc.js"></script>
 </body>
 </html>
