@@ -19,7 +19,7 @@ function printExc(user){
         <div class="form">
                     <form id="myForm">
                         <br><label for="name">Selecciona la semana de la rutina a modificar</label></br></br>
-                        <select id="weeks" name="weeks" required>
+                        <select id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
         `
     user.rutinas[rutina_id].semanas.forEach((week,index) => {
         main_body += `

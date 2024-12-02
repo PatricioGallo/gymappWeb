@@ -29,6 +29,8 @@ input[type="text"], input[type="number"] {
     border: 1px solid #ccc;      /* Bordes de los inputs */
     border-radius: 4px;          /* Bordes redondeados */
     box-sizing: border-box;      /* Incluir el padding y border en el tamaño total */
+    color: black;
+    text-decoration: none;
 }
 
 /* Estilo para el botón de envío */
@@ -52,6 +54,8 @@ select {
     padding: 4px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    color: black;
+    text-decoration: none;
 }
 
 /* Adaptación para dispositivos móviles */
