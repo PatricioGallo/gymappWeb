@@ -52,10 +52,11 @@ function printExc(user){
         event.preventDefault();
         weekId = document.getElementById("weeks").value;
         dayId = document.getElementById("day").value;
+        dayValue = user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre.toLowerCase();
         main_body = `
             <div class="configFace">
                 <div class="configHeader">
-                    <h1>Modificar pesos del dia ${user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre} de la semana ${user.rutinas[rutina_id].semanas[weekId].numero}</h1>
+                    <h1>Modificar pesos del dia ${dayValue} de la semana numero ${user.rutinas[rutina_id].semanas[weekId].numero}</h1>
                 </div>
                 <div class="configForm">
                     <form id="myForm">
@@ -64,6 +65,8 @@ function printExc(user){
                                 <tr>
                                     <th>Día</th>
                                     <th>Ejercicio</th>
+                                    <th>Series</th>
+                                    <th>Repes</th>
                                     <th>Peso anterior</th>
                                     <th>Peso actual</th>
                                 </tr>
@@ -78,6 +81,8 @@ function printExc(user){
                         <tr class="day-dark">
                             <td rowspan="${arraysCount(user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios)}">${user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre}</td>
                             <td>${exc.nombre}</td>
+                            <td>${exc.serie}</td>
+                            <td>${exc.repe}</td>
                             <td>${peso_anterior(exc.id_exc)}</td>
                             <td><input type="number" id="repe-0" name="repe-0" value="${exc.peso}"></td>
                         </tr>`;
@@ -86,6 +91,8 @@ function printExc(user){
                         main_body += `
                         <tr class="day-dark">
                             <td>${exc.nombre}</td>
+                            <td>${exc.serie}</td>
+                            <td>${exc.repe}</td>
                             <td>${peso_anterior(exc.id_exc)}</td>
                             <td><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}"></td>
                         </tr>
@@ -123,7 +130,11 @@ function printExc(user){
                     }
                 }
             });
-            return(peso)
+            if(peso == undefined){
+                return("Sin peso anterior")
+            }else{
+                return(peso)
+            }
         }
 
         document.getElementById('myForm').addEventListener('submit', (event) =>{
