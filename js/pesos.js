@@ -84,7 +84,7 @@ function printExc(user){
                             <td>${exc.serie}</td>
                             <td>${exc.repe}</td>
                             <td>${peso_anterior(exc.id_exc)}</td>
-                            <td><input type="number" id="repe-0" name="repe-0" value="${exc.peso}"></td>
+                            <td><center><input type="number" id="repe-0" name="repe-0" value="${exc.peso}"></center></td>
                         </tr>`;
                         exc_count++;
                     } else {
@@ -94,7 +94,7 @@ function printExc(user){
                             <td>${exc.serie}</td>
                             <td>${exc.repe}</td>
                             <td>${peso_anterior(exc.id_exc)}</td>
-                            <td><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}"></td>
+                            <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}"></center></td>
                         </tr>
                     `;
                     }

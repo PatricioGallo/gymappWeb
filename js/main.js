@@ -1,18 +1,17 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
     // Seleccionar el contenedor donde se agregarán las tarjetas
-    const userCardsContainer = document.getElementById('user-cards');
+    const personal_info = document.getElementById('personal_info');
+    const personal_rutins = document.getElementById('personal_rutins');
 
     // Función para crear y agregar las tarjetas de los usuarios
     function createUserCard(user, index) {
-        const card = document.createElement('div');
-        let has_click = false;
-        let has_print_exc = false;
+        const profile_info = document.createElement('div');
         let user_id = index
 
-        // Crear el contenido de la tarjeta
-        card.classList.add('card');
-        card.innerHTML = `
+        // Crear el contenido de la tarjeta personal
+        profile_info.classList.add('profile_info');
+        profile_info.innerHTML = `
                     <div class="header_card">
                         <img src="img/default_profile.webp" alt="">
                         <h1>${user.nombre} ${user.apellido}</h1>
@@ -23,182 +22,78 @@ if(gymapp_id != null){
                         <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
                     </div>
         `;
-        userCardsContainer.appendChild(card);
+        personal_info.appendChild(profile_info);
 
-        // Agregar funcionalidad al hacer click en la tarjeta
-        card.addEventListener('click', () => {
-            if(!has_click){
-                card.innerHTML = ``;
-                card.classList.add('bigCard');
-                // Crear la tabla de rutinas dinámicamente
-                let tableContent = `
-                    <div class="header_card">
-                        <img src="img/default_profile.webp" alt="">
-                        <h1>${user.nombre} ${user.apellido}</h1>
-                        <button id="addRutins" title="Agregar una nueva rutina">+</button>
-                    </div>
-                    <hr class="custom-line"></hr>
-                `;
-                if(user.rutinas.length != 0){ //En caso de rutinas vacias
-                    user.rutinas.forEach( (rutina,index) =>{
-                        tableContent+=`
-                        <div class="body_card">
-                                <h3>Nombre: ${rutina.nombre}</h3>
-                                <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
-                                <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
-                                <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
-                        `;
-                        //Init table
-                        if(has_print_exc == true){
-                            tableContent +=`
-                                    <div class="main_button_class">
-                                        <button id="printTable">Ocultar ejercicios</button> 
-                                        <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                                        <button class="addPeso" data-index="${index}">Agregar pesos</button>
-                                    </div>
-                                </div> 
-                                <div class="tabla">
-                                    <table class="training-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Día</th>
-                                                <th>Ejercicio</th>
-                                                <th>Series</th>
-                                                <th>Repes</th>
-                                                <th>Último peso</th>
-                                                <th>Última fecha de entreno</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                            `;
+        // Crear el contenido de la rutina
+        const table_container = document.createElement('div');
+        table_container.classList.add('table_container');
+        let table_container_content = `
+                        <div class="header_card">
+                            <h1>Rutinas</h1>
+                            <button id="addRutins" title="Agregar una nueva rutina">+</button>
+                        </div>
+        `;
 
-                            
-                            // Generar las filas de la tabla con los ejercicios
-                                rutina.semanas[0].dias.forEach((dia, diaIndex) => {
-                                    let exc_count = 0;
-                                    // Alternamos las clases de color según el índice de los días
-                                    let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
+        if(user.rutinas.length != 0){ //En caso de rutinas vacias
+            user.rutinas.forEach( (rutina,index) =>{
+                table_container_content+=`
+                <div class="body_card">
+                        <hr class="custom-line"></hr>
+                        <h3>Nombre: ${rutina.nombre}</h3>
+                        <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
+                        <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
+                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
+                        <div class="main_button_class">
+                            <button class="showExc" data-index="${index}">Mostrar ejercicios</button>
+                            <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                            <button class="addPeso" data-index="${index}">Pesos semanales</button>
+                            <button class="button_red" data-index="${index}">Eliminar Rutina</button>
+                        </div>
+                </div> 
+                `
+            });//end foreach rutina
+        } else{ //else if lenght != 0
+            table_container_content+=`
+                <div class="body_card">
+                        <h3>Actualmente no posee rutinas</h3>
+                        <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
+                        <hr class="custom-line"></hr>
+                `;            
+        }
+        table_container.innerHTML = table_container_content;
+        personal_rutins.appendChild(table_container);
 
-                                    dia.ejercicios.forEach((ejercicio) => {
-                                        if (exc_count == 0) {
-                                            tableContent += `
-                                            <tr class="${dayClass}">
-                                                <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                                                <td>${ejercicio.nombre}</td>
-                                                <td>${ejercicio.serie}</td>
-                                                <td>${ejercicio.repe}</td>
-                                                <td>${ejercicio.peso}kg</td>
-                                                <td>${ejercicio.fecha}</td>
-                                            </tr>`;
-                                            exc_count++;
-                                        } else {
-                                            tableContent += `
-                                            <tr class="${dayClass}">
-                                                <td>${ejercicio.nombre}</td>
-                                                <td>${ejercicio.serie}</td>
-                                                <td>${ejercicio.repe}</td>
-                                                <td>${ejercicio.peso}kg</td>
-                                                <td>${ejercicio.fecha}</td>
-                                            </tr>
-                                        `;
-                                        }
-                                    });
-                                });
+        const showExcButton = document.querySelectorAll('.showExc');
+        const modExcButtons = document.querySelectorAll('.modExc');
+        const addPesoButton = document.querySelectorAll('.addPeso');
 
-                                // Cerrar la tabla
-                                tableContent += `
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <hr class="custom-line"></hr>
-                                `;
-                            }else{
-                                tableContent +=`
-                                    <div class="main_button_class">
-                                        <button id="printTable">Mostrar ejercicios</button>
-                                        <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                                        <button class="addPeso" data-index="${index}">Pesos semanales</button>
-                                    </div>
-                                    <hr class="custom-line"></hr>
-                                </div> `
-                            }
+        showExcButton.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `showExc.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
 
-                        card.innerHTML = tableContent;
-                    });//End foreach rutinas   
+        modExcButtons.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
 
-                    const table_button  = document.getElementById("printTable");
-                    const modExcButtons = document.querySelectorAll('.modExc');
-                    const addPesoButton = document.querySelectorAll('.addPeso');
-
-                    table_button.addEventListener("click", () =>{
-                        has_print_exc = !has_print_exc;
-                        has_click = !has_click;
-                    });
-
-                    modExcButtons.forEach((button, index) => {
-                        button.addEventListener('click', () => {
-                            has_click = !has_click;
-                            const userId = user_id;  
-                            const rutinaId = index;  
-                            window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
-                        });
-                    });
-
-                    addPesoButton.forEach((button, index) => {
-                        button.addEventListener('click', () => {
-                            has_click = !has_click;
-                            const userId = user_id;  
-                            const rutinaId = index;  
-                            window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
-                        });
-                    });
-                    
-                }else{ //end if lenght != 0
-                    tableContent+=`
-                        <div class="body_card">
-                                <h3>Actualmente no posee rutinas</h3>
-                                <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
-                                <hr class="custom-line"></hr>
-                        `;
-                    
-                    card.innerHTML = tableContent;
-                }
+        addPesoButton.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
                 
-                addRutins.addEventListener("click",() =>{
-                    has_click = !has_click;
-                    window.location.href = `rutinsView.html?id=${user_id}`;
-                })
-
-            }else{
-                card.classList.remove("bigCard");
-                card.classList.add('card');
-                card.innerHTML = `
-                <div class="header_card">
-                        <img src="img/default_profile.webp" alt="">
-                        <h1>${user.nombre} ${user.apellido}</h1>
-                    </div>
-                    <div class="body_card">
-                        <h3>Edad: ${user.edad} años</h3>
-                        <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
-                        <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                    </div>
-            `; 
-            }
-            has_click = !has_click;
-        });
-
-        // Manejo del hover para agrandar la tarjeta
-        card.addEventListener('mouseover', () => {
-            if (!has_click) {
-                card.style.transform = 'scale(1.1)';
-            }
-        });
-
-        card.addEventListener('mouseout', () => {
-            if (!has_click) {
-                card.style.transform = 'scale(1)';
-            }
-        });
+        addRutins.addEventListener("click",() =>{
+            window.location.href = `rutinsView.html?id=${user_id}`;
+        })
 
         function arraysCount(arrays){
             let count = 0;
@@ -245,7 +140,8 @@ if(gymapp_id != null){
 
             switch (users[gymapp_id].user_type) {
             case 0:
-                users.forEach((user,index) => createUserCard(user,index));
+                // users.forEach((user,index) => createUserCard(user,index));
+                createUserCard(users[gymapp_id],gymapp_id);
                 break;
             case 1:
                 alert("tipo 1"); //TODO completar logica

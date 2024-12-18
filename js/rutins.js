@@ -11,6 +11,7 @@ let max_num_exc = 20;
 let weeks_array = []
 let days_array = [];
 let exc_api_array;
+let users;
 
 function addRutins(user){
     const body = document.createElement('div');
@@ -25,13 +26,13 @@ function addRutins(user){
         <div class="form">
                     <form id="myForm">
                         <label for="name">Nombre de la rutina</label>
-                        <input type="text" id="name" name="name" required><br>
+                        <input type="text" class="input_text" id="name" name="name" required><br>
 
                         <label for="weeks">Cantidad de semanas</label>
-                        <input type="number" id="weeks" name="weeks" min="1" max="10" required><br>
+                        <input type="number" class="input_number" id="weeks" name="weeks" min="1" max="10" required><br>
 
                         <label for="days">Cantidad de dias</label>
-                        <input type="number" id="days" name="days" min="1" max="7" required><br>
+                        <input type="number" class="input_number" id="days" name="days" min="1" max="7" required><br>
 
                         <button type="submit">Crear tabla</button>
                     </form>
@@ -78,13 +79,13 @@ function addRutins(user){
                             <td><select id="exc-0-${i}" name="exc-0-${i}" required>
                             `
                             exc_api_array.forEach(exc => {
-                                main_body += `<option value="${exc.id}">${exc.name}</option>`
+                                main_body += `<option title="${exc.info}" value="${exc.id}">${exc.name}  (${viewAuthor(exc.author)})</option>`
                             });
 
                             main_body +=`
                             </select></td>
-                            <td><input type="number" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></td>
-                            <td><input type="number" id="repe-0-${i}" name="repe-0-${i}" placeholder="repeticiones" required></td>
+                            <td><center><input type="number" class="input_number_table" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></center></td>
+                            <td><center><input type="number" class="input_number_table" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repeticiones" required></center></td>
                         </tr>`
                         for (let j = 0; j < max_num_exc; j++) {
                             main_body +=`<tr id="row-${j+1}-${i}" class="${dayClass}"></tr>`
@@ -105,6 +106,15 @@ function addRutins(user){
                 </div>`
 
             body.innerHTML = main_body;
+
+            function viewAuthor(id){
+                if(id != "gymapp"){
+                    return users[id-1].nombre;
+                }else{
+                    return "gymapp"
+                }
+            }
+
             document.getElementById('table_form').addEventListener('submit', (event) =>{
                 event.preventDefault();
                 for (let d = 0; d < days; d++) { 
@@ -172,8 +182,8 @@ function addRutins(user){
                             
                         newRow +=`    
                         </select></td>
-                        <td><input type="number" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series"></td>
-                        <td><input type="number" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones"></td>
+                        <td><center><input type="number" class="input_number_table" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series"></center></td>
+                        <td><center><input type="number" class="input_number_table" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones"></center></td>
                         `;
                     excArray[index] += 1;
                     actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
@@ -188,7 +198,7 @@ async function fetchUsers() {
     try {
         // Hacer la solicitud a la API
         const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
-        const users = await response.json();
+        users = await response.json();
 
         addRutins(users[user_id]);
     } catch (error) {
@@ -227,6 +237,7 @@ async function fetchExc() {
         const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
         const exc = await response.json();
         exc_api_array = exc;
+        exc_api_array.sort((a, b) => a.name.localeCompare(b.name));
 
     } catch (error) {
         console.error('Error al obtener los usuarios:', error);

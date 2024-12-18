@@ -14,11 +14,11 @@ function printExc(user){
     main_body = `
         <div class="form_body">
                     <div class="header_form">
-                        <h1>${user.nombre} puedes modificar: ${user.rutinas[rutina_id].nombre}</h1>
+                        <h1>${user.nombre} puedes ver ejercicios: ${user.rutinas[rutina_id].nombre}</h1>
                     </div>
         <div class="form">
                     <form id="myForm">
-                        <br><label for="name">Selecciona la semana de la rutina a modificar</label></br></br>
+                        <br><label for="name">Selecciona la semana de la rutina que deseas ver</label></br></br>
                         <select id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
         `
     user.rutinas[rutina_id].semanas.forEach((week,index) => {
@@ -40,14 +40,12 @@ function printExc(user){
     document.getElementById('myForm').addEventListener('submit', (event) =>{
         event.preventDefault();
         weekId = document.getElementById("weeks").value;
-        console.log(weekId)
         main_body = `
             <div class="configFace">
                 <div class="configHeader">
-                    <h1>Modificar Ejercicios de ${user.rutinas[rutina_id].nombre}</h1>
+                    <h1>Ver ejercicios de "${user.rutinas[rutina_id].nombre}"</h1>
                 </div>
                 <div class="configForm">
-                    <form id="myForm">
                         <table class="training-table">
                             <thead>
                                 <tr>
@@ -55,6 +53,9 @@ function printExc(user){
                                     <th>Ejercicio</th>
                                     <th>Series</th>
                                     <th>Repes</th>
+                                    <th>Ultimo Peso</th>
+                                    <th>Ultimo Entreno</th>
+                                    <th>Info del ejercicio</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -71,30 +72,23 @@ function printExc(user){
                         main_body += `
                         <tr class="${dayClass}">
                             <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                            <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex}" required>
-                                <option value="${exc.nombre}">${exc.nombre}</option>
-                        `
-                        exc_api_array.forEach((exc)=>{
-                            main_body += `<option value="${exc.id}">${exc.name}</option>`
-                        })
-                        main_body +=`
-                            </select></td>
-                            <td><center><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" ></center></td>
-                            <td><center><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}"></center></td>
+                            <td>${exc.nombre}</td>
+                            <td>${exc.serie}</td>
+                            <td>${exc.repe}</td>
+                            <td>${exc.peso}</td>
+                            <td>${exc.fecha}</td>
+                            <td>${exc.info}</td>
                         </tr>`;
                         exc_count++;
                     } else {
                         main_body += `
                         <tr class="${dayClass}">
-                            <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex}" required>
-                                <option value="${exc.nombre}">${exc.nombre}</option>`
-                                exc_api_array.forEach((exc)=>{
-                                    main_body += `<option value="${exc.id}">${exc.name}</option>`
-                                })
-                                main_body +=`
-                                </select></td>
-                            <td><center><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}"></center></td>
-                            <td><center><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}"></center></td>
+                            <td>${exc.nombre}</td>
+                            <td>${exc.serie}</td>
+                            <td>${exc.repe}</td>
+                            <td>${exc.peso}</td>
+                            <td>${exc.fecha}</td>
+                            <td>${exc.info}</td>
                         </tr>
                     `;
                     }
@@ -105,8 +99,6 @@ function printExc(user){
             main_body += `
                         </tbody>
                     </table>
-                        <button type="submit">Guardar</button>
-                    </form>
                 </div>
             </div>
             `;
@@ -121,53 +113,6 @@ function printExc(user){
             return count
         }
 
-        document.getElementById('myForm').addEventListener('submit', (event) =>{
-            event.preventDefault();
-            //VARIABLES
-            let userPath = user.rutinas[parseInt(rutina_id)].semanas[weekId];
-            let dayCount = userPath.dias.length;
-            let days_array = []
-
-            for (let d = 0; d < dayCount; d++) { 
-                //VARIABLES
-                let excPath  = user.rutinas[parseInt(rutina_id)].semanas[weekId].dias[d].ejercicios;
-                let excCount = excPath.length;
-                let day_obj = {
-                    nombre: "",
-                    ejercicios: []
-                }
-                let exc_array =[]
-
-                for (let e= 0; e < excCount; e++) {
-                    let exc_obj = {
-                        nombre: "",
-                        peso_anterior: 0,
-                        peso: 0,
-                        serie: 0,
-                        fecha: "",
-                        repe: 0,
-                        info: "",
-                        id_exc: 4
-                    }
-                    exc_obj.peso_anterior   = excPath[e].peso_anterior;
-                    exc_obj.peso            = excPath[e].peso;
-                    exc_obj.fecha           = excPath[e].fecha;
-                    exc_obj.info            = excPath[e].info;
-                    exc_obj.id_exc          = excPath[e].id_exc;
-                    exc_obj.nombre          = document.getElementById("exc-"+e+"-"+d).value;
-                    exc_obj.serie           = parseInt(document.getElementById("serie-"+e+"-"+d).value);
-                    exc_obj.repe            = parseInt(document.getElementById("repe-"+e+"-"+d).value);
-                    exc_array.push(exc_obj);
-                }
-                day_obj.ejercicios = exc_array;
-                day_obj.nombre = userPath.dias[d].nombre;
-                days_array.push(day_obj)
-            }
-
-            user.rutinas[parseInt(rutina_id)].semanas[weekId].dias = days_array;
-            let actID = (parseInt(user_id) + 1)
-            actRutina(actID,user);
-        });
     });//End submit
 }
 
@@ -190,7 +135,6 @@ async function fetchExc() {
         const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
         const exc = await response.json();
         exc_api_array = exc;
-        exc_api_array.sort((a, b) => a.name.localeCompare(b.name));
 
     } catch (error) {
         console.error('Error al obtener los usuarios:', error);
