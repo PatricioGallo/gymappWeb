@@ -6,234 +6,234 @@ if(gymapp_id != null){
     // Función para crear y agregar las tarjetas de los usuarios
     function createUserCard(user, index) {
         const card = document.createElement('div');
-        let has_click = false;
-        let has_print_exc = false;
-        let user_id = index
+        // let has_click = false;
+        // let has_print_exc = false;
+        // let user_id = index
 
-        // Crear el contenido de la tarjeta
-        card.classList.add('card');
-        card.innerHTML = `
-                    <div class="header_card">
-                        <img src="img/default_profile.webp" alt="">
-                        <h1>${user.nombre} ${user.apellido}</h1>
-                    </div>
-                    <div class="body_card">
-                        <h3>Edad: ${user.edad} años</h3>
-                        <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
-                        <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                    </div>
-        `;
-        userCardsContainer.appendChild(card);
+        // // Crear el contenido de la tarjeta
+        // card.classList.add('card');
+        // card.innerHTML = `
+        //             <div class="header_card">
+        //                 <img src="img/default_profile.webp" alt="">
+        //                 <h1>${user.nombre} ${user.apellido}</h1>
+        //             </div>
+        //             <div class="body_card">
+        //                 <h3>Edad: ${user.edad} años</h3>
+        //                 <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
+        //                 <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
+        //             </div>
+        // `;
+        // userCardsContainer.appendChild(card);
 
-        // Agregar funcionalidad al hacer click en la tarjeta
-        card.addEventListener('click', () => {
-            if(!has_click){
-                card.innerHTML = ``;
-                card.classList.add('bigCard');
-                // Crear la tabla de rutinas dinámicamente
-                let tableContent = `
-                    <div class="header_card">
-                        <img src="img/default_profile.webp" alt="">
-                        <h1>${user.nombre} ${user.apellido}</h1>
-                        <button id="addRutins" title="Agregar una nueva rutina">+</button>
-                    </div>
-                    <hr class="custom-line"></hr>
-                `;
-                if(user.rutinas.length != 0){ //En caso de rutinas vacias
-                    user.rutinas.forEach( (rutina,index) =>{
-                        tableContent+=`
-                        <div class="body_card">
-                                <h3>Nombre: ${rutina.nombre}</h3>
-                                <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
-                                <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
-                                <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
-                        `;
-                        //Init table
-                        if(has_print_exc == true){
-                            tableContent +=`
-                                    <div class="main_button_class">
-                                        <button id="printTable">Ocultar ejercicios</button> 
-                                        <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                                        <button class="addPeso" data-index="${index}">Agregar pesos</button>
-                                    </div>
-                                </div> 
-                                <div class="tabla">
-                                    <table class="training-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Día</th>
-                                                <th>Ejercicio</th>
-                                                <th>Series</th>
-                                                <th>Repes</th>
-                                                <th>Último peso</th>
-                                                <th>Última fecha de entreno</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                            `;
+        // // Agregar funcionalidad al hacer click en la tarjeta
+        // card.addEventListener('click', () => {
+        //     if(!has_click){
+        //         card.innerHTML = ``;
+        //         card.classList.add('bigCard');
+        //         // Crear la tabla de rutinas dinámicamente
+        //         let tableContent = `
+        //             <div class="header_card">
+        //                 <img src="img/default_profile.webp" alt="">
+        //                 <h1>${user.nombre} ${user.apellido}</h1>
+        //                 <button id="addRutins" title="Agregar una nueva rutina">+</button>
+        //             </div>
+        //             <hr class="custom-line"></hr>
+        //         `;
+        //         if(user.rutinas.length != 0){ //En caso de rutinas vacias
+        //             user.rutinas.forEach( (rutina,index) =>{
+        //                 tableContent+=`
+        //                 <div class="body_card">
+        //                         <h3>Nombre: ${rutina.nombre}</h3>
+        //                         <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
+        //                         <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
+        //                         <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
+        //                 `;
+        //                 //Init table
+        //                 if(has_print_exc == true){
+        //                     tableContent +=`
+        //                             <div class="main_button_class">
+        //                                 <button id="printTable">Ocultar ejercicios</button> 
+        //                                 <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+        //                                 <button class="addPeso" data-index="${index}">Agregar pesos</button>
+        //                             </div>
+        //                         </div> 
+        //                         <div class="tabla">
+        //                             <table class="training-table">
+        //                                 <thead>
+        //                                     <tr>
+        //                                         <th>Día</th>
+        //                                         <th>Ejercicio</th>
+        //                                         <th>Series</th>
+        //                                         <th>Repes</th>
+        //                                         <th>Último peso</th>
+        //                                         <th>Última fecha de entreno</th>
+        //                                     </tr>
+        //                                 </thead>
+        //                                 <tbody>
+        //                     `;
 
                             
-                            // Generar las filas de la tabla con los ejercicios
-                                rutina.semanas[0].dias.forEach((dia, diaIndex) => {
-                                    let exc_count = 0;
-                                    // Alternamos las clases de color según el índice de los días
-                                    let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
+        //                     // Generar las filas de la tabla con los ejercicios
+        //                         rutina.semanas[0].dias.forEach((dia, diaIndex) => {
+        //                             let exc_count = 0;
+        //                             // Alternamos las clases de color según el índice de los días
+        //                             let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
 
-                                    dia.ejercicios.forEach((ejercicio) => {
-                                        if (exc_count == 0) {
-                                            tableContent += `
-                                            <tr class="${dayClass}">
-                                                <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                                                <td>${ejercicio.nombre}</td>
-                                                <td>${ejercicio.serie}</td>
-                                                <td>${ejercicio.repe}</td>
-                                                <td>${ejercicio.peso}kg</td>
-                                                <td>${ejercicio.fecha}</td>
-                                            </tr>`;
-                                            exc_count++;
-                                        } else {
-                                            tableContent += `
-                                            <tr class="${dayClass}">
-                                                <td>${ejercicio.nombre}</td>
-                                                <td>${ejercicio.serie}</td>
-                                                <td>${ejercicio.repe}</td>
-                                                <td>${ejercicio.peso}kg</td>
-                                                <td>${ejercicio.fecha}</td>
-                                            </tr>
-                                        `;
-                                        }
-                                    });
-                                });
+        //                             dia.ejercicios.forEach((ejercicio) => {
+        //                                 if (exc_count == 0) {
+        //                                     tableContent += `
+        //                                     <tr class="${dayClass}">
+        //                                         <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
+        //                                         <td>${ejercicio.nombre}</td>
+        //                                         <td>${ejercicio.serie}</td>
+        //                                         <td>${ejercicio.repe}</td>
+        //                                         <td>${ejercicio.peso}kg</td>
+        //                                         <td>${ejercicio.fecha}</td>
+        //                                     </tr>`;
+        //                                     exc_count++;
+        //                                 } else {
+        //                                     tableContent += `
+        //                                     <tr class="${dayClass}">
+        //                                         <td>${ejercicio.nombre}</td>
+        //                                         <td>${ejercicio.serie}</td>
+        //                                         <td>${ejercicio.repe}</td>
+        //                                         <td>${ejercicio.peso}kg</td>
+        //                                         <td>${ejercicio.fecha}</td>
+        //                                     </tr>
+        //                                 `;
+        //                                 }
+        //                             });
+        //                         });
 
-                                // Cerrar la tabla
-                                tableContent += `
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <hr class="custom-line"></hr>
-                                `;
-                            }else{
-                                tableContent +=`
-                                    <div class="main_button_class">
-                                        <button id="printTable">Mostrar ejercicios</button>
-                                        <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                                        <button class="addPeso" data-index="${index}">Pesos semanales</button>
-                                    </div>
-                                    <hr class="custom-line"></hr>
-                                </div> `
-                            }
+        //                         // Cerrar la tabla
+        //                         tableContent += `
+        //                                     </tbody>
+        //                                 </table>
+        //                             </div>
+        //                             <hr class="custom-line"></hr>
+        //                         `;
+        //                     }else{
+        //                         tableContent +=`
+        //                             <div class="main_button_class">
+        //                                 <button id="printTable">Mostrar ejercicios</button>
+        //                                 <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+        //                                 <button class="addPeso" data-index="${index}">Pesos semanales</button>
+        //                             </div>
+        //                             <hr class="custom-line"></hr>
+        //                         </div> `
+        //                     }
 
-                        card.innerHTML = tableContent;
-                    });//End foreach rutinas   
+        //                 card.innerHTML = tableContent;
+        //             });//End foreach rutinas   
 
-                    const table_button  = document.getElementById("printTable");
-                    const modExcButtons = document.querySelectorAll('.modExc');
-                    const addPesoButton = document.querySelectorAll('.addPeso');
+        //             const table_button  = document.getElementById("printTable");
+        //             const modExcButtons = document.querySelectorAll('.modExc');
+        //             const addPesoButton = document.querySelectorAll('.addPeso');
 
-                    table_button.addEventListener("click", () =>{
-                        has_print_exc = !has_print_exc;
-                        has_click = !has_click;
-                    });
+        //             table_button.addEventListener("click", () =>{
+        //                 has_print_exc = !has_print_exc;
+        //                 has_click = !has_click;
+        //             });
 
-                    modExcButtons.forEach((button, index) => {
-                        button.addEventListener('click', () => {
-                            has_click = !has_click;
-                            const userId = user_id;  
-                            const rutinaId = index;  
-                            window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
-                        });
-                    });
+        //             modExcButtons.forEach((button, index) => {
+        //                 button.addEventListener('click', () => {
+        //                     has_click = !has_click;
+        //                     const userId = user_id;  
+        //                     const rutinaId = index;  
+        //                     window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
+        //                 });
+        //             });
 
-                    addPesoButton.forEach((button, index) => {
-                        button.addEventListener('click', () => {
-                            has_click = !has_click;
-                            const userId = user_id;  
-                            const rutinaId = index;  
-                            window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
-                        });
-                    });
+        //             addPesoButton.forEach((button, index) => {
+        //                 button.addEventListener('click', () => {
+        //                     has_click = !has_click;
+        //                     const userId = user_id;  
+        //                     const rutinaId = index;  
+        //                     window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
+        //                 });
+        //             });
                     
-                }else{ //end if lenght != 0
-                    tableContent+=`
-                        <div class="body_card">
-                                <h3>Actualmente no posee rutinas</h3>
-                                <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
-                                <hr class="custom-line"></hr>
-                        `;
+        //         }else{ //end if lenght != 0
+        //             tableContent+=`
+        //                 <div class="body_card">
+        //                         <h3>Actualmente no posee rutinas</h3>
+        //                         <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
+        //                         <hr class="custom-line"></hr>
+        //                 `;
                     
-                    card.innerHTML = tableContent;
-                }
+        //             card.innerHTML = tableContent;
+        //         }
                 
-                addRutins.addEventListener("click",() =>{
-                    has_click = !has_click;
-                    window.location.href = `rutinsView.html?id=${user_id}`;
-                })
+        //         addRutins.addEventListener("click",() =>{
+        //             has_click = !has_click;
+        //             window.location.href = `rutinsView.html?id=${user_id}`;
+        //         })
 
-            }else{
-                card.classList.remove("bigCard");
-                card.classList.add('card');
-                card.innerHTML = `
-                <div class="header_card">
-                        <img src="img/default_profile.webp" alt="">
-                        <h1>${user.nombre} ${user.apellido}</h1>
-                    </div>
-                    <div class="body_card">
-                        <h3>Edad: ${user.edad} años</h3>
-                        <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
-                        <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                    </div>
-            `; 
-            }
-            has_click = !has_click;
-        });
+        //     }else{
+        //         card.classList.remove("bigCard");
+        //         card.classList.add('card');
+        //         card.innerHTML = `
+        //         <div class="header_card">
+        //                 <img src="img/default_profile.webp" alt="">
+        //                 <h1>${user.nombre} ${user.apellido}</h1>
+        //             </div>
+        //             <div class="body_card">
+        //                 <h3>Edad: ${user.edad} años</h3>
+        //                 <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
+        //                 <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
+        //             </div>
+        //     `; 
+        //     }
+        //     has_click = !has_click;
+        // });
 
-        // Manejo del hover para agrandar la tarjeta
-        card.addEventListener('mouseover', () => {
-            if (!has_click) {
-                card.style.transform = 'scale(1.1)';
-            }
-        });
+        // // Manejo del hover para agrandar la tarjeta
+        // card.addEventListener('mouseover', () => {
+        //     if (!has_click) {
+        //         card.style.transform = 'scale(1.1)';
+        //     }
+        // });
 
-        card.addEventListener('mouseout', () => {
-            if (!has_click) {
-                card.style.transform = 'scale(1)';
-            }
-        });
+        // card.addEventListener('mouseout', () => {
+        //     if (!has_click) {
+        //         card.style.transform = 'scale(1)';
+        //     }
+        // });
 
-        function arraysCount(arrays){
-            let count = 0;
-            arrays.forEach( () => {
-                count++;
-            })
-            return count
-        }
-        function last_training(historial){
-            if(historial.length != 0){
-                let last_train = historial.at(-1)
-                return last_train.fecha
-            } else{
-                return "Sin entrenos previos"
-            }
-        }
-        function excCount(dias){
-            let count = 0;
-            let id_array = [];
-            dias.forEach( (dia) =>{
-                dia.ejercicios.forEach( (ejercicio) =>{
-                    let same_id = 0;
-                    id_array.forEach( (item) =>{
-                        if(item == ejercicio.id_array){
-                            same_id = 1;
-                        }
-                    })
-                    if(same_id == 0){
-                        count++;
-                        id_array.push(ejercicio.id_exc);
-                    }
-                })
-            })
-            return count
-        }
+        // function arraysCount(arrays){
+        //     let count = 0;
+        //     arrays.forEach( () => {
+        //         count++;
+        //     })
+        //     return count
+        // }
+        // function last_training(historial){
+        //     if(historial.length != 0){
+        //         let last_train = historial.at(-1)
+        //         return last_train.fecha
+        //     } else{
+        //         return "Sin entrenos previos"
+        //     }
+        // }
+        // function excCount(dias){
+        //     let count = 0;
+        //     let id_array = [];
+        //     dias.forEach( (dia) =>{
+        //         dia.ejercicios.forEach( (ejercicio) =>{
+        //             let same_id = 0;
+        //             id_array.forEach( (item) =>{
+        //                 if(item == ejercicio.id_array){
+        //                     same_id = 1;
+        //                 }
+        //             })
+        //             if(same_id == 0){
+        //                 count++;
+        //                 id_array.push(ejercicio.id_exc);
+        //             }
+        //         })
+        //     })
+        //     return count
+        // }
     }
 
     // Función para obtener los usuarios desde la API
