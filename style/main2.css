@@ -115,13 +115,14 @@ main {
 .header_card button {
     background-color: #4CAF50;
     color: #ffffff;
-    height: 23px;
-    width: 23px;
+    height: 25px;
+    width: 25px;
     border: 1px solid #4CAF50;
     border-radius: 10px;
-    font-size: 20px;
+    font-size: 15px;
     cursor: pointer;
     margin-left: 10px;
+    text-align: center;
 }
 .header_card button:hover {
     background-color: #45a049;
@@ -301,8 +302,19 @@ footer {
         width: 100%; /* Hacemos que las tarjetas ocupen más espacio en pantallas pequeñas */
         margin: 0px 0; 
     }
-
-
+    .main_button_class {
+        display: flex;
+        flex-direction: row;
+        margin-top: 20px;
+        flex-wrap: wrap;
+        justify-content: space-around;
+    }
+    .modExc, .addPeso,.showExc{
+        margin: 5px;
+    }
+    .button_red {
+        margin: 5px;
+    }
 
     /* foooter */
 

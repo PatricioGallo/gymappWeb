@@ -71,10 +71,11 @@ select {
     }
 
     input[type="number"] {
-        width: 30%; /* Hacemos que los inputs y selects ocupen todo el ancho disponible */
+        width: 40%; /* Hacemos que los inputs y selects ocupen todo el ancho disponible */
         padding: 5px; /* Aumentamos el padding para facilitar la interacción en pantallas táctiles */
-        font-size: 14px;
+        font-size: 12px;
         text-align: center;
+        color: #464646;
     }
 
     button[type="submit"] {
