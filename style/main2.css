@@ -171,7 +171,7 @@ main {
     flex-direction: row;
     margin-top: 20px;
 }
-.button_green {
+.modExc, .addPeso,.showExc{
     background-color: #4CAF50;
     color: #ffffff;
     height: 40px;
@@ -183,7 +183,13 @@ main {
     cursor: pointer;
     padding: 4px;
 }
-.button_green:hover {
+.modExc:hover {
+    background-color: #45a049;
+}
+.addPeso:hover {
+    background-color: #45a049;
+}
+.showExc:hover {
     background-color: #45a049;
 }
 

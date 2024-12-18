@@ -30,48 +30,11 @@
         <!-- Contenedor de tarjetas que se llenará dinámicamente -->
         <section class="person-cards" id="user-cards">
             <div class="person_container">
-                <div class="personal_info">
-                    <div class="profile_info">
-                        <div class="header_card">
-                            <img src="img/default_profile.webp" alt="">
-                            <h1>${user.nombre} ${user.apellido}</h1>
-                        </div>
-                        <div class="body_card">
-                            <h3>Edad: ${user.edad} años</h3>
-                            <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
-                            <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                            <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                            <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                            <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                        </div>
-                    </div>
+                <div class="personal_info" id="personal_info">
                     <div class="exc_info">
-
                     </div>
                 </div>
-                <div class="personal_rutins">
-                    <div class="table_container">
-                        <div class="header_card">
-                            <h1>Rutinas</h1>
-                            <button id="addRutins" title="Agregar una nueva rutina">+</button>
-                        </div>
-                        <div class="body_card">
-                            <hr class="custom-line"></hr>
-                            <h3>Nombre: ${rutina.nombre}</h3>
-                            <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
-                            <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
-                            <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
-                            <div class="main_button_class">
-                                <button class="button_green" id="printTable">Mostrar ejercicios</button>
-                                <button class="button_green" data-index="${index}">Modificar ejercicios</button>
-                                <button class="button_green" data-index="${index}">Pesos semanales</button>
-                                <button class="button_red" data-index="${index}">Eliminar Rutina</button>
-                            </div>
-                        </div> 
-
-    
-                        
-                    </div>
+                <div class="personal_rutins" id="personal_rutins">
                 </div>
             </div>
         </section>

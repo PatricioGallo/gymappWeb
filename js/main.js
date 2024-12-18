@@ -1,29 +1,69 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
     // Seleccionar el contenedor donde se agregarán las tarjetas
-    const userCardsContainer = document.getElementById('user-cards');
+    const personal_info = document.getElementById('personal_info');
+    const personal_rutins = document.getElementById('personal_rutins');
 
     // Función para crear y agregar las tarjetas de los usuarios
     function createUserCard(user, index) {
-        const card = document.createElement('div');
+        const profile_info = document.createElement('div');
         // let has_click = false;
         // let has_print_exc = false;
-        // let user_id = index
+        let user_id = index
 
-        // // Crear el contenido de la tarjeta
-        // card.classList.add('card');
-        // card.innerHTML = `
-        //             <div class="header_card">
-        //                 <img src="img/default_profile.webp" alt="">
-        //                 <h1>${user.nombre} ${user.apellido}</h1>
-        //             </div>
-        //             <div class="body_card">
-        //                 <h3>Edad: ${user.edad} años</h3>
-        //                 <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
-        //                 <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-        //             </div>
-        // `;
-        // userCardsContainer.appendChild(card);
+        // Crear el contenido de la tarjeta personal
+        profile_info.classList.add('profile_info');
+        profile_info.innerHTML = `
+                    <div class="header_card">
+                        <img src="img/default_profile.webp" alt="">
+                        <h1>${user.nombre} ${user.apellido}</h1>
+                    </div>
+                    <div class="body_card">
+                        <h3>Edad: ${user.edad} años</h3>
+                        <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
+                        <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
+                    </div>
+        `;
+        personal_info.appendChild(profile_info);
+
+        // Crear el contenido de la rutina
+        const table_container = document.createElement('div');
+        table_container.classList.add('table_container');
+        let table_container_content = `
+                        <div class="header_card">
+                            <h1>Rutinas</h1>
+                            <button id="addRutins" title="Agregar una nueva rutina">+</button>
+                        </div>
+        `;
+
+        if(user.rutinas.length != 0){ //En caso de rutinas vacias
+            user.rutinas.forEach( (rutina,index) =>{
+                table_container_content+=`
+                <div class="body_card">
+                        <hr class="custom-line"></hr>
+                        <h3>Nombre: ${rutina.nombre}</h3>
+                        <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
+                        <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
+                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
+                        <div class="main_button_class">
+                            <button class="showExc" data-index="${index}">Mostrar ejercicio</button>
+                            <button class="modExc" data-index="${index}">Modificar ejercicios</button>
+                            <button class="addPeso" data-index="${index}">Pesos semanales</button>
+                            <button class="button_red" data-index="${index}">Eliminar Rutina</button>
+                        </div>
+                </div> 
+                `
+            });//end foreach rutina
+        } else{ //else if lenght != 0
+            table_container_content+=`
+                <div class="body_card">
+                        <h3>Actualmente no posee rutinas</h3>
+                        <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
+                        <hr class="custom-line"></hr>
+                `;            
+        }
+        table_container.innerHTML = table_container_content;
+        personal_rutins.appendChild(table_container);
 
         // // Agregar funcionalidad al hacer click en la tarjeta
         // card.addEventListener('click', () => {
@@ -126,32 +166,30 @@ if(gymapp_id != null){
         //                 card.innerHTML = tableContent;
         //             });//End foreach rutinas   
 
-        //             const table_button  = document.getElementById("printTable");
-        //             const modExcButtons = document.querySelectorAll('.modExc');
-        //             const addPesoButton = document.querySelectorAll('.addPeso');
+        const table_button  = document.getElementById("printTable");
+        const modExcButtons = document.querySelectorAll('.modExc');
+        const addPesoButton = document.querySelectorAll('.addPeso');
 
         //             table_button.addEventListener("click", () =>{
         //                 has_print_exc = !has_print_exc;
         //                 has_click = !has_click;
         //             });
 
-        //             modExcButtons.forEach((button, index) => {
-        //                 button.addEventListener('click', () => {
-        //                     has_click = !has_click;
-        //                     const userId = user_id;  
-        //                     const rutinaId = index;  
-        //                     window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
-        //                 });
-        //             });
+        modExcButtons.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `excView.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
 
-        //             addPesoButton.forEach((button, index) => {
-        //                 button.addEventListener('click', () => {
-        //                     has_click = !has_click;
-        //                     const userId = user_id;  
-        //                     const rutinaId = index;  
-        //                     window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
-        //                 });
-        //             });
+        addPesoButton.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
                     
         //         }else{ //end if lenght != 0
         //             tableContent+=`
@@ -200,40 +238,40 @@ if(gymapp_id != null){
         //     }
         // });
 
-        // function arraysCount(arrays){
-        //     let count = 0;
-        //     arrays.forEach( () => {
-        //         count++;
-        //     })
-        //     return count
-        // }
-        // function last_training(historial){
-        //     if(historial.length != 0){
-        //         let last_train = historial.at(-1)
-        //         return last_train.fecha
-        //     } else{
-        //         return "Sin entrenos previos"
-        //     }
-        // }
-        // function excCount(dias){
-        //     let count = 0;
-        //     let id_array = [];
-        //     dias.forEach( (dia) =>{
-        //         dia.ejercicios.forEach( (ejercicio) =>{
-        //             let same_id = 0;
-        //             id_array.forEach( (item) =>{
-        //                 if(item == ejercicio.id_array){
-        //                     same_id = 1;
-        //                 }
-        //             })
-        //             if(same_id == 0){
-        //                 count++;
-        //                 id_array.push(ejercicio.id_exc);
-        //             }
-        //         })
-        //     })
-        //     return count
-        // }
+        function arraysCount(arrays){
+            let count = 0;
+            arrays.forEach( () => {
+                count++;
+            })
+            return count
+        }
+        function last_training(historial){
+            if(historial.length != 0){
+                let last_train = historial.at(-1)
+                return last_train.fecha
+            } else{
+                return "Sin entrenos previos"
+            }
+        }
+        function excCount(dias){
+            let count = 0;
+            let id_array = [];
+            dias.forEach( (dia) =>{
+                dia.ejercicios.forEach( (ejercicio) =>{
+                    let same_id = 0;
+                    id_array.forEach( (item) =>{
+                        if(item == ejercicio.id_array){
+                            same_id = 1;
+                        }
+                    })
+                    if(same_id == 0){
+                        count++;
+                        id_array.push(ejercicio.id_exc);
+                    }
+                })
+            })
+            return count
+        }
     }
 
     // Función para obtener los usuarios desde la API
@@ -245,7 +283,8 @@ if(gymapp_id != null){
 
             switch (users[gymapp_id].user_type) {
             case 0:
-                users.forEach((user,index) => createUserCard(user,index));
+                // users.forEach((user,index) => createUserCard(user,index));
+                createUserCard(users[gymapp_id],gymapp_id);
                 break;
             case 1:
                 alert("tipo 1"); //TODO completar logica
