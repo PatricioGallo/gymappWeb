@@ -23,7 +23,7 @@
 /* Estilo para las entradas de texto */
 input[type="text"], input[type="number"] {
     width: 90%;                  /* Ancho de las entradas */
-    padding: 4px;                /* Espacio interno */
+    padding: 7px;                /* Espacio interno */
     margin: 10px 0;              /* Espaciado entre los campos */
     display: block;              /* Mostrar cada input como bloque */
     border: 1px solid #ccc;      /* Bordes de los inputs */
@@ -51,7 +51,7 @@ button[type="submit"]:hover {
 
 select {
     width: 90%;
-    padding: 4px;
+    padding: 7px;
     border: 1px solid #ccc;
     border-radius: 4px;
     color: black;
@@ -64,10 +64,17 @@ select {
         width: 95%;  /* Aumentamos el ancho para aprovechar mejor la pantalla del móvil */
     }
 
-    input[type="text"], input[type="number"], select {
+    input[type="text"], select {
         width: 100%; /* Hacemos que los inputs y selects ocupen todo el ancho disponible */
-        padding: 3px; /* Aumentamos el padding para facilitar la interacción en pantallas táctiles */
-        font-size: 10px; /* Aumentamos el tamaño de la fuente para mejorar la legibilidad en móviles */
+        padding: 8px; /* Aumentamos el padding para facilitar la interacción en pantallas táctiles */
+        font-size: 12px; /* Aumentamos el tamaño de la fuente para mejorar la legibilidad en móviles */
+    }
+
+    input[type="number"] {
+        width: 30%; /* Hacemos que los inputs y selects ocupen todo el ancho disponible */
+        padding: 5px; /* Aumentamos el padding para facilitar la interacción en pantallas táctiles */
+        font-size: 14px;
+        text-align: center;
     }
 
     button[type="submit"] {

@@ -79,20 +79,22 @@ function printExc(user){
                         })
                         main_body +=`
                             </select></td>
-                            <td><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" ></td>
-                            <td><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}"></td>
+                            <td><center><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" ></center></td>
+                            <td><center><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}"></center></td>
                         </tr>`;
                         exc_count++;
                     } else {
                         main_body += `
                         <tr class="${dayClass}">
                             <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex}" required>
-                                <option value="${exc.nombre}">${exc.nombre}</option>
-                                <option value="pecho plano">Pecho Plano</option>
-                                <option value="pecho inclinado">Pecho Inclinado</option>
-                            </select></td>
-                            <td><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}"></td>
-                            <td><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}"></td>
+                                <option value="${exc.nombre}">${exc.nombre}</option>`
+                                exc_api_array.forEach((exc)=>{
+                                    main_body += `<option value="${exc.id}">${exc.name}</option>`
+                                })
+                                main_body +=`
+                                </select></td>
+                            <td><center><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}"></center></td>
+                            <td><center><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}"></center></td>
                         </tr>
                     `;
                     }
@@ -188,6 +190,7 @@ async function fetchExc() {
         const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
         const exc = await response.json();
         exc_api_array = exc;
+        exc_api_array.sort((a, b) => a.name.localeCompare(b.name));
 
     } catch (error) {
         console.error('Error al obtener los usuarios:', error);
