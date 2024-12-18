@@ -18,8 +18,9 @@ if(gymapp_id != null){
                     </div>
                     <div class="body_card">
                         <h3>Edad: ${user.edad} años</h3>
-                        <h3>Rutinas: ${arraysCount(user.rutinas)}</h3>
+                        <h3>Cantidad de rutinas: ${arraysCount(user.rutinas)}</h3>
                         <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
+                        <h3>Ultima ejercicio entrenado: ${last_exc(user.historial)}</h3>
                     </div>
         `;
         personal_info.appendChild(profile_info);
@@ -42,7 +43,10 @@ if(gymapp_id != null){
                         <h3>Nombre: ${rutina.nombre}</h3>
                         <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
                         <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
-                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
+                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} </h3>
+                        <h3>Porcentaje de la rutina: ${porcentaje(rutina)}% </h3>
+                        <h3>Ultima semana entrenada: Semana ${last_week(rutina)} </h3>
+                        <h3>Ultimo dia entrenado: ${last_day(rutina)} </h3>
                         <div class="main_button_class">
                             <button class="showExc" data-index="${index}">Mostrar ejercicios</button>
                             <button class="modExc" data-index="${index}">Modificar ejercicios</button>
@@ -110,6 +114,14 @@ if(gymapp_id != null){
                 return "Sin entrenos previos"
             }
         }
+        function last_exc(historial){
+            if(historial.length != 0){
+                let last_train = historial.at(-1)
+                return exc_api_array[parseInt(last_train.id_exc)].name
+            } else{
+                return "Sin entrenos previos"
+            }
+        }
         function excCount(dias){
             let count = 0;
             let id_array = [];
@@ -128,6 +140,66 @@ if(gymapp_id != null){
                 })
             })
             return count
+        }
+        function porcentaje(rutina){
+            let exc_count = 0;
+            let count = 0;
+            rutina.semanas.forEach( (semana) =>{
+                semana.dias.forEach((dia)=>{
+                    dia.ejercicios.forEach(exc => {
+                        if(exc.peso != 0){
+                            count++; 
+                        }
+                        exc_count++;
+                    });
+                })
+            })
+            console.log(exc_count)
+            console.log(count)
+            return(parseInt((count/exc_count)*100))
+        }
+
+        function last_week(rutina) {  
+            let week_num = 0;      
+            rutina.semanas.reverse().forEach((semana) => {
+                semana.dias.reverse().forEach((dia) => {
+                    dia.ejercicios.reverse().forEach((exc) => {
+                        if(week_num == 0){
+                            if (exc.peso != 0) {
+                                week_num = semana.numero
+                            }
+                        }
+                    });
+                });
+            });   
+            return week_num
+        }
+        function last_day(rutina) {  
+            let day_name = 0;      
+            rutina.semanas.reverse().forEach((semana) => {
+                semana.dias.reverse().forEach((dia) => {
+                    dia.ejercicios.reverse().forEach((exc) => {
+                        if(day_name == 0){
+                            if (exc.peso != 0) {
+                                day_name = dia.nombre
+                            }
+                        }
+                    });
+                });
+            });   
+            return day_name
+        }
+    }
+
+    async function fetchExc() {
+        try {
+            // Hacer la solicitud a la API
+            const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
+            const exc = await response.json();
+            exc_api_array = exc;
+    
+        } catch (error) {
+            console.error('Error al obtener los usuarios:', error);
         }
     }
 
@@ -159,6 +231,7 @@ if(gymapp_id != null){
     }
 
     // Llamar a la función para obtener los usuarios al cargar la página
+    fetchExc();
     fetchUsers();
 } else {
     window.location.href = `login.html`;
