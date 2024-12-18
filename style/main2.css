@@ -54,7 +54,7 @@ header {
     font-size: 16px; /* Ajusta el tamaño de la fuente */
 }
 
-/* Main */
+/* Main Content */
 
 /* Main content - ocupando todo el ancho */
 main {
@@ -73,6 +73,7 @@ main {
     display: flex;
     width: 100%;
     flex-direction: row;
+    flex-wrap: wrap;
 }
 .personal_info{
     display: flex;
@@ -247,4 +248,70 @@ footer {
 
 .footer-right img:hover {
     transform: scale(1.4);
+}
+
+
+/* Adaptación para dispositivos móviles */
+@media (max-width: 600px) {
+    /* header */
+    header {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .logo img {
+        width: 80px;
+        height: 80px;
+        margin-left: 0;
+    }
+
+    .card:hover {
+        transform: scale(1);
+        cursor: pointer; /* Cambia a la mano cuando pasas sobre la tarjeta */
+    }
+    
+    .nav-menu ul {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin-top: 20px;
+        margin-right: 0;
+    }
+
+    .nav-menu ul li {
+        display: block;
+        margin-bottom: 10px;
+    }
+
+    /* main */
+    .person-cards {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .person_container{
+        flex-direction: column;
+        align-items: center;
+    }
+    .personal_info{
+        width: 100%; /* Hacemos que las tarjetas ocupen más espacio en pantallas pequeñas */
+        margin: 0px 0;
+    }
+    .personal_rutins{
+        width: 100%; /* Hacemos que las tarjetas ocupen más espacio en pantallas pequeñas */
+        margin: 0px 0; 
+    }
+
+
+
+    /* foooter */
+
+    footer {
+        flex-direction: column;
+        text-align: center;
+    }
+    .footer-left {
+        margin-bottom: 10px;
+    }
+    
 }

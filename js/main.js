@@ -166,14 +166,17 @@ if(gymapp_id != null){
         //                 card.innerHTML = tableContent;
         //             });//End foreach rutinas   
 
-        const table_button  = document.getElementById("printTable");
+        const showExcButton = document.querySelectorAll('.showExc');
         const modExcButtons = document.querySelectorAll('.modExc');
         const addPesoButton = document.querySelectorAll('.addPeso');
 
-        //             table_button.addEventListener("click", () =>{
-        //                 has_print_exc = !has_print_exc;
-        //                 has_click = !has_click;
-        //             });
+        showExcButton.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `showExc.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
 
         modExcButtons.forEach((button, index) => {
             button.addEventListener('click', () => {
