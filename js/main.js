@@ -46,7 +46,7 @@ if(gymapp_id != null){
                         <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
                         <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} ejercicios</h3>
                         <div class="main_button_class">
-                            <button class="showExc" data-index="${index}">Mostrar ejercicio</button>
+                            <button class="showExc" data-index="${index}">Mostrar ejercicios</button>
                             <button class="modExc" data-index="${index}">Modificar ejercicios</button>
                             <button class="addPeso" data-index="${index}">Pesos semanales</button>
                             <button class="button_red" data-index="${index}">Eliminar Rutina</button>
@@ -202,10 +202,9 @@ if(gymapp_id != null){
         //             card.innerHTML = tableContent;
         //         }
                 
-        //         addRutins.addEventListener("click",() =>{
-        //             has_click = !has_click;
-        //             window.location.href = `rutinsView.html?id=${user_id}`;
-        //         })
+        addRutins.addEventListener("click",() =>{
+            window.location.href = `rutinsView.html?id=${user_id}`;
+        })
 
         //     }else{
         //         card.classList.remove("bigCard");
