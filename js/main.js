@@ -76,6 +76,7 @@ if(gymapp_id != null){
         const showExcButton = document.querySelectorAll('.showExc');
         const modExcButtons = document.querySelectorAll('.modExc');
         const addPesoButton = document.querySelectorAll('.addPeso');
+        const delRutin      = document.querySelectorAll('.button_red');
 
         showStats.addEventListener("click",()=>{
             const userId = user_id;  
@@ -103,6 +104,14 @@ if(gymapp_id != null){
                 const userId = user_id;  
                 const rutinaId = index;  
                 window.location.href = `pesos.html?id=${userId}&rutina=${rutinaId}`;
+            });
+        });
+
+        delRutin.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const userId = user_id;  
+                const rutinaId = index;  
+                window.location.href = `deleteRutins.html?id=${userId}&rutina=${rutinaId}`;
             });
         });
                 

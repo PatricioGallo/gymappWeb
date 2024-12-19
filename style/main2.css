@@ -178,7 +178,6 @@ main {
     color: #ffffff;
     height: 40px;
     width: 80px;
-    margin-right: 20px;
     border: 1px solid #127daf;
     border-radius: 10px;
     font-size: 12px;
@@ -331,6 +330,9 @@ footer {
     }
     .button_red {
         margin: 5px;
+    }
+    .body_card{
+        margin-left: 0px;
     }
 
     /* foooter */
