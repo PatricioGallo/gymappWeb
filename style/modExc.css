@@ -52,6 +52,12 @@
     font-weight: normal;
 }
 
+canvas {
+    width: 100%;
+    height: auto;
+    min-height: 350px;
+}
+
 
 /* Estilo para las entradas de texto */
 input[type="text"], input[type="number"] {
@@ -131,5 +137,9 @@ canvas {
     }
     .configHeader h1{
         font-size: 18px;
+    }
+    .configPlusContent{
+        width: 100%;
+
     }
 }

@@ -164,8 +164,6 @@ if(gymapp_id != null){
                     });
                 })
             })
-            console.log(exc_count)
-            console.log(count)
             return(parseInt((count/exc_count)*100))
         }
 

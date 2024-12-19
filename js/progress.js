@@ -8,6 +8,7 @@ let exc_api_array;
 let data;
 let dates = [];
 let weights = [];
+let trainedExc = [];
 
 function printExc(user){
     const configBody = document.createElement('div');
@@ -23,7 +24,9 @@ function printExc(user){
                         <br><label for="name">Selecciona el ejercicio que desea realizar un seguimiento</label></br></br>
                         <select id="exc_id" name="exc_id" required autocomplete="off" autocorrect="off" autocapitalize="none">
         `
-        exc_api_array.forEach((exc,index) => {
+        makeTrainedArray(user.historial);
+
+        trainedExc.forEach((exc) => {
         main_body += `
             <option value="${exc.id}">${exc.name} (by: ${exc.author})</option>
         `
@@ -49,7 +52,7 @@ function printExc(user){
                     <h1>Datos del ejercicio "${exc_name}"</h1>
                 </div>
                 <div class="configForm">
-                    <canvas id="exerciseChart" width="400" height="200"></canvas>
+                    <canvas id="exerciseChart"></canvas>
                 </div>
                 <div class="configPlus">
                     <div class="configPlusContent">
@@ -83,7 +86,7 @@ function printExc(user){
             data: data,
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // Permite ajustar la proporción
+                maintainAspectRatio: false, // Permitir ajuste dinámico de proporciones
                 plugins: {
                     legend: {
                         position: 'top', // Posición de la leyenda
@@ -117,7 +120,7 @@ function printExc(user){
         const ctx = document.getElementById('exerciseChart').getContext('2d');
         new Chart(ctx, config);
 
-        //functions
+        //Functions
         function arraysCount(arrays){
             let count = 0;
             arrays.forEach( () => {
@@ -193,6 +196,31 @@ function printExc(user){
         }
     
     });//End submit
+
+    function makeTrainedArray(historial){
+        let trainedHist = [];
+        historial.forEach((exc) => {
+            if (!trainedHist.some(item => item.id_exc === exc.id_exc)) {
+                let obj = {
+                    peso: exc.peso,
+                    fecha: exc.fecha,
+                    id_exc: exc.id_exc
+                };
+                trainedHist.push(obj);
+            }
+        });    
+        exc_api_array.forEach((exc) => {
+            if (trainedHist.some(item => item.id_exc == exc.id)) {
+                let obj = {
+                    id: exc.id,
+                    name: exc.name,
+                    info: exc.info,
+                    author: exc.author
+                };
+                trainedExc.push(obj);
+            }
+        })
+    }
 }
 
 // Función para obtener los usuarios desde la API
