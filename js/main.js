@@ -21,6 +21,9 @@ if(gymapp_id != null){
                         <h3>Cantidad de rutinas: ${arraysCount(user.rutinas)}</h3>
                         <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
                         <h3>Ultima ejercicio entrenado: ${last_exc(user.historial)}</h3>
+                        <div class="main_button_class">
+                            <button id="stats" class="statsButton">Ver estadisticas</button>
+                        </div>
                     </div>
         `;
         personal_info.appendChild(profile_info);
@@ -66,10 +69,17 @@ if(gymapp_id != null){
         }
         table_container.innerHTML = table_container_content;
         personal_rutins.appendChild(table_container);
-
+        
+        //Buttons
+        const showStats     = document.getElementById("stats");
         const showExcButton = document.querySelectorAll('.showExc');
         const modExcButtons = document.querySelectorAll('.modExc');
         const addPesoButton = document.querySelectorAll('.addPeso');
+
+        showStats.addEventListener("click",()=>{
+            const userId = user_id;  
+            window.location.href = `progress.html?id=${userId}`;
+        })
 
         showExcButton.forEach((button, index) => {
             button.addEventListener('click', () => {

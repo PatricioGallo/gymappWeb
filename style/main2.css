@@ -173,6 +173,23 @@ main {
     flex-direction: row;
     margin-top: 20px;
 }
+.statsButton{
+    background-color: #1395d1;
+    color: #ffffff;
+    height: 40px;
+    width: 80px;
+    margin-right: 20px;
+    border: 1px solid #127daf;
+    border-radius: 10px;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px;  
+}
+
+.statsButton:hover {
+    background-color: #127daf;
+}
+
 .modExc, .addPeso,.showExc{
     background-color: #4CAF50;
     color: #ffffff;
