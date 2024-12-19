@@ -3,6 +3,7 @@ if(gymapp_id != null){
     // Seleccionar el contenedor donde se agregarán las tarjetas
     const personal_info = document.getElementById('personal_info');
     const personal_rutins = document.getElementById('personal_rutins');
+    let exc_api_array;
 
     // Función para crear y agregar las tarjetas de los usuarios
     function createUserCard(user, index) {
@@ -125,12 +126,18 @@ if(gymapp_id != null){
             }
         }
         function last_exc(historial){
+            let ret;
             if(historial.length != 0){
                 let last_train = historial.at(-1)
-                return exc_api_array[parseInt(last_train.id_exc)].name
+                exc_api_array.forEach((exc)=>{
+                    if(exc.id == last_train.id_exc){
+                        ret = exc.name;
+                    }
+                })
             } else{
-                return "Sin entrenos previos"
+                ret = "Sin entrenos previos";
             }
+            return ret
         }
         function excCount(dias){
             let count = 0;
