@@ -108,9 +108,10 @@ function printExc(user){
                             display: true,
                             text: 'Peso (kg)'
                         },
-                        beginAtZero: true, // Comienza desde 0
+                        beginAtZero: false, // Ignorar el inicio en 0
+                        min: minWeight(user.historial,exc_id)-10, // Define el valor mínimo del eje Y
                         ticks: {
-                            stepSize: 5 // Define que el peso aumente de 5 en 5
+                            stepSize: 1 // Define que el peso aumente de 5 en 5
                         }
                     }
                 }
