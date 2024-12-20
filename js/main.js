@@ -21,7 +21,6 @@ if(gymapp_id != null){
                         <h3>Edad: ${user.edad} años</h3>
                         <h3>Cantidad de rutinas: ${arraysCount(user.rutinas)}</h3>
                         <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                        <h3>Ultima ejercicio entrenado: ${last_exc(user.historial)}</h3>
                         <div class="main_button_class">
                             <button id="stats" class="statsButton">Ver estadisticas</button>
                         </div>
@@ -134,20 +133,20 @@ if(gymapp_id != null){
                 return "Sin entrenos previos"
             }
         }
-        function last_exc(historial){
-            let ret;
-            if(historial.length != 0){
-                let last_train = historial.at(-1)
-                exc_api_array.forEach((exc)=>{
-                    if(exc.id == last_train.id_exc){
-                        ret = exc.name;
-                    }
-                })
-            } else{
-                ret = "Sin entrenos previos";
-            }
-            return ret
-        }
+        // function last_exc(historial){
+        //     let ret;
+        //     if(historial.length != 0){
+        //         let last_train = historial.at(-1)
+        //         exc_api_array.forEach((exc)=>{
+        //             if(exc.id == last_train.id_exc){
+        //                 ret = exc.name;
+        //             }
+        //         })
+        //     } else{
+        //         ret = "Sin entrenos previos";
+        //     }
+        //     return ret
+        // }
         function excCount(dias){
             let count = 0;
             let id_array = [];
