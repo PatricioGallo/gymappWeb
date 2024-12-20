@@ -36,10 +36,10 @@
 }
 .form a {
     text-decoration: none;
-    color: black;
+    color: rgb(41, 141, 255);
 }
 .form a:hover {
-    color: #333;
+    color: rgb(33, 100, 177);;
 }
 
 /* Estilo de los campos de entrada */
