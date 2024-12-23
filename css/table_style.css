@@ -1,0 +1,29 @@
+.training-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 auto;
+}
+
+.training-table th, .training-table td {
+    border: 1px solid #ffffff;
+    padding: 8px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.training-table th {
+    background-color: #bd2130;
+    color: white;
+}
+
+.day-dark {
+    background-color: #e0e0e0; /* Color gris oscuro */
+}
+
+.day-light {
+    background-color: #f2f2f2; /* Color gris claro */
+}
+
+.training-table td {
+    color: #333;
+}

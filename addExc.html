@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="viewport" content="initial-scale=1, maximum-scale=1">
 <!-- site metas -->
-<title>Contact</title>
+<title>Nuevo Ejercicio - GymApp</title>
 <meta name="keywords" content="">
 <meta name="description" content="">
 <meta name="author" content=""> 
@@ -43,7 +43,7 @@
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
           <ul class="navbar-nav mr-auto">
             <li class="nav-item">
-              <a class="nav-link" href="profile.html">INICIO</a>
+              <a class="nav-link" href="profile.html">MI PERFIL</a>
             </li>
             <li class="nav-item">
               <a class="nav-link" href="about.html">EJERCICIOS</a>
@@ -56,32 +56,31 @@
       </nav>
     </div>
   </div>
-  <!--header section end -->
-    <!-- Main content -->
-    <main>
-        <!-- Contenedor de tarjetas que se llenará dinámicamente -->
-        <section class="person-cards" id="user-cards">
-            <div class="mainBody">
-                <div class="form_body">\
-                    <div class="form_body">
-                        <div class="header_form">
-                            <h1>Agregar nuevos ejercicios</h1>
-                        </div>
-                    <div class="form">
-                        <form id="myForm">
-                            <label for="excName">Nombre del ejericio</label>
-                            <input type="text" id="excName" name="excName" required><br>
-    
-                            <label for="description">Descripción</label>
-                            <textarea id="description" name="description" rows="4" cols="50" placeholder="Escribe una descripción..." required></textarea><br>
-    
-                            <button type="submit">Subir</button>
-                        </form>
-                    </div>
+    <!--header section end -->
+    <div class="Contact_section layout_padding">
+      <div class="container">
+        <h1 class="categories_text">Agregar un ejercicio nuevo</h1>
+        <p class="services_text">Completando el siguiente formulario podras ingresar un ejercicio personalizado, que se guardara en nuestra base de datos con tu nombre de autor, para que puedas utilziarlo luego en tus rutinas personalizadas. 
+          <br/>Recuerda compeltar con el nombre especifico del ejercicio y una breve descripcion (maximo 140 caracteres) 
+        </p>
+        <div class="email_box">
+          <div class="input_main">
+            <form id="myForm">
+                <div class="form-group">
+                  <input type="text" class="email-bt" placeholder="Nombre del ejercicio" name="excName" id="excName">
                 </div>
-            </div>
-        </section>
-    </main>
+                <div class="form-group">
+                  <textarea id="description" class="email-bt" name="description" rows="6" cols="75" placeholder="Escribe una breve descripción del ejercicio..." required></textarea><br>
+                </div>
+                <div class="send_bt">
+                  <button type="submit" class="login-botton">AGREGAR</button>
+                </div>
+              </form>                     
+          </div>
+        </div>
+      </div>
+    </div>
+  
     <!--contact section end -->
     <div class="contact_section_2 layout_padding">
       <div class="container">

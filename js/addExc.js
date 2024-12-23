@@ -9,8 +9,44 @@ if(gymapp_id != null){
         excName = document.getElementById("excName").value;
         description = document.getElementById("description").value;
         userName = parseInt(userName) + 1;
-        addExc(excName,description,userName);
+        let switch_resp = debugItem(excName.length,description.length);
+
+        switch (switch_resp) {
+            case 0:
+                alert("Nombre del ejercicio muy corto")
+                break;
+            case 1:
+                alert("Nombre del ejercicio muy largo")
+                break;
+            case 2:
+                alert("Descripcion del ejercicio muy corta")
+                break;
+            case 3:
+                alert("Descripcion del ejercicio muy larga")
+                break;
+            case 4:
+                addExc(excName,description,userName);
+                break;
+            default:
+            console.log("Error: sin coincidencias en el case");
+        }
+
     })
+
+    function debugItem(exc,des){
+        if(exc < 5 ){
+            return 0
+        } else if (exc > 60){
+            return 1
+        } else if(des < 30){
+            return 2
+        } else if(des > 140){
+            return 3
+        } else{
+            return 4
+        }
+
+    }
 
     async function addExc(excName,description,userName) {
         const newRutin = {

@@ -38,7 +38,6 @@ if(gymapp_id == null){
                     if(user.contrasena == pass){
                         pass_status = true;
                         localStorage.setItem('gymapp_id',index);
-                        console.log("Guardo en localstorage")
                     }
                 }
             });
