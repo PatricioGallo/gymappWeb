@@ -34,14 +34,14 @@ if(gymapp_id != null){
             <div class="form">
                         <form id="myForm">
                             <div class="form-group">
-                                <input type="text" class="email-bt" placeholder="Nombre de la rutina" name="name" id="name">
+                                <input type="text" class="email-bt" placeholder="Nombre de la rutina" name="name" id="name" required>
                             </div>
                             <div class="form-group">
-                                <input type="number" class="email-bt" placeholder="Cantidad de semanas" name="weeks" id="weeks" min="1" max="10">
+                                <input type="number" class="email-bt" placeholder="Cantidad de semanas" name="weeks" id="weeks" min="1" max="10" required>
                             </div>
 
                             <div class="form-group">
-                                <input type="number" class="email-bt" placeholder="Cantidad de dias" name="days" id="days" min="1" max="7">
+                                <input type="number" class="email-bt" placeholder="Cantidad de dias" name="days" id="days" min="1" max="7" required>
                             </div>
                             <div class="send_bt">
                                 <button type="submit" class="login-botton">CREAR TABLA</button>
@@ -130,6 +130,7 @@ if(gymapp_id != null){
 
                 document.getElementById('login-botton').addEventListener('click', (event) =>{
                     event.preventDefault();
+                    console.log("entroi aqui")
                     let error = 0;
                     for (let d = 0; d < days; d++) { 
                         let day_obj = {

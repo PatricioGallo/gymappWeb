@@ -21,19 +21,19 @@ if(gymapp_id != null){
                 <div class="col-sm-4">
                 <a href="#rutinas"><div class="box_main">
                     <div class="icon_1"></div>
-                    <a href="#rutinas"><h6 class="heavy_text">ENTRENAMIENTO <br>Rutinas</h6></a>
+                    <a href="#rutinas"><h6 class="heavy_text">ENTRENAMIENTO <br>Rutinas</h6>
                 </div></a>
                 </div>
                 <div class="col-sm-4">
                 <a href="progress.html?id=${user_id}"><div class="box_main active">
                     <div class="icon_2"></div>
-                    <h6 class="heavy_text active">GRAFICOS <br>Y AVANCES</h6></a>
+                    <h6 class="heavy_text active">GRAFICOS <br>Y AVANCES</h6>
                 </div></a>
                 </div>
                 <div class="col-sm-4">
-                <a href=""><div class="box_main">
+                <a href="rutinsView.html?id=${user_id}"><div class="box_main">
                     <div class="icon_3"></div>
-                    <a href="rutinsView.html?id=${user_id}"><h6 class="heavy_text">CREAR <br>NUEVA RUTINA</h6></a>
+                    <h6 class="heavy_text">CREAR <br>NUEVA RUTINA</h6>
                 </div></a>
                 </div>
             </div>
