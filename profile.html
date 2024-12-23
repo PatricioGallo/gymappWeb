@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="viewport" content="initial-scale=1, maximum-scale=1">
 <!-- site metas -->
-<title>Contact</title>
+<title>Perfil - GymApp</title>
 <meta name="keywords" content="">
 <meta name="description" content="">
 <meta name="author" content=""> 
@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="css/owl.carousel.min.css">
 <link rel="stylesheet" href="css/owl.theme.default.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.css" media="screen">
-
+<link rel="stylesheet" href="css/main2.css">
 </head>
 <body>
   <!--header section start -->
@@ -46,10 +46,10 @@
               <a class="nav-link" href="profile.html">INICIO</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="about.html">EJERCICIOS</a>
+              <a class="nav-link" href="addExc.html">EJERCICIOS</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="services.html">SALIR</a>
+              <a class="nav-link" href="exit.html">SALIR</a>
             </li>
           </ul>
         </div>
@@ -57,68 +57,37 @@
     </div>
   </div>
   <!--header section end -->
-    <!-- Main content -->
-    <main>
-        <!-- Contenedor de tarjetas que se llenará dinámicamente -->
-        <section class="person-cards" id="user-cards">
-            <div class="mainBody">
-                <div class="form_body">\
-                    <div class="form_body">
-                        <div class="header_form">
-                            <h1>Agregar nuevos ejercicios</h1>
-                        </div>
-                    <div class="form">
-                        <form id="myForm">
-                            <label for="excName">Nombre del ejericio</label>
-                            <input type="text" id="excName" name="excName" required><br>
-    
-                            <label for="description">Descripción</label>
-                            <textarea id="description" name="description" rows="4" cols="50" placeholder="Escribe una descripción..." required></textarea><br>
-    
-                            <button type="submit">Subir</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-    <!--contact section end -->
+
+    <!--services section start -->
+    <div class="services_section layout_padding" id="services_section">
+    </div>
+    <!--services section end -->
+
+    <!--trainer section start -->
+    <div class="trainer_section layout_padding">
+      <div class="container">
+        <h1 class="services_taital">Tu informacion</h1>
+        <p class="services_text">Aqui encontraras una leve descripcion de tus entrenamientos.</p>
+        <div class="trainer_section_2 layout_padding" id="trainer_section_2">
+        </div>
+      </div>
+    </div>
+    <!--trainer section end -->
+
+    <!--rutins section end -->
     <div class="contact_section_2 layout_padding">
       <div class="container">
-        <h1 class="services_taital">Our Trainer</h1>
-        <p class="services_text">Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a</p>
-        <div id="carouselExampleIndicators" class="carousel slide" data-ride="carousel">
-          <ol class="carousel-indicators">
-            <li data-target="#carouselExampleIndicators" data-slide-to="0" class="active"></li>
-            <li data-target="#carouselExampleIndicators" data-slide-to="1"></li>
-            <li data-target="#carouselExampleIndicators" data-slide-to="2"></li>
-          </ol>
-          <div class="carousel-inner">
-            <div class="carousel-item active">
-              <div class="duit_box">
-                <h1 class="duis_text">Duis aute</h1>
-                <p class="dolor_text">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. x ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate</p>
+        <h1 class="services_taital" id="rutinas">Rutinas</h1>
+        <p class="services_text">En esta seccion encontraras tus rutinas activas y el historial de las mismas.</p>
+          <section class="person-cards" id="user-cards">
+              <div class="person_container">
+                  <div class="personal_rutins" id="personal_rutins">
+                  </div>
               </div>
-              <div class="quote_icon"><img src="images/quote-icon.png"></div>
-            </div>
-            <div class="carousel-item">
-              <div class="duit_box">
-                <h1 class="duis_text">Duis aute</h1>
-                <p class="dolor_text">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. x ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate</p>
-              </div>
-              <div class="quote_icon"><img src="images/quote-icon.png"></div>
-            </div>
-            <div class="carousel-item">
-              <div class="duit_box">
-                <h1 class="duis_text">Duis aute</h1>
-                <p class="dolor_text">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. x ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate</p>
-              </div>
-              <div class="quote_icon"><img src="images/quote-icon.png"></div>
-            </div>
-          </div>
-        </div>
+          </section>
       </div>      
     </div>
+
   <!--footer section start -->
   <div class="footer_section layout_padding">
     <div class="container">
@@ -182,9 +151,7 @@
         <div class="copyright_text">Copyright 2024 All Right Reserved By <a href="https://html.design">Free html  Templates</a></div>
     </div>
   </div>
-  <!-- Conexión al archivo de JavaScript -->
-  <script src="js/addExc.js"></script>
-  
+
   <!--footer section end -->
   <!-- Javascript files-->
   <script src="js/jquery.min.js"></script>
@@ -198,5 +165,7 @@
   <!-- javascript --> 
   <script src="js/owl.carousel.js"></script>
   <script src="https:cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.js"></script>
+   <!-- Conexión al archivo de JavaScript -->
+   <script src="js/main.js"></script>
 </body>
 </html>

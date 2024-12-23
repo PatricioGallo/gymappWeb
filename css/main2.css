@@ -1,0 +1,185 @@
+.person-cards {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    flex-wrap: wrap; /* Para permitir que las tarjetas se adapten en varias líneas en pantallas pequeñas */
+}
+.person_container{
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+.personal_info{
+    display: flex;
+    width: 35%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.profile_info{
+    min-height: 180px;
+    width: 90%;
+    background-color: rgb(255, 255, 255);
+    border: 1px solid #a1e1ff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    cursor: default; /* Puntero por defecto */
+    margin: 20px; /* Separación entre tarjetas */
+    display: flex;
+    flex-direction: column;
+}
+.header_card {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.header_card h1 {
+    font-size: 18px;
+    margin-left: 10px;
+}
+.header_card img {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+}
+.header_card button {
+    background-color: #4CAF50;
+    color: #ffffff;
+    height: 25px;
+    width: 25px;
+    border: 1px solid #4CAF50;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-left: 10px;
+    text-align: center;
+}
+.header_card button:hover {
+    background-color: #45a049;
+}
+.body_card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 20px;
+    margin-left: 20px;
+}
+.body_card a {
+    text-decoration: none;
+    color: #4e4e4e;
+}
+.body_card a:hover {
+    color: #a3a3a3;
+}
+.body_card h3 {
+    font-size: 14px;
+    color: #4e4e4e;
+    margin-bottom: 5px;
+    font-weight: normal;
+}
+.personal_rutins{
+    display: flex;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+/* Contenedor general para elementos como tablas o tarjetas */
+.table_container {
+    min-height: 180px;
+    width: 90%;
+    background-color: #fff; /* Fondo más claro y limpio */
+    border: 1px solid #dcdcdc; /* Borde gris suave */
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Sombra ligera y elegante */
+    cursor: default;
+    margin: 20px auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: 'Poppins', sans-serif; /* Tipografía moderna */
+}
+
+/* Contenedor para botones principales */
+.main_button_class {
+    display: flex;
+    flex-direction: row;
+    margin-top: 30px;
+    gap: 10px; /* Espaciado uniforme entre botones */
+    justify-content: center;
+}
+
+/* Botón de estadísticas */
+.statsButton {
+    background-color: #007bff; /* Azul más moderno */
+    color: #ffffff; /* Texto blanco para contraste */
+    height: 40px;
+    width: 100px;
+    border: 1px solid #0056b3; /* Borde más oscuro */
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 5px 10px;
+    transition: all 0.3s ease;
+}
+
+.statsButton:hover {
+    background-color: #0056b3; /* Azul más oscuro al pasar el cursor */
+    transform: translateY(-2px); /* Animación ligera */
+}
+
+
+/* Botones de acción */
+.modExc, .addPeso, .showExc {
+    color: #ff0000;
+    background-color: #fff;
+    height: 50px;
+    width: 100px;
+    margin-right: 10px;
+    border: 2px solid #ff0000; 
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    padding: 5px 10px;
+}
+
+.modExc:hover, .addPeso:hover, .showExc:hover {
+    background-color: #bd2130; /* Verde más oscuro al pasar el cursor */
+    color: #ffffff;
+    transform: scale(1.05); /* Aumento ligero */
+}
+
+/* Botón rojo para acciones críticas */
+.button_red {
+    background-color: #dc3545; /* Rojo moderno */
+    color: #ffffff;
+    height: 50px;
+    width: 100px;
+    margin-right: 10px;
+    border: 1px solid #bd2130;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 5px 10px;
+    transition: all 0.3s ease;
+}
+
+.button_red:hover {
+    background-color: #bd2130; /* Rojo más oscuro al pasar el cursor */
+    transform: scale(1.05);
+}
+
+.custom-line {
+    border: none;
+    height: 2px;
+    background-color: #b1b1b1;
+    margin: 20px 0;
+}

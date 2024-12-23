@@ -4,56 +4,85 @@ if(gymapp_id != null){
     const personal_info = document.getElementById('personal_info');
     const personal_rutins = document.getElementById('personal_rutins');
     let exc_api_array;
+    const trainer_section_2 = document.getElementById('trainer_section_2');
+    const services_section = document.getElementById('services_section');
 
     // Función para crear y agregar las tarjetas de los usuarios
     function createUserCard(user, index) {
         const profile_info = document.createElement('div');
         let user_id = index
 
+        services_section.innerHTML = `
+        <div class="container">
+            <h1 class="services_taital">Hola ${user.nombre}</h1>
+            <p class="services_text">Bienvenido a tu perfil, aqui podras encontrar tus rutinas, como asi tambien tu informacion personal</p>
+            <div class="services_section_2 layout_padding">
+            <div class="row">
+                <div class="col-sm-4">
+                <a href="#rutinas"><div class="box_main">
+                    <div class="icon_1"></div>
+                    <a href="#rutinas"><h6 class="heavy_text">ENTRENAMIENTO <br>Rutinas</h6></a>
+                </div></a>
+                </div>
+                <div class="col-sm-4">
+                <a href="progress.html?id=${user_id}"><div class="box_main active">
+                    <div class="icon_2"></div>
+                    <h6 class="heavy_text active">GRAFICOS <br>Y AVANCES</h6></a>
+                </div></a>
+                </div>
+                <div class="col-sm-4">
+                <a href=""><div class="box_main">
+                    <div class="icon_3"></div>
+                    <a href="rutinsView.html?id=${user_id}"><h6 class="heavy_text">CREAR <br>NUEVA RUTINA</h6></a>
+                </div></a>
+                </div>
+            </div>
+            <div class="read_bt"><a href="progress.html?id=${user_id}">ESTADISTICAS</a></div>
+            </div>
+        </div>
+        `
         // Crear el contenido de la tarjeta personal
         profile_info.classList.add('profile_info');
-        profile_info.innerHTML = `
-                    <div class="header_card">
-                        <img src="img/default_profile.webp" alt="">
-                        <h1>${user.nombre} ${user.apellido}</h1>
-                    </div>
-                    <div class="body_card">
-                        <h3>Edad: ${user.edad} años</h3>
-                        <h3>Cantidad de rutinas: ${arraysCount(user.rutinas)}</h3>
-                        <h3>Ultimo entreno: ${last_training(user.historial)}</h3>
-                        <div class="main_button_class">
-                            <button id="stats" class="statsButton">Ver estadisticas</button>
+        trainer_section_2.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6 padding_0">
+                        <div class="trainer_box">
+                            <h3 class="trainer_text">${user.nombre}</h3>
+                            <p class="lorem_text">Sabemos lo mucho que te gusta entrenar, por eso te traemos algunos datos:</p>
+                            <p"><span class="highlight">Nombre:</span> ${user.nombre}</p>
+                            <p"><span class="highlight">Cantidad de rutinas:</span> ${arraysCount(user.rutinas)}</p>
+                            <p"><span class="highlight">Último entreno:</span> ${last_training(user.historial)}</p>
+                        </div>
+                        </div>
+                        <div class="col-md-6 padding_0">
+                        <div class="image_1"></div>
                         </div>
                     </div>
         `;
-        personal_info.appendChild(profile_info);
+        //personal_info.appendChild(profile_info);
 
         // Crear el contenido de la rutina
         const table_container = document.createElement('div');
         table_container.classList.add('table_container');
         let table_container_content = `
-                        <div class="header_card">
-                            <h1>Rutinas</h1>
-                            <button id="addRutins" title="Agregar una nueva rutina">+</button>
-                        </div>
         `;
 
         if(user.rutinas.length != 0){ //En caso de rutinas vacias
             user.rutinas.forEach( (rutina,index) =>{
-                table_container_content+=`
+                table_container_content +=`
                 <div class="body_card">
                         <hr class="custom-line"></hr>
-                        <h3>Nombre: ${rutina.nombre}</h3>
-                        <h3>Cantidad de semanas: ${arraysCount(rutina.semanas)}</h3>
-                        <h3>Dias: ${arraysCount(rutina.semanas[0].dias)} dias</h3>
-                        <h3>Cantidad de ejercicios: ${excCount(rutina.semanas[0].dias)} </h3>
-                        <h3>Porcentaje de la rutina: ${porcentaje(rutina)}% </h3>
-                        <h3>Ultima semana entrenada: Semana ${last_week(rutina)} </h3>
-                        <h3>Ultimo dia entrenado: ${last_day(rutina)} </h3>
+                        <p"><span class="highlight">Nombre:</span> ${rutina.nombre}</p>
+                        <p"><span class="highlight">Cantidad de semanas:</span> ${arraysCount(rutina.semanas)}</p>
+                        <p"><span class="highlight">Dias:</span> ${arraysCount(rutina.semanas[0].dias)} dias</p>
+                        <p"><span class="highlight">Cantidad de ejercicios:</span> ${excCount(rutina.semanas[0].dias)}</p>
+                        <p"><span class="highlight">Porcentaje de la rutina:</span> ${porcentaje(rutina)}% </p>
+                        <p"><span class="highlight">Ultima semana entrenada:</span> Semana ${last_week(rutina)}</p>
+                        <p"><span class="highlight">Ultimo dia entrenado:</span> ${last_day(rutina)}</p>
                         <div class="main_button_class">
-                            <button class="showExc" data-index="${index}">Mostrar ejercicios</button>
-                            <button class="modExc" data-index="${index}">Modificar ejercicios</button>
-                            <button class="addPeso" data-index="${index}">Pesos semanales</button>
+                            <button class="showExc" data-index="${index}">Mostrar Ejercicios</button>
+                            <button class="modExc" data-index="${index}">Modificar Ejercicios</button>
+                            <button class="addPeso" data-index="${index}">Pesos Semanales</button>
                             <button class="button_red" data-index="${index}">Eliminar Rutina</button>
                         </div>
                 </div> 
@@ -65,6 +94,8 @@ if(gymapp_id != null){
                         <h3>Actualmente no posee rutinas</h3>
                         <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
                         <hr class="custom-line"></hr>
+                </div> 
+
                 `;            
         }
         table_container.innerHTML = table_container_content;
@@ -77,16 +108,17 @@ if(gymapp_id != null){
         const addPesoButton = document.querySelectorAll('.addPeso');
         const delRutin      = document.querySelectorAll('.button_red');
 
-        showStats.addEventListener("click",()=>{
-            const userId = user_id;  
-            window.location.href = `progress.html?id=${userId}`;
-        })
+        // showStats.addEventListener("click",()=>{
+        //     const userId = user_id;  
+        //     window.location.href = `progress.html?id=${userId}`;
+        // })
 
         showExcButton.forEach((button, index) => {
             button.addEventListener('click', () => {
                 const userId = user_id;  
                 const rutinaId = index;  
                 window.location.href = `showExc.html?id=${userId}&rutina=${rutinaId}`;
+                console.log("show exc")
             });
         });
 
@@ -114,9 +146,9 @@ if(gymapp_id != null){
             });
         });
                 
-        addRutins.addEventListener("click",() =>{
-            window.location.href = `rutinsView.html?id=${user_id}`;
-        })
+        // addRutins.addEventListener("click",() =>{
+        //     window.location.href = `rutinsView.html?id=${user_id}`;
+        // })
 
         function arraysCount(arrays){
             let count = 0;
@@ -257,5 +289,5 @@ if(gymapp_id != null){
     fetchExc();
     fetchUsers();
 } else {
-    window.location.href = `login.html`;
+    window.location.href = `index.html`;
 }

@@ -36,52 +36,77 @@
   <div class="header_section padding_bottom_0">
     <div class="container-fluid">
       <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="logo"><a href="profile.html"><img src="images/logo.png"></a></div>
+        <div class="logo"><a href="index.html"><img src="images/logo.png"></a></div>
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
           <ul class="navbar-nav mr-auto">
             <li class="nav-item">
-              <a class="nav-link" href="profile.html">INICIO</a>
+              <a class="nav-link" href="index.html">INICIO</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="about.html">EJERCICIOS</a>
+              <a class="nav-link" href="about.html">ABOUT</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="services.html">SALIR</a>
+              <a class="nav-link" href="services.html">SERVICIOS</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="gym.html">GYM</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="contact.html">CONTACTANOS</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">LOGIN</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">REGISTRO</a>
             </li>
           </ul>
+          <form class="form-inline my-2 my-lg-0">
+            <div class="search_icon"><a href="#"><img src="images/search-icon.png"></a></div>
+          </form>
         </div>
       </nav>
     </div>
   </div>
   <!--header section end -->
-    <!-- Main content -->
-    <main>
-        <!-- Contenedor de tarjetas que se llenará dinámicamente -->
-        <section class="person-cards" id="user-cards">
-            <div class="mainBody">
-                <div class="form_body">\
-                    <div class="form_body">
-                        <div class="header_form">
-                            <h1>Agregar nuevos ejercicios</h1>
-                        </div>
-                    <div class="form">
-                        <form id="myForm">
-                            <label for="excName">Nombre del ejericio</label>
-                            <input type="text" id="excName" name="excName" required><br>
-    
-                            <label for="description">Descripción</label>
-                            <textarea id="description" name="description" rows="4" cols="50" placeholder="Escribe una descripción..." required></textarea><br>
-    
-                            <button type="submit">Subir</button>
-                        </form>
-                    </div>
-                </div>
+  <!--contact section end -->
+  <div class="Contact_section layout_padding">
+      <div class="container">
+        <h1 class="categories_text">Rqueste a call back</h1>
+        <p class="services_text">There are many variations of passages of Lorem Ipsum available, but the majority have suffered a</p>
+        <div class="email_box">
+          <div class="input_main">
+            <form action="/action_page.php">
+              <div class="form-group">
+                <input type="text" class="email-bt" placeholder="Name" name="Name">
+              </div>
+              <div class="form-group">
+                <input type="text" class="email-bt" placeholder="Phone" name="Phone">
+              </div>
+              <div class="form-group">
+                <input type="text" class="email-bt" placeholder="Email" name="Email">
+              </div>
+              <div class="form-group">
+                <textarea class="massage-bt" placeholder="Massage" rows="5" id="comment" name="Massage"></textarea>
+              </div>
+            </form>   
+          <div class="send_bt"><a href="#">SEND</a></div>                  
+          </div>
+        </div>
+      </div>
+      <div class="map_section layout_padding">
+        <div class="container-fluid padding_0">
+          <div class="map_main">
+            <div class="map-responsive">
+              <iframe src="https://www.google.com/maps/embed/v1/place?key=AIzaSyA0s1a7phLN0iaD6-UE7m4qP-z21pH0eSc&q=Eiffel+Tower+Paris+France" width="600" height="580" frameborder="0" style="border:0; width: 100%;" allowfullscreen></iframe>
             </div>
-        </section>
-    </main>
+          </div>
+        </div>
+      </div>
+    </div>
     <!--contact section end -->
     <div class="contact_section_2 layout_padding">
       <div class="container">
@@ -182,9 +207,6 @@
         <div class="copyright_text">Copyright 2024 All Right Reserved By <a href="https://html.design">Free html  Templates</a></div>
     </div>
   </div>
-  <!-- Conexión al archivo de JavaScript -->
-  <script src="js/addExc.js"></script>
-  
   <!--footer section end -->
   <!-- Javascript files-->
   <script src="js/jquery.min.js"></script>
