@@ -130,6 +130,7 @@ if(gymapp_id != null){
 
                 document.getElementById('login-botton').addEventListener('click', (event) =>{
                     event.preventDefault();
+                    let error = 0;
                     for (let d = 0; d < days; d++) { 
                         let day_obj = {
                             nombre: "",
@@ -150,8 +151,15 @@ if(gymapp_id != null){
                             exc_obj.id_exc  = parseInt(document.getElementById("exc-"+e+"-"+d).value)//recibo el id
                             exc_obj.nombre  = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].name; 
                             exc_obj.info    = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].info;
-                            exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
-                            exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
+                            if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
+                                exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
+                                exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
+                                error = 0;
+                            }else{
+                                error = 1;
+                            }
+                            // exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
+                            // exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
                             exc_array.push(exc_obj);
                         }
                         day_obj.ejercicios = exc_array;
@@ -179,7 +187,17 @@ if(gymapp_id != null){
                     user.rutinas.push(rutina_obj)
                     let actID = (parseInt(user_id) + 1)
                     //subirRutina(actID,user)
-                    console.log("Rutina subida con exito!")
+                    console.log("Entre aqui")
+                    if( error == 0){
+                       subirRutina(actID,user)
+                    } else{
+                        alert("Ingrese todos los valores solicitados");
+                        rutina_obj = {};
+                        week_obj = {};
+                        day_obj = {};
+                        weeks_array = []
+                        days_array = [];
+                    }
                 })
                 
                 // Agregar el evento de agregar fila
