@@ -91,9 +91,9 @@ if(gymapp_id != null){
         } else{ //else if lenght != 0
             table_container_content+=`
                 <div class="body_card">
-                        <h3>Actualmente no posee rutinas</h3>
-                        <h3>Clickear en el boton "+" para agregar una nueva rutina</h3>
-                        <hr class="custom-line"></hr>
+                        <br/>
+                        <h3>Actualmente no posees rutinas.</h3>
+                        <h3>Clickear en el boton "CREAR NUEVA RUTINA" para agregar una nueva.</h3>
                 </div> 
 
                 `;            

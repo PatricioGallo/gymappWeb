@@ -45,7 +45,6 @@ if(gymapp_id != null){
         } else{
             return 4
         }
-
     }
 
     async function addExc(excName,description,userName) {

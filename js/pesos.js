@@ -154,11 +154,16 @@ if(gymapp_id != null){
                 let excPath     = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios;
                 let excCount    = excPath.length;
                 let exc_histo   = user.historial;
+                let switch_resp_array = []
+                let correctValue = 0;
+                let beforeError = 0;
 
                 for (let e= 0; e < excCount; e++) {
                     let peso_exc = parseInt(document.getElementById("repe-"+e).value);
+                    let switch_resp = debugItem(peso_exc); //me fijo si se ingreso un valor correcto
+                    switch_resp_array.push(switch_resp)
 
-                    if( peso_exc != 0){
+                    if( switch_resp == 3){
 
                         let exc_obj = {
                             nombre: "",
@@ -199,12 +204,38 @@ if(gymapp_id != null){
                         user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios[e] = exc_obj;
                         exc_histo.push(exc_obj_array);
                     }
-
                 }
                 user.historial = exc_histo;
                 let actID = (parseInt(user_id) + 1)
-                actRutina(actID,user);
+
+                for (let valor of switch_resp_array) {
+                    if(valor == 3 && beforeError == 0){
+                        correctValue = 1;
+                    } else if(valor == 1 || valor == 2){
+                        correctValue = 0;
+                        beforeError = 1;
+                    }
+                }
+
+                if(correctValue != 0){
+                    actRutina(actID,user);
+                }else{
+                    alert("Ingresaste un valor incorrecto o ningun valor!")
+                }
+
             });
+
+            function debugItem(item){
+                if(item == 0){
+                    return 0
+                } else if (item < 0){
+                    return 1
+                } else if(isNaN(item)){
+                    return 2
+                } else{
+                    return 3
+                }
+            }
         });//End submit
     }
 
@@ -246,7 +277,7 @@ if(gymapp_id != null){
             if (response.ok) {
                 const datos = await response.json();
                 alert("Peso agregado con éxito.");
-                window.location.href = `index.html`;
+                window.location.href = `pesos.html?id=${user_id}&rutina=${rutina_id}`;
             } else {
                 console.error('Error al subir el peso:', response.statusText);
                 alert("Error al subir pesos.");

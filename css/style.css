@@ -542,11 +542,26 @@ button {
     font-size: 18px;
     padding: 10px 20px 10px 20px;
     background: #ffffff;
-    border-radius: 20px;
+    border-radius: 10px;
     border: 1px solid #8f8f8f;
     font-family: Raleway;
 }
 input.email-bt::placeholder {
+    color: #a6a5a5;
+}
+
+.selector-email-bt {
+    color: #a6a5a5;
+    width: 60%;
+    height: auto;
+    font-size: 15px;
+    padding: 10px 20px 10px 20px;
+    background: #ffffff;
+    border-radius: 5px;
+    border: 1px solid #8f8f8f;
+    font-family: Raleway;
+}
+input.selector-email-bt::placeholder {
     color: #a6a5a5;
 }
 
@@ -562,6 +577,21 @@ input.email-bt::placeholder {
     font-family: Raleway;
 }
 .login-botton:hover{
+    background-color: #ff0000;
+}
+
+.addButton {
+    color: #ffffff;
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+    background: #cb0b0b;
+    border: 1px solid #8f8f8f;
+    font-family: Raleway;
+    text-align: center;
+    border-radius: 30px;
+}
+.addButton:hover{
     background-color: #ff0000;
 }
 .massage-bt {
