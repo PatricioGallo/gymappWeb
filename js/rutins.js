@@ -4,7 +4,6 @@ if(gymapp_id != null){
     const container          = document.getElementById('container');
     // Acceder a un parámetro específico
     const user_id = params.get('id');
-    let printTable = false;
     let weeks = 0;
     let rut_name = "";
     let days = 0;
@@ -157,7 +156,11 @@ if(gymapp_id != null){
                             if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
                                 exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
                                 exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
-                                error = 0;
+                                if(exc_obj.serie > 10 || exc_obj.serie < 1 || exc_obj.repe > 30 || exc_obj.repe<1){
+                                    error = 1;
+                                }else{
+                                    error = 0;
+                                }
                             }else{
                                 error = 1;
                             }
@@ -192,7 +195,7 @@ if(gymapp_id != null){
                         let actID = (parseInt(user_id) + 1)
                         subirRutina(actID,user)
                     } else{
-                        alert("Ingrese todos los valores solicitados");
+                        alert("Ingrese todos los valores solicitados o valores validos");
                         rutina_obj = {};
                         week_obj = {};
                         day_obj = {};
