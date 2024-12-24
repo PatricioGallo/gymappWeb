@@ -6,21 +6,21 @@ if(gymapp_id == null){
         event.preventDefault();
         mail = document.getElementById("mail").value;
         pass = document.getElementById("pass").value;
+        let alert_message = document.getElementById("alert_message");
         let switch_resp = await fetchUsers(mail, pass);
 
         switch (switch_resp) {
             case 0:
-                alert("mail no coincide")
+                alert_message.innerHTML = `<p>ERROR! Usuario no existe.</p>`
                 break;
             case 1:
-                alert("pass no coincide")
+                alert_message.innerHTML = `<p>ERROR! Contraseña incorrecta.</p>`
                 break;
             case 2:
-                alert("Bienvenido")
                 window.location.href = `profile.html`;
                 break;
             default:
-            console.log("Error: sin coincidencias en el case");
+            alert_message.innerHTML = `<p>ERROR! Volver a intentarlo.</p>`
         }
     })
 
