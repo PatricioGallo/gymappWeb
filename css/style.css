@@ -510,6 +510,15 @@ button {
     position: relative;
     left: -150px;
 }
+.image_3 {
+    width: 130%;
+    float: left;
+    background-image: url(../images/img-3.png);
+    height: 337px;
+    background-size: 100%;
+    position: relative;
+    left: -150px;
+}
 .padding_0{
     padding: 0px;
 }
@@ -709,6 +718,7 @@ textarea#comment::placeholder {
     background-color: #fbfbfb;
     height: auto;
     padding-bottom: 150px;
+    margin-top: 50px;
 }
 .duit_box {
     width: 50%;
@@ -716,7 +726,7 @@ textarea#comment::placeholder {
     text-align: center;
     background-color: #ffffff;
     padding: 40px 20px 20px 20px;
-    margin-top: 70px;
+    margin-top: 80px;
 }
 .duis_text {
     width: 21%;
