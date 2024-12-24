@@ -204,7 +204,6 @@ if(gymapp_id != null){
                 // Agregar fila
                 document.querySelectorAll('.addButton').forEach((button, index) => {
                     button.addEventListener('click', function() {
-                        console.log(index)
                         let rowName = ("row-"+ (excArray[index])+"-"+index)
                         const actualRow = document.getElementById(rowName);
                         let newRow = `
@@ -226,25 +225,12 @@ if(gymapp_id != null){
                 });
 
                 //Eliminar fila
-                document.querySelectorAll('.delButton').forEach((button, index) => {
-                    button.addEventListener('click', function() {
-                        console.log(index)
-                        // let rowName = ("row-"+ (excArray[index])+"-"+index)
-                        // const actualRow = document.getElementById(rowName);
-                        // let newRow = ``;
-                        // excArray[index] -= 1;
-                        // actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
-                    });
-                });
-
                 document.getElementById('container').addEventListener('click', function (event) {
                     if (event.target.classList.contains('delButton')) {
                         const rowToDelete = event.target.closest('tr'); // Encuentra la fila más cercana al botón
-                        console.log(rowToDelete.id);
                         let palabra = rowToDelete.id;
                         let partes = palabra.split("-"); // ["row", fila, index]
                         let index = parseInt(partes[2]); // Obtiene index
-                        console.log(index)
                         excArray[index] -= 1;
                         rowToDelete.innerHTML = ``
                     }
