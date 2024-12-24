@@ -2,6 +2,7 @@ const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
 
     const params = new URLSearchParams(window.location.search);
+    const container          = document.getElementById('container');
     const userCardsContainer = document.getElementById('user-cards');
 
     // Acceder a un parámetro específico
@@ -12,18 +13,22 @@ if(gymapp_id != null){
     let exc_api_array;
 
     function printExc(user){
+        container.innerHTML = `
+            <h1 class="services_taital">Tus pesos</h1>
+            <p class="services_text" id="services_text">${user.nombre} selecciona la semana y el dia de tu rutina: "${user.rutinas[rutina_id].nombre}", para poder ver los ejercicios y agregarle el peso del dia.</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+        `
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
+        const userCardsContainer = document.getElementById('trainer_section_2');
         let main_body;
         main_body = `
-            <div class="form_body">
-                        <div class="header_form">
-                            <h1>${user.nombre} agregar pesos diarios en: ${user.rutinas[rutina_id].nombre}</h1>
-                        </div>
-            <div class="form">
-                        <form id="myForm">
-                            <br><label for="name">Selecciona la semana y el dia de la rutina para agregar tus pesos</label></br></br>
-                            <select id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
+            <div class="email_box">
+                <form id="myForm">
+                    <div class="form-group">
+                        <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">  
             `
         user.rutinas[rutina_id].semanas.forEach((week,index) => {
             main_body += `
@@ -33,7 +38,7 @@ if(gymapp_id != null){
         
         main_body += `
             </select><br><br>
-            <select id="day" name="day" required>
+            <select class="email-bt" id="day" name="day" required autocomplete="off" autocorrect="off" autocapitalize="none">
             `
         user.rutinas[rutina_id].semanas[0].dias.forEach((day,index) => {
             main_body += `
@@ -42,8 +47,10 @@ if(gymapp_id != null){
         })
         main_body +=`
                                 
-                            </select><br>
-                            <button type="submit">Ver Ejercicios</button>
+                            </select><br><br>
+                            <div class="send_bt">
+                                <button type="submit" class="login-botton">Ver Ejercicios</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -56,11 +63,10 @@ if(gymapp_id != null){
             weekId = document.getElementById("weeks").value;
             dayId = document.getElementById("day").value;
             dayValue = user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre.toLowerCase();
+            services_text = document.getElementById("services_text");
+            services_text.innerHTML = `${user.nombre} ahora podras agregar pesos en los ejercicios de "${user.rutinas[rutina_id].nombre}" semana numero: ${parseInt(weekId)+1} <br/>`
             main_body = `
                 <div class="configFace">
-                    <div class="configHeader">
-                        <h1>Modificar pesos del dia ${dayValue} de la semana numero ${user.rutinas[rutina_id].semanas[weekId].numero}</h1>
-                    </div>
                     <div class="configForm">
                         <form id="myForm">
                             <table class="training-table">
@@ -106,7 +112,10 @@ if(gymapp_id != null){
                 main_body += `
                             </tbody>
                         </table>
-                            <button type="submit">Guardar</button>
+                            </br>
+                            <div class="send_bt">
+                                <button type="submit" class="login-botton">Guardar</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -145,11 +154,16 @@ if(gymapp_id != null){
                 let excPath     = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios;
                 let excCount    = excPath.length;
                 let exc_histo   = user.historial;
+                let switch_resp_array = []
+                let correctValue = 0;
+                let beforeError = 0;
 
                 for (let e= 0; e < excCount; e++) {
                     let peso_exc = parseInt(document.getElementById("repe-"+e).value);
+                    let switch_resp = debugItem(peso_exc); //me fijo si se ingreso un valor correcto
+                    switch_resp_array.push(switch_resp)
 
-                    if( peso_exc != 0){
+                    if( switch_resp == 3){
 
                         let exc_obj = {
                             nombre: "",
@@ -190,12 +204,38 @@ if(gymapp_id != null){
                         user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios[e] = exc_obj;
                         exc_histo.push(exc_obj_array);
                     }
-
                 }
                 user.historial = exc_histo;
                 let actID = (parseInt(user_id) + 1)
-                actRutina(actID,user);
+
+                for (let valor of switch_resp_array) {
+                    if(valor == 3 && beforeError == 0){
+                        correctValue = 1;
+                    } else if(valor == 1 || valor == 2){
+                        correctValue = 0;
+                        beforeError = 1;
+                    }
+                }
+
+                if(correctValue != 0){
+                    actRutina(actID,user);
+                }else{
+                    alert("Ingresaste un valor incorrecto o ningun valor!")
+                }
+
             });
+
+            function debugItem(item){
+                if(item == 0){
+                    return 0
+                } else if (item < 0){
+                    return 1
+                } else if(isNaN(item)){
+                    return 2
+                } else{
+                    return 3
+                }
+            }
         });//End submit
     }
 
@@ -237,7 +277,7 @@ if(gymapp_id != null){
             if (response.ok) {
                 const datos = await response.json();
                 alert("Peso agregado con éxito.");
-                window.location.href = `index.html`;
+                window.location.href = `pesos.html?id=${user_id}&rutina=${rutina_id}`;
             } else {
                 console.error('Error al subir el peso:', response.statusText);
                 alert("Error al subir pesos.");

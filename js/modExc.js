@@ -2,27 +2,31 @@ const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
 
     const params = new URLSearchParams(window.location.search);
-    const userCardsContainer = document.getElementById('user-cards');
+    const container          = document.getElementById('container');
 
     // Acceder a un parámetro específico
     const user_id = params.get('id');
     const rutina_id = params.get('rutina');
     let weekId = 0
     let exc_api_array;
+    let max_num_exc = 20;
 
     function printExc(user){
+        container.innerHTML = `
+            <h1 class="services_taital">Modificar Rutina</h1>
+            <p class="services_text" id="services_text">${user.nombre}, selecciona la semana de: "${user.rutinas[rutina_id].nombre}", para poder editar los ejercicios que necesites.</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+        `
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
+        const userCardsContainer = document.getElementById('trainer_section_2');
         let main_body;
         main_body = `
-            <div class="form_body">
-                        <div class="header_form">
-                            <h1>${user.nombre} puedes modificar: ${user.rutinas[rutina_id].nombre}</h1>
-                        </div>
-            <div class="form">
-                        <form id="myForm">
-                            <br><label for="name">Selecciona la semana de la rutina a modificar</label></br></br>
-                            <select id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
+            <div class="email_box">
+                <form id="myForm">
+                    <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
             `
         user.rutinas[rutina_id].semanas.forEach((week,index) => {
             main_body += `
@@ -31,8 +35,10 @@ if(gymapp_id != null){
         })
         main_body +=`
                                 
-                            </select><br>
-                            <button type="submit">Ver Ejercicios</button>
+                            </select><br><br>
+                            <div class="send_bt">
+                                <button type="submit" class="login-botton">Ver Ejercicios</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -43,7 +49,8 @@ if(gymapp_id != null){
         document.getElementById('myForm').addEventListener('submit', (event) =>{
             event.preventDefault();
             weekId = document.getElementById("weeks").value;
-            console.log(weekId)
+            services_text = document.getElementById("services_text");
+            services_text.innerHTML = `${user.nombre} ahora podras modificar los ejercicios de: "${user.rutinas[rutina_id].nombre}" semana numero: ${parseInt(weekId)+1} <br/>`
             main_body = `
                 <div class="configFace">
                     <div class="configHeader">
@@ -74,7 +81,7 @@ if(gymapp_id != null){
                             main_body += `
                             <tr class="${dayClass}">
                                 <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                                <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex}" required>
+                                <td><select id="exc-0-${diaIndex}" name="exc-0-${diaIndex}" required class="selector-email-bt">
                                     <option value="${exc.nombre}">${exc.nombre}</option>
                             `
                             exc_api_array.forEach((exc)=>{
@@ -89,7 +96,7 @@ if(gymapp_id != null){
                         } else {
                             main_body += `
                             <tr class="${dayClass}">
-                                <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex}" required>
+                                <td><select id="exc-${excIndex}-${diaIndex}" name="exc-${excIndex}-${diaIndex}" required class="selector-email-bt">
                                     <option value="${exc.nombre}">${exc.nombre}</option>`
                                     exc_api_array.forEach((exc)=>{
                                         main_body += `<option value="${exc.id}">${exc.name}</option>`
@@ -98,17 +105,20 @@ if(gymapp_id != null){
                                     </select></td>
                                 <td><center><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}"></center></td>
                                 <td><center><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}"></center></td>
-                            </tr>
-                        `;
+                            </tr>`;
                         }
-                    });
+                        
+                        });
                 });
 
                 // Cerrar la tabla
                 main_body += `
-                            </tbody>
-                        </table>
-                            <button type="submit">Guardar</button>
+                                </tbody>
+                            </table>
+                            </br>
+                            <div class="send_bt">
+                                    <button type="submit" class="login-botton">Guardar</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -172,6 +182,7 @@ if(gymapp_id != null){
                 actRutina(actID,user);
             });
         });//End submit
+
     }
 
     // Función para obtener los usuarios desde la API

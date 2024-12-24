@@ -1,8 +1,8 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
 
-    const params = new URLSearchParams(window.location.search);
-    const userCardsContainer = document.getElementById('user-cards');
+    const params             = new URLSearchParams(window.location.search);
+    const container          = document.getElementById('container');
 
     // Acceder a un parámetro específico
     const user_id = params.get('id');
@@ -11,18 +11,23 @@ if(gymapp_id != null){
     let exc_api_array;
 
     function printExc(user){
+        container.innerHTML = `
+            <h1 class="services_taital">Tus ejercicios</h1>
+            <p class="services_text" id="services_text">${user.nombre} selecciona la semana de tu rutina: ${user.rutinas[rutina_id].nombre} para poder ver los ejercicios.</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+        `
+        const userCardsContainer = document.getElementById('trainer_section_2');
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
         let main_body;
         main_body = `
-            <div class="form_body">
-                        <div class="header_form">
-                            <h1>${user.nombre} puedes ver ejercicios: ${user.rutinas[rutina_id].nombre}</h1>
-                        </div>
-            <div class="form">
-                        <form id="myForm">
-                            <br><label for="name">Selecciona la semana de la rutina que deseas ver</label></br></br>
-                            <select id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
+
+                            <div class="email_box">
+                                    <form id="myForm">
+                                        <div class="form-group">
+                                            <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">        
             `
         user.rutinas[rutina_id].semanas.forEach((week,index) => {
             main_body += `
@@ -31,10 +36,11 @@ if(gymapp_id != null){
         })
         main_body +=`
                                 
-                            </select><br>
-                            <button type="submit">Ver Ejercicios</button>
+                            </select></div><br>
+                            <div class="send_bt">
+                                <button type="submit" class="login-botton">Ver Ejercicios</button>
+                            </div>
                         </form>
-                    </div>
                 </div>
             `
         configBody.innerHTML = main_body;
@@ -43,11 +49,10 @@ if(gymapp_id != null){
         document.getElementById('myForm').addEventListener('submit', (event) =>{
             event.preventDefault();
             weekId = document.getElementById("weeks").value;
+            services_text = document.getElementById("services_text");
+            services_text.innerHTML = `${user.nombre} ahora podras ver los ejercicios de "${user.rutinas[rutina_id].nombre}" semana numero: ${parseInt(weekId)+1} <br/>`
             main_body = `
                 <div class="configFace">
-                    <div class="configHeader">
-                        <h1>Ver ejercicios de "${user.rutinas[rutina_id].nombre}"</h1>
-                    </div>
                     <div class="configForm">
                             <table class="training-table">
                                 <thead>
@@ -102,6 +107,7 @@ if(gymapp_id != null){
                 main_body += `
                             </tbody>
                         </table>
+                        <div class="read_bt"><a href="showExc.html?id=${user_id}&rutina=${rutina_id}">Elegir Otra Semana</a></div>
                     </div>
                 </div>
                 `;

@@ -1,10 +1,9 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
     const params = new URLSearchParams(window.location.search);
-    const userCardsContainer = document.getElementById('user-cards');
+    const container          = document.getElementById('container');
     // Acceder a un parámetro específico
     const user_id = params.get('id');
-    let printTable = false;
     let weeks = 0;
     let rut_name = "";
     let days = 0;
@@ -16,27 +15,36 @@ if(gymapp_id != null){
     let users;
 
     function addRutins(user){
+        container.innerHTML = `
+            <h1 class="services_taital">Agregar rutina</h1>
+            <p class="services_text" id="services_text">${user.nombre}, completa el formulario con el nombre de la rutina, la cantidad de semanas y dias.</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+        `
+        const userCardsContainer = document.getElementById('trainer_section_2');
         const body = document.createElement('div');
         body.classList.add("body");
         userCardsContainer.appendChild(body);
         let main_body;
         main_body = `
-            <div class="form_body">
-                        <div class="header_form">
-                            <h1>${user.nombre} agrega una nueva rutina</h1>
-                        </div>
+            <div class="email_box">
+                        
             <div class="form">
                         <form id="myForm">
-                            <label for="name">Nombre de la rutina</label>
-                            <input type="text" class="input_text" id="name" name="name" required><br>
+                            <div class="form-group">
+                                <input type="text" class="email-bt" placeholder="Nombre de la rutina" name="name" id="name" required>
+                            </div>
+                            <div class="form-group">
+                                <input type="number" class="email-bt" placeholder="Cantidad de semanas" name="weeks" id="weeks" min="1" max="10" required>
+                            </div>
 
-                            <label for="weeks">Cantidad de semanas</label>
-                            <input type="number" class="input_number" id="weeks" name="weeks" min="1" max="10" required><br>
-
-                            <label for="days">Cantidad de dias</label>
-                            <input type="number" class="input_number" id="days" name="days" min="1" max="7" required><br>
-
-                            <button type="submit">Crear tabla</button>
+                            <div class="form-group">
+                                <input type="number" class="email-bt" placeholder="Cantidad de dias" name="days" id="days" min="1" max="7" required>
+                            </div>
+                            <div class="send_bt">
+                                <button type="submit" class="login-botton">CREAR TABLA</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -48,10 +56,9 @@ if(gymapp_id != null){
                 rut_name = document.getElementById('name').value;
                 weeks = document.getElementById('weeks').value;
                 days = document.getElementById('days').value;
+                services_text = document.getElementById("services_text");
+                services_text.innerHTML = `${user.nombre}, ahora podes rellenar la tabla segun como queres completar tu rutina: "${rut_name}". <br/>`
                 main_body = `
-                    <div class="header_form">
-                        <h1>Agrega los ejercicios para ${rut_name}</h1></br></br>
-                    </div>
                     <div class="table_body">
                         <form id="table_form">
                             <table class="training-table">
@@ -61,6 +68,7 @@ if(gymapp_id != null){
                                         <th>Ejercicio</th>
                                         <th>Series</th>
                                         <th>Repes</th>
+                                        <th>Eliminar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -69,7 +77,7 @@ if(gymapp_id != null){
                         let dayClass = i % 2 === 0 ? 'day-dark' : 'day-light';
                         main_body += `
                             <tr class="${dayClass}">
-                                <td rowspan="${max_num_exc}"><select id="day-${i}" name="day-${i}" placeholder="Ingrese dia" required>
+                                <td rowspan="${max_num_exc}"><select id="day-${i}" name="day-${i}" placeholder="Ingrese dia" class="selector-email-bt" required>
                                     <option value="Lunes">Lunes</option>
                                     <option value="Martes">Martes</option>
                                     <option value="Miercoles">Miercoles</option>
@@ -78,7 +86,7 @@ if(gymapp_id != null){
                                     <option value="Sabado">Sabado</option>
                                     <option value="Domingo">Domingo</option>
                                 </select></td>
-                                <td><select id="exc-0-${i}" name="exc-0-${i}" required>
+                                <td><select id="exc-0-${i}" name="exc-0-${i}" class="selector-email-bt" required>
                                 `
                                 exc_api_array.forEach(exc => {
                                     main_body += `<option title="${exc.info}" value="${exc.id}">${exc.name}  (${viewAuthor(exc.author)})</option>`
@@ -88,14 +96,15 @@ if(gymapp_id != null){
                                 </select></td>
                                 <td><center><input type="number" class="input_number_table" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></center></td>
                                 <td><center><input type="number" class="input_number_table" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repeticiones" required></center></td>
+                                <td></td>
                             </tr>`
                             for (let j = 0; j < max_num_exc; j++) {
                                 main_body +=`<tr id="row-${j+1}-${i}" class="${dayClass}"></tr>`
                             }
                         main_body +=`    
                             <tr class="${dayClass}">
-                                <td colspan="4">
-                                    <button class="addButton" id="addRow" title="Agregar una nueva fila">+<button>
+                                <td colspan="5">
+                                    <button id="addRow" class="addButton" type="button" title="Agregar una nueva fila">+</button>
                                 </td>
                             </tr>`
                     }
@@ -103,7 +112,10 @@ if(gymapp_id != null){
                     main_body += `
                                 </tbody>
                             </table>
-                            <button type="submit">Guardar Cambios</button>
+                            </br>
+                            <div class="send_bt">
+                                <button type="submit" id="login-botton" class="login-botton">Guardar</button>
+                            </div>
                         </form>
                     </div>`
 
@@ -117,8 +129,9 @@ if(gymapp_id != null){
                     }
                 }
 
-                document.getElementById('table_form').addEventListener('submit', (event) =>{
+                document.getElementById('login-botton').addEventListener('click', (event) =>{
                     event.preventDefault();
+                    let error = 0;
                     for (let d = 0; d < days; d++) { 
                         let day_obj = {
                             nombre: "",
@@ -139,8 +152,19 @@ if(gymapp_id != null){
                             exc_obj.id_exc  = parseInt(document.getElementById("exc-"+e+"-"+d).value)//recibo el id
                             exc_obj.nombre  = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].name; 
                             exc_obj.info    = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].info;
-                            exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
-                            exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
+
+                            if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
+                                exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
+                                exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
+                                if(exc_obj.serie > 10 || exc_obj.serie < 1 || exc_obj.repe > 30 || exc_obj.repe<1){
+                                    error = 1;
+                                }else{
+                                    error = 0;
+                                }
+                            }else{
+                                error = 1;
+                            }
+
                             exc_array.push(exc_obj);
                         }
                         day_obj.ejercicios = exc_array;
@@ -165,18 +189,28 @@ if(gymapp_id != null){
 
                     rutina_obj.nombre = rut_name;
                     rutina_obj.semanas = weeks_array;
-                    user.rutinas.push(rutina_obj)
-                    let actID = (parseInt(user_id) + 1)
-                    subirRutina(actID,user)
+                   
+                    if( error == 0){
+                        user.rutinas.push(rutina_obj)
+                        let actID = (parseInt(user_id) + 1)
+                        subirRutina(actID,user)
+                    } else{
+                        alert("Ingrese todos los valores solicitados o valores validos");
+                        rutina_obj = {};
+                        week_obj = {};
+                        day_obj = {};
+                        weeks_array = []
+                        days_array = [];
+                    }
                 })
                 
-                // Agregar el evento de agregar fila
+                // Agregar fila
                 document.querySelectorAll('.addButton').forEach((button, index) => {
                     button.addEventListener('click', function() {
                         let rowName = ("row-"+ (excArray[index])+"-"+index)
                         const actualRow = document.getElementById(rowName);
                         let newRow = `
-                            <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" required>`
+                            <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" class="selector-email-bt" required>`
 
                             exc_api_array.forEach(exc => {
                                 newRow += `<option value="${exc.id}">${exc.name}</option>`
@@ -184,13 +218,27 @@ if(gymapp_id != null){
                                 
                             newRow +=`    
                             </select></td>
-                            <td><center><input type="number" class="input_number_table" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series"></center></td>
-                            <td><center><input type="number" class="input_number_table" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones"></center></td>
+                            <td><center><input type="number" class="input_number_table" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series" required></center></td>
+                            <td><center><input type="number" class="input_number_table" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones" required></center></td>
+                            <td><button id="addRow" class="delButton" type="button" title="Eliminar fila">-</button></td>
                             `;
                         excArray[index] += 1;
                         actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
                     });
                 });
+
+                //Eliminar fila
+                document.getElementById('container').addEventListener('click', function (event) {
+                    if (event.target.classList.contains('delButton')) {
+                        const rowToDelete = event.target.closest('tr'); // Encuentra la fila más cercana al botón
+                        let palabra = rowToDelete.id;
+                        let partes = palabra.split("-"); // ["row", fila, index]
+                        let index = parseInt(partes[2]); // Obtiene index
+                        excArray[index] -= 1;
+                        rowToDelete.innerHTML = ``
+                    }
+                });
+
 
             });//GET ELEMENT
     }

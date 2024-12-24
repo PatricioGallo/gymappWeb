@@ -3,6 +3,7 @@ if(gymapp_id != null){
 
     const params = new URLSearchParams(window.location.search);
     const userCardsContainer = document.getElementById('user-cards');
+    const container          = document.getElementById('container');
 
     // Acceder a un parámetro específico
     const user_id = params.get('id');
@@ -10,20 +11,26 @@ if(gymapp_id != null){
     let exc_api_array;
 
     function printExc(user){
+        container.innerHTML = `
+            <h1 class="services_taital">Eliminar rutina</h1>
+            <p class="services_text" id="services_text">${user.nombre}, ¿Estas seguro que quieres eliminar: "${user.rutinas[rutina_id].nombre}" ?</p>
+            <p class="services_text" id="services_text">Si es asi, haz click en el boton "Eliminar"</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+        `
+        const userCardsContainer = document.getElementById('trainer_section_2');
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
         let main_body;
         main_body = `
-            <div class="form_body">
-                        <div class="header_form">
-                            <br><br><h1>${user.nombre}, ¿estas seguro que deseas eliminar: ${user.rutinas[rutina_id].nombre}?</h1>
-                        </div>
-            <div class="form">
+            <div class="email_box">
                         <form id="myForm">
-                            <br><label for="name">Estas por eliminar la rutina ${user.rutinas[rutina_id].nombre}, haz click en el boton eliminar</label></br></br>
-                            <center><button id="but" value="1" type="submit">Eliminar</button>
+                            <div class="send_bt">
+                                <button type="submit" id="but" value="1" class="login-botton">Eliminar</button>
+                            </div>
                         </form>
-                    </div>
+                    
                 </div>
             `
         configBody.innerHTML = main_body;
@@ -94,5 +101,5 @@ if(gymapp_id != null){
     fetchUsers();
     fetchExc();
 } else {
-    window.location.href = `login.html`;
+    window.location.href = `profile.html`;
 }

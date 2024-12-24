@@ -14,18 +14,21 @@ if(gymapp_id != null){
     let users;
 
     function printExc(user){
+        container.innerHTML = `
+            <h1 class="services_taital">Elige el ejercicio</h1>
+            <p class="services_text" id="services_text">${user.nombre}, seleccina el ejercicio que deseas realizarle un seguimiento.</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+        `
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
+        const userCardsContainer = document.getElementById('trainer_section_2');
         let main_body;
         main_body = `
-            <div class="form_body">
-                        <div class="header_form">
-                            <h1>${user.nombre} elige el ejercicio</h1>
-                        </div>
-            <div class="form">
-                        <form id="myForm">
-                            <br><label for="name">Selecciona el ejercicio que desea realizar un seguimiento</label></br></br>
-                            <select id="exc_id" name="exc_id" required autocomplete="off" autocorrect="off" autocapitalize="none">
+            <div class="email_box">
+                <form id="myForm">
+                    <select class="select_email-bt" id="exc_id" name="exc_id" required autocomplete="off" autocorrect="off" autocapitalize="none">
             `
             makeTrainedArray(user.historial);
 
@@ -36,8 +39,10 @@ if(gymapp_id != null){
         })
         main_body +=`
                                 
-                            </select><br>
-                            <button type="submit">Ver Ejercicio</button>
+                            </select><br><br>
+                            <div class="send_bt">
+                                <button type="submit" class="login-botton">Ver</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -49,11 +54,10 @@ if(gymapp_id != null){
             event.preventDefault();
             exc_id = document.getElementById("exc_id").value;
             let exc_name = return_exc_name(exc_id);
+            services_text = document.getElementById("services_text");
+            services_text.innerHTML = `${user.nombre}, aqui tienes los datos del ejercicios: "${exc_name}". <br/>`
             main_body = `
                 <div class="configFace">
-                    <div class="configHeader">
-                        <h1>Datos del ejercicio "${exc_name}"</h1>
-                    </div>
                     <div class="configForm">
                         <canvas id="exerciseChart"></canvas>
                     </div>
@@ -77,8 +81,8 @@ if(gymapp_id != null){
                 datasets: [{
                     label: 'Progreso del Ejercicio',
                     data: weights, // Pesos
-                    borderColor: 'rgba(75, 192, 192, 1)', // Color de la línea
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)', // Color del área bajo la línea
+                    borderColor: '#cb0b0b', // Color de la línea
+                    backgroundColor: '#ff0000', // Color del área bajo la línea
                     borderWidth: 2, // Grosor de la línea
                     tension: 0.3 // Suavidad de la línea
                 }]
