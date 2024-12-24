@@ -75,6 +75,10 @@ input.number_input-bt::placeholder {
         font-size: 0.9rem;
         padding: 8px;
     }
+    .configPlusContent{
+        width: 100%;
+
+    }
 }
 
 /* Ajustes para pantallas muy pequeñas */
@@ -101,5 +105,9 @@ input.number_input-bt::placeholder {
     .number_input-bt{
         width: 35%;
         font-size: 13px;
+    }
+    .configPlusContent{
+        width: 100%;
+
     }
 }
