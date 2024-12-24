@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="viewport" content="initial-scale=1, maximum-scale=1">
 <!-- site metas -->
-<title>Contact</title>
+<title>Progreso - GymApp</title>
 <meta name="keywords" content="">
 <meta name="description" content="">
 <meta name="author" content=""> 
@@ -25,10 +25,12 @@
 <link rel="stylesheet" href="css/jquery.mCustomScrollbar.min.css">
 <!-- Tweaks for older IEs-->
 <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css">
+<link rel="stylesheet" href="css/table_style.css">
 <!-- owl stylesheets --> 
 <link rel="stylesheet" href="css/owl.carousel.min.css">
 <link rel="stylesheet" href="css/owl.theme.default.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.css" media="screen">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </head>
 <body>
@@ -36,71 +38,35 @@
   <div class="header_section padding_bottom_0">
     <div class="container-fluid">
       <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="logo"><a href="index.html"><img src="images/logo.png"></a></div>
+        <div class="logo"><a href="profile.html"><img src="images/logo.png"></a></div>
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
           <ul class="navbar-nav mr-auto">
             <li class="nav-item">
-              <a class="nav-link" href="index.html">INICIO</a>
+              <a class="nav-link" href="profile.html">MI PERFIL</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="about.html">ABOUT</a>
+              <a class="nav-link" href="addExc.html">EJERCICIOS</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="services.html">SERVICIOS</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="gym.html">GYM</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="contact.html">CONTACTANOS</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="login.html">LOGIN</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#">REGISTRO</a>
+              <a class="nav-link" href="exit.html">SALIR</a>
             </li>
           </ul>
-          <form class="form-inline my-2 my-lg-0">
-            <div class="search_icon"><a href="#"><img src="images/search-icon.png"></a></div>
-          </form>
         </div>
       </nav>
     </div>
   </div>
-  <!--header section end -->
-  <!--contact section end -->
-  <div class="Contact_section layout_padding">
-      <div class="container">
-        <h1 class="categories_text">Registro</h1>
-        <p class="services_text">Rellena con tu  datos para registrarse</p>
-        <div class="email_box">
-          <div class="input_main">
-            <form id="myForm">
-                <div class="form-group">
-                    <input type="text" class="email-bt" placeholder="Ingresa tu nombre" name="name" id="name" required>
-                </div>
-                <div class="form-group">
-                    <input type="text" class="email-bt" placeholder="Ingresa tu apellido" name="surn" id="surn" required>
-                </div>
-                <div class="form-group">
-                  <input type="text" class="email-bt" placeholder="Ingresa mail" name="mail" id="mail" required>
-                </div>
-                <div class="form-group">
-                  <input type="password" class="email-bt" placeholder="contraseña" name="pass" id="pass" required>
-                </div>
-                <div class="send_bt">
-                  <button type="submit" class="email-bt">ENTRAR</button>
-                </div>
-              </form>                     
-          </div>
+    <!--header section end -->
+
+    <!--trainer section start -->
+    <div class="trainer_section layout_padding">
+        <div class="container" id="container">
         </div>
       </div>
-
-    </div>
+      <!--trainer section end -->
+  
     <!--contact section end -->
     <div class="contact_section_2 layout_padding">
       <div class="container">
@@ -211,10 +177,10 @@
         </div>
     </div>
   </div>
-
   <!--footer section end -->
+  
   <!-- Conexión al archivo de JavaScript -->
-  <script src="js/login.js"></script>
+  <script src="js/progress.js" defer></script>
   
   <!--footer section end -->
   <!-- Javascript files-->

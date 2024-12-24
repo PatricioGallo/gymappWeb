@@ -220,7 +220,7 @@ if(gymapp_id != null){
                             </select></td>
                             <td><center><input type="number" class="input_number_table" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series" required></center></td>
                             <td><center><input type="number" class="input_number_table" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones" required></center></td>
-                            <td><button id="addRow" class="delButton" type="button" title="Agregar una nueva fila">-</button></td>
+                            <td><button id="addRow" class="delButton" type="button" title="Eliminar fila">-</button></td>
                             `;
                         excArray[index] += 1;
                         actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla

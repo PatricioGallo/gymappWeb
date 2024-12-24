@@ -536,7 +536,7 @@ button {
     margin-top: 70px;
 }
 .email-bt {
-    color: #a6a5a5;
+    color: #505050;
     width: 100%;
     height: auto;
     font-size: 18px;
@@ -550,8 +550,59 @@ input.email-bt::placeholder {
     color: #a6a5a5;
 }
 
+.select_email-bt {
+    color: #6e6e6e;
+    width: 100%;
+    height: auto;
+    font-size: 18px;
+    padding: 10px 20px 10px 20px;
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #8f8f8f;
+    font-family: Raleway;
+}
+input.select_email-bt::placeholder {
+    color: #a6a5a5;
+}
+
+.configPlus{
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+}
+.configPlusContent{
+    width: 30%;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #a1e1ff;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+    margin-top: 30px;
+}
+.configPlusContent h1{
+    font-size: 21px;
+    text-align: center;
+    margin-bottom: 20px;
+    color: #4e4e4e;
+}
+.configPlusContent h3{
+    font-size: 14px;
+    color: #4e4e4e;;
+    margin-bottom: 5px;
+    font-weight: normal;
+}
+
+canvas {
+    width: 100%;
+    height: auto;
+    min-height: 350px;
+}
+
 .selector-email-bt {
-    color: #727272;
+    color: #555555;
     width: 60%;
     height: auto;
     font-size: 15px;
