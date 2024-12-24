@@ -130,7 +130,6 @@ if(gymapp_id != null){
 
                 document.getElementById('login-botton').addEventListener('click', (event) =>{
                     event.preventDefault();
-                    console.log("entroi aqui")
                     let error = 0;
                     for (let d = 0; d < days; d++) { 
                         let day_obj = {
@@ -152,6 +151,7 @@ if(gymapp_id != null){
                             exc_obj.id_exc  = parseInt(document.getElementById("exc-"+e+"-"+d).value)//recibo el id
                             exc_obj.nombre  = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].name; 
                             exc_obj.info    = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].info;
+
                             if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
                                 exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
                                 exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
@@ -159,8 +159,7 @@ if(gymapp_id != null){
                             }else{
                                 error = 1;
                             }
-                            // exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
-                            // exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
+
                             exc_array.push(exc_obj);
                         }
                         day_obj.ejercicios = exc_array;
@@ -185,12 +184,11 @@ if(gymapp_id != null){
 
                     rutina_obj.nombre = rut_name;
                     rutina_obj.semanas = weeks_array;
-                    user.rutinas.push(rutina_obj)
-                    let actID = (parseInt(user_id) + 1)
-                    //subirRutina(actID,user)
-                    console.log("Entre aqui")
+                   
                     if( error == 0){
-                       subirRutina(actID,user)
+                        user.rutinas.push(rutina_obj)
+                        let actID = (parseInt(user_id) + 1)
+                        subirRutina(actID,user)
                     } else{
                         alert("Ingrese todos los valores solicitados");
                         rutina_obj = {};
