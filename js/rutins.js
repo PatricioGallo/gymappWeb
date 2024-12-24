@@ -69,6 +69,7 @@ if(gymapp_id != null){
                                         <th>Ejercicio</th>
                                         <th>Series</th>
                                         <th>Repes</th>
+                                        <th>Eliminar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -96,13 +97,14 @@ if(gymapp_id != null){
                                 </select></td>
                                 <td><center><input type="number" class="input_number_table" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></center></td>
                                 <td><center><input type="number" class="input_number_table" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repeticiones" required></center></td>
+                                <td></td>
                             </tr>`
                             for (let j = 0; j < max_num_exc; j++) {
                                 main_body +=`<tr id="row-${j+1}-${i}" class="${dayClass}"></tr>`
                             }
                         main_body +=`    
                             <tr class="${dayClass}">
-                                <td colspan="4">
+                                <td colspan="5">
                                     <button id="addRow" class="addButton" type="button" title="Agregar una nueva fila">+</button>
                                 </td>
                             </tr>`
@@ -199,9 +201,10 @@ if(gymapp_id != null){
                     }
                 })
                 
-                // Agregar el evento de agregar fila
+                // Agregar fila
                 document.querySelectorAll('.addButton').forEach((button, index) => {
                     button.addEventListener('click', function() {
+                        console.log(index)
                         let rowName = ("row-"+ (excArray[index])+"-"+index)
                         const actualRow = document.getElementById(rowName);
                         let newRow = `
@@ -215,11 +218,38 @@ if(gymapp_id != null){
                             </select></td>
                             <td><center><input type="number" class="input_number_table" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series" required></center></td>
                             <td><center><input type="number" class="input_number_table" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones" required></center></td>
+                            <td><button id="addRow" class="delButton" type="button" title="Agregar una nueva fila">-</button></td>
                             `;
                         excArray[index] += 1;
                         actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
                     });
                 });
+
+                //Eliminar fila
+                document.querySelectorAll('.delButton').forEach((button, index) => {
+                    button.addEventListener('click', function() {
+                        console.log(index)
+                        // let rowName = ("row-"+ (excArray[index])+"-"+index)
+                        // const actualRow = document.getElementById(rowName);
+                        // let newRow = ``;
+                        // excArray[index] -= 1;
+                        // actualRow.insertAdjacentHTML('beforeend', newRow);  // Agregar la nueva fila al final de la tabla
+                    });
+                });
+
+                document.getElementById('container').addEventListener('click', function (event) {
+                    if (event.target.classList.contains('delButton')) {
+                        const rowToDelete = event.target.closest('tr'); // Encuentra la fila más cercana al botón
+                        console.log(rowToDelete.id);
+                        let palabra = rowToDelete.id;
+                        let partes = palabra.split("-"); // ["row", fila, index]
+                        let index = parseInt(partes[2]); // Obtiene index
+                        console.log(index)
+                        excArray[index] -= 1;
+                        rowToDelete.innerHTML = ``
+                    }
+                });
+
 
             });//GET ELEMENT
     }
