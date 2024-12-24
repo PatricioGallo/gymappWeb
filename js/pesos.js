@@ -93,7 +93,7 @@ if(gymapp_id != null){
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${peso_anterior(exc.id_exc)}</td>
-                                <td><center><input type="number" id="repe-0" name="repe-0" value="${exc.peso}"></center></td>
+                                <td><center><input type="number" id="repe-0" name="repe-0" value="${exc.peso}" class="number_input-bt"></center></td>
                             </tr>`;
                             exc_count++;
                         } else {
@@ -103,7 +103,7 @@ if(gymapp_id != null){
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${peso_anterior(exc.id_exc)}</td>
-                                <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}"></center></td>
+                                <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
                             </tr>
                         `;
                         }

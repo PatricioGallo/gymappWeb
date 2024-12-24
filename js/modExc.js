@@ -53,9 +53,6 @@ if(gymapp_id != null){
             services_text.innerHTML = `${user.nombre} ahora podras modificar los ejercicios de: "${user.rutinas[rutina_id].nombre}" semana numero: ${parseInt(weekId)+1} <br/>`
             main_body = `
                 <div class="configFace">
-                    <div class="configHeader">
-                        <h1>Modificar Ejercicios de ${user.rutinas[rutina_id].nombre}</h1>
-                    </div>
                     <div class="configForm">
                         <form id="myForm">
                             <table class="training-table">
@@ -89,8 +86,8 @@ if(gymapp_id != null){
                             })
                             main_body +=`
                                 </select></td>
-                                <td><center><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" ></center></td>
-                                <td><center><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}"></center></td>
+                                <td><center><input type="number" id="serie-0-${diaIndex}" name="serie-0-${diaIndex}" value="${exc.serie}" class="number_input-bt"></center></td>
+                                <td><center><input type="number" id="repe-0-${diaIndex}" name="repe-0-${diaIndex}" value="${exc.repe}" class="number_input-bt"></center></td>
                             </tr>`;
                             exc_count++;
                         } else {
@@ -103,8 +100,8 @@ if(gymapp_id != null){
                                     })
                                     main_body +=`
                                     </select></td>
-                                <td><center><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}"></center></td>
-                                <td><center><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}"></center></td>
+                                <td><center><input type="number" id="serie-${excIndex}-${diaIndex}" name="serie-${excIndex}-${diaIndex}" value="${exc.serie}" class="number_input-bt"></center></td>
+                                <td><center><input type="number" id="repe-${excIndex}-${diaIndex}" name="repe-${excIndex}-${diaIndex}" value="${exc.repe}" class="number_input-bt"></center></td>
                             </tr>`;
                         }
                         

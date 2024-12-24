@@ -55,7 +55,7 @@ if(gymapp_id != null){
                         </div>
                         </div>
                         <div class="col-md-6 padding_0">
-                        <div class="image_3"></div>
+                        <div class="image_1"></div>
                         </div>
                     </div>
         `;
