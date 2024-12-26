@@ -19,15 +19,29 @@ myForm.addEventListener("submit", async (event)=>{
     } else if(isNaN(age) || age < 12 || age > 100){
         alert_message.innerHTML = `<p>ERROR! Edad no es correcta!.</p>`
     } else{
+        let loaderBody = document.getElementById("loaderBody");
+        loaderBody.innerHTML = `
+        <div id="loading" class="loader-container">
+            <div class="modern-spinner">
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+            <p>Ingresando...</p>
+        </div>
+        `
         let switch_resp = await fetchUsers(mail);
         switch (switch_resp) {
             case 0:
                 addUser(mail,pass,userName,sur,age);
                 break;
             case 1:
+                loaderBody.innerHTML = ``;
                 alert_message.innerHTML = `<p>ERROR! Email ya registrado.</p>`
                 break;
             default:
+            loaderBody.innerHTML = ``;
             alert_message.innerHTML = `<p>ERROR! Algo salio mal, volver a intentar.</p>`
         }
     }
@@ -69,6 +83,8 @@ async function addUser(mail,pass,userName,sur,age) {
         user_type : 2,
         rutinas: []
     };
+    let loaderBody = document.getElementById("loaderBody");
+    let alert_message = document.getElementById("alert_message");
 
     try {
         const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users', {
@@ -81,15 +97,26 @@ async function addUser(mail,pass,userName,sur,age) {
 
         if (response.ok) {
             const data = await response.json();
-            console.log('Usuario agregado con éxito:', data);
-            alert('Usuario agregado con éxito');
-            window.location.href = `index.html`;
+            loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>¡Ususario registrado con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `index.html`;
+                }, 3000); 
         } else {
-            console.error('Error al agregar el usuario:', response.statusText);
-            alert('Error al agregar el usuario');
+            loaderBody.innerHTML = ``;
+            alert_message.innerHTML = `<p>ERROR! Algo salio mal, volver a intentar.</p>`
         }
     } catch (error) {
-        console.error('Hubo un problema con la solicitud:', error);
-        alert('Error en la conexión');
+        loaderBody.innerHTML = ``;
+        alert_message.innerHTML = `<p>ERROR! Algo salio mal, volver a intentar.</p>`
     }
 }

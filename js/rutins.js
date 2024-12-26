@@ -21,6 +21,7 @@ if(gymapp_id != null){
             <br/>
             <div class="trainer_section_2" id="trainer_section_2">
             </div>
+            <div id=loaderBody></div>
         `
         const userCardsContainer = document.getElementById('trainer_section_2');
         const body = document.createElement('div');
@@ -67,7 +68,7 @@ if(gymapp_id != null){
                                         <th>Día</th>
                                         <th>Ejercicio</th>
                                         <th>Series</th>
-                                        <th>Repes</th>
+                                        <th>Repeticiones</th>
                                         <th>Eliminar</th>
                                     </tr>
                                 </thead>
@@ -94,8 +95,8 @@ if(gymapp_id != null){
 
                                 main_body +=`
                                 </select></td>
-                                <td><center><input type="number" class="input_number_table" id="serie-0-${i}" name="serie-0-${i}" placeholder="series" required></center></td>
-                                <td><center><input type="number" class="input_number_table" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repeticiones" required></center></td>
+                                <td><center><input type="number" class="number_input-bt" id="serie-0-${i}" name="serie-0-${i}" placeholder="Series" required></center></td>
+                                <td><center><input type="number" class="number_input-bt" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repes" required></center></td>
                                 <td></td>
                             </tr>`
                             for (let j = 0; j < max_num_exc; j++) {
@@ -113,6 +114,7 @@ if(gymapp_id != null){
                                 </tbody>
                             </table>
                             </br>
+                            <div class="alert_message" id="alert_message"></div>
                             <div class="send_bt">
                                 <button type="submit" id="login-botton" class="login-botton">Guardar</button>
                             </div>
@@ -131,6 +133,7 @@ if(gymapp_id != null){
 
                 document.getElementById('login-botton').addEventListener('click', (event) =>{
                     event.preventDefault();
+                    let alert_message = document.getElementById("alert_message"); 
                     let error = 0;
                     for (let d = 0; d < days; d++) { 
                         let day_obj = {
@@ -193,9 +196,21 @@ if(gymapp_id != null){
                     if( error == 0){
                         user.rutinas.push(rutina_obj)
                         let actID = (parseInt(user_id) + 1)
-                        subirRutina(actID,user)
+                        let loaderBody = document.getElementById("loaderBody");
+                        loaderBody.innerHTML = `
+                        <div id="loading" class="loader-container">
+                            <div class="modern-spinner">
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                            </div>
+                            <p>Subiendo rutina...</p>
+                        </div>
+                        `
+                        subirRutina(actID,user);
                     } else{
-                        alert("Ingrese todos los valores solicitados o valores validos");
+                        alert_message.innerHTML = `<p>ERROR! Ingrese todos los valores solicitados o valores validos.</p>`
                         rutina_obj = {};
                         week_obj = {};
                         day_obj = {};
@@ -257,6 +272,8 @@ if(gymapp_id != null){
     }
 
     async function subirRutina(userId, user) {
+        let alert_message = document.getElementById("alert_message"); 
+        let loaderBody = document.getElementById("loaderBody");
         try {
             const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
                 method: 'PUT',  // Utiliza POST para crear un nuevo recurso
@@ -267,17 +284,30 @@ if(gymapp_id != null){
             });
 
             if (response.ok) {
-                const datos = await response.json();
-                console.log('Rutina subida con éxito:', datos);
-                alert("Rutina subida con éxito.");
-                window.location.href = `index.html`;
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>¡Rutina subida con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `index.html`;
+                }, 3000); 
+                return 0;
             } else {
-                console.error('Error al subir la rutina:', response.statusText);
-                alert("Error al subir la rutina.");
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>ERROR! No se pudo subir la rutina.</p>`
+                return 1;
             }
         } catch (error) {
-            console.error('Hubo un problema con la solicitud:', error);
-            alert("Error en la conexión.");
+            loaderBody.innerHTML = ``;
+            alert_message.innerHTML = `<p>ERROR! Hubo un problema con la solicitud</p>`
+            return 2;
         }
     }
 

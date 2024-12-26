@@ -7,17 +7,38 @@ if(gymapp_id == null){
         mail = document.getElementById("mail").value;
         pass = document.getElementById("pass").value;
         let alert_message = document.getElementById("alert_message");
+        let loaderBody = document.getElementById("loaderBody");
+        loaderBody.innerHTML = `
+        <div id="loading" class="loader-container">
+            <div class="modern-spinner">
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+            <p>Ingresando...</p>
+        </div>
+        `
         let switch_resp = await fetchUsers(mail, pass);
 
         switch (switch_resp) {
             case 0:
+                loaderBody.innerHTML = ``;
                 alert_message.innerHTML = `<p>ERROR! Usuario no existe.</p>`
                 break;
             case 1:
+                loaderBody.innerHTML = ``;
                 alert_message.innerHTML = `<p>ERROR! Contraseña incorrecta.</p>`
                 break;
             case 2:
-                window.location.href = `profile.html`;
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <p>¡Bienvenido!</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `profile.html`;
+                }, 2000); 
                 break;
             default:
             alert_message.innerHTML = `<p>ERROR! Volver a intentarlo.</p>`

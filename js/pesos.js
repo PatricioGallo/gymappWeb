@@ -3,7 +3,6 @@ if(gymapp_id != null){
 
     const params = new URLSearchParams(window.location.search);
     const container          = document.getElementById('container');
-    const userCardsContainer = document.getElementById('user-cards');
 
     // Acceder a un parámetro específico
     const user_id = params.get('id');
@@ -19,6 +18,7 @@ if(gymapp_id != null){
             <br/>
             <div class="trainer_section_2" id="trainer_section_2">
             </div>
+            <div id=loaderBody></div>
         `
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
@@ -113,6 +113,7 @@ if(gymapp_id != null){
                             </tbody>
                         </table>
                             </br>
+                            <div class="alert_message" id="alert_message"></div>
                             <div class="send_bt">
                                 <button type="submit" class="login-botton">Guardar</button>
                             </div>
@@ -151,6 +152,7 @@ if(gymapp_id != null){
 
             document.getElementById('myForm').addEventListener('submit', (event) =>{
                 event.preventDefault();
+                let alert_message = document.getElementById("alert_message"); 
                 let excPath     = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios;
                 let excCount    = excPath.length;
                 let exc_histo   = user.historial;
@@ -218,9 +220,21 @@ if(gymapp_id != null){
                 }
 
                 if(correctValue != 0){
+                    let loaderBody = document.getElementById("loaderBody");
+                        loaderBody.innerHTML = `
+                        <div id="loading" class="loader-container">
+                            <div class="modern-spinner">
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                            </div>
+                            <p>Subiendo rutina...</p>
+                        </div>
+                        `
                     actRutina(actID,user);
                 }else{
-                    alert("Ingresaste un valor incorrecto o ningun valor!")
+                    alert_message.innerHTML = `<p>ERROR! Ingresaste un valor incorrecto o ningun valor.</p>`
                 }
 
             });
@@ -265,6 +279,8 @@ if(gymapp_id != null){
     }
 
     async function actRutina(userId, user) {
+        let alert_message = document.getElementById("alert_message"); 
+        let loaderBody = document.getElementById("loaderBody");
         try {
             const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
                 method: 'PUT',  
@@ -275,16 +291,27 @@ if(gymapp_id != null){
             });
 
             if (response.ok) {
-                const datos = await response.json();
-                alert("Peso agregado con éxito.");
-                window.location.href = `pesos.html?id=${user_id}&rutina=${rutina_id}`;
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>¡Peso actualizado con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `pesos.html?id=${user_id}&rutina=${rutina_id}`;
+                }, 3000); 
             } else {
-                console.error('Error al subir el peso:', response.statusText);
-                alert("Error al subir pesos.");
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>ERROR! No se pudo subir la rutina.</p>`
             }
         } catch (error) {
-            console.error('Hubo un problema con la solicitud:', error);
-            alert("Error en la conexión.");
+            loaderBody.innerHTML = ``;
+            alert_message.innerHTML = `<p>ERROR! Hubo un problema con la solicitud</p>`
         }
     }
 

@@ -16,6 +16,7 @@ if(gymapp_id != null){
             <p class="services_text" id="services_text">${user.nombre}, ¿Estas seguro que quieres eliminar: "${user.rutinas[rutina_id].nombre}" ?</p>
             <p class="services_text" id="services_text">Si es asi, haz click en el boton "Eliminar"</p>
             <br/>
+            <div id=loaderBody></div>
             <div class="trainer_section_2" id="trainer_section_2">
             </div>
         `
@@ -26,6 +27,7 @@ if(gymapp_id != null){
         main_body = `
             <div class="email_box">
                         <form id="myForm">
+                            <div class="alert_message" id="alert_message"></div>
                             <div class="send_bt">
                                 <button type="submit" id="but" value="1" class="login-botton">Eliminar</button>
                             </div>
@@ -42,6 +44,18 @@ if(gymapp_id != null){
             rutins.splice(rutina_id, 1);
             user.rutinas = rutins;
             let actID = (parseInt(user_id) + 1)
+            let loaderBody = document.getElementById("loaderBody");
+            loaderBody.innerHTML = `
+            <div id="loading" class="loader-container">
+                <div class="modern-spinner">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+                <p>Eliminando rutina...</p>
+            </div>
+            `
             actRutina(actID,user);
         });//End submit
     }
@@ -85,15 +99,29 @@ if(gymapp_id != null){
 
             if (response.ok) {
                 const datos = await response.json();
-                alert("Rutina eliminada con éxito.");
-                window.location.href = `index.html`;
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>¡Rutina eliminada con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `index.html`;
+                }, 3000); 
             } else {
-                console.error('Error al subir la rutina:', response.statusText);
-                alert("Error al actulizar la rutina.");
+                let loaderBody = document.getElementById("loaderBody");
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>ERROR! No se pudo subir la rutina.</p>`
             }
         } catch (error) {
-            console.error('Hubo un problema con la solicitud:', error);
-            alert("Error en la conexión.");
+            let loaderBody = document.getElementById("loaderBody");
+            loaderBody.innerHTML = ``;
+            alert_message.innerHTML = `<p>ERROR! No se pudo subir la rutina.</p>`
         }
     }
 
