@@ -90,7 +90,7 @@ if(gymapp_id != null){
                                 <td><select id="exc-0-${i}" name="exc-0-${i}" class="selector-email-bt" required>
                                 `
                                 exc_api_array.forEach(exc => {
-                                    main_body += `<option title="${exc.info}" value="${exc.id}">${exc.name}  (${viewAuthor(exc.author)})</option>`
+                                    main_body += `<option title="${exc.info}" value="${exc.id}">${exc.name}  (by: ${viewAuthor(exc.author)})</option>`
                                 });
 
                                 main_body +=`
@@ -125,7 +125,7 @@ if(gymapp_id != null){
 
                 function viewAuthor(id){
                     if(id != "gymapp"){
-                        return users[id-1].nombre;
+                        return `${users[id-1].nombre} ${users[id-1].apellido}`
                     }else{
                         return "gymapp"
                     }

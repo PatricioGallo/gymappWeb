@@ -34,7 +34,7 @@ if(gymapp_id != null){
 
             trainedExc.forEach((exc) => {
             main_body += `
-                <option value="${exc.id}">${exc.name} (by: ${exc.author})</option>
+                <option value="${exc.id}">${exc.name} (by: ${viewAuthor(exc.author)})</option>
             `
         })
         main_body +=`
@@ -49,6 +49,14 @@ if(gymapp_id != null){
             `
         configBody.innerHTML = main_body;
         userCardsContainer.appendChild(configBody);
+
+        function viewAuthor(id){
+            if(id != "gymapp"){
+                return `${users[id-1].nombre} ${users[id-1].apellido}`;
+            }else{
+                return "gymapp"
+            }
+        }
 
         document.getElementById('myForm').addEventListener('submit', (event) =>{
             event.preventDefault();
