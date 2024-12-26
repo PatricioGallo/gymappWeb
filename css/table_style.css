@@ -233,11 +233,18 @@ input.number_input-bt::placeholder {
         padding: 6px;
     }
     .number_input-bt{
-        width: 35%;
-        font-size: 13px;
+        width: 40%;
+        font-size: 12px;
+        padding: 1px;
     }
     .configPlusContent{
         width: 100%;
 
+    }
+    .selector-email-bt {
+        width: 90%;
+        height: auto;
+        font-size: 12px;
+        padding: 1px;
     }
 }
