@@ -18,6 +18,7 @@ if(gymapp_id != null){
             <br/>
             <div class="trainer_section_2" id="trainer_section_2">
             </div>
+            <div id=loaderBody></div>
         `
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
@@ -113,6 +114,7 @@ if(gymapp_id != null){
                                 </tbody>
                             </table>
                             </br>
+                            <div class="alert_message" id="alert_message"></div>
                             <div class="send_bt">
                                     <button type="submit" class="login-botton">Guardar</button>
                             </div>
@@ -133,10 +135,13 @@ if(gymapp_id != null){
 
             document.getElementById('myForm').addEventListener('submit', (event) =>{
                 event.preventDefault();
+                let alert_message = document.getElementById("alert_message"); 
+                let loaderBody = document.getElementById("loaderBody");
                 //VARIABLES
                 let userPath = user.rutinas[parseInt(rutina_id)].semanas[weekId];
                 let dayCount = userPath.dias.length;
                 let days_array = []
+                let error = 0;
 
                 for (let d = 0; d < dayCount; d++) { 
                     //VARIABLES
@@ -165,18 +170,46 @@ if(gymapp_id != null){
                         exc_obj.info            = excPath[e].info;
                         exc_obj.id_exc          = excPath[e].id_exc;
                         exc_obj.nombre          = document.getElementById("exc-"+e+"-"+d).value;
-                        exc_obj.serie           = parseInt(document.getElementById("serie-"+e+"-"+d).value);
-                        exc_obj.repe            = parseInt(document.getElementById("repe-"+e+"-"+d).value);
+
+                        if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
+                            exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
+                            exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
+
+                            if(exc_obj.serie > 10 || exc_obj.serie < 1 || exc_obj.repe > 30 || exc_obj.repe<1){
+                                error = 1;
+                            }else{
+                                error = 0;
+                            }
+                        }else{
+                            error = 1;
+                        }
+
                         exc_array.push(exc_obj);
                     }
                     day_obj.ejercicios = exc_array;
                     day_obj.nombre = userPath.dias[d].nombre;
                     days_array.push(day_obj)
-                }
+                }                
 
-                user.rutinas[parseInt(rutina_id)].semanas[weekId].dias = days_array;
-                let actID = (parseInt(user_id) + 1)
-                actRutina(actID,user);
+                if( error == 0){
+                    user.rutinas[parseInt(rutina_id)].semanas[weekId].dias = days_array;
+                    let actID = (parseInt(user_id) + 1)
+                    let loaderBody = document.getElementById("loaderBody");
+                    loaderBody.innerHTML = `
+                    <div id="loading" class="loader-container">
+                        <div class="modern-spinner">
+                            <div></div>
+                            <div></div>
+                            <div></div>
+                            <div></div>
+                        </div>
+                        <p>Actualizando rutina...</p>
+                    </div>`
+                    actRutina(actID,user);
+                } else{
+                    alert_message.innerHTML = `<p>ERROR! Ingrese todos los valores solicitados o valores validos.</p>`
+                    days_array = []
+                }
             });
         });//End submit
 
@@ -210,6 +243,8 @@ if(gymapp_id != null){
 
 
     async function actRutina(userId, user) {
+        let loaderBody = document.getElementById("loaderBody");
+        let alert_message = document.getElementById("alert_message"); 
         try {
             const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
                 method: 'PUT',  
@@ -220,16 +255,28 @@ if(gymapp_id != null){
             });
 
             if (response.ok) {
-                const datos = await response.json();
-                alert("Rutina actualizada con éxito.");
-                window.location.href = `index.html`;
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>¡Rutina actualizada con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `index.html`;
+                }, 3000); 
+                return 0;
             } else {
-                console.error('Error al subir la rutina:', response.statusText);
-                alert("Error al actulizar la rutina.");
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>ERROR! No se pudo subir la rutina.</p>`
             }
         } catch (error) {
-            console.error('Hubo un problema con la solicitud:', error);
-            alert("Error en la conexión.");
+            loaderBody.innerHTML = ``;
+            alert_message.innerHTML = `<p>ERROR! Hubo un problema con la solicitud</p>`
         }
     }
 
