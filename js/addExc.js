@@ -8,21 +8,38 @@ if(gymapp_id != null){
         event.preventDefault();
         excName = document.getElementById("excName").value;
         description = document.getElementById("description").value;
+        let alert_message = document.getElementById("alert_message");
+        let loaderBody = document.getElementById("loaderBody");
         userName = parseInt(userName) + 1;
+        loaderBody.innerHTML = `
+        <div id="loading" class="loader-container">
+            <div class="modern-spinner">
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+            <p>Subiendo ejercicio nuevo...</p>
+        </div>
+        `
         let switch_resp = debugItem(excName.length,description.length);
 
         switch (switch_resp) {
             case 0:
-                alert("Nombre del ejercicio muy corto")
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>Nombre del ejercicio muy corto.</p>`
                 break;
             case 1:
-                alert("Nombre del ejercicio muy largo")
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>Nombre del ejercicio muy largo.</p>`
                 break;
             case 2:
-                alert("Descripcion del ejercicio muy corta")
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>Descripcion del ejercicio muy corta.</p>`
                 break;
             case 3:
-                alert("Descripcion del ejercicio muy larga")
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>Descripcion del ejercicio muy larga.</p>`
                 break;
             case 4:
                 addExc(excName,description,userName);
@@ -53,7 +70,8 @@ if(gymapp_id != null){
             info: description,
             author: userName,
         };
-
+        let loaderBody = document.getElementById("loaderBody");
+        let alert_message = document.getElementById("alert_message");
         try {
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices', {
                 method: 'POST', // Método POST para crear un nuevo recurso
@@ -64,16 +82,27 @@ if(gymapp_id != null){
             });
 
             if (response.ok) {
-                const data = await response.json();
-                alert('Ejercicio agregado con éxito');
-                window.location.href = `index.html`;
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>Ejercicio subido con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `index.html`;
+                }, 3000); 
             } else {
-                console.error('Error al agregar el ejercicio:', response.statusText);
-                alert('Error al agregar el ejercicio');
+                loaderBody.innerHTML = ``;
+                alert_message.innerHTML = `<p>ERROR! Algo salio mal, volver a intentar.</p>`
             }
         } catch (error) {
-            console.error('Hubo un problema con la solicitud:', error);
-            alert('Error en la conexión');
+            loaderBody.innerHTML = ``;
+            alert_message.innerHTML = `<p>ERROR! Algo salio mal, volver a intentar.</p>`
         }
     }
 

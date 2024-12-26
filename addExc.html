@@ -17,6 +17,7 @@
 <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
 <!-- style css -->
 <link rel="stylesheet" type="text/css" href="css/style.css">
+<link rel="stylesheet" type="text/css" href="css/table_style.css">
 <!-- Responsive-->
 <link rel="stylesheet" href="css/responsive.css">
 <!-- fevicon -->
@@ -68,6 +69,7 @@
         </p>
         <div class="email_box">
           <div class="input_main">
+            <div id=loaderBody></div>
             <form id="myForm">
                 <div class="form-group">
                   <input type="text" class="email-bt" placeholder="Nombre del ejercicio" name="excName" id="excName">
@@ -75,6 +77,7 @@
                 <div class="form-group">
                   <textarea id="description" class="email-bt" name="description" rows="6" cols="75" placeholder="Escribe una breve descripción del ejercicio..." required></textarea><br>
                 </div>
+                <div class="alert_message" id="alert_message"></div>
                 <div class="send_bt">
                   <button type="submit" class="login-botton">AGREGAR</button>
                 </div>
