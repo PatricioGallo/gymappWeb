@@ -10,6 +10,7 @@ if(gymapp_id != null){
     let weekId = 0;
     let dayId = 0;
     let exc_api_array;
+    let users;
 
     function printExc(user){
         container.innerHTML = `
@@ -73,7 +74,7 @@ if(gymapp_id != null){
                                 <thead>
                                     <tr>
                                         <th>Día</th>
-                                        <th>Ejercicio</th>
+                                        <th>Ejercicio (tocar para ver)</th>
                                         <th>Series</th>
                                         <th>Repes</th>
                                         <th>Peso anterior</th>
@@ -89,7 +90,7 @@ if(gymapp_id != null){
                             main_body += `
                             <tr class="day-dark">
                                 <td rowspan="${arraysCount(user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios)}">${user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre}</td>
-                                <td>${exc.nombre}</td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${peso_anterior(exc.id_exc)}</td>
@@ -99,7 +100,7 @@ if(gymapp_id != null){
                         } else {
                             main_body += `
                             <tr class="day-dark">
-                                <td>${exc.nombre}</td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${peso_anterior(exc.id_exc)}</td>
@@ -239,6 +240,44 @@ if(gymapp_id != null){
 
             });
 
+            document.querySelectorAll('.excDesc').forEach((button, index) => {
+                button.addEventListener('click', function() {
+                    let loaderBody = document.getElementById("loaderBody");
+                    let exc = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios[index];
+                    console.log(exc);
+                    loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="exc_container">
+                            <div class="exc_info">
+                                <div class="exc_title"><h1>${exc.nombre}</h1></div>
+                                <div class= "exc_detail">
+                                    <h2>Descripcion:</h2>
+                                    <h3>${exc.info}</h3>
+                                    <br/>
+                                    <h2>Desarrollado por:</h2>
+                                    <h3>${viewAuthorID(exc.id_exc)}</h3>
+                                </div>
+                                <div class= "exc_buttons"><button class="exc_button" onclick="document.getElementById('loaderBody').innerHTML = '';">Cerrar</button></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                });
+            });
+            
+            function viewAuthorID(id){
+                let id_author = exc_api_array[id-1].author;
+                return viewAuthor(id_author);
+            }
+
+            function viewAuthor(id){
+                if(id != "gymapp"){
+                    return `${users[id-1].nombre} ${users[id-1].apellido}`;
+                }else{
+                    return "gymapp"
+                }
+            }
+
             function debugItem(item){
                 if(item == 0){
                     return 0
@@ -258,7 +297,7 @@ if(gymapp_id != null){
         try {
             // Hacer la solicitud a la API
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
-            const users = await response.json();
+            users = await response.json();
 
             printExc(users[user_id]);
         } catch (error) {

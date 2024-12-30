@@ -245,4 +245,13 @@ input.number_input-bt::placeholder {
         font-size: 12px;
         padding: 1px;
     }
+    .exc_info{
+        width: 100%;
+    }
+    .exc_detail{
+        padding: 10px;
+    }
+    .exc_button{
+        width: 40%;
+    }
 }

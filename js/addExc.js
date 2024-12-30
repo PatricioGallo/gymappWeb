@@ -55,9 +55,9 @@ if(gymapp_id != null){
             return 0
         } else if (exc > 60){
             return 1
-        } else if(des < 30){
+        } else if(des < 100){
             return 2
-        } else if(des > 140){
+        } else if(des > 600){ //maxima caracterers en la descripcion
             return 3
         } else{
             return 4

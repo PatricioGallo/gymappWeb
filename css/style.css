@@ -665,6 +665,17 @@ input.selector-email-bt::placeholder {
 .addButton:hover{
     background-color: #ff0000;
 }
+
+.excDesc {
+    color: #ffffff;
+    width: 90%;
+    height: auto;
+    font-size: 15px;
+    font-family: Raleway;
+    text-align: center;
+    color: #555555;
+    background-color: #e0e0e0;
+}
 .delButton {
     color: #ffffff;
     width: 30px;
@@ -723,6 +734,84 @@ textarea#comment::placeholder {
     width: 100%;
     float: left;
 }
+.exc_container{
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: Raleway;
+}
+.exc_info{
+    width: 40%;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    font-size: 18px;
+    padding: 20px;
+    background: #f3f3f3;
+    border-radius: 20px;
+    border: 1px solid #8f8f8f;
+}
+.exc_title{
+    width: 100%;
+    height: auto;
+    display: flex;
+    color: #555555;
+    font-family: Raleway;
+    text-align: center;
+    justify-content: center;
+}
+.exc_title h1{
+    color: #555555;
+    font-family: Raleway;
+    text-align: center;
+}
+.exc_detail{
+    width: 100%;
+    height: auto;
+    display: flex;
+    padding: 20px;
+    flex-direction: column;
+}
+.exc_detail h2{
+    color: #555555;
+    font-family: Raleway;
+    text-align: left;
+    font-size: 17px;
+    font-weight: bold;
+    margin-top: 10px;
+}
+.exc_detail h3{
+    color: #555555;
+    font-family: Raleway;
+    text-align: left;
+    font-size: 16px;
+}
+.exc_buttons{
+    margin-top: 30px;
+    width: 100%;
+    display: flex;
+    justify-content:center;
+}
+
+.exc_button {
+    color: #ffffff;
+    width: 20%;
+    height: auto;
+    font-size: 18px;
+    padding: 10px 20px 10px 20px;
+    background: #cb0b0b;
+    border-radius: 20px;
+    border: 1px solid #8f8f8f;
+    font-family: Raleway;
+}
+.exc_button:hover{
+    background-color: #ff0000;
+}
+
 .contact_section_2 {
     width: 100%;
     float: left;
