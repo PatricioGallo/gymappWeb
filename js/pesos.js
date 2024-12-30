@@ -303,7 +303,7 @@ if(gymapp_id != null){
                     </div>
                 `;
                 setTimeout(() => {
-                    window.location.href = `pesos.html?id=${user_id}&rutina=${rutina_id}`;
+                    loaderBody.innerHTML = ``;
                 }, 3000); 
             } else {
                 loaderBody.innerHTML = ``;
