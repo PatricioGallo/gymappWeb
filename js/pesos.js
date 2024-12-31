@@ -94,15 +94,20 @@ if(gymapp_id != null){
                                 <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.note)}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
-                                <td>${peso_anterior(exc.id_exc)}</td>
                                 `
                                 
-                                if(sn_peso == 0){  //para no poner la entrada de valores en caso de un ejercicio sin peso  
-                                main_body += `
-                                    <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
-                                </tr>
-                                `;}else{
-                                    main_body += `<td></td></tr>`
+                                if(exc.peso_anterior != -1){  //para no poner la entrada de valores en caso de un ejercicio sin peso  
+                                    main_body += `
+                                        <td>${peso_anterior(exc.id_exc)}</td>
+                                        <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
+                                    </tr>
+                                    `;
+                                }else{
+                                    main_body += `
+                                        <td>Sin peso</td>
+                                        <td></td>
+                                    </tr>
+                                        `
                                 }
 
                             exc_count++;
@@ -112,14 +117,19 @@ if(gymapp_id != null){
                                 <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
-                                <td>${peso_anterior(exc.id_exc)}</td>
                                 `
-                            if(sn_peso == 0){    
-                            main_body += `
-                                <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
-                            </tr>
-                            `;}else{
-                            main_body += `<td></td></tr>`
+                            if(exc.peso_anterior != -1){   
+                                main_body += `
+                                    <td>${peso_anterior(exc.id_exc)}</td>
+                                    <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
+                                </tr>
+                                `;
+                            }else{
+                                main_body += `
+                                    <td>Sin peso</td>
+                                    <td></td>
+                                </tr>
+                                    `
                             }
                         }
                     });
@@ -172,9 +182,6 @@ if(gymapp_id != null){
                 });
                 if(peso == undefined){
                     return("Sin peso anterior")
-                }else if(peso == -1){
-                    sn_peso = 1;
-                    return("Sin peso");
                 }else{
                     return(peso)
                 }

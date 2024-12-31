@@ -636,6 +636,22 @@ input.selector-email-bt::placeholder {
     color: #a6a5a5;
 }
 
+.selector-rutins-bt {
+    color: #555555;
+    width: 90%;
+    height: auto;
+    font-size: 15px;
+    padding: 7px;
+    background: #ffffff;
+    border-radius: 5px;
+    border: 1px solid #8f8f8f;
+    font-family: Raleway;
+}
+input.selector-rutins-bt::placeholder {
+    color: #a6a5a5;
+}
+
+
 .login-botton {
     color: #ffffff;
     width: 100%;
@@ -1075,4 +1091,42 @@ textarea#comment::placeholder {
 }
 .margin_top_90{
     margin-top: 90px;
+}
+input[type="checkbox"] {
+    appearance: none; /* Elimina el estilo predeterminado del navegador */
+    width: 20px; /* Ancho del checkbox */
+    height: 20px; /* Alto del checkbox */
+    border: 2px solid #ff0000; /* Borde rojo */
+    border-radius: 4px; /* Esquinas ligeramente redondeadas */
+    outline: none; /* Sin borde al enfocar */
+    cursor: pointer; /* Cambia el cursor al pasar sobre el checkbox */
+    transition: all 0.3s ease; /* Suaviza los cambios de estilo */
+    background-color: white;
+}
+
+/* Cambia el color al estar seleccionado */
+input[type="checkbox"]:checked {
+    background-color: #ff0000; /* Color de fondo cuando está seleccionado */
+    border-color: #ff0000; /* Cambia el borde al estar activo */
+}
+
+/* Agregar un check al marcar */
+input[type="checkbox"]:checked::before {
+    content: '✔'; /* Icono de check */
+    color: white;
+    font-size: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%; /* Asegura que el icono ocupe todo el espacio */
+}
+
+/* Estilo al pasar el mouse por encima */
+input[type="checkbox"]:hover {
+    border-color: #cc0000; /* Resalta el borde al pasar el cursor */
+}
+
+/* Opcional: Mantén el estilo dentro del diseño de tabla */
+td input[type="checkbox"] {
+    margin: 0px; /* Espaciado dentro de la celda */
 }

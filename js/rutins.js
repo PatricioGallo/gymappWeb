@@ -69,6 +69,8 @@ if(gymapp_id != null){
                                         <th>Ejercicio</th>
                                         <th>Series</th>
                                         <th>Repeticiones</th>
+                                        <th>Sin peso</th>
+                                        <th>Nota</th>
                                         <th>Eliminar</th>
                                     </tr>
                                 </thead>
@@ -78,7 +80,7 @@ if(gymapp_id != null){
                         let dayClass = i % 2 === 0 ? 'day-dark' : 'day-light';
                         main_body += `
                             <tr class="${dayClass}">
-                                <td rowspan="${max_num_exc}"><select id="day-${i}" name="day-${i}" placeholder="Ingrese dia" class="selector-email-bt" required>
+                                <td rowspan="${max_num_exc}"><select id="day-${i}" name="day-${i}" placeholder="Ingrese dia" class="selector-rutins-bt" required>
                                     <option value="Lunes">Lunes</option>
                                     <option value="Martes">Martes</option>
                                     <option value="Miercoles">Miercoles</option>
@@ -87,7 +89,7 @@ if(gymapp_id != null){
                                     <option value="Sabado">Sabado</option>
                                     <option value="Domingo">Domingo</option>
                                 </select></td>
-                                <td><select id="exc-0-${i}" name="exc-0-${i}" class="selector-email-bt" required>
+                                <td><select id="exc-0-${i}" name="exc-0-${i}" class="selector-rutins-bt" required>
                                 `
                                 exc_api_array.forEach(exc => {
                                     main_body += `<option title="${exc.info}" value="${exc.id}">${exc.name}  (by: ${viewAuthor(exc.author)})</option>`
@@ -97,14 +99,17 @@ if(gymapp_id != null){
                                 </select></td>
                                 <td><center><input type="number" class="number_input-bt" id="serie-0-${i}" name="serie-0-${i}" placeholder="Series" required></center></td>
                                 <td><center><input type="number" class="number_input-bt" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repes" required></center></td>
+                                <td><input type="checkbox" id="check-0-${i}" value="1" onclick="this.value = this.checked ? 1 : 0;"></td>
+                                <td></td>
                                 <td></td>
                             </tr>`
                             for (let j = 0; j < max_num_exc; j++) {
                                 main_body +=`<tr id="row-${j+1}-${i}" class="${dayClass}"></tr>`
                             }
+                            
                         main_body +=`    
                             <tr class="${dayClass}">
-                                <td colspan="5">
+                                <td colspan="7">
                                     <button id="addRow" class="addButton" type="button" title="Agregar una nueva fila">+</button>
                                 </td>
                             </tr>`
@@ -155,6 +160,11 @@ if(gymapp_id != null){
                             exc_obj.id_exc  = parseInt(document.getElementById("exc-"+e+"-"+d).value)//recibo el id
                             exc_obj.nombre  = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].name; 
                             exc_obj.info    = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].info;
+
+                            if(document.getElementById("check-"+e+"-"+d).value == 1){
+                                exc_obj.peso_anterior = -1;
+                                exc_obj.peso = -1;
+                            }
 
                             if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
                                 exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
@@ -210,7 +220,7 @@ if(gymapp_id != null){
                         `
                         subirRutina(actID,user);
                     } else{
-                        alert_message.innerHTML = `<p>ERROR! Ingrese todos los valores solicitados o valores validos.</p>`
+                        alert_message.innerHTML = `<p>Por favor, ingrese todos los valores solicitados o valores validos.</p>`
                         rutina_obj = {};
                         week_obj = {};
                         day_obj = {};
@@ -225,16 +235,18 @@ if(gymapp_id != null){
                         let rowName = ("row-"+ (excArray[index])+"-"+index)
                         const actualRow = document.getElementById(rowName);
                         let newRow = `
-                            <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" class="selector-email-bt" required>`
+                            <td><select id="exc-${excArray[index]}-${index}" name="exc-${excArray[index]}-${index}" class="selector-rutins-bt" required>`
 
                             exc_api_array.forEach(exc => {
-                                newRow += `<option value="${exc.id}">${exc.name}</option>`
+                                newRow += `<option title="${exc.info}" value="${exc.id}">${exc.name}  (by: ${viewAuthor(exc.author)})</option>`
                             });
                                 
                             newRow +=`    
                             </select></td>
-                            <td><center><input type="number" class="input_number_table" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series" required></center></td>
-                            <td><center><input type="number" class="input_number_table" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repeticiones" required></center></td>
+                            <td><center><input type="number" class="number_input-bt" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series" required></center></td>
+                            <td><center><input type="number" class="number_input-bt" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repes" required></center></td>
+                            <td><input type="checkbox" id="check-${excArray[index]}-${index}" value="1" onclick="this.value = this.checked ? 1 : 0;"></td>
+                            <td></td>
                             <td><button id="addRow" class="delButton" type="button" title="Eliminar fila">-</button></td>
                             `;
                         excArray[index] += 1;

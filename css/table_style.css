@@ -35,7 +35,7 @@
 }
 .number_input-bt {
     color: #272727;
-    width: 30%;
+    width: 50%;
     height: auto;
     font-size: 14px;
     padding: 5px;
@@ -231,9 +231,9 @@ input.number_input-bt::placeholder {
         padding: 6px;
     }
     .number_input-bt{
-        width: 40%;
-        font-size: 12px;
-        padding: 1px;
+        width: 98%;
+        font-size: 10px;
+        padding: 3px;
     }
     .configPlusContent{
         width: 100%;
@@ -253,5 +253,19 @@ input.number_input-bt::placeholder {
     }
     .exc_button{
         width: 40%;
+    }
+    .selector-rutins-bt{
+        width: 100%;
+        font-size: 11px;
+    }
+    
+    input[type="checkbox"] {
+        width: 15px; /* Ancho del checkbox */
+        height: 15px; /* Alto del checkbox */
+    }
+    .delButton {
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
     }
 }
