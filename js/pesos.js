@@ -11,6 +11,7 @@ if(gymapp_id != null){
     let dayId = 0;
     let exc_api_array;
     let users;
+    let sn_peso = 0;
 
     function printExc(user){
         container.innerHTML = `
@@ -90,12 +91,20 @@ if(gymapp_id != null){
                             main_body += `
                             <tr class="day-dark">
                                 <td rowspan="${arraysCount(user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios)}">${user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre}</td>
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}</button></td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.note)}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${peso_anterior(exc.id_exc)}</td>
-                                <td><center><input type="number" id="repe-0" name="repe-0" value="${exc.peso}" class="number_input-bt"></center></td>
-                            </tr>`;
+                                `
+                                
+                                if(sn_peso == 0){  //para no poner la entrada de valores en caso de un ejercicio sin peso  
+                                main_body += `
+                                    <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
+                                </tr>
+                                `;}else{
+                                    main_body += `<td></td></tr>`
+                                }
+
                             exc_count++;
                         } else {
                             main_body += `
@@ -104,9 +113,14 @@ if(gymapp_id != null){
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${peso_anterior(exc.id_exc)}</td>
+                                `
+                            if(sn_peso == 0){    
+                            main_body += `
                                 <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
                             </tr>
-                        `;
+                            `;}else{
+                            main_body += `<td></td></tr>`
+                            }
                         }
                     });
                 // Cerrar la tabla
@@ -118,6 +132,9 @@ if(gymapp_id != null){
                             <div class="send_bt">
                                 <button type="submit" class="login-botton">Guardar</button>
                             </div>
+                            </br>
+                            </br>
+                            <p class="services_text" id="services_text">Nota: Los ejercicios marcados con un " * " indican que el entrenador ha dejado una nota especial relacionada con ellos.</p>
                         </form>
                     </div>
                 </div>
@@ -133,6 +150,15 @@ if(gymapp_id != null){
                 return count
             }
 
+            function existNote(note){
+                console.log(note)
+                if(note != undefined && note != ""){
+                    return "*"
+                }else{
+                    return ""
+                }
+            }
+
             function peso_anterior(id){
                 let peso;
                 let cnt = 0;
@@ -146,6 +172,9 @@ if(gymapp_id != null){
                 });
                 if(peso == undefined){
                     return("Sin peso anterior")
+                }else if(peso == -1){
+                    sn_peso = 1;
+                    return("Sin peso");
                 }else{
                     return(peso)
                 }
@@ -253,6 +282,8 @@ if(gymapp_id != null){
                                 <div class= "exc_detail">
                                     <h2>Descripcion:</h2>
                                     <h3>${exc.info}</h3>
+                                    <div id="note">
+                                    </div>
                                     <br/>
                                     <h2>Desarrollado por:</h2>
                                     <h3>${viewAuthorID(exc.id_exc)}</h3>
@@ -261,7 +292,14 @@ if(gymapp_id != null){
                             </div>
                         </div>
                     </div>
-                `;
+                    `;
+                    if(exc.note != undefined && exc.note != ""){
+                        note.innerHTML = `
+                            <br/>
+                            <h2>Nota del entrenador:</h2>
+                            <h3>${exc.info}</h3>
+                        `
+                    }
                 });
             });
             
