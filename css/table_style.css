@@ -268,4 +268,13 @@ input.number_input-bt::placeholder {
         height: 20px;
         font-size: 10px;
     }
+    .input-nota {
+        width: 90%;
+        font-size: 11px;
+        padding: 2px;
+    }
+    
+    .input-nota:focus {
+        width: 90%; /* Más ancho al hacer clic */
+    }
 }

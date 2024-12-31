@@ -7,6 +7,7 @@ if(gymapp_id != null){
     // Acceder a un parámetro específico
     const user_id = params.get('id');
     const rutina_id = params.get('rutina');
+    let user;
     let weekId = 0
     let exc_api_array;
 
@@ -17,6 +18,7 @@ if(gymapp_id != null){
             <br/>
             <div class="trainer_section_2" id="trainer_section_2">
             </div>
+            <div id=loaderBody></div>
         `
         const userCardsContainer = document.getElementById('trainer_section_2');
         const configBody = document.createElement('div');
@@ -58,12 +60,11 @@ if(gymapp_id != null){
                                 <thead>
                                     <tr>
                                         <th>Día</th>
-                                        <th>Ejercicio</th>
+                                        <th>Ejercicio (tocar para ver)</th>
                                         <th>Series</th>
                                         <th>Repes</th>
                                         <th>Ultimo Peso</th>
                                         <th>Ultimo Entreno</th>
-                                        <th>Info del ejercicio</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -80,23 +81,21 @@ if(gymapp_id != null){
                             main_body += `
                             <tr class="${dayClass}">
                                 <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                                <td>${exc.nombre}</td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
-                                <td>${exc.peso}</td>
+                                <td>${exc.peso > 0 ? exc.peso: "Sin peso"}</td>
                                 <td>${exc.fecha}</td>
-                                <td>${exc.info}</td>
                             </tr>`;
                             exc_count++;
                         } else {
                             main_body += `
                             <tr class="${dayClass}">
-                                <td>${exc.nombre}</td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 <td>${exc.peso}</td>
                                 <td>${exc.fecha}</td>
-                                <td>${exc.info}</td>
                             </tr>
                         `;
                         }
@@ -113,6 +112,97 @@ if(gymapp_id != null){
                 `;
 
             configBody.innerHTML = main_body;
+            
+            document.querySelectorAll('.excDesc').forEach((button, index) => {
+                let day_index = getDayIndex(index);
+                let backgroundColor = day_index % 2 === 0 ? '#e0e0e0' : '#f2f2f2';
+                button.style.backgroundColor = backgroundColor;
+            })
+
+            document.querySelectorAll('.excDesc').forEach((button, index) => {
+                button.addEventListener('click', function() {
+                    let dayIndex = getDayIndex(index);
+                    let excIndex = getExcIndex(index);
+                    let loaderBody = document.getElementById("loaderBody");
+                    let exc = user.rutinas[rutina_id].semanas[weekId].dias[dayIndex].ejercicios[excIndex];
+                    loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="exc_container">
+                            <div class="exc_info">
+                                <div class="exc_title"><h1>${exc.nombre}</h1></div>
+                                <div class= "exc_detail">
+                                    <h2>Descripcion:</h2>
+                                    <h3>${exc.info}</h3>
+                                    <div id="note">
+                                    </div>
+                                    <br/>
+                                    <h2>Desarrollado por:</h2>
+                                    <h3>${viewAuthorID(exc.id_exc)}</h3>
+                                </div>
+                                <div class= "exc_buttons"><button class="exc_button" onclick="document.getElementById('loaderBody').innerHTML = '';">Cerrar</button></div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                    if(exc.nota != undefined && exc.nota != ""){
+                        note.innerHTML = `
+                            <br/>
+                            <h2>Nota del entrenador:</h2>
+                            <h3>${exc.nota}</h3>
+                        `
+                    }
+                });
+
+            });
+
+
+            function viewAuthorID(id){
+                let id_author = exc_api_array[id-1].author;
+                return viewAuthor(id_author);
+            }
+
+            function viewAuthor(id){
+                if(id != "gymapp"){
+                    return `${users[id-1].nombre} ${users[id-1].apellido}`;
+                }else{
+                    return "gymapp"
+                }
+            }
+
+            function getDayIndex(index){
+                let exc_count = -1;
+                let day_index;
+                user.rutinas[rutina_id].semanas[weekId].dias.forEach((dia, day_i)=>{
+                    dia.ejercicios.forEach(exc =>{
+                        exc_count ++; 
+                        if(exc_count == index){
+                            day_index = day_i;
+                        }
+                    })
+                })
+                return day_index
+            }
+            function getExcIndex(index){
+                let exc_count = -1;
+                let exc_index;
+                user.rutinas[rutina_id].semanas[weekId].dias.forEach((dia, day_i)=>{
+                    dia.ejercicios.forEach((exc,e_index) =>{
+                        exc_count ++; 
+                        if(exc_count == index){
+                            exc_index = e_index;
+                        }
+                    })
+                })
+                return exc_index
+            }
+
+            function existNote(nota){
+                if(nota != undefined && nota != ""){
+                    return "*"
+                }else{
+                    return ""
+                }
+            }
 
             function arraysCount(arrays){
                 let count = 0;
@@ -130,7 +220,7 @@ if(gymapp_id != null){
         try {
             // Hacer la solicitud a la API
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
-            const users = await response.json();
+            users = await response.json();
 
             printExc(users[user_id]);
         } catch (error) {

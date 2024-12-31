@@ -204,7 +204,7 @@ if(gymapp_id != null){
             rutina.semanas.forEach( (semana) =>{
                 semana.dias.forEach((dia)=>{
                     dia.ejercicios.forEach(exc => {
-                        if(exc.peso != 0){
+                        if(exc.peso > 0 ){
                             count++; 
                         }
                         exc_count++;

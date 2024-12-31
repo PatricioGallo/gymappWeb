@@ -162,6 +162,7 @@ if(gymapp_id != null){
                             fecha: "",
                             repe: 0,
                             info: "",
+                            nota: "",
                             id_exc: 4
                         }
                         exc_obj.peso_anterior   = excPath[e].peso_anterior;
@@ -169,6 +170,7 @@ if(gymapp_id != null){
                         exc_obj.fecha           = excPath[e].fecha;
                         exc_obj.info            = excPath[e].info;
                         exc_obj.id_exc          = excPath[e].id_exc;
+                        exc_obj.nota            = excPath[e].nota;
                         exc_obj.nombre          = document.getElementById("exc-"+e+"-"+d).value;
 
                         if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
@@ -207,7 +209,7 @@ if(gymapp_id != null){
                     </div>`
                     actRutina(actID,user);
                 } else{
-                    alert_message.innerHTML = `<p>ERROR! Ingrese todos los valores solicitados o valores validos.</p>`
+                    alert_message.innerHTML = `<p>Ingrese todos los valores solicitados o valores validos.</p>`
                     days_array = []
                 }
             });

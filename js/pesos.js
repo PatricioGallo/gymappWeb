@@ -11,7 +11,6 @@ if(gymapp_id != null){
     let dayId = 0;
     let exc_api_array;
     let users;
-    let sn_peso = 0;
 
     function printExc(user){
         container.innerHTML = `
@@ -91,7 +90,7 @@ if(gymapp_id != null){
                             main_body += `
                             <tr class="day-dark">
                                 <td rowspan="${arraysCount(user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios)}">${user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre}</td>
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.note)}</button></td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 `
@@ -114,7 +113,7 @@ if(gymapp_id != null){
                         } else {
                             main_body += `
                             <tr class="day-dark">
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}</button></td>
+                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
                                 <td>${exc.serie}</td>
                                 <td>${exc.repe}</td>
                                 `
@@ -160,9 +159,8 @@ if(gymapp_id != null){
                 return count
             }
 
-            function existNote(note){
-                console.log(note)
-                if(note != undefined && note != ""){
+            function existNote(nota){
+                if(nota != undefined && nota != ""){
                     return "*"
                 }else{
                     return ""
@@ -280,7 +278,6 @@ if(gymapp_id != null){
                 button.addEventListener('click', function() {
                     let loaderBody = document.getElementById("loaderBody");
                     let exc = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios[index];
-                    console.log(exc);
                     loaderBody.innerHTML = `
                     <div id="success-check" class="success-check-container">
                         <div class="exc_container">
@@ -300,11 +297,11 @@ if(gymapp_id != null){
                         </div>
                     </div>
                     `;
-                    if(exc.note != undefined && exc.note != ""){
+                    if(exc.nota != undefined && exc.nota != ""){
                         note.innerHTML = `
                             <br/>
                             <h2>Nota del entrenador:</h2>
-                            <h3>${exc.info}</h3>
+                            <h3>${exc.nota}</h3>
                         `
                     }
                 });

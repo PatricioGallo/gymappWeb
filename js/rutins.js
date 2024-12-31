@@ -70,7 +70,7 @@ if(gymapp_id != null){
                                         <th>Series</th>
                                         <th>Repeticiones</th>
                                         <th>Sin peso</th>
-                                        <th>Nota</th>
+                                        <th>Nota (opcional)</th>
                                         <th>Eliminar</th>
                                     </tr>
                                 </thead>
@@ -99,8 +99,8 @@ if(gymapp_id != null){
                                 </select></td>
                                 <td><center><input type="number" class="number_input-bt" id="serie-0-${i}" name="serie-0-${i}" placeholder="Series" required></center></td>
                                 <td><center><input type="number" class="number_input-bt" id="repe-0-${i}" name="repe-0-${i}" placeholder="Repes" required></center></td>
-                                <td><input type="checkbox" id="check-0-${i}" value="1" onclick="this.value = this.checked ? 1 : 0;"></td>
-                                <td></td>
+                                <td><input type="checkbox" id="check-0-${i}" onclick="this.value = this.checked ? 1 : 0;"></td>
+                                <td><input type="text" id="nota-0-${i}" class="input-nota" placeholder="Agregar nota..."></td>
                                 <td></td>
                             </tr>`
                             for (let j = 0; j < max_num_exc; j++) {
@@ -123,6 +123,8 @@ if(gymapp_id != null){
                             <div class="send_bt">
                                 <button type="submit" id="login-botton" class="login-botton">Guardar</button>
                             </div>
+                            <br/><br/>
+                            <p class="services_text" id="services_text">Nota:  ${user.nombre}, Puedes agregar una "nota" opcional para registrar detalles específicos relacionados con el ejercicio (maximo 140 caracteres). Estas notas serán visibles posteriormente en la sección de "pesos semanales", y son especialmente útiles si el ejercicio requiere observaciones adicionales o ajustes particulares..</p>
                         </form>
                     </div>`
 
@@ -155,11 +157,12 @@ if(gymapp_id != null){
                                 fecha: "",
                                 repe: 0,
                                 info: "",
-                                id_exc: 4
+                                nota: "",
+                                id_exc: 0
                             }
                             exc_obj.id_exc  = parseInt(document.getElementById("exc-"+e+"-"+d).value)//recibo el id
-                            exc_obj.nombre  = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].name; 
-                            exc_obj.info    = exc_api_array[document.getElementById("exc-"+e+"-"+d).value -1].info;
+                            exc_obj.nombre  = returnName(exc_obj.id_exc);
+                            exc_obj.info    = returnInfo(exc_obj.id_exc);
 
                             if(document.getElementById("check-"+e+"-"+d).value == 1){
                                 exc_obj.peso_anterior = -1;
@@ -169,15 +172,23 @@ if(gymapp_id != null){
                             if(document.getElementById("serie-"+e+"-"+d).value && document.getElementById("repe-"+e+"-"+d).value){
                                 exc_obj.serie   = parseInt(document.getElementById("serie-"+e+"-"+d).value)
                                 exc_obj.repe    = parseInt(document.getElementById("repe-"+e+"-"+d).value)
-                                if(exc_obj.serie > 10 || exc_obj.serie < 1 || exc_obj.repe > 30 || exc_obj.repe<1){
-                                    error = 1;
+                                exc_obj.nota    = document.getElementById("nota-"+e+"-"+d).value;
+                                if(exc_obj.serie > 10){
+                                    error = 2;
+                                }else if(exc_obj.serie < 1 ) {
+                                    error = 3;
+                                }else if(exc_obj.repe > 30){
+                                    error = 4;
+                                }else if(exc_obj.repe<1){
+                                    error = 5;
+                                }else if(exc_obj.nota.length > 140){
+                                    error = 6;
                                 }else{
                                     error = 0;
                                 }
                             }else{
                                 error = 1;
                             }
-
                             exc_array.push(exc_obj);
                         }
                         day_obj.ejercicios = exc_array;
@@ -202,30 +213,78 @@ if(gymapp_id != null){
 
                     rutina_obj.nombre = rut_name;
                     rutina_obj.semanas = weeks_array;
-                   
-                    if( error == 0){
-                        user.rutinas.push(rutina_obj)
-                        let actID = (parseInt(user_id) + 1)
-                        let loaderBody = document.getElementById("loaderBody");
-                        loaderBody.innerHTML = `
-                        <div id="loading" class="loader-container">
-                            <div class="modern-spinner">
-                                <div></div>
-                                <div></div>
-                                <div></div>
-                                <div></div>
+                
+                    switch (error) {
+                        case 0:
+                            user.rutinas.push(rutina_obj)
+                            let actID = (parseInt(user_id) + 1)
+                            let loaderBody = document.getElementById("loaderBody");
+                            loaderBody.innerHTML = `
+                            <div id="loading" class="loader-container">
+                                <div class="modern-spinner">
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                </div>
+                                <p>Subiendo rutina...</p>
                             </div>
-                            <p>Subiendo rutina...</p>
-                        </div>
-                        `
-                        subirRutina(actID,user);
-                    } else{
-                        alert_message.innerHTML = `<p>Por favor, ingrese todos los valores solicitados o valores validos.</p>`
+                            `
+                            subirRutina(actID,user);
+                            break;
+                        case 1:
+                            alert_message.innerHTML = `<p>Por favor, ingrese todos los valores solicitados.</p>`
+                            cleanAll()
+                            break;
+                        case 2:
+                            alert_message.innerHTML = `<p>El valor maximo de las series es 10.</p>`
+                            cleanAll()
+                            break;
+                        case 3:
+                            alert_message.innerHTML = `<p>El valor minimo de las series es 1.</p>`
+                            cleanAll()
+                            break;
+                        case 4:
+                            alert_message.innerHTML = `<p>El valor maximo de las repeticiones es 30.</p>`
+                            cleanAll()
+                            break;    
+                        case 5:
+                            alert_message.innerHTML = `<p>El valor minimo de las repeticiones es 1.</p>`
+                            cleanAll()
+                            break;  
+                        case 6:
+                            alert_message.innerHTML = `<p>Las notas tiene un maximo de 140 caracteres.</p>`
+                            cleanAll()
+                            break;                      
+                        default:
+                            alert_message.innerHTML = `<p>Por favor, ingrese todos los valores solicitados o valores validos (la nota tiene un maximo de 140 caracteres).</p>`
+                            break;
+                    }
+
+                    function cleanAll(){
                         rutina_obj = {};
                         week_obj = {};
                         day_obj = {};
                         weeks_array = []
                         days_array = [];
+                    }
+                    function returnName(id){
+                        let nombre;
+                        exc_api_array.forEach(ex =>{
+                            if(ex.id == id){
+                                nombre =  ex.name;
+                            }
+                        })
+                        return nombre
+                    }
+                    function returnInfo(id){
+                        let info;
+                        exc_api_array.forEach(ex =>{
+                            if(ex.id == id){
+                                info = ex.info
+                            }
+                        })
+                        return info
                     }
                 })
                 
@@ -245,8 +304,8 @@ if(gymapp_id != null){
                             </select></td>
                             <td><center><input type="number" class="number_input-bt" id="serie-${excArray[index]}-${index}" name="serie-${excArray[index]}-${index}" placeholder="Series" required></center></td>
                             <td><center><input type="number" class="number_input-bt" id="repe-${excArray[index]}-${index}" name="repe-${excArray[index]}-${index}" placeholder="Repes" required></center></td>
-                            <td><input type="checkbox" id="check-${excArray[index]}-${index}" value="1" onclick="this.value = this.checked ? 1 : 0;"></td>
-                            <td></td>
+                            <td><input type="checkbox" id="check-${excArray[index]}-${index}" onclick="this.value = this.checked ? 1 : 0;"></td>
+                            <td><input type="text" id="nota-${excArray[index]}-${index}" class="input-nota" placeholder="Agregar nota..."></td>
                             <td><button id="addRow" class="delButton" type="button" title="Eliminar fila">-</button></td>
                             `;
                         excArray[index] += 1;
