@@ -201,7 +201,7 @@ if(gymapp_id != null){
                 let beforeError = 0;
 
                 for (let e= 0; e < excCount; e++) {
-                    let peso_exc = parseInt(document.getElementById("repe-"+e).value);
+                    let peso_exc = document.getElementById("repe-"+e).value;
                     let switch_resp = debugItem(peso_exc); //me fijo si se ingreso un valor correcto
                     switch_resp_array.push(switch_resp)
 
@@ -273,8 +273,9 @@ if(gymapp_id != null){
                         </div>
                         `
                     actRutina(actID,user);
+                    alert_message.innerHTML = ``
                 }else{
-                    alert_message.innerHTML = `<p>ERROR! Ingresaste un valor incorrecto o ningun valor.</p>`
+                    alert_message.innerHTML = `<p>Ingresaste un valor incorrecto o ningun valor.</p>`
                 }
 
             });
