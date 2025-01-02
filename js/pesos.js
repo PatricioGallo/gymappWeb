@@ -13,6 +13,9 @@ if(gymapp_id != null){
     let users;
 
     function printExc(user){
+        let last_weekId = last_week(user,rutina_id);
+        let last_dayId  = last_day(user,rutina_id);
+        reinventir_rutina(user,rutina_id);
         container.innerHTML = `
             <h1 class="services_taital">Tus pesos</h1>
             <p class="services_text" id="services_text">${user.nombre} selecciona la semana y el dia de tu rutina: "${user.rutinas[rutina_id].nombre}", para poder ver los ejercicios y agregarle el peso del dia.</p>
@@ -29,11 +32,11 @@ if(gymapp_id != null){
             <div class="email_box">
                 <form id="myForm">
                     <div class="form-group">
-                        <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">  
+                        <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
             `
         user.rutinas[rutina_id].semanas.forEach((week,index) => {
             main_body += `
-                <option value="${index}">Semana ${week.numero}</option>
+                <option value="${index}" ${index === last_weekId ? 'selected' : ''}>Semana ${week.numero}</option>
             `
         })
         
@@ -43,7 +46,7 @@ if(gymapp_id != null){
             `
         user.rutinas[rutina_id].semanas[0].dias.forEach((day,index) => {
             main_body += `
-                <option value="${index}">${day.nombre}</option>
+                <option value="${index}" ${index === last_dayId ? 'selected' : ''}>${day.nombre}</option>
             `
         })
         main_body +=`
@@ -52,6 +55,8 @@ if(gymapp_id != null){
                             <div class="send_bt">
                                 <button type="submit" class="login-botton">Ver Ejercicios</button>
                             </div>
+                            <br/><br/>
+                            <p class="services_text" id="services_text">Nota: ${user.nombre}, de manera automática, GymApp identificará el día y la semana que te corresponde entrenar hoy, para que siempre estés al tanto de tu rutina.</p>
                         </form>
                     </div>
                 </div>
@@ -103,7 +108,7 @@ if(gymapp_id != null){
                                     `;
                                 }else{
                                     main_body += `
-                                        <td>Sin peso</td>
+                                        <td>Sin peso <input type="number" id="repe-${excIndex}" style="display: none;" value="-1"></td>
                                         <td></td>
                                     </tr>
                                         `
@@ -125,7 +130,7 @@ if(gymapp_id != null){
                                 `;
                             }else{
                                 main_body += `
-                                    <td>Sin peso</td>
+                                    <td>Sin peso <input type="number" id="repe-${excIndex}" style="display: none;" value="-1"></td>
                                     <td></td>
                                 </tr>
                                     `
@@ -323,7 +328,7 @@ if(gymapp_id != null){
             function debugItem(item){
                 if(item == 0){
                     return 0
-                } else if (item < 0){
+                } else if (item < -1){
                     return 1
                 } else if(isNaN(item)){
                     return 2
@@ -332,6 +337,55 @@ if(gymapp_id != null){
                 }
             }
         });//End submit
+    
+        function last_week(user,rutinaId) {  
+            let week_num = 0;      
+            user.rutinas[rutinaId].semanas.reverse().forEach((semana) => {
+                semana.dias.reverse().forEach((dia) => {
+                    dia.ejercicios.reverse().forEach((exc) => {
+                        if(week_num == 0){
+                            if (exc.peso > 0) {
+                                week_num = semana.numero
+                            }
+                        }
+                    });
+                });
+            });   
+            return (week_num -1)
+        }
+        function last_day(user,rutinaId) {  
+            let day_name = 0;    
+            let total_count = user.rutinas[rutinaId].semanas[0].dias.length;  
+            let count;
+            user.rutinas[rutinaId].semanas.forEach((semana) => {
+                count = total_count -1;
+                semana.dias.forEach((dia) => {
+                    dia.ejercicios.forEach((exc) => {
+                        if(day_name == 0){
+                            if (exc.peso > 0) {
+                                day_name = count;
+                            }
+                        }
+                    });
+                    count--;
+                });
+            });   
+            return (day_name +1)
+        }
+        function reinventir_rutina(user,rutinaId){
+            let day_name = 0;      
+            user.rutinas[rutinaId].semanas.reverse().forEach((semana) => {
+                semana.dias.reverse().forEach((dia, index) => {
+                    dia.ejercicios.reverse().forEach((exc) => {
+                        if(day_name == 0){
+                            if (exc.peso > 0) {
+                                day_name = index
+                            }
+                        }
+                    });
+                });
+            });   
+        }
     }
 
     // Función para obtener los usuarios desde la API
