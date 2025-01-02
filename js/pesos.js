@@ -98,7 +98,7 @@ if(gymapp_id != null){
                                 if(exc.peso_anterior != -1){  //para no poner la entrada de valores en caso de un ejercicio sin peso  
                                     main_body += `
                                         <td>${peso_anterior(exc.id_exc)}</td>
-                                        <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
+                                        <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" placeholder="${exc.peso}" class="number_input-bt"></center></td>
                                     </tr>
                                     `;
                                 }else{
@@ -120,7 +120,7 @@ if(gymapp_id != null){
                             if(exc.peso_anterior != -1){   
                                 main_body += `
                                     <td>${peso_anterior(exc.id_exc)}</td>
-                                    <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" value="${exc.peso}" class="number_input-bt"></center></td>
+                                    <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" placeholder="${exc.peso}" class="number_input-bt"></center></td>
                                 </tr>
                                 `;
                             }else{

@@ -277,4 +277,7 @@ input.number_input-bt::placeholder {
     .input-nota:focus {
         width: 90%; /* Más ancho al hacer clic */
     }
+    .excDesc{
+        font-size: 10px;
+    }
 }
