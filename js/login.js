@@ -24,11 +24,11 @@ if(gymapp_id == null){
         switch (switch_resp) {
             case 0:
                 loaderBody.innerHTML = ``;
-                alert_message.innerHTML = `<p>ERROR! Usuario no existe.</p>`
+                alert_message.innerHTML = `<p>Usuario no existe. Por favor intente nuevamente.</p>`
                 break;
             case 1:
                 loaderBody.innerHTML = ``;
-                alert_message.innerHTML = `<p>ERROR! Contraseña incorrecta.</p>`
+                alert_message.innerHTML = `<p>Contraseña incorrecta. Por favor intente nuevamente.</p>`
                 break;
             case 2:
                 loaderBody.innerHTML = `

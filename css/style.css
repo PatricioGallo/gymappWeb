@@ -823,11 +823,22 @@ textarea#comment::placeholder {
     border-radius: 20px;
     border: 1px solid #8f8f8f;
     font-family: Raleway;
+    margin-left: 10px;
 }
 .exc_button:hover{
     background-color: #ff0000;
 }
-
+.exc_detail input{
+    color: #6e6e6e;
+    width: 100%;
+    height: auto;
+    font-size: 18px;
+    padding: 10px 20px 10px 20px;
+    background: #f3f3f3;
+    border-radius: 10px;
+    border: 1px solid #8f8f8f;
+    font-family: Raleway;
+}
 .contact_section_2 {
     width: 100%;
     float: left;

@@ -1,11 +1,12 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
     // Seleccionar el contenedor donde se agregarán las tarjetas
-    const personal_info = document.getElementById('personal_info');
-    const personal_rutins = document.getElementById('personal_rutins');
+    const personal_info     = document.getElementById('personal_info');
+    const personal_rutins   = document.getElementById('personal_rutins');
     let exc_api_array;
     const trainer_section_2 = document.getElementById('trainer_section_2');
-    const services_section = document.getElementById('services_section');
+    const services_section  = document.getElementById('services_section');    
+    let users; 
 
     // Función para crear y agregar las tarjetas de los usuarios
     function createUserCard(user, index) {
@@ -59,7 +60,6 @@ if(gymapp_id != null){
                         </div>
                     </div>
         `;
-        //personal_info.appendChild(profile_info);
 
         // Crear el contenido de la rutina
         const table_container = document.createElement('div');
@@ -109,17 +109,11 @@ if(gymapp_id != null){
         const addPesoButton = document.querySelectorAll('.addPeso');
         const delRutin      = document.querySelectorAll('.button_red');
 
-        // showStats.addEventListener("click",()=>{
-        //     const userId = user_id;  
-        //     window.location.href = `progress.html?id=${userId}`;
-        // })
-
         showExcButton.forEach((button, index) => {
             button.addEventListener('click', () => {
                 const userId = user_id;  
                 const rutinaId = index;  
                 window.location.href = `showExc.html?id=${userId}&rutina=${rutinaId}`;
-                console.log("show exc")
             });
         });
 
@@ -147,10 +141,6 @@ if(gymapp_id != null){
             });
         });
                 
-        // addRutins.addEventListener("click",() =>{
-        //     window.location.href = `rutinsView.html?id=${user_id}`;
-        // })
-
         function arraysCount(arrays){
             let count = 0;
             arrays.forEach( () => {
@@ -237,7 +227,6 @@ if(gymapp_id != null){
 
         function last_day(rutina) {  
             let day_name = "";
-            console.log(rutina)
             rutina.semanas.forEach((semana) => {
                 semana.dias.forEach((dia) => {
                     dia.ejercicios.forEach((exc) => {
@@ -268,7 +257,128 @@ if(gymapp_id != null){
                     });
                 });
             });
+        }
+    }
 
+    function configMenu(user){
+        const config = document.getElementById('config'); 
+        if (config) {
+            config.addEventListener('click', (e) => {
+                e.preventDefault();
+                let loaderBody = document.getElementById("loaderBody");
+                loaderBody.innerHTML = `
+                <div id="success-check" class="success-check-container">
+                    <div class="exc_container">
+                        <div class="exc_info">
+                            <div class="exc_title"><h1>Configuracion</h1></div>
+                            <div class= "exc_detail">
+                                <h2>Nombre:</h2>
+                                <h3><input type="text" placeholder="${user.nombre}" name="userName" id="userName"></h3>
+                                <h2>Apellido:</h2>
+                                <h3><input type="text" placeholder="${user.apellido}" name="sname" id="sname"></h3>
+                                <h2>Mail:</h2>
+                                <h3><input type="email" placeholder="${user.mail}" name="mail" id="mail"></h3>
+                                <h2>Contraseña:</h2>
+                                <h3><input type="password" placeholder="••••••••••••" name="pswd" id="pswd"></h3>
+                            </div>
+                            <div class="alert_message" id="alert_message"></div>
+                            <div class= "exc_buttons">
+                                <button class="exc_button" id="saveChanges">Guardar</button>
+                                <button class="exc_button" onclick="document.getElementById('loaderBody').innerHTML = '';">Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+                saveChanges.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let noEmpty = 0;
+                    let newUser = user;
+                    let configError = 0;
+
+                    if(userName.value){
+                        if(userName.value.length > 2 && isNaN(userName.value)){
+                            newUser.nombre = userName.value;
+                        }else{
+                            configError = 2;
+                        }
+                        noEmpty = 1;
+                    } 
+                    if(sname.value){
+                        if(sname.value.length > 2 && isNaN(sname.value)){
+                            newUser.apellido = sname.value;
+                        }else{
+                            configError = 3;
+                        }
+                        noEmpty = 1;
+                    }
+                    if(mail.value){
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (emailRegex.test(mail.value)) {
+                            let repeatedMail = isRepeated(mail.value)
+                            if (repeatedMail == 0){
+                                newUser.mail = mail.value;
+                            }else{
+                                configError = 6; 
+                            }
+                        } else {
+                            configError = 4;
+                        }
+                        noEmpty = 1;
+                    }
+                    if(pswd.value){
+                        if(pswd.value.length > 6){
+                            newUser.contrasena = pswd.value;
+                        }else{
+                            configError = 5;
+                        }
+                        noEmpty = 1;
+                    }
+
+                    if(noEmpty == 0){
+                        configError = 1;
+                    }
+
+                    switch (configError) {
+                        case 1:
+                            alert_message.innerHTML = `<p>Ingresaste un valor incorrecto o ningun valor.</p>`
+                            break;
+                        case 2:
+                            alert_message.innerHTML = `<p>Ingresaste un nombre incorrecto</p>`
+                            break;
+                        case 3:
+                            alert_message.innerHTML = `<p>Ingresaste un apellido incorrecto.</p>`
+                            break;
+                        case 4:
+                            alert_message.innerHTML = `<p>Ingresaste un email incorrecto.</p>`
+                            break;
+                        case 5:
+                            alert_message.innerHTML = `<p>Ingresaste una contraseña no valida</p>`
+                            break;
+                        case 6:
+                            alert_message.innerHTML = `<p>El email ya esta registrado.</p>`
+                            break;
+                        case 0:
+                            alert_message.innerHTML = ``
+                            updateUser(parseInt(gymapp_id)+1,newUser);
+                            break;
+                        default:
+                            console.log("Error!");
+                            break;
+                    }
+
+                    function isRepeated(mail){
+                        let repeated = 0;
+                        users.forEach(user =>{
+                            if(user.mail == mail){
+                                repeated = 1;
+                            }
+                        })
+                        return repeated
+                    }
+
+                })
+            });
         }
     }
 
@@ -284,23 +394,63 @@ if(gymapp_id != null){
         }
     }
 
+
+    async function updateUser(userId, updatedData) {
+        try {
+            const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
+                method: 'PUT', // Cambiar a 'PATCH' si solo modificas campos específicos
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updatedData)
+            });
+    
+            if (response.ok) {
+                const updatedUser = await response.json();
+                loaderBody.innerHTML = `
+                    <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>¡Cambios guardados con exito!. Espere sera redirigido</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = `profile.html`;
+                    loaderBody.innerHTML = ``;
+                }, 3000); 
+                return updatedUser;
+            } else {
+                alert_message.innerHTML = `Error al guardar cambios`
+                console.error('Error al actualizar el usuario:', response.status);
+            }
+        } catch (error) {
+            console.error('Error en la solicitud de actualización:', error);
+        }
+    }
+
     // Función para obtener los usuarios desde la API
     async function fetchUsers() {
         try {
             // Hacer la solicitud a la API
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
-            const users = await response.json();
+            users = await response.json();
 
             switch (users[gymapp_id].user_type) {
             case 0:
                 // users.forEach((user,index) => createUserCard(user,index));
                 createUserCard(users[gymapp_id],gymapp_id);
+                configMenu(users[gymapp_id]);
                 break;
             case 1:
                 alert("tipo 1"); //TODO completar logica
                 break;
             case 2:
                 createUserCard(users[gymapp_id],gymapp_id);
+                configMenu(users[gymapp_id]);
                 break;
             default:
                 console.log("Error: sin coincidencias en el case");
