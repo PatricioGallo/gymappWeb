@@ -50,7 +50,8 @@ if(gymapp_id != null){
                         <div class="trainer_box">
                             <h3 class="trainer_text">${user.nombre}</h3>
                             <p class="lorem_text">Sabemos lo mucho que te gusta entrenar, por eso te traemos algunos datos:</p>
-                            <p"><span class="highlight">Nombre:</span> ${user.nombre}</p>
+                            <p"><span class="highlight">Ultimo ejercicio entrenado:</span> ${last_exc(user.historial)}</p>
+                            <p"><span class="highlight">Ejercicio mas entrenado:</span> ${findMostFrequentId(user.historial)}</p>
                             <p"><span class="highlight">Cantidad de rutinas:</span> ${arraysCount(user.rutinas)}</p>
                             <p"><span class="highlight">Último entreno:</span> ${last_training(user.historial)}</p>
                         </div>
@@ -155,20 +156,45 @@ if(gymapp_id != null){
                 return "Sin entrenos previos"
             }
         }
-        // function last_exc(historial){
-        //     let ret;
-        //     if(historial.length != 0){
-        //         let last_train = historial.at(-1)
-        //         exc_api_array.forEach((exc)=>{
-        //             if(exc.id == last_train.id_exc){
-        //                 ret = exc.name;
-        //             }
-        //         })
-        //     } else{
-        //         ret = "Sin entrenos previos";
-        //     }
-        //     return ret
-        // }
+        function last_exc(historial){
+            let ret;
+            if(historial.length != 0){
+                let last_train = historial.at(-1)
+                exc_api_array.forEach((exc)=>{
+                    if(exc.id == last_train.id_exc){
+                        ret = exc.name;
+                    }
+                })
+            } else{
+                ret = "Sin entrenos previos";
+            }
+            return ret
+        }
+
+        function findMostFrequentId(historial) {
+            const frequency = {}; // Objeto para contar las frecuencias
+        
+            // Contar las frecuencias de id_exc
+            historial.forEach(item => {
+                const id = item.id_exc;
+                if (id !== undefined) { // Asegúrate de que id_exc existe
+                    frequency[id] = (frequency[id] || 0) + 1;
+                }
+            });
+        
+            // Encontrar el id_exc más repetido
+            let maxCount = 0;
+            let mostFrequentId = null;
+        
+            for (const id in frequency) {
+                if (frequency[id] > maxCount) {
+                    maxCount = frequency[id];
+                    mostFrequentId = id;
+                }
+            }
+            return exc_api_array[mostFrequentId-1].name //para regresar el nombre del ejercicio
+        }
+
         function excCount(dias){
             let count = 0;
             let id_array = [];
