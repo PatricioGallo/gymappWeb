@@ -103,7 +103,6 @@ if(gymapp_id != null){
         personal_rutins.appendChild(table_container);
         
         //Buttons
-        const showStats     = document.getElementById("stats");
         const showExcButton = document.querySelectorAll('.showExc');
         const modExcButtons = document.querySelectorAll('.modExc');
         const addPesoButton = document.querySelectorAll('.addPeso');
@@ -232,42 +231,52 @@ if(gymapp_id != null){
 
         function last_week(rutina) {  
             let week_num = 0;
-            rutina.semanas.forEach((semana) => {
-                semana.dias.forEach((dia) => {
-                    dia.ejercicios.forEach((exc) => {
-                        if(week_num == 0){
-                            if (exc.peso > 0) {
-                                week_num = semana.numero
-                            }
+        
+            // Clonar las semanas para evitar modificar el objeto original
+            const semanas = [...rutina.semanas].reverse();
+        
+            semanas.forEach((semana) => {
+                // Clonar los días de cada semana
+                const dias = [...semana.dias].reverse();
+        
+                dias.forEach((dia) => {
+                    // Clonar los ejercicios de cada día
+                    const ejercicios = [...dia.ejercicios].reverse();
+        
+                    ejercicios.forEach((exc) => {
+                        if (week_num === 0 && exc.peso > 0) {
+                            week_num = semana.numero;
                         }
                     });
                 });
             });
-            if(week_num==0){
-                return "sin entreno previo"
-            }else{
-                return week_num
-            }
+        
+            return week_num === 0 ? "sin entreno previo" : week_num;
         }
 
         function last_day(rutina) {  
             let day_name = "";
-            rutina.semanas.forEach((semana) => {
-                semana.dias.forEach((dia) => {
-                    dia.ejercicios.forEach((exc) => {
-                        if(day_name == ""){
-                            if (exc.peso > 0) {
-                                day_name = dia.nombre
-                            }
+        
+            // Clonar las semanas para evitar modificar el objeto original
+            const semanas = [...rutina.semanas].reverse();
+        
+            semanas.forEach((semana) => {
+                // Clonar los días de cada semana
+                const dias = [...semana.dias].reverse();
+        
+                dias.forEach((dia) => {
+                    // Clonar los ejercicios de cada día
+                    const ejercicios = [...dia.ejercicios].reverse();
+        
+                    ejercicios.forEach((exc) => {
+                        if (day_name === "" && exc.peso > 0) {
+                            day_name = dia.nombre;
                         }
                     });
                 });
             });
-            if(day_name==0){
-                return "sin entreno previo"
-            }else{
-                return day_name
-            }
+        
+            return day_name === "" ? "sin entreno previo" : day_name;
         }
     }
 
@@ -399,6 +408,7 @@ if(gymapp_id != null){
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
             const exc = await response.json();
             exc_api_array = exc;
+            fetchUsers();
     
         } catch (error) {
             console.error('Error al obtener los usuarios:', error);
@@ -474,7 +484,6 @@ if(gymapp_id != null){
 
     // Llamar a la función para obtener los usuarios al cargar la página
     fetchExc();
-    fetchUsers();
 } else {
     window.location.href = `index.html`;
 }

@@ -15,7 +15,7 @@ if(gymapp_id != null){
     function printExc(user){
         let last_weekId = last_week(user,rutina_id);
         let last_dayId  = last_day(user,rutina_id);
-        reinventir_rutina(user,rutina_id);
+       // reinventir_rutina(user,rutina_id);
         container.innerHTML = `
             <h1 class="services_taital">Tus pesos</h1>
             <p class="services_text" id="services_text">${user.nombre} selecciona la semana y el dia de tu rutina: "${user.rutinas[rutina_id].nombre}", para poder ver los ejercicios y agregarle el peso del dia.</p>
@@ -339,39 +339,56 @@ if(gymapp_id != null){
             }
         });//End submit
     
-        function last_week(user,rutinaId) {  
-            let week_num = 0;      
-            user.rutinas[rutinaId].semanas.forEach((semana) => {
-                semana.dias.forEach((dia) => {
-                    dia.ejercicios.forEach((exc) => {
-                        if(week_num == 0){
-                            if (exc.peso > 0) {
-                                week_num = semana.numero
-                            }
+        function last_week(lastWeekUser, rutinaId) {  
+            let week_num = 0;
+        
+            // Trabaja con una copia del arreglo invertido
+            const semanasInvertidas = [...lastWeekUser.rutinas[rutinaId].semanas].reverse();
+        
+            semanasInvertidas.forEach((semana) => {        
+                // Trabaja con una copia de los días invertidos
+                const diasInvertidos = [...semana.dias].reverse();
+        
+                diasInvertidos.forEach((dia) => {
+                    const ejerciciosInvertidos = [...dia.ejercicios].reverse();
+        
+                    ejerciciosInvertidos.forEach((exc) => {
+                        if (week_num === 0 && exc.peso > 0) {
+                            week_num = semana.numero;
                         }
                     });
                 });
             });   
-            return (week_num -1)
+        
+            return week_num - 1;
         }
-        function last_day(user,rutinaId) {  
+        function last_day(lastDayuser, rutinaId) {  
             let day_name = 0;    
-            let total_count = user.rutinas[rutinaId].semanas[0].dias.length;  
+            const total_count = lastDayuser.rutinas[rutinaId].semanas[0].dias.length;  
             let count;
-            user.rutinas[rutinaId].semanas.forEach((semana) => {
-                count = total_count -1;
-                semana.dias.forEach((dia) => {
-                    dia.ejercicios.forEach((exc) => {
-                        if(day_name == 0){
-                            if (exc.peso > 0) {
-                                day_name = count;
-                            }
+        
+            // Clonar las semanas para evitar modificar el original
+            const semanas = [...lastDayuser.rutinas[rutinaId].semanas];
+        
+            semanas.forEach((semana) => {
+                count = total_count - 1;
+        
+                // Clonar los días para evitar modificar el original
+                const dias = [...semana.dias];
+        
+                dias.forEach((dia) => {
+                    // Clonar los ejercicios para evitar modificar el original
+                    const ejercicios = [...dia.ejercicios];
+        
+                    ejercicios.forEach((exc) => {
+                        if (day_name === 0 && exc.peso > 0) {
+                            day_name = count;
                         }
                     });
                     count--;
                 });
-            });   
-            return (day_name +1)
+            });           
+            return day_name;
         }
         function reinventir_rutina(user,rutinaId){
             let day_name = 0;      
