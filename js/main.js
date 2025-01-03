@@ -87,7 +87,6 @@ if(gymapp_id != null){
                         </div>
                 </div> 
                 `
-                reinventir_rutina(rutina)
             });//end foreach rutina
         } else{ //else if lenght != 0
             table_container_content+=`
@@ -207,9 +206,9 @@ if(gymapp_id != null){
 
         function last_week(rutina) {  
             let week_num = 0;
-            rutina.semanas.reverse().forEach((semana) => {
-                semana.dias.reverse().forEach((dia) => {
-                    dia.ejercicios.reverse().forEach((exc) => {
+            rutina.semanas.forEach((semana) => {
+                semana.dias.forEach((dia) => {
+                    dia.ejercicios.forEach((exc) => {
                         if(week_num == 0){
                             if (exc.peso > 0) {
                                 week_num = semana.numero
@@ -243,20 +242,6 @@ if(gymapp_id != null){
             }else{
                 return day_name
             }
-        }
-        function reinventir_rutina(rutina){
-            let day_name = "";
-            rutina.semanas.forEach((semana) => {
-                semana.dias.forEach((dia) => {
-                    dia.ejercicios.forEach((exc) => {
-                        if(day_name == ""){
-                            if (exc.peso > 0) {
-                                day_name = dia.nombre
-                            }
-                        }
-                    });
-                });
-            });
         }
     }
 

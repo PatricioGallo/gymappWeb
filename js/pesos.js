@@ -341,9 +341,9 @@ if(gymapp_id != null){
     
         function last_week(user,rutinaId) {  
             let week_num = 0;      
-            user.rutinas[rutinaId].semanas.reverse().forEach((semana) => {
-                semana.dias.reverse().forEach((dia) => {
-                    dia.ejercicios.reverse().forEach((exc) => {
+            user.rutinas[rutinaId].semanas.forEach((semana) => {
+                semana.dias.forEach((dia) => {
+                    dia.ejercicios.forEach((exc) => {
                         if(week_num == 0){
                             if (exc.peso > 0) {
                                 week_num = semana.numero
