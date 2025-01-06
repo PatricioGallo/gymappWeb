@@ -176,7 +176,7 @@ let logout = 0;
             shareButton.addEventListener('click', async () => {
                 const shareData = {
                     title: 'GymApp',
-                    text: 'Mira este ejercicio en GymApp:',
+                    text: 'Te comparto mi rutina para que la veas en GymApp:',
                     url: window.location.href // URL actual de la página
                 };
 
