@@ -280,4 +280,10 @@ input.number_input-bt::placeholder {
     .excDesc{
         font-size: 10px;
     }
+    .showRutinsButtons{
+        flex-direction: column;
+    }
+    .sharedButton{
+        margin-top: 10px;
+    }
 }

@@ -1,5 +1,5 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
-if(gymapp_id != null){
+let logout = 0;
 
     const params             = new URLSearchParams(window.location.search);
     const container          = document.getElementById('container');
@@ -12,6 +12,17 @@ if(gymapp_id != null){
     let exc_api_array;
 
     function printExc(user){
+        if(logout == 1){
+            document.getElementById("nav_var").style.display = "none";
+            container.innerHTML = `
+            <h1 class="services_taital">Tus ejercicios</h1>
+            <p class="services_text" id="services_text">Puedes seleccionar la semana de la rutina: "${user.rutinas[rutina_id].nombre}" de ${user.nombre}, para poder ver los ejercicios.</p>
+            <br/>
+            <div class="trainer_section_2" id="trainer_section_2">
+            </div>
+            <div id=loaderBody></div>
+        `
+        } else{
         container.innerHTML = `
             <h1 class="services_taital">Tus ejercicios</h1>
             <p class="services_text" id="services_text">${user.nombre} selecciona la semana de tu rutina: ${user.rutinas[rutina_id].nombre} para poder ver los ejercicios.</p>
@@ -19,7 +30,7 @@ if(gymapp_id != null){
             <div class="trainer_section_2" id="trainer_section_2">
             </div>
             <div id=loaderBody></div>
-        `
+        `}
         const userCardsContainer = document.getElementById('trainer_section_2');
         const configBody = document.createElement('div');
         configBody.classList.add("configBody");
@@ -52,7 +63,7 @@ if(gymapp_id != null){
             event.preventDefault();
             weekId = document.getElementById("weeks").value;
             services_text = document.getElementById("services_text");
-            services_text.innerHTML = `${user.nombre} ahora podras ver los ejercicios de "${user.rutinas[rutina_id].nombre}" semana numero: ${parseInt(weekId)+1} <br/>`
+            services_text.innerHTML = `Podras ver los ejercicios de ${user.nombre}, de la rutina: "${user.rutinas[rutina_id].nombre}" la semana numero: ${parseInt(weekId)+1} <br/>`
             main_body = `
                 <div class="configFace">
                     <div class="configForm">
@@ -64,7 +75,7 @@ if(gymapp_id != null){
                                         <th>Series</th>
                                         <th>Repes</th>
                                         <th>Ultimo Peso</th>
-                                        <th>Ultimo Entreno</th>
+                                        <th>Fecha de Entreno</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -106,7 +117,10 @@ if(gymapp_id != null){
                 main_body += `
                             </tbody>
                         </table>
-                        <div class="read_bt"><a href="showExc.html?id=${user_id}&rutina=${rutina_id}">Elegir Otra Semana</a></div>
+                        <div class="showRutinsButtons">
+                            <div class="read_bt"><a href="showExc.html?id=${user_id}&rutina=${rutina_id}">Elegir Otra Semana</a></div>
+                            <button class="sharedButton" id="shareButton">Compartir rutina</button>
+                        </div>
                     </div>
                 </div>
                 `;
@@ -153,6 +167,28 @@ if(gymapp_id != null){
                     }
                 });
 
+            });
+
+            //Boton de compartir
+            const shareButton = document.getElementById('shareButton');
+
+            // Agrega un evento al botón
+            shareButton.addEventListener('click', async () => {
+                const shareData = {
+                    title: 'GymApp',
+                    text: 'Mira este ejercicio en GymApp:',
+                    url: window.location.href // URL actual de la página
+                };
+
+                try {
+                    if (navigator.share) {
+                        await navigator.share(shareData); // Intenta compartir
+                    } else {
+                        console.log("Error")
+                    }
+                } catch (error) {
+                    console.error('Error al compartir:', error);
+                }
             });
 
 
@@ -268,6 +304,13 @@ if(gymapp_id != null){
     // Llamar a la función para obtener los usuarios al cargar la página
     fetchUsers();
     fetchExc();
+
+if(gymapp_id != null){
+    logout = 0;
+    fetchUsers();
+    fetchExc();
 } else {
-    window.location.href = `login.html`;
+    logout = 1;
+    fetchUsers();
+    fetchExc();
 }

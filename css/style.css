@@ -389,11 +389,17 @@ button {
 .box_main:hover .icon_3{
     background-image: url(../images/icon-5.png);
 }
+.showRutinsButtons{
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 60px;
+}
 .read_bt {
     width: 170px;
     margin: 0 auto;
     text-align: center;
-    margin-top: 80px;
 }
 .read_bt a {
     width: 100%;
@@ -405,6 +411,20 @@ button {
     border: 2px solid #ff0000; 
 }
 .read_bt a:hover {
+    color: #ffffff;
+    background-color: #ff0000;
+}
+.sharedButton{
+    width: 170px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 16px;
+    color: #cb0b0b;
+    text-align: center;
+    padding: 10px 0px;
+    border: 2px solid #ff0000; 
+}
+.sharedButton:hover {
     color: #ffffff;
     background-color: #ff0000;
 }
