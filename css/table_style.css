@@ -286,4 +286,7 @@ input.number_input-bt::placeholder {
     .sharedButton{
         margin-top: 10px;
     }
+    .read_bt a{
+        margin-top: 30px;
+    }
 }
