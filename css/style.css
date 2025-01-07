@@ -1183,3 +1183,36 @@ td input[type="checkbox"] {
     outline: 1px solid #8f8f8f; /* Resalta el borde */
     color: #272727;
 }
+
+.alum_container{
+    width: 98%;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+}
+.name_container{
+    width: 20%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.row_alum_container{
+    width: 98%;
+}
+.rutins_description_row{
+    display: flex;
+    flex-direction: row;
+}
+
+.descripcion_container{
+    width: 60%;
+}
+.button_alum_container{
+    width: 40%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items:center;
+}

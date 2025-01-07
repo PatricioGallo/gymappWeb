@@ -184,3 +184,7 @@
     background-color: #b1b1b1;
     margin: 20px 0;
 }
+.highlight_2 {
+    font-size: 0.9em; /* Ajusta el tamaño de la letra */
+    font-weight: bold; /* Aplica negrita */
+}

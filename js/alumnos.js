@@ -1,11 +1,10 @@
 const gymapp_id = localStorage.getItem("gymapp_id")
 let user_type = 0;
 if(gymapp_id != null){
+
     // Seleccionar el contenedor donde se agregarán las tarjetas
     const personal_rutins   = document.getElementById('personal_rutins');
     let exc_api_array;
-    const trainer_section_2 = document.getElementById('trainer_section_2');
-    const services_section  = document.getElementById('services_section');    
     let users; 
 
     // Función para crear y agregar las tarjetas de los usuarios
@@ -15,83 +14,48 @@ if(gymapp_id != null){
         if(user_type == 0){
             document.getElementById("nav-item").innerHTML=`<a class="nav-link" href="alumnos.html">Tus alumnos</a>`
         }
-
-        services_section.innerHTML = `
-        <div class="container">
-            <h1 class="services_taital">Hola ${user.nombre}</h1>
-            <p class="services_text">Bienvenido a tu perfil, aqui podras encontrar tus rutinas activas, crear nuevas, ver estadisticas e informacion personal.</p>
-            <div class="services_section_2 layout_padding">
-            <div class="row">
-                <div class="col-sm-4">
-                <a href="#rutinas"><div class="box_main">
-                    <div class="icon_1"></div>
-                    <a href="#rutinas"><h6 class="heavy_text">ENTRENAMIENTO <br>Rutinas</h6>
-                </div></a>
-                </div>
-                <div class="col-sm-4">
-                <a href="progress.html?id=${user_id}"><div class="box_main active">
-                    <div class="icon_2"></div>
-                    <h6 class="heavy_text active">GRAFICOS <br>Y AVANCES</h6>
-                </div></a>
-                </div>
-                <div class="col-sm-4">
-                <a href="rutinsView.html?id=${user_id}"><div class="box_main">
-                    <div class="icon_3"></div>
-                    <h6 class="heavy_text">CREAR <br>NUEVA RUTINA</h6>
-                </div></a>
-                </div>
-            </div>
-            <div class="read_bt"><a href="progress.html?id=${user_id}">ESTADISTICAS</a></div>
-            </div>
-        </div>
-        `
-        // Crear el contenido de la tarjeta personal
-        profile_info.classList.add('profile_info');
-        trainer_section_2.innerHTML = `
-                    <div class="row">
-                        <div class="col-md-6 padding_0">
-                        <div class="trainer_box">
-                            <h3 class="trainer_text">${user.nombre}</h3>
-                            <p class="lorem_text">Sabemos lo mucho que te gusta entrenar, por eso te traemos algunos datos:</p>
-                            <p"><span class="highlight">Ultimo ejercicio entrenado:</span> ${last_exc(user.historial)}</p>
-                            <p"><span class="highlight">Ejercicio mas entrenado:</span> ${findMostFrequentId(user.historial)}</p>
-                            <p"><span class="highlight">Cantidad de rutinas:</span> ${arraysCount(user.rutinas)}</p>
-                            <p"><span class="highlight">Último entreno:</span> ${last_training(user.historial)}</p>
-                        </div>
-                        </div>
-                        <div class="col-md-6 padding_0">
-                        <div class="image_1"></div>
-                        </div>
-                    </div>
-        `;
-
         // Crear el contenido de la rutina
         const table_container = document.createElement('div');
         table_container.classList.add('table_container');
         let table_container_content = `
         `;
 
+        table_container_content +=`
+        <div class="body_card">
+            <div class="row_alum_container">
+                <hr class="custom-line"></hr>
+                <div class="alum_container">
+                    <div class="name_container">
+                        <p"><span class="highlight">Patricio Gallo</span></p>
+                    </div>
+        `
         if(user.rutinas.length != 0){ //En caso de rutinas vacias
-            user.rutinas.forEach( (rutina,index) =>{
+            users[1].rutinas.forEach( (rutina,index) =>{
                 table_container_content +=`
-                <div class="body_card">
-                        <hr class="custom-line"></hr>
-                        <p"><span class="highlight">Nombre:</span> ${rutina.nombre}</p>
-                        <p"><span class="highlight">Cantidad de semanas:</span> ${arraysCount(rutina.semanas)}</p>
-                        <p"><span class="highlight">Dias:</span> ${arraysCount(rutina.semanas[0].dias)} dias</p>
-                        <p"><span class="highlight">Cantidad de ejercicios:</span> ${excCount(rutina.semanas[0].dias)}</p>
-                        <p"><span class="highlight">Porcentaje de la rutina:</span> ${porcentaje(rutina)}% </p>
-                        <p"><span class="highlight">Ultima semana entrenada:</span> Semana ${last_week(rutina)}</p>
-                        <p"><span class="highlight">Ultimo dia entrenado:</span> ${last_day(rutina)}</p>
-                        <div class="main_button_class">
-                            <button class="showExc" data-index="${index}">Mostrar Ejercicios</button>
-                            <button class="modExc" data-index="${index}">Modificar Ejercicios</button>
-                            <button class="addPeso" data-index="${index}">Pesos Semanales</button>
-                            <button class="button_red" data-index="${index}">Eliminar Rutina</button>
-                        </div>
-                </div> 
+                            <div class="rutins_description">
+                                <div class="rutins_description_row">
+                                    <div class="descripcion_container">
+                                        <p"><span class="highlight_2">Rutina:</span> ${rutina.nombre}</p>
+                                        <p"><span class="highlight_2">Cantidad de semanas:</span> ${arraysCount(rutina.semanas)}</p>
+                                        <p"><span class="highlight_2">Dias:</span> ${arraysCount(rutina.semanas[0].dias)} dias</p>
+                                        <p"><span class="highlight_2">Porcentaje de la rutina:</span> ${porcentaje(rutina)}% </p>
+                                    </div>
+                                    <div class="button_alum_container">
+                                        <button class="showExc" data-index="${index}">Mostrar Ejercicios</button>
+                                        <button class="modExc" data-index="${index}">Modificar Ejercicios</button>
+                                        <button class="addPeso" data-index="${index}">Ver estadisticas</button>
+                                        <button class="button_red" data-index="${index}">Eliminar Rutina</button>
+                                    </div>
+                                </div>
+                                <hr class="custom-line"></hr>
+                            </div>
                 `
             });//end foreach rutina
+            
+            table_container_content +=`  
+                </div>      
+            </div> 
+            `
         } else{ //else if lenght != 0
             table_container_content+=`
                 <div class="body_card">
@@ -102,6 +66,7 @@ if(gymapp_id != null){
 
                 `;            
         }
+        console.log(table_container_content)
         table_container.innerHTML = table_container_content;
         personal_rutins.appendChild(table_container);
         
@@ -462,23 +427,6 @@ if(gymapp_id != null){
             // Hacer la solicitud a la API
             const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
             users = await response.json();
-
-            // switch (users[gymapp_id].user_type) {
-            // case 0:
-            //     // users.forEach((user,index) => createUserCard(user,index));
-            //     createUserCard(users[gymapp_id],gymapp_id);
-            //     configMenu(users[gymapp_id]);
-            //     break;
-            // case 1:
-            //     alert("tipo 1"); //TODO completar logica
-            //     break;
-            // case 2:
-            //     createUserCard(users[gymapp_id],gymapp_id);
-            //     configMenu(users[gymapp_id]);
-            //     break;
-            // default:
-            //     console.log("Error: sin coincidencias en el case");
-            // }
             user_type = users[gymapp_id].user_type;
             createUserCard(users[gymapp_id],gymapp_id);
             configMenu(users[gymapp_id]);
