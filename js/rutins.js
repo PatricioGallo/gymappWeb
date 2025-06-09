@@ -367,7 +367,7 @@ if(gymapp_id != null){
                     </div>
                 `;
                 setTimeout(() => {
-                    window.location.href = `index.html`;
+                    window.location.href = `profile.html`;
                 }, 3000); 
                 return 0;
             } else {
