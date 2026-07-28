@@ -1,193 +1,184 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-<!-- basic -->
 <meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- mobile metas -->
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="viewport" content="initial-scale=1, maximum-scale=1">
-<!-- site metas -->
 <title>GymApp - Servicios</title>
-<meta name="keywords" content="GymApp, fitness, entrenamiento, gimnasio, salud, ejercicios, rutinas personalizadas, progreso físico">
-<meta name="description" content="Descubre GymApp, tu aliado perfecto para el gimnasio. Crea rutinas personalizadas, sigue tu progreso y alcanza tus metas fitness de manera efectiva.">
+<meta name="keywords" content="GymApp, fitness, entrenamiento, gimnasio, salud, ejercicios, rutinas personalizadas, progreso físico, entrenadores">
+<meta name="description" content="Conocé los servicios de GymApp: rutinas personalizadas y seguimiento de progreso ya disponibles, y lo que viene: entrenadores y una red social de gimnasios.">
 <meta name="author" content="GymApp Team">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="index, follow">
 <meta name="language" content="es">
-<!-- bootstrap css -->
-<link rel="stylesheet" type="text/css" href="../css/bootstrap.min.css">
-<!-- style css -->
-<link rel="stylesheet" type="text/css" href="../css/style.css">
-<!-- Responsive-->
-<link rel="stylesheet" href="../css/responsive.css">
-<!-- fevicon -->
 <link rel="icon" href="../images/fevicon.png" type="image/gif" />
-<!-- Scrollbar Custom CSS -->
-<link rel="stylesheet" href="../css/jquery.mCustomScrollbar.min.css">
-<!-- Tweaks for older IEs-->
-<link rel="stylesheet" href="https://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css">
-<!-- owl stylesheets --> 
-<link rel="stylesheet" href="../css/owl.carousel.min.css">
-<link rel="stylesheet" href="../css/owl.theme.default.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.css" media="screen">
-
+<link rel="stylesheet" href="../css/modern.css">
 </head>
 <body>
-  <!--header section start -->
-  <div class="header_section padding_bottom_0">
-    <div class="container-fluid">
-      <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="logo"><a href="../index.html"><img src="../images/logo.png"></a></div>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-          <ul class="navbar-nav mr-auto ml-auto">
-            <li class="nav-item">
-              <a class="nav-link" href="../index.html">Inicio</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="about.html">Nosotros</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="services.html">Servicios</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="contact.html">Contactanos</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="login.html">Ingresar</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="register.html">Registro</a>
-            </li>
-          </ul>
-        </div>
-      </nav>
-    </div>
-  </div>
-  <!--header section end -->
-  <!--services section start -->
-  <div class="services_section layout_padding">
+
+  <header class="site-header">
     <div class="container">
-      <h1 class="services_taital">Nuestros Servicios</h1>
-      <p class="services_text">GymApp es una web interactiva, donde podras hacer un progreso de tus pesos y ejercicios de gimnasio</p>
-      <div class="services_section_2 layout_padding">
-        <div class="row">
-          <div class="col-sm-4">
-            <div class="box_main">
-              <div class="icon_1"></div>
-              <h6 class="heavy_text">Crea tus<br>Rutinas</h6>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="box_main active">
-              <div class="icon_2"></div>
-              <h6 class="heavy_text active">Haz un <br>seguimiento</h6>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="box_main">
-              <div class="icon_3"></div>
-              <a href="login.html"><h6 class="heavy_text">Progresa<br>dia a dia</h6></a>
-            </div>
-          </div>
+      <a class="brand" href="../index.html">
+        <img src="../images/logo.png" alt="GymApp">
+        <span>GymApp</span>
+      </a>
+
+      <nav class="site-nav" id="siteNav">
+        <a href="../index.html">Inicio</a>
+        <a href="about.html">Nosotros</a>
+        <a href="services.html" class="active">Servicios</a>
+        <a href="contact.html">Contactanos</a>
+        <a href="login.html" class="accent">Ingresar</a>
+        <a href="register.html" class="btn btn-primary nav-cta">Registrate gratis</a>
+      </nav>
+
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <div class="container">
+      <span class="eyebrow">Servicios</span>
+      <h1>Todo lo que necesitás<br><span>para entrenar mejor</span></h1>
+      <p>GymApp está en etapa de prueba. Lo esencial para armar tu rutina y seguir tu progreso ya funciona, y seguimos construyendo el resto en base a cómo se usa.</p>
+
+      <div class="notice reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v5.5L4.5 18a1 1 0 0 0 .87 1.5h13.26a1 1 0 0 0 .87-1.5L14 8.5V3"/></svg>
         </div>
-        <div class="read_bt"><a href="register.html">REGISTRATE AHORA</a></div>
+        <div>
+          <strong>Estamos en etapa de prueba</strong>
+          <p>Lo que ves marcado como "Disponible" ya lo podés usar hoy, entrenando de verdad. Lo marcado como "Próximamente" todavía lo estamos construyendo.</p>
+        </div>
       </div>
     </div>
-  </div>
-  <!--services section end -->
-  <!--footer section start -->
-  <div class="footer_section layout_padding">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-6">
-                <h1 class="newsletter_text">Boletín Informativo</h1>
-            </div>
-            <div class="col-md-6">
-                <div class="box_main_2">
-                    <textarea class="email_bt_2" placeholder="Ingresa tu correo electrónico" name=""></textarea>
-                </div>
-                <button class="subscribe_bt_2"><a href="#">Suscribirse</a></button>
-            </div>
-        </div>
-        <div class="footer_taital">
-            <div class="row">
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">DIRECCIÓN</h3>
-                    <div class="location_text">
-                        <img src="../images/map-icon.png">
-                        <span class="padding_left_15">SMT - TUC</span>
-                    </div>
-                    <div class="location_text">
-                        <img src="../images/call-icon.png">
-                        <span class="padding_left_15">+ 549 381 400 400</span>
-                    </div>
-                    <div class="location_text">
-                        <img src="../images/mail-icon.png">
-                        <span class="padding_left_15">admin@gmapp.com</span>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">ENLACES ADICIONALES</h3>
-                    <div class="footer_menu">
-                        <ul>
-                            <li class="active"><a href="profile.html">Perfil</a></li>
-                            <li><a href="addExc.html">Agregar nuevo ejercicio</a></li>
-                            <li><a href="contact.html">Contactanos</a></li>
-                            <li><a href="exit.html">Salir</a></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">BOLETÍN INFORMATIVO</h3>
-                    <div class="subscribe_left">
-                        <form>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" placeholder="Ingresa tu correo electrónico">
-                                <div class="input-group-append">
-                                    <span class="input-group-text">Suscribirse</span>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <p class="contrary_text">Puede suscribirte y recibir noticias diarias sobre nosotros, tu gymbro de confianza.</p>
-                </div>
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">Síguenos</h3>
-                    <div class="social_icon">
-                        <ul>
-                            <li><a href="#"><img src="../images/fb-icon.png"></a></li>
-                            <li><a href="#"><img src="../images/twitter-icon.png"></a></li>
-                            <li><a href="https://www.instagram.com/patoogallo"><img src="../images/instagram-icon.png"></a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="copyright_text">
-            © Copyright 2025 Todos los derechos reservados por <a href="https://www.instagram.com/patoogallo">PG</a>
-        </div>
-    </div>
-  </div>
+  </section>
 
-  <!--footer section end -->
-  <!--footer section end -->
-  <!-- Javascript files-->
-  <script src="../js/jquery.min.js"></script>
-  <script src="../js/popper.min.js"></script>
-  <script src="../js/bootstrap.bundle.min.js"></script>
-  <script src="../js/jquery-3.0.0.min.js"></script>
-  <script src="../js/plugin.js"></script>
-  <!-- sidebar -->
-  <script src="../js/jquery.mCustomScrollbar.concat.min.js"></script>
-  <script src="../js/custom.js"></script>
-  <script src="../js/index.js"></script>
-  <!-- javascript --> 
-  <script src="../js/owl.carousel.js"></script>
-  <script src="https:cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.js"></script>
+  <section class="features">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Disponible ahora</span>
+        <h2>Lo que ya podés usar hoy</h2>
+        <p>Las funciones base de GymApp, probadas entrenamiento a entrenamiento.</p>
+      </div>
+
+      <div class="card-grid cols-3">
+        <div class="feature-card live reveal">
+          <span class="live-tag">Disponible</span>
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg>
+          </div>
+          <h3>Rutinas personalizadas</h3>
+          <p>Armá tu rutina por semana y por día, con los ejercicios que quieras entrenar vos.</p>
+        </div>
+
+        <div class="feature-card live reveal">
+          <span class="live-tag">Disponible</span>
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V10M12 20V4M18 20v-7"/></svg>
+          </div>
+          <h3>Seguimiento de pesos</h3>
+          <p>Registrá el peso que usás en cada ejercicio y no perdés el historial nunca más.</p>
+        </div>
+
+        <div class="feature-card live reveal">
+          <span class="live-tag">Disponible</span>
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>
+          </div>
+          <h3>Progreso visual</h3>
+          <p>Mirá tu evolución a lo largo del tiempo y detectá en qué ejercicios más avanzaste.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="steps">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Lo que estamos construyendo</span>
+        <h2>Hacia una red social de gimnasios</h2>
+        <p>La idea de fondo de GymApp: dejar de entrenar solo frente a tus propios números.</p>
+      </div>
+
+      <div class="card-grid cols-3">
+        <div class="feature-card soon reveal">
+          <span class="soon-tag">Próximamente</span>
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M18 8l1.5 1.5L23 6"/></svg>
+          </div>
+          <h3>Entrenadores con seguimiento</h3>
+          <p>Un entrenador va a poder ver tu progreso real y ajustar tu rutina según cómo vas evolucionando.</p>
+        </div>
+
+        <div class="feature-card soon reveal">
+          <span class="soon-tag">Próximamente</span>
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+          </div>
+          <h3>Red social de gimnasios</h3>
+          <p>Conectá con otros usuarios y gimnasios, compartí rutinas y celebrá logros en conjunto.</p>
+        </div>
+
+        <div class="feature-card soon reveal">
+          <span class="soon-tag">Próximamente</span>
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M7 19V9M12 19V5M17 19v-7"/><path d="M4 4l4 4 4-4 4 4 4-4"/></svg>
+          </div>
+          <h3>Estadísticas avanzadas</h3>
+          <p>Reportes más completos sobre tu rendimiento y tu constancia a lo largo del tiempo.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="container">
+      <div class="cta-box reveal">
+        <h2>Probá lo que ya está disponible</h2>
+        <p>Es gratis, está en etapa de prueba y tu feedback ayuda a decidir qué construimos primero.</p>
+        <div class="cta-actions">
+          <a href="register.html" class="btn btn-primary btn-block">Crear cuenta</a>
+          <a href="contact.html" class="btn btn-outline btn-block">Dejar mi opinión</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="../index.html">
+            <img src="../images/logo.png" alt="GymApp">
+            <span>GymApp</span>
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+        </div>
+
+        <nav class="footer-links">
+          <a href="../index.html">Inicio</a>
+          <a href="about.html">Nosotros</a>
+          <a href="services.html">Servicios</a>
+          <a href="contact.html">Contactanos</a>
+          <a href="login.html">Ingresar</a>
+          <a href="register.html">Registro</a>
+        </nav>
+
+        <div class="footer-social">
+          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 GymApp. Todos los derechos reservados.</span>
+        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/app.js"></script>
 </body>
 </html>

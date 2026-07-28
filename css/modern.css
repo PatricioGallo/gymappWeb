@@ -11,6 +11,8 @@
   --accent: #ff4d4d;
   --accent-2: #ff8a3d;
   --accent-soft: rgba(255, 77, 77, 0.14);
+  --live: #2fd971;
+  --live-soft: rgba(47, 217, 113, 0.14);
   --radius: 16px;
   --radius-sm: 10px;
   --max-width: 1140px;
@@ -568,6 +570,57 @@ a { color: inherit; text-decoration: none; }
   border-radius: 999px;
 }
 
+.feature-card.live { border-color: rgba(47, 217, 113, 0.35); }
+
+.live-tag {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--live);
+  background: var(--live-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.feature-card.live .icon { background: var(--live-soft); }
+.feature-card.live .icon svg { stroke: var(--live); }
+
+/* ---------- Notice (aviso de beta) ---------- */
+
+.notice {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  max-width: 720px;
+  margin: 28px auto 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  text-align: left;
+}
+
+.notice .icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.notice .icon svg { width: 18px; height: 18px; stroke: var(--accent-2); }
+
+.notice strong { display: block; font-size: 14.5px; margin-bottom: 3px; }
+.notice p { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+
 /* ---------- Steps ---------- */
 
 .steps { padding: 48px 0; background: var(--surface); }
@@ -770,4 +823,5 @@ a { color: inherit; text-decoration: none; }
 
 @media (min-width: 1024px) {
   .card-grid { grid-template-columns: repeat(4, 1fr); }
+  .card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 }
