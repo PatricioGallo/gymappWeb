@@ -14,12 +14,13 @@ if (navToggle && siteNav) {
         navToggle.setAttribute("aria-expanded", String(isOpen));
     });
 
-    siteNav.querySelectorAll("a").forEach((link) => {
-        link.addEventListener("click", () => {
-            siteNav.classList.remove("open");
-            navToggle.classList.remove("open");
-            navToggle.setAttribute("aria-expanded", "false");
-        });
+    // Delegado en el contenedor (no en cada <a>) para que tambien funcione
+    // con links agregados dinamicamente despues de esta carga inicial.
+    siteNav.addEventListener("click", (e) => {
+        if (!e.target.closest("a")) return;
+        siteNav.classList.remove("open");
+        navToggle.classList.remove("open");
+        navToggle.setAttribute("aria-expanded", "false");
     });
 }
 

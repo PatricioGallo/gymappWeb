@@ -1,316 +1,155 @@
-const gymapp_id = localStorage.getItem("gymapp_id")
-let logout = 0;
+// GymApp — ver los ejercicios de una rutina (pages/showExc.html)
+// Pagina de solo lectura: funciona logueado (tu propia rutina) o sin login,
+// via el link que arma el boton "Compartir rutina".
 
-    const params             = new URLSearchParams(window.location.search);
-    const container          = document.getElementById('container');
+const gymapp_id = localStorage.getItem("gymapp_id");
+const isLoggedIn = gymapp_id != null;
 
-    // Acceder a un parámetro específico
-    const user_id = params.get('id');
-    const rutina_id = params.get('rutina');
-    let user;
-    let weekId = 0
-    let exc_api_array;
+const params = new URLSearchParams(window.location.search);
+const user_id = params.get('id');
+const rutina_id = params.get('rutina');
 
-    function printExc(user){
-        if(logout == 1){
-            document.getElementById("nav_var").style.display = "none";
-            container.innerHTML = `
-            <h1 class="services_taital">Tus ejercicios</h1>
-            <p class="services_text" id="services_text">Puedes seleccionar la semana de la rutina: "${user.rutinas[rutina_id].nombre}" de ${user.nombre}, para poder ver los ejercicios.</p>
-            <br/>
-            <div class="trainer_section_2" id="trainer_section_2">
-            </div>
-            <div id=loaderBody></div>
-        `
-        } else{
-        container.innerHTML = `
-            <h1 class="services_taital">Tus ejercicios</h1>
-            <p class="services_text" id="services_text">${user.nombre} selecciona la semana de tu rutina: ${user.rutinas[rutina_id].nombre} para poder ver los ejercicios.</p>
-            <br/>
-            <div class="trainer_section_2" id="trainer_section_2">
-            </div>
-            <div id=loaderBody></div>
-        `}
-        const userCardsContainer = document.getElementById('trainer_section_2');
-        const configBody = document.createElement('div');
-        configBody.classList.add("configBody");
-        let main_body;
-        main_body = `
+let users = [];
+let exc_api_array = [];
 
-                            <div class="email_box">
-                                    <form id="myForm">
-                                        <div class="form-group">
-                                            <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">        
-            `
-        user.rutinas[rutina_id].semanas.forEach((week,index) => {
-            main_body += `
-                <option value="${index}">Semana ${week.numero}</option>
-            `
-        })
-        main_body +=`
-                                
-                            </select></div><br>
-                            <div class="send_bt">
-                                <button type="submit" class="login-botton">Ver Ejercicios</button>
-                            </div>
-                        </form>
-                </div>
-            `
-        configBody.innerHTML = main_body;
-        userCardsContainer.appendChild(configBody);
+function renderNav() {
+    const nav = document.getElementById('siteNav');
+    if (!nav) return;
 
-        document.getElementById('myForm').addEventListener('submit', (event) =>{
-            event.preventDefault();
-            weekId = document.getElementById("weeks").value;
-            services_text = document.getElementById("services_text");
-            services_text.innerHTML = `Podras ver los ejercicios de ${user.nombre}, de la rutina: "${user.rutinas[rutina_id].nombre}" la semana numero: ${parseInt(weekId)+1} <br/>`
-            main_body = `
-                <div class="configFace">
-                    <div class="configForm">
-                            <table class="training-table">
-                                <thead>
-                                    <tr>
-                                        <th>Día</th>
-                                        <th>Ejercicio (tocar para ver)</th>
-                                        <th>Series</th>
-                                        <th>Repes</th>
-                                        <th>Ultimo Peso</th>
-                                        <th>Fecha de Entreno</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-
-                `
-                // Generar las filas de la tabla con los ejercicios
-                user.rutinas[rutina_id].semanas[weekId].dias.forEach((dia, diaIndex) => {
-                    let exc_count = 0;
-                    // Alternamos las clases de color según el índice de los días
-                    let dayClass = diaIndex % 2 === 0 ? 'day-dark' : 'day-light';
-
-                    dia.ejercicios.forEach((exc,excIndex) => {
-                        if (exc_count == 0) {
-                            main_body += `
-                            <tr class="${dayClass}">
-                                <td rowspan="${arraysCount(dia.ejercicios)}">${dia.nombre}</td>
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
-                                <td>${exc.serie}</td>
-                                <td>${exc.repe}</td>
-                                <td>${exc.peso > 0 ? exc.peso: "Sin peso"}</td>
-                                <td>${exc.fecha}</td>
-                            </tr>`;
-                            exc_count++;
-                        } else {
-                            main_body += `
-                            <tr class="${dayClass}">
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
-                                <td>${exc.serie}</td>
-                                <td>${exc.repe}</td>
-                                <td>${exc.peso}</td>
-                                <td>${exc.fecha}</td>
-                            </tr>
-                        `;
-                        }
-                    });
-                });
-
-                // Cerrar la tabla
-                main_body += `
-                            </tbody>
-                        </table>
-                        <div class="showRutinsButtons">
-                            <div class="read_bt"><a href="showExc.html?id=${user_id}&rutina=${rutina_id}">Elegir Otra Semana</a></div>
-                            <button class="sharedButton" id="shareButton">Compartir rutina</button>
-                        </div>
-                    </div>
-                </div>
-                `;
-
-            configBody.innerHTML = main_body;
-            
-            document.querySelectorAll('.excDesc').forEach((button, index) => {
-                let day_index = getDayIndex(index);
-                let backgroundColor = day_index % 2 === 0 ? '#e0e0e0' : '#f2f2f2';
-                button.style.backgroundColor = backgroundColor;
-            })
-
-            document.querySelectorAll('.excDesc').forEach((button, index) => {
-                button.addEventListener('click', function() {
-                    let dayIndex = getDayIndex(index);
-                    let excIndex = getExcIndex(index);
-                    let loaderBody = document.getElementById("loaderBody");
-                    let exc = user.rutinas[rutina_id].semanas[weekId].dias[dayIndex].ejercicios[excIndex];
-                    loaderBody.innerHTML = `
-                    <div id="success-check" class="success-check-container">
-                        <div class="exc_container">
-                            <div class="exc_info">
-                                <div class="exc_title"><h1>${exc.nombre}</h1></div>
-                                <div class= "exc_detail">
-                                    <h2>Descripcion:</h2>
-                                    <h3>${exc.info}</h3>
-                                    <div id="note">
-                                    </div>
-                                    <br/>
-                                    <h2>Desarrollado por:</h2>
-                                    <h3>${viewAuthorID(exc.id_exc)}</h3>
-                                </div>
-                                <div class= "exc_buttons"><button class="exc_button" onclick="document.getElementById('loaderBody').innerHTML = '';">Cerrar</button></div>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                    if(exc.nota != undefined && exc.nota != ""){
-                        note.innerHTML = `
-                            <br/>
-                            <h2>Nota del entrenador:</h2>
-                            <h3>${exc.nota}</h3>
-                        `
-                    }
-                });
-
-            });
-
-            //Boton de compartir
-            const shareButton = document.getElementById('shareButton');
-
-            // Agrega un evento al botón
-            shareButton.addEventListener('click', async () => {
-                const shareData = {
-                    title: 'GymApp',
-                    text: 'Te comparto mi rutina para que la veas en GymApp:',
-                    url: window.location.href // URL actual de la página
-                };
-
-                try {
-                    if (navigator.share) {
-                        await navigator.share(shareData); // Intenta compartir
-                    } else {
-                        console.log("Error")
-                    }
-                } catch (error) {
-                    console.error('Error al compartir:', error);
-                }
-            });
-
-
-            function viewAuthorID(id){
-                let id_author = exc_api_array[id-1].author;
-                return viewAuthor(id_author);
-            }
-
-            function viewAuthor(id){
-                if(id != "gymapp"){
-                    return `${users[id-1].nombre} ${users[id-1].apellido}`;
-                }else{
-                    return "gymapp"
-                }
-            }
-
-            function getDayIndex(index){
-                let exc_count = -1;
-                let day_index;
-                user.rutinas[rutina_id].semanas[weekId].dias.forEach((dia, day_i)=>{
-                    dia.ejercicios.forEach(exc =>{
-                        exc_count ++; 
-                        if(exc_count == index){
-                            day_index = day_i;
-                        }
-                    })
-                })
-                return day_index
-            }
-            function getExcIndex(index){
-                let exc_count = -1;
-                let exc_index;
-                user.rutinas[rutina_id].semanas[weekId].dias.forEach((dia, day_i)=>{
-                    dia.ejercicios.forEach((exc,e_index) =>{
-                        exc_count ++; 
-                        if(exc_count == index){
-                            exc_index = e_index;
-                        }
-                    })
-                })
-                return exc_index
-            }
-
-            function existNote(nota){
-                if(nota != undefined && nota != ""){
-                    return "*"
-                }else{
-                    return ""
-                }
-            }
-
-            function arraysCount(arrays){
-                let count = 0;
-                arrays.forEach( () => {
-                    count++;
-                })
-                return count
-            }
-
-        });//End submit
-    }
-
-    // Función para obtener los usuarios desde la API
-    async function fetchUsers() {
-        try {
-            // Hacer la solicitud a la API
-            const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
-            users = await response.json();
-
-            printExc(users[user_id]);
-        } catch (error) {
-            console.error('Error al obtener los usuarios:', error);
-        }
-    }
-
-    async function fetchExc() {
-        try {
-            // Hacer la solicitud a la API
-            const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
-            const exc = await response.json();
-            exc_api_array = exc;
-
-        } catch (error) {
-            console.error('Error al obtener los usuarios:', error);
-        }
-    }
-
-
-    async function actRutina(userId, user) {
-        try {
-            const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
-                method: 'PUT',  
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(user)  
-            });
-
-            if (response.ok) {
-                const datos = await response.json();
-                alert("Rutina actualizada con éxito.");
-                window.location.href = `../index.html`;
-            } else {
-                console.error('Error al subir la rutina:', response.statusText);
-                alert("Error al actulizar la rutina.");
-            }
-        } catch (error) {
-            console.error('Hubo un problema con la solicitud:', error);
-            alert("Error en la conexión.");
-        }
-    }
-
-    // Llamar a la función para obtener los usuarios al cargar la página
-    fetchUsers();
-    fetchExc();
-
-if(gymapp_id != null){
-    logout = 0;
-    fetchUsers();
-    fetchExc();
-} else {
-    logout = 1;
-    fetchUsers();
-    fetchExc();
+    nav.innerHTML = isLoggedIn
+        ? `<a href="profile.html">Rutinas</a><a href="exit.html">Salir</a>`
+        : `<a href="../index.html">Inicio</a><a href="register.html" class="btn btn-primary nav-cta">Registrate gratis</a>`;
 }
+
+function authorLabel(idExc) {
+    const excDef = exc_api_array[idExc - 1];
+    if (!excDef || excDef.author === undefined || excDef.author === 'gymapp') return 'GymApp';
+    const author = users[excDef.author - 1];
+    return author ? `${author.nombre} ${author.apellido}` : 'GymApp';
+}
+
+function initShare(routineName, ownerName) {
+    const shareBtn = document.getElementById('shareBtn');
+    if (!shareBtn) return;
+    const originalHTML = shareBtn.innerHTML;
+
+    shareBtn.addEventListener('click', async () => {
+        const url = window.location.href;
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: `Rutina de ${ownerName} - GymApp`, text: `Mirá la rutina "${routineName}" en GymApp`, url });
+                return;
+            }
+            await navigator.clipboard.writeText(url);
+            shareBtn.textContent = '¡Copiado!';
+            setTimeout(() => { shareBtn.innerHTML = originalHTML; }, 2000);
+        } catch (err) {
+            console.error('No se pudo compartir la rutina:', err);
+        }
+    });
+}
+
+function showNotFound(message) {
+    document.getElementById('routineTitle').textContent = message;
+    const actions = document.getElementById('routineActions');
+    const weekPicker = document.getElementById('weekPicker');
+    if (actions) actions.remove();
+    if (weekPicker) weekPicker.remove();
+}
+
+function renderWeekOptions(rutina) {
+    const select = document.getElementById('weekSelect');
+    const lastIndex = rutina.semanas.length - 1;
+
+    select.innerHTML = rutina.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join('');
+    select.value = lastIndex;
+    select.addEventListener('change', () => renderWeek(rutina, Number(select.value)));
+
+    renderWeek(rutina, lastIndex);
+}
+
+function renderWeek(rutina, weekIndex) {
+    const semana = rutina.semanas[weekIndex];
+    const weekContent = document.getElementById('weekContent');
+
+    weekContent.innerHTML = semana.dias.map((dia, diaIndex) => `
+        <div class="day-card reveal">
+            <h3>${dia.nombre}</h3>
+            ${dia.ejercicios.map((exc, excIndex) => `
+                <div class="exc-row">
+                    <button class="exc-name" type="button" data-dia="${diaIndex}" data-exc="${excIndex}">
+                        ${exc.nombre}
+                        ${exc.nota ? '<span class="exc-note-dot" title="Tiene nota del entrenador"></span>' : ''}
+                    </button>
+                    <span class="exc-meta">
+                        ${exc.serie}x${exc.repe} · <strong>${exc.peso > 0 ? exc.peso + ' kg' : 'Sin peso'}</strong>${exc.fecha ? ' · ' + exc.fecha : ''}
+                    </span>
+                </div>
+            `).join('')}
+        </div>
+    `).join('');
+
+    weekContent.querySelectorAll('.exc-name').forEach((button) => {
+        button.addEventListener('click', () => {
+            const dia = semana.dias[Number(button.dataset.dia)];
+            const exc = dia.ejercicios[Number(button.dataset.exc)];
+            openExerciseModal(exc);
+        });
+    });
+}
+
+function openExerciseModal(exc) {
+    const loaderBody = document.getElementById('loaderBody');
+
+    loaderBody.innerHTML = `
+        <div class="success-check-container">
+            <div class="modal-card">
+                <h2>${exc.nombre}</h2>
+                <p class="subtitle">${exc.info || 'Sin descripción cargada.'}</p>
+                ${exc.nota ? `
+                <div class="notice">
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+                    <div><strong>Nota del entrenador</strong><p>${exc.nota}</p></div>
+                </div>` : ''}
+                <p class="auth-foot" style="text-align:left;margin-top:16px;">Ejercicio de ${authorLabel(exc.id_exc)}</p>
+                <div class="modal-actions"><button class="btn btn-outline" id="closeExcModal">Cerrar</button></div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('closeExcModal').addEventListener('click', () => {
+        loaderBody.innerHTML = '';
+    });
+}
+
+async function init() {
+    renderNav();
+
+    try {
+        const [usersRes, excRes] = await Promise.all([
+            fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users'),
+            fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices')
+        ]);
+        users = await usersRes.json();
+        exc_api_array = await excRes.json();
+
+        const user = users[user_id];
+        const rutina = user ? user.rutinas[rutina_id] : null;
+
+        if (!user || !rutina) {
+            showNotFound('No se encontró esta rutina.');
+            return;
+        }
+
+        document.getElementById('routineTitle').textContent = rutina.nombre;
+        document.getElementById('routineSubtitle').textContent = `Rutina de ${user.nombre} ${user.apellido}`;
+
+        initShare(rutina.nombre, `${user.nombre} ${user.apellido}`);
+        renderWeekOptions(rutina);
+    } catch (error) {
+        console.error('Error al cargar la rutina:', error);
+        showNotFound('Ocurrió un error al cargar la rutina.');
+    }
+}
+
+init();
