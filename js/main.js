@@ -485,5 +485,5 @@ if(gymapp_id != null){
     // Llamar a la función para obtener los usuarios al cargar la página
     fetchExc();
 } else {
-    window.location.href = `index.html`;
+    window.location.href = `../index.html`;
 }

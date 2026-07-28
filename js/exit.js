@@ -1,2 +1,2 @@
 localStorage.removeItem('gymapp_id');
-window.location.href = `index.html`;
+window.location.href = `../index.html`;

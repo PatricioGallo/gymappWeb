@@ -290,7 +290,7 @@ let logout = 0;
             if (response.ok) {
                 const datos = await response.json();
                 alert("Rutina actualizada con éxito.");
-                window.location.href = `index.html`;
+                window.location.href = `../index.html`;
             } else {
                 console.error('Error al subir la rutina:', response.statusText);
                 alert("Error al actulizar la rutina.");

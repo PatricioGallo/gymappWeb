@@ -94,7 +94,7 @@ if(gymapp_id != null){
                     </div>
                 `;
                 setTimeout(() => {
-                    window.location.href = `index.html`;
+                    window.location.href = `../index.html`;
                 }, 3000); 
             } else {
                 loaderBody.innerHTML = ``;
