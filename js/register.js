@@ -10,6 +10,7 @@ myForm.addEventListener("submit", async (event)=>{
     pass = document.getElementById("pass").value;
     pass2 = document.getElementById("pass2").value;
     age = document.getElementById("age").value;
+    let terms = document.getElementById("terms").checked;
     let alert_message = document.getElementById("alert_message");
 
     if(userName.length < 2 || !isNaN(userName) || sur.length < 2 || !isNaN(sur)){
@@ -18,6 +19,8 @@ myForm.addEventListener("submit", async (event)=>{
         alert_message.innerHTML = `<p>ERROR! Contraseñas no coinciden o muy corta. (minimo 6 caracteres)</p>`
     } else if(isNaN(age) || age < 12 || age > 100){
         alert_message.innerHTML = `<p>ERROR! Edad no es correcta!.</p>`
+    } else if(!terms){
+        alert_message.innerHTML = `<p>ERROR! Debés aceptar los Términos y Condiciones para registrarte.</p>`
     } else{
         let loaderBody = document.getElementById("loaderBody");
         loaderBody.innerHTML = `

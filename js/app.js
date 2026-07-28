@@ -1,8 +1,10 @@
 // GymApp — paginas publicas (index.html y pages/*.html)
 
 // Si ya hay sesion iniciada, vamos directo al area personal.
-const gymapp_id = localStorage.getItem("gymapp_id");
-if (gymapp_id != null) {
+// (variable con prefijo propio para no chocar con el "gymapp_id" que
+// declaran los scripts especificos de cada pagina, ej. login.js, main.js)
+const gymappAppJsSessionId = localStorage.getItem("gymapp_id");
+if (gymappAppJsSessionId != null) {
     const enPages = location.pathname.includes("/pages/");
     window.location.href = enPages ? "profile.html" : "pages/profile.html";
 }
