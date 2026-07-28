@@ -83,7 +83,7 @@ async function addUser(mail,pass,userName,sur,age) {
         apellido: sur,
         edad: age,
         historial: [],
-        user_type : 2,
+        user_type : 3, // 0 admin, 1 gimnasio, 2 entrenador, 3 usuario comun
         rutinas: []
     };
     let loaderBody = document.getElementById("loaderBody");

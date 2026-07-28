@@ -1,13 +1,7 @@
-// GymApp — paginas publicas (index.html y pages/*.html)
-
-// Si ya hay sesion iniciada, vamos directo al area personal.
-// (variable con prefijo propio para no chocar con el "gymapp_id" que
-// declaran los scripts especificos de cada pagina, ej. login.js, main.js)
-const gymappAppJsSessionId = localStorage.getItem("gymapp_id");
-if (gymappAppJsSessionId != null) {
-    const enPages = location.pathname.includes("/pages/");
-    window.location.href = enPages ? "profile.html" : "pages/profile.html";
-}
+// GymApp — UI compartida para paginas ya autenticadas (pages/profile.html y afines).
+// A diferencia de app.js, este script NO redirige segun localStorage: en estas
+// paginas ya estamos logueados, y app.js redirigiria a profile.html en loop
+// si se lo incluyera aca.
 
 // Menu mobile
 const navToggle = document.getElementById("navToggle");
@@ -29,8 +23,10 @@ if (navToggle && siteNav) {
     });
 }
 
-// Reveal on scroll. Con MutationObserver por si en el futuro se agrega
-// contenido ".reveal" de forma dinamica despues de la carga inicial.
+// Reveal on scroll. Usa un MutationObserver ademas del IntersectionObserver
+// porque en estas paginas el contenido ".reveal" suele llegar despues (main.js
+// lo inserta recien cuando resuelve el fetch a la API) y no existe todavia
+// cuando este script corre por primera vez.
 function setupRevealObserver() {
     if (!("IntersectionObserver" in window)) {
         document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in-view"));

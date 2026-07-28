@@ -1024,6 +1024,237 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-muted);
 }
 
+/* ---------- Profile ---------- */
+
+.profile-hero { padding: 40px 0 8px; }
+
+.profile-hero .container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.avatar-wrap { position: relative; width: 108px; height: 108px; flex-shrink: 0; }
+
+.avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+  border: 3px solid var(--surface-2);
+  display: block;
+}
+
+.avatar-edit {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: 3px solid var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.avatar-edit svg { width: 16px; height: 16px; stroke: #0a0c0f; }
+.avatar-edit input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.profile-name { font-size: clamp(22px, 5vw, 28px); margin: 0; }
+
+.profile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.profile-badge {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.profile-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.avatar-hint { font-size: 12px; color: var(--text-muted); margin: -4px 0 0; }
+
+/* ---------- Quick actions ---------- */
+
+.quick-actions { padding: 24px 0 8px; }
+
+.quick-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+
+.quick-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
+  transition: border-color 0.15s ease;
+}
+
+.quick-card:hover { border-color: var(--accent-2); }
+
+.quick-card .icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.quick-card .icon svg { width: 22px; height: 22px; stroke: var(--accent-2); }
+.quick-card h3 { margin: 0 0 2px; font-size: 15px; }
+.quick-card p { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+/* ---------- Stat cards ---------- */
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+
+.stat-card .label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.stat-card .value { font-size: 19px; font-weight: 800; line-height: 1.3; }
+.stat-card .value small { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-top: 3px; }
+
+/* ---------- Empty state ---------- */
+
+.empty-state {
+  text-align: center;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 44px 26px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.empty-state .icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.empty-state .icon svg { width: 26px; height: 26px; stroke: var(--text-muted); }
+.empty-state h3 { margin: 0 0 8px; font-size: 17px; }
+.empty-state p { margin: 0 0 18px; color: var(--text-muted); font-size: 14px; }
+
+/* ---------- Chart card ---------- */
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  margin-top: 16px;
+}
+
+.chart-card h3 { margin: 0 0 4px; font-size: 16px; }
+.chart-card .chart-sub { margin: 0 0 18px; font-size: 13px; color: var(--text-muted); }
+.chart-wrap { position: relative; height: 220px; }
+
+/* ---------- Routine card ---------- */
+
+.routine-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.routine-card + .routine-card { margin-top: 14px; }
+.routine-card h3 { margin: 0 0 14px; font-size: 17px; }
+
+.routine-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 18px; }
+.routine-stats span { display: block; font-size: 12.5px; color: var(--text-muted); }
+.routine-stats strong { display: block; color: var(--text); font-size: 14px; margin-top: 2px; font-weight: 700; }
+
+.routine-progress { margin-bottom: 18px; }
+.routine-progress-head { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-muted); }
+.routine-progress-head strong { color: var(--text); }
+
+.routine-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.routine-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.routine-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn-sm { padding: 9px 16px; font-size: 13px; }
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(255, 90, 90, 0.4);
+  color: #ff8a8a;
+}
+
+.btn-danger:hover { background: rgba(255, 90, 90, 0.12); }
+
+/* ---------- Modal (overlay generado por JS) ---------- */
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 30px 26px;
+  max-width: 420px;
+  width: calc(100% - 40px);
+  max-height: 85vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.modal-card h2 { margin: 0 0 4px; font-size: 20px; }
+.modal-card .subtitle { margin: 0 0 22px; font-size: 13.5px; color: var(--text-muted); }
+.modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+.modal-actions .btn { flex: 1; }
+
+@media (min-width: 640px) {
+  .quick-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ---------- Reveal on scroll ---------- */
 
 .reveal {
