@@ -1,9 +1,10 @@
-// GymApp — landing page (index.html)
+// GymApp — paginas publicas (index.html y pages/*.html)
 
 // Si ya hay sesion iniciada, vamos directo al area personal.
 const gymapp_id = localStorage.getItem("gymapp_id");
 if (gymapp_id != null) {
-    window.location.href = "pages/profile.html";
+    const enPages = location.pathname.includes("/pages/");
+    window.location.href = enPages ? "profile.html" : "pages/profile.html";
 }
 
 // Menu mobile
