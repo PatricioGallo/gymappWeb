@@ -91,10 +91,10 @@ export async function getRoutineDetail(routineId: string): Promise<RoutineDetail
             .map((e: any) => {
               const { exercises, ...rest } = e;
               const author = exercises?.is_builtin
-                ? "GymApp"
+                ? "Gym Social"
                 : exercises?.profiles
                   ? `${exercises.profiles.nombre} ${exercises.profiles.apellido}`
-                  : "GymApp";
+                  : "Gym Social";
               return {
                 ...rest,
                 authorName: author,

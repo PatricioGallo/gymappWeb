@@ -136,7 +136,7 @@ function initShare() {
     const url = window.location.href;
     try {
       if (navigator.share) {
-        await navigator.share({ title: "Mi perfil de GymApp", url });
+        await navigator.share({ title: "Mi perfil de Gym Social", url });
         return;
       }
       await navigator.clipboard.writeText(url);
@@ -368,7 +368,7 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
 function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean, container: HTMLElement, logs: WeightLogEntry[]) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
-      ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas activas</h3><p>Creá tu primera rutina para empezar a entrenar con GymApp.</p><a href="rutinsView.html" class="btn btn-primary btn-sm">Crear nueva rutina</a></div>`
+      ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas activas</h3><p>Creá tu primera rutina para empezar a entrenar con Gym Social.</p><a href="rutinsView.html" class="btn btn-primary btn-sm">Crear nueva rutina</a></div>`
       : `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tiene rutinas activas</h3><p>Este usuario no cargó ninguna rutina por ahora.</p></div>`;
     return;
   }
