@@ -28,7 +28,7 @@ function renderChooser() {
       <h1>¿Cómo querés armarla?</h1>
       <p>Podés empezar de cero o elegir una rutina ya armada como base.</p>
     </div>
-    <div class="quick-grid reveal">
+    <div class="quick-grid quick-grid-2 reveal">
       <button type="button" class="quick-card" id="chooseScratch">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
         <div><h3>Empezar desde cero</h3><p>Elegís vos cada ejercicio, serie y repetición</p></div>

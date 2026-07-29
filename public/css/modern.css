@@ -1142,7 +1142,7 @@ a { color: inherit; text-decoration: none; }
 .quick-card h3 { margin: 0 0 2px; font-size: 15px; }
 .quick-card p { margin: 0; font-size: 13px; color: var(--text-muted); }
 
-button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
+button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family: inherit; color: inherit; }
 
 /* ---------- Stat cards ---------- */
 
@@ -1881,6 +1881,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 @media (min-width: 640px) {
   .quick-grid { grid-template-columns: repeat(3, 1fr); }
+  .quick-grid-2 { grid-template-columns: repeat(2, 1fr); max-width: 640px; margin: 0 auto; }
 }
 
 /* ---------- Reveal on scroll ---------- */
