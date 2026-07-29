@@ -6,6 +6,7 @@ import { calcularEdad } from "../lib/age";
 import { COUNTRIES } from "../lib/countries";
 import {
   getProfile,
+  getProfileBasic,
   updateProfileFields,
   updateEmail,
   updatePassword,
@@ -15,6 +16,7 @@ import {
   reactivateRoutine,
   listWeightLogsWithContext,
   type Profile,
+  type ProfileBasic,
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
@@ -27,13 +29,14 @@ setupRevealObserver();
 const { data: sessionData } = await supabase.auth.getSession();
 const myId = sessionData.session?.user.id ?? null;
 
-if (!myId) {
+const urlParams = new URLSearchParams(window.location.search);
+const viewId = urlParams.get("id") ?? myId;
+
+if (!viewId) {
   window.location.href = "login.html";
   throw new Error("not authenticated");
 }
 
-const urlParams = new URLSearchParams(window.location.search);
-const viewId = urlParams.get("id") ?? myId;
 const isOwner = viewId === myId;
 
 const USER_TYPE_LABELS: Record<string, string> = {
@@ -108,8 +111,6 @@ function lastTrainingLabel(logs: WeightLogEntry[]): string {
 
 function initAvatar(profile: Profile) {
   const avatarImg = document.getElementById("avatarImg") as HTMLImageElement | null;
-  if (avatarImg && profile.avatar_url) avatarImg.src = profile.avatar_url;
-
   const avatarInput = document.getElementById("avatarInput") as HTMLInputElement | null;
   if (!avatarInput || !avatarImg) return;
 
@@ -128,12 +129,14 @@ function initAvatar(profile: Profile) {
 
 // ---------- Compartir perfil ----------
 
-function initShare() {
+function initShare(profileId: string) {
   const shareBtn = document.getElementById("shareBtn");
   if (!shareBtn) return;
   const originalHTML = shareBtn.innerHTML;
   shareBtn.addEventListener("click", async () => {
-    const url = window.location.href;
+    // Se arma explicitamente con ?id= para que el link funcione para cualquiera
+    // que lo abra sin sesion iniciada (window.location.href de "mi" perfil no lleva id).
+    const url = `${window.location.origin}${window.location.pathname}?id=${profileId}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Mi perfil de Gym Social", url });
@@ -150,18 +153,27 @@ function initShare() {
   });
 }
 
-function renderProfileBadges(profile: Profile) {
+function renderProfileBadges(profile: Profile | ProfileBasic) {
   const badges = document.getElementById("profileBadges");
   if (!badges) return;
   badges.innerHTML = `
-    <span class="profile-badge">${escapeHtml(USER_TYPE_LABELS[profile.user_type] ?? "Usuario")}</span>
-    <span class="profile-badge">${calcularEdad(profile.fecha_nacimiento)} años</span>
+    <span class="profile-badge">${escapeHtml(USER_TYPE_LABELS[profile.user_type ?? "usuario"] ?? "Usuario")}</span>
+    <span class="profile-badge">${calcularEdad(profile.fecha_nacimiento!)} años</span>
     ${profile.nacionalidad ? `<span class="profile-badge">${escapeHtml(profile.nacionalidad)}</span>` : ""}
-    <span class="profile-badge">@${escapeHtml(profile.username)}</span>
+    <span class="profile-badge">@${escapeHtml(profile.username ?? "")}</span>
   `;
 }
 
-function renderProfileActions(ownerView: boolean) {
+function renderBasicBadges(profile: ProfileBasic) {
+  const badges = document.getElementById("profileBadges");
+  if (!badges) return;
+  badges.innerHTML = `
+    <span class="profile-badge">${calcularEdad(profile.fecha_nacimiento!)} años</span>
+    <span class="profile-badge">@${escapeHtml(profile.username ?? "")}</span>
+  `;
+}
+
+function renderProfileActions(profileId: string, ownerView: boolean, viewerLoggedIn: boolean) {
   const actions = document.getElementById("profileActions");
   if (!actions) return;
   actions.innerHTML = `
@@ -169,10 +181,10 @@ function renderProfileActions(ownerView: boolean) {
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
       Compartir perfil
     </button>
-    ${ownerView ? "" : `<button class="btn btn-primary" id="addFriendBtn" type="button">+ Seguir</button>`}
+    ${ownerView || !viewerLoggedIn ? "" : `<button class="btn btn-primary" id="addFriendBtn" type="button">+ Seguir</button>`}
   `;
-  initShare();
-  if (!ownerView) {
+  initShare(profileId);
+  if (!ownerView && viewerLoggedIn) {
     const btn = document.getElementById("addFriendBtn");
     btn?.addEventListener("click", () => {
       btn.textContent = "Función en camino";
@@ -180,6 +192,25 @@ function renderProfileActions(ownerView: boolean) {
         btn.textContent = "+ Seguir";
       }, 2000);
     });
+  }
+}
+
+// ---------- Perfil privado (visitante sin acceso completo) ----------
+
+function renderPrivateNotice(nombre: string) {
+  document.getElementById("quickActionsSection")?.remove();
+  document.getElementById("rutinas")?.remove();
+
+  const statsSection = document.getElementById("statsSection");
+  const container = statsSection?.querySelector(".container");
+  if (container) {
+    container.innerHTML = `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <h3>Este perfil es privado</h3>
+        <p>${escapeHtml(nombre)} decidió que solo se vea su información básica.</p>
+      </div>
+    `;
   }
 }
 
@@ -524,6 +555,13 @@ function configMenu(profile: Profile) {
               ${COUNTRIES.map((country) => `<option value="${escapeHtml(country)}" ${country === profile.nacionalidad ? "selected" : ""}>${escapeHtml(country)}</option>`).join("")}
             </select>
           </div>
+          <div class="field">
+            <label for="visibilityField">Visibilidad del perfil</label>
+            <select id="visibilityField">
+              <option value="true" ${profile.is_public ? "selected" : ""}>Público (se ven tus rutinas y estadísticas)</option>
+              <option value="false" ${!profile.is_public ? "selected" : ""}>Privado (solo se ve tu información básica)</option>
+            </select>
+          </div>
           <div class="field"><label for="mailField">Mail</label><input type="email" placeholder="${escapeHtml(profile.email)}" id="mailField"></div>
           <div class="field"><label for="pswd">Contraseña nueva</label><input type="password" placeholder="••••••••••••" id="pswd"></div>
           <div class="alert_message" id="configAlert"></div>
@@ -544,15 +582,24 @@ function configMenu(profile: Profile) {
       const apellido = (document.getElementById("sname") as HTMLInputElement).value.trim();
       const fechaNacimiento = (document.getElementById("birthdateField") as HTMLInputElement).value;
       const nacionalidad = (document.getElementById("nationalityField") as HTMLSelectElement).value;
+      const isPublic = (document.getElementById("visibilityField") as HTMLSelectElement).value === "true";
       const mail = (document.getElementById("mailField") as HTMLInputElement).value.trim();
       const pass = (document.getElementById("pswd") as HTMLInputElement).value;
 
-      if (!nombre && !apellido && !mail && !pass && fechaNacimiento === profile.fecha_nacimiento && nacionalidad === profile.nacionalidad) {
+      if (
+        !nombre &&
+        !apellido &&
+        !mail &&
+        !pass &&
+        fechaNacimiento === profile.fecha_nacimiento &&
+        nacionalidad === profile.nacionalidad &&
+        isPublic === profile.is_public
+      ) {
         alertBox.innerHTML = "<p>Ingresá al menos un valor para cambiar.</p>";
         return;
       }
 
-      const fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad">> = {};
+      const fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public">> = {};
       if (nombre) {
         if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
           alertBox.innerHTML = "<p>Ingresaste un nombre incorrecto.</p>";
@@ -576,6 +623,9 @@ function configMenu(profile: Profile) {
       }
       if (nacionalidad && nacionalidad !== profile.nacionalidad) {
         fields.nacionalidad = nacionalidad;
+      }
+      if (isPublic !== profile.is_public) {
+        fields.is_public = isPublic;
       }
 
       try {
@@ -613,34 +663,56 @@ function configMenu(profile: Profile) {
 // ---------- Armado de la pagina ----------
 
 async function main() {
-  const profile = await getProfile(viewId);
-  if (!profile) {
+  // getProfile trae la fila completa (incluye mail): solo la ven el dueño, un
+  // admin o un entrenador con rutinas asignadas al usuario, via RLS. Si no hay
+  // acceso completo, caemos a la vista publica (sin mail) para el resto de casos.
+  const profile = await getProfile(viewId!);
+  const basicProfile = profile ? null : await getProfileBasic(viewId!);
+  const displayProfile = profile ?? basicProfile;
+
+  if (!displayProfile) {
     const profileName = document.getElementById("profileName");
     if (profileName) profileName.textContent = "Este perfil no existe";
     return;
   }
 
   const profileName = document.getElementById("profileName");
-  if (profileName) profileName.textContent = isOwner ? `Hola, ${escapeHtml(profile.nombre)}` : `${escapeHtml(profile.nombre)} ${escapeHtml(profile.apellido)}`;
+  if (profileName) {
+    profileName.textContent = isOwner
+      ? `Hola, ${escapeHtml(displayProfile.nombre ?? "")}`
+      : `${escapeHtml(displayProfile.nombre ?? "")} ${escapeHtml(displayProfile.apellido ?? "")}`;
+  }
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();
     document.getElementById("config")?.remove();
     document.getElementById("adminLink")?.remove();
-  } else {
-    if (profile.user_type !== "admin") document.getElementById("adminLink")?.remove();
+  } else if (profile && profile.user_type !== "admin") {
+    document.getElementById("adminLink")?.remove();
   }
 
-  initAvatar(profile);
-  renderProfileBadges(profile);
-  renderProfileActions(isOwner);
-  renderQuickActions(profile.id, isOwner);
+  const avatarImg = document.getElementById("avatarImg") as HTMLImageElement | null;
+  if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
+  if (isOwner && profile) initAvatar(profile);
 
-  const logs = await listWeightLogsWithContext(profile.id);
-  const activeCount = await renderRoutines(profile.id, isOwner, logs);
+  renderProfileActions(displayProfile.id!, isOwner, myId !== null);
+
+  const isPrivateForViewer = !profile && !basicProfile?.is_public;
+
+  if (isPrivateForViewer) {
+    renderBasicBadges(basicProfile!);
+    renderPrivateNotice(basicProfile!.nombre ?? "Este usuario");
+    return;
+  }
+
+  renderProfileBadges(displayProfile);
+  renderQuickActions(displayProfile.id!, isOwner);
+
+  const logs = await listWeightLogsWithContext(displayProfile.id!);
+  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs);
   renderStats(logs, activeCount ?? 0);
 
-  if (isOwner) configMenu(profile);
+  if (isOwner && profile) configMenu(profile);
 }
 
 main();

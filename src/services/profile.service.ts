@@ -3,6 +3,7 @@ import type { Tables } from "../types/database";
 
 export type Profile = Tables<"profiles">;
 export type Routine = Tables<"routines">;
+export type ProfileBasic = Tables<"profiles_public">;
 
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
@@ -10,9 +11,15 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return data;
 }
 
+export async function getProfileBasic(userId: string): Promise<ProfileBasic | null> {
+  const { data, error } = await supabase.from("profiles_public").select("*").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function updateProfileFields(
   userId: string,
-  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad">>
+  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public">>
 ): Promise<void> {
   const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
   if (error) throw error;

@@ -10,6 +10,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -71,6 +73,7 @@ export type Database = {
           email: string
           fecha_nacimiento: string
           id: string
+          is_public: boolean
           nacionalidad: string | null
           nombre: string
           updated_at: string
@@ -84,6 +87,7 @@ export type Database = {
           email: string
           fecha_nacimiento: string
           id: string
+          is_public?: boolean
           nacionalidad?: string | null
           nombre: string
           updated_at?: string
@@ -97,6 +101,7 @@ export type Database = {
           email?: string
           fecha_nacimiento?: string
           id?: string
+          is_public?: boolean
           nacionalidad?: string | null
           nombre?: string
           updated_at?: string
@@ -386,7 +391,10 @@ export type Database = {
         Row: {
           apellido: string | null
           avatar_url: string | null
+          fecha_nacimiento: string | null
           id: string | null
+          is_public: boolean | null
+          nacionalidad: string | null
           nombre: string | null
           user_type: Database["public"]["Enums"]["user_type"] | null
           username: string | null
@@ -394,7 +402,10 @@ export type Database = {
         Insert: {
           apellido?: string | null
           avatar_url?: string | null
+          fecha_nacimiento?: string | null
           id?: string | null
+          is_public?: boolean | null
+          nacionalidad?: string | null
           nombre?: string | null
           user_type?: Database["public"]["Enums"]["user_type"] | null
           username?: string | null
@@ -402,7 +413,10 @@ export type Database = {
         Update: {
           apellido?: string | null
           avatar_url?: string | null
+          fecha_nacimiento?: string | null
           id?: string | null
+          is_public?: boolean | null
+          nacionalidad?: string | null
           nombre?: string | null
           user_type?: Database["public"]["Enums"]["user_type"] | null
           username?: string | null
@@ -440,6 +454,9 @@ export type Database = {
       can_access_day: { Args: { did: string }; Returns: boolean }
       can_access_routine: { Args: { rid: string }; Returns: boolean }
       can_access_week: { Args: { wid: string }; Returns: boolean }
+      can_view_day: { Args: { did: string }; Returns: boolean }
+      can_view_routine: { Args: { rid: string }; Returns: boolean }
+      can_view_week: { Args: { wid: string }; Returns: boolean }
       create_routine: {
         Args: {
           p_fecha_inicio: string
@@ -455,6 +472,7 @@ export type Database = {
       }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
+      is_profile_public: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
       exercise_category:
