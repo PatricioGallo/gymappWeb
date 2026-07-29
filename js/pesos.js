@@ -178,7 +178,9 @@ if(gymapp_id != null){
             const exc = dia.ejercicios[excIndex];
             exc.peso = peso;
             exc.fecha = fecha;
-            currentUser.historial.push({ peso, fecha, id_exc: exc.id_exc });
+            // serie/repe quedan pegados a cada registro historico para poder
+            // estimar despues el 1RM y el volumen (peso x series x repes).
+            currentUser.historial.push({ peso, fecha, id_exc: exc.id_exc, serie: exc.serie, repe: exc.repe });
             touched++;
         });
 

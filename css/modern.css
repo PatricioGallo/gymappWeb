@@ -1199,6 +1199,13 @@ a { color: inherit; text-decoration: none; }
 .chart-card .chart-sub { margin: 0 0 18px; font-size: 13px; color: var(--text-muted); }
 .chart-wrap { position: relative; height: 220px; }
 
+.chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 40px; }
+.chart-grid .chart-card { margin-top: 0; }
+
+@media (min-width: 860px) {
+  .chart-grid { grid-template-columns: 1fr 1fr; }
+}
+
 /* ---------- Routine tabs ---------- */
 
 .routine-tabs {
