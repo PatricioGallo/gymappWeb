@@ -1,0 +1,91 @@
+import { supabase } from "../lib/supabaseClient";
+import type { Enums } from "../types/database";
+
+export type UserType = Enums<"user_type">;
+
+export const USER_TYPE_OPTIONS: UserType[] = ["admin", "gimnasio", "entrenador", "usuario"];
+
+export const USER_TYPE_LABELS: Record<UserType, string> = {
+  admin: "Admin",
+  gimnasio: "Gimnasio",
+  entrenador: "Entrenador",
+  usuario: "Usuario",
+};
+
+export interface AdminUserRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  user_type: UserType;
+  fecha_nacimiento: string;
+  nacionalidad: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  email_confirmed: boolean;
+  routines_count: number;
+}
+
+export interface AdminSiteStats {
+  total_users: number;
+  users_by_type: Partial<Record<UserType, number>>;
+  new_users_last_30_days: number;
+  total_routines: number;
+  active_routines: number;
+  total_exercises: number;
+  custom_exercises: number;
+  total_weight_logs: number;
+  total_visits: number;
+  visits_today: number;
+  visits_last_7_days: number;
+  last_visit_at: string | null;
+}
+
+export interface AdminDailyVisit {
+  day: string;
+  count: number;
+}
+
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_admin");
+  if (error) return false;
+  return Boolean(data);
+}
+
+export async function getAdminSiteStats(): Promise<AdminSiteStats | null> {
+  const { data, error } = await supabase.rpc("admin_site_stats");
+  if (error) throw error;
+  return (data as unknown as AdminSiteStats) ?? null;
+}
+
+export async function getAdminDailyVisits(days = 14): Promise<AdminDailyVisit[]> {
+  const { data, error } = await supabase.rpc("admin_daily_visits", { p_days: days });
+  if (error) throw error;
+  return (data ?? []) as AdminDailyVisit[];
+}
+
+export async function listAllUsersAdmin(): Promise<AdminUserRow[]> {
+  const { data, error } = await supabase.rpc("admin_list_users");
+  if (error) throw error;
+  return (data ?? []) as AdminUserRow[];
+}
+
+export interface AdminEditableUserFields {
+  username?: string;
+  nombre?: string;
+  apellido?: string;
+  fecha_nacimiento?: string;
+  nacionalidad?: string;
+  user_type?: UserType;
+}
+
+export async function updateUserAsAdmin(userId: string, fields: AdminEditableUserFields): Promise<{ error?: string }> {
+  const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
+  if (error) {
+    if (error.code === "23505") return { error: "Ese nombre de usuario ya está en uso." };
+    return { error: "No se pudo guardar el usuario. Probá de nuevo." };
+  }
+  return {};
+}
