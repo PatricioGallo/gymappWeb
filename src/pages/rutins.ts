@@ -3,6 +3,7 @@ import { listExercises, type Exercise } from "../services/exercise.service";
 import { createRoutine, type NewDayInput } from "../services/routine.service";
 import { escapeHtml } from "../lib/dom";
 import { DIA_LABELS } from "../lib/dias";
+import { openExercisePicker } from "../lib/exercisePicker";
 
 setupNavToggle();
 setupRevealObserver();
@@ -14,18 +15,12 @@ const targetUserId = params.get("uid") ?? myId;
 const container = document.getElementById("container") as HTMLElement;
 let excCatalog: Exercise[] = [];
 
-function excOptions(): string {
-  return excCatalog.map((exc) => `<option value="${exc.id}">${escapeHtml(exc.name)}</option>`).join("");
-}
-
 function excBlockMarkup(): string {
   return `
     <div class="exc-block">
       <div class="exc-edit-row">
-        <select class="excSelectInput">
-          <option value="">Elegir ejercicio</option>
-          ${excOptions()}
-        </select>
+        <button type="button" class="exc-picker-btn">Elegir ejercicio</button>
+        <input type="hidden" class="excSelectInput" value="">
         <input type="number" class="mini-input serieInput" placeholder="Series" min="1" max="10">
         <input type="number" class="mini-input repeInput" placeholder="Repes" min="1" max="30">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
@@ -115,6 +110,13 @@ function renderBuilder(name: string, weeks: number, days: number) {
       const list = block?.parentElement;
       if (list && list.children.length > 1) block?.remove();
     }
+    if (target.classList.contains("exc-picker-btn")) {
+      const block = target.closest<HTMLElement>(".exc-block")!;
+      openExercisePicker(excCatalog, (exc) => {
+        target.textContent = exc.name;
+        block.querySelector<HTMLInputElement>(".excSelectInput")!.value = exc.id;
+      });
+    }
   });
 
   document.getElementById("createRoutine")?.addEventListener("click", () => submitRoutine(name, weeks));
@@ -131,7 +133,7 @@ async function submitRoutine(name: string, weeks: number) {
     const ejercicios: NewDayInput["ejercicios"] = [];
 
     dayCard.querySelectorAll(".exc-block").forEach((block, orden) => {
-      const excId = (block.querySelector(".excSelectInput") as HTMLSelectElement).value;
+      const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
       const serie = parseInt((block.querySelector(".serieInput") as HTMLInputElement).value, 10);
       const repe = parseInt((block.querySelector(".repeInput") as HTMLInputElement).value, 10);
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
