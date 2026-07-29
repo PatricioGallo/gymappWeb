@@ -6,7 +6,8 @@ export interface SignUpFields {
   nombre: string;
   apellido: string;
   username: string;
-  edad: number;
+  fechaNacimiento: string;
+  nacionalidad: string;
 }
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
@@ -42,7 +43,8 @@ export async function signUp(fields: SignUpFields): Promise<{ error?: string }> 
         nombre: fields.nombre,
         apellido: fields.apellido,
         username,
-        edad: fields.edad,
+        fecha_nacimiento: fields.fechaNacimiento,
+        nacionalidad: fields.nacionalidad,
       },
     },
   });

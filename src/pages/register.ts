@@ -2,6 +2,8 @@ import { setupNavToggle, setupRevealObserver, redirectIfAuthenticated } from "..
 import { signUp, isUsernameAvailable, isValidUsername, normalizeUsername } from "../services/auth.service";
 import { escapeHtml } from "../lib/dom";
 import { supabase } from "../lib/supabaseClient";
+import { calcularEdad } from "../lib/age";
+import { COUNTRIES } from "../lib/countries";
 
 setupNavToggle();
 setupRevealObserver();
@@ -10,6 +12,13 @@ await redirectIfAuthenticated();
 const form = document.getElementById("myForm") as HTMLFormElement | null;
 const alertMessage = document.getElementById("alert_message");
 const loaderBody = document.getElementById("loaderBody");
+
+const nationalitySelect = document.getElementById("nationality") as HTMLSelectElement | null;
+if (nationalitySelect) {
+  nationalitySelect.innerHTML =
+    `<option value="">Elegí tu nacionalidad</option>` +
+    COUNTRIES.map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join("");
+}
 
 function showError(message: string): void {
   if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(message)}</p>`;
@@ -23,11 +32,11 @@ form?.addEventListener("submit", async (event) => {
   const apellido = (document.getElementById("surn") as HTMLInputElement).value.trim();
   const username = normalizeUsername((document.getElementById("username") as HTMLInputElement).value);
   const mail = (document.getElementById("mail") as HTMLInputElement).value.trim();
-  const edadStr = (document.getElementById("age") as HTMLInputElement).value;
+  const fechaNacimiento = (document.getElementById("birthdate") as HTMLInputElement).value;
+  const nacionalidad = (document.getElementById("nationality") as HTMLSelectElement).value;
   const pass = (document.getElementById("pass") as HTMLInputElement).value;
   const pass2 = (document.getElementById("pass2") as HTMLInputElement).value;
   const terms = (document.getElementById("terms") as HTMLInputElement).checked;
-  const edad = Number(edadStr);
 
   if (nombre.length < 2 || !Number.isNaN(Number(nombre)) || apellido.length < 2 || !Number.isNaN(Number(apellido))) {
     showError("ERROR! Nombre o apellido inválidos.");
@@ -41,8 +50,12 @@ form?.addEventListener("submit", async (event) => {
     showError("ERROR! Contraseñas no coinciden o muy corta (mínimo 8 caracteres).");
     return;
   }
-  if (Number.isNaN(edad) || edad < 12 || edad > 100) {
-    showError("ERROR! Edad no es correcta.");
+  if (!fechaNacimiento || Number.isNaN(Date.parse(fechaNacimiento)) || calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
+    showError("ERROR! Ingresá una fecha de nacimiento válida (entre 12 y 100 años).");
+    return;
+  }
+  if (!nacionalidad) {
+    showError("ERROR! Elegí tu nacionalidad.");
     return;
   }
   if (!terms) {
@@ -66,7 +79,7 @@ form?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const { error } = await signUp({ email: mail, password: pass, nombre, apellido, username, edad });
+  const { error } = await signUp({ email: mail, password: pass, nombre, apellido, username, fechaNacimiento, nacionalidad });
 
   if (error) {
     if (loaderBody) loaderBody.innerHTML = "";

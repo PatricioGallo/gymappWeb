@@ -12,7 +12,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
 export async function updateProfileFields(
   userId: string,
-  fields: Partial<Pick<Profile, "nombre" | "apellido" | "edad">>
+  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad">>
 ): Promise<void> {
   const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
   if (error) throw error;

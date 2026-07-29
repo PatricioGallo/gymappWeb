@@ -68,9 +68,10 @@ export type Database = {
           apellido: string
           avatar_url: string | null
           created_at: string
-          edad: number
           email: string
+          fecha_nacimiento: string
           id: string
+          nacionalidad: string | null
           nombre: string
           updated_at: string
           user_type: Database["public"]["Enums"]["user_type"]
@@ -80,9 +81,10 @@ export type Database = {
           apellido: string
           avatar_url?: string | null
           created_at?: string
-          edad: number
           email: string
+          fecha_nacimiento: string
           id: string
+          nacionalidad?: string | null
           nombre: string
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
@@ -92,9 +94,10 @@ export type Database = {
           apellido?: string
           avatar_url?: string | null
           created_at?: string
-          edad?: number
           email?: string
+          fecha_nacimiento?: string
           id?: string
+          nacionalidad?: string | null
           nombre?: string
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]

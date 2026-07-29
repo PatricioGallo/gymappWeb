@@ -2,6 +2,8 @@ import { setupNavToggle, setupRevealObserver } from "../lib/nav";
 import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
+import { calcularEdad } from "../lib/age";
+import { COUNTRIES } from "../lib/countries";
 import {
   getProfile,
   updateProfileFields,
@@ -153,7 +155,8 @@ function renderProfileBadges(profile: Profile) {
   if (!badges) return;
   badges.innerHTML = `
     <span class="profile-badge">${escapeHtml(USER_TYPE_LABELS[profile.user_type] ?? "Usuario")}</span>
-    <span class="profile-badge">${profile.edad} años</span>
+    <span class="profile-badge">${calcularEdad(profile.fecha_nacimiento)} años</span>
+    ${profile.nacionalidad ? `<span class="profile-badge">${escapeHtml(profile.nacionalidad)}</span>` : ""}
     <span class="profile-badge">@${escapeHtml(profile.username)}</span>
   `;
 }
@@ -514,6 +517,13 @@ function configMenu(profile: Profile) {
           <p class="subtitle">Dejá vacío lo que no quieras cambiar.</p>
           <div class="field"><label for="userName">Nombre</label><input type="text" placeholder="${escapeHtml(profile.nombre)}" id="userName"></div>
           <div class="field"><label for="sname">Apellido</label><input type="text" placeholder="${escapeHtml(profile.apellido)}" id="sname"></div>
+          <div class="field"><label for="birthdateField">Fecha de nacimiento</label><input type="date" id="birthdateField" value="${profile.fecha_nacimiento}"></div>
+          <div class="field">
+            <label for="nationalityField">Nacionalidad</label>
+            <select id="nationalityField">
+              ${COUNTRIES.map((country) => `<option value="${escapeHtml(country)}" ${country === profile.nacionalidad ? "selected" : ""}>${escapeHtml(country)}</option>`).join("")}
+            </select>
+          </div>
           <div class="field"><label for="mailField">Mail</label><input type="email" placeholder="${escapeHtml(profile.email)}" id="mailField"></div>
           <div class="field"><label for="pswd">Contraseña nueva</label><input type="password" placeholder="••••••••••••" id="pswd"></div>
           <div class="alert_message" id="configAlert"></div>
@@ -532,15 +542,17 @@ function configMenu(profile: Profile) {
 
       const nombre = (document.getElementById("userName") as HTMLInputElement).value.trim();
       const apellido = (document.getElementById("sname") as HTMLInputElement).value.trim();
+      const fechaNacimiento = (document.getElementById("birthdateField") as HTMLInputElement).value;
+      const nacionalidad = (document.getElementById("nationalityField") as HTMLSelectElement).value;
       const mail = (document.getElementById("mailField") as HTMLInputElement).value.trim();
       const pass = (document.getElementById("pswd") as HTMLInputElement).value;
 
-      if (!nombre && !apellido && !mail && !pass) {
+      if (!nombre && !apellido && !mail && !pass && fechaNacimiento === profile.fecha_nacimiento && nacionalidad === profile.nacionalidad) {
         alertBox.innerHTML = "<p>Ingresá al menos un valor para cambiar.</p>";
         return;
       }
 
-      const fields: Partial<Pick<Profile, "nombre" | "apellido">> = {};
+      const fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad">> = {};
       if (nombre) {
         if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
           alertBox.innerHTML = "<p>Ingresaste un nombre incorrecto.</p>";
@@ -554,6 +566,16 @@ function configMenu(profile: Profile) {
           return;
         }
         fields.apellido = apellido;
+      }
+      if (fechaNacimiento && fechaNacimiento !== profile.fecha_nacimiento) {
+        if (calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
+          alertBox.innerHTML = "<p>Ingresaste una fecha de nacimiento incorrecta.</p>";
+          return;
+        }
+        fields.fecha_nacimiento = fechaNacimiento;
+      }
+      if (nacionalidad && nacionalidad !== profile.nacionalidad) {
+        fields.nacionalidad = nacionalidad;
       }
 
       try {
