@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymApp - Ingresar</title>
+<meta name="keywords" content="GymApp, fitness, entrenamiento, gimnasio, ingresar, login">
+<meta name="description" content="Ingresá a tu cuenta de GymApp para seguir tus rutinas y tu progreso.">
+<meta name="author" content="GymApp Team">
+<meta name="robots" content="noindex, follow">
+<meta name="language" content="es">
+<link rel="icon" href="/images/fevicon.png" type="image/gif" />
+<link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <img src="/images/logo.png" alt="GymApp">
+        <span>GymApp</span>
+      </a>
+
+      <nav class="site-nav" id="siteNav">
+        <a href="../index.html">Inicio</a>
+        <a href="about.html">Nosotros</a>
+        <a href="services.html">Servicios</a>
+        <a href="contact.html">Contactanos</a>
+        <a href="login.html" class="accent active">Ingresar</a>
+        <a href="register.html" class="btn btn-primary nav-cta">Registrate gratis</a>
+      </nav>
+
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="auth-section">
+    <div class="container">
+      <div class="auth-card reveal">
+        <span class="eyebrow">Ingresar</span>
+        <h1>Ya te extrañábamos</h1>
+        <p class="subtitle">Ingresá con tu mail y contraseña para seguir con tu rutina.</p>
+
+        <div id="loaderBody"></div>
+
+        <form id="myForm" novalidate>
+          <div class="field">
+            <label for="mail">Mail</label>
+            <input type="email" id="mail" name="mail" placeholder="tu@mail.com" autocomplete="email">
+          </div>
+
+          <div class="field">
+            <label for="pass">Contraseña</label>
+            <input type="password" id="pass" name="pass" placeholder="Tu contraseña" autocomplete="current-password">
+          </div>
+
+          <div class="alert_message" id="alert_message"></div>
+
+          <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+        </form>
+
+        <p class="auth-foot">¿Todavía no tenés cuenta? <a href="register.html">Registrate gratis</a></p>
+      </div>
+
+      <div class="auth-trust">
+        <span class="hero-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 11h16"/></svg>
+          100% gratis, en etapa de prueba
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="../index.html">
+            <img src="/images/logo.png" alt="GymApp">
+            <span>GymApp</span>
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+        </div>
+
+        <nav class="footer-links">
+          <a href="../index.html">Inicio</a>
+          <a href="about.html">Nosotros</a>
+          <a href="services.html">Servicios</a>
+          <a href="contact.html">Contactanos</a>
+          <a href="login.html">Ingresar</a>
+          <a href="register.html">Registro</a>
+        </nav>
+
+        <div class="footer-social">
+          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 GymApp. Todos los derechos reservados.</span>
+        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/pages/login.ts"></script>
+</body>
+</html>

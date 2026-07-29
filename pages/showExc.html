@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymApp - Rutina</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="language" content="es">
+<link rel="icon" href="/images/fevicon.png" type="image/gif" />
+<link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <img src="/images/logo.png" alt="GymApp">
+        <span>GymApp</span>
+      </a>
+
+      <nav class="site-nav" id="siteNav"></nav>
+
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div id="loaderBody"></div>
+
+  <section class="page-hero">
+    <div class="container">
+      <span class="eyebrow">Rutina</span>
+      <h1 id="routineTitle">Cargando...</h1>
+      <p id="routineSubtitle"></p>
+
+      <div class="profile-actions" id="routineActions">
+        <button class="btn btn-outline" id="shareBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
+          Compartir rutina
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="week-status" id="weekStatus"></div>
+
+      <div id="weekContent"></div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="../index.html">
+            <img src="/images/logo.png" alt="GymApp">
+            <span>GymApp</span>
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+        </div>
+
+        <div class="footer-social">
+          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 GymApp. Todos los derechos reservados.</span>
+        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/pages/showExc.ts"></script>
+</body>
+</html>
