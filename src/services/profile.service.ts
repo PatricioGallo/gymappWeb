@@ -11,8 +11,14 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return data;
 }
 
-export async function getProfileBasic(userId: string): Promise<ProfileBasic | null> {
-  const { data, error } = await supabase.from("profiles_public").select("*").eq("id", userId).maybeSingle();
+export async function getProfileByUsername(username: string): Promise<Profile | null> {
+  const { data, error } = await supabase.from("profiles").select("*").eq("username", username).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function getProfileBasicByUsername(username: string): Promise<ProfileBasic | null> {
+  const { data, error } = await supabase.from("profiles_public").select("*").eq("username", username).maybeSingle();
   if (error) throw error;
   return data;
 }
