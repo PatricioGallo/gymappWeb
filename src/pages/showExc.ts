@@ -46,7 +46,7 @@ function initShare(getShareUrl: () => Promise<string>, routineName: string, owne
     try {
       const url = await getShareUrl();
       if (navigator.share) {
-        await navigator.share({ title: `Rutina de ${ownerName} - GymApp`, text: `Mirá la rutina "${routineName}" en GymApp`, url });
+        await navigator.share({ title: `Rutina de ${ownerName} - Gym Social`, text: `Mirá la rutina "${routineName}" en Gym Social`, url });
         return;
       }
       await navigator.clipboard.writeText(url);
@@ -165,7 +165,7 @@ function renderWeekContent(diasBase: RoutineDetail["semanas"][number]["dias"], w
       event.stopPropagation();
       const dia = diasBase[Number(button.dataset.dia)];
       const exc = dia.ejercicios[Number(button.dataset.exc)];
-      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "GymApp", exc.category, exc.image_url);
+      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
     });
   });
 }
@@ -234,7 +234,7 @@ async function renderShared(token: string) {
         event.stopPropagation();
         const dia = diasBase[Number(button.dataset.dia)];
         const exc = dia.ejercicios[Number(button.dataset.exc)];
-        openExerciseModal(exc.nombre, exc.info, exc.nota, "GymApp", exc.category, exc.image_url);
+        openExerciseModal(exc.nombre, exc.info, exc.nota, "Gym Social", exc.category, exc.image_url);
       });
     });
   }

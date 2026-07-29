@@ -144,10 +144,10 @@ export async function listWeightLogsWithContext(userId: string): Promise<WeightL
     exerciseId: row.exercise_id,
     exerciseName: row.exercises?.name ?? "Ejercicio",
     authorName: row.exercises?.is_builtin
-      ? "GymApp"
+      ? "Gym Social"
       : row.exercises?.profiles
         ? `${row.exercises.profiles.nombre} ${row.exercises.profiles.apellido}`
-        : "GymApp",
+        : "Gym Social",
     routineExerciseId: row.routine_exercises?.id ?? null,
     routineId: row.routine_exercises?.routine_days?.routine_weeks?.routine_id ?? null,
     weekNumero: row.routine_exercises?.routine_days?.routine_weeks?.numero ?? null,
