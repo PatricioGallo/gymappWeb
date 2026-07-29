@@ -6,15 +6,15 @@
 <title>GymApp - Mi Perfil</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
-<link rel="icon" href="../images/fevicon.png" type="image/gif" />
-<link rel="stylesheet" href="../css/modern.css">
+<link rel="icon" href="/images/fevicon.png" type="image/gif" />
+<link rel="stylesheet" href="/css/modern.css">
 </head>
 <body>
 
   <header class="site-header">
     <div class="container">
       <a class="brand" href="profile.html">
-        <img src="../images/logo.png" alt="GymApp">
+        <img src="/images/logo.png" alt="GymApp">
         <span>GymApp</span>
       </a>
 
@@ -35,7 +35,7 @@
   <section class="profile-hero">
     <div class="container">
       <div class="avatar-wrap">
-        <img src="../images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
+        <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
         <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
           <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
@@ -86,7 +86,7 @@
       <div class="footer-top">
         <div class="footer-brand">
           <a class="brand" href="profile.html">
-            <img src="../images/logo.png" alt="GymApp">
+            <img src="/images/logo.png" alt="GymApp">
             <span>GymApp</span>
           </a>
           <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
@@ -112,8 +112,7 @@
     </div>
   </footer>
 
-  <script src="../js/ui.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="../js/main.js"></script>
+  <script type="module" src="/src/pages/profile.ts"></script>
 </body>
 </html>
