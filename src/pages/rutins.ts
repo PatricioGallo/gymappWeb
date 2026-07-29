@@ -1,5 +1,5 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
-import { listExercises, type Exercise } from "../services/exercise.service";
+import { listExercises, CATEGORY_LABELS, EXERCISE_CATEGORIES, type Exercise } from "../services/exercise.service";
 import { createRoutine, type NewDayInput } from "../services/routine.service";
 import { escapeHtml } from "../lib/dom";
 import { DIA_LABELS } from "../lib/dias";
@@ -15,7 +15,12 @@ const container = document.getElementById("container") as HTMLElement;
 let excCatalog: Exercise[] = [];
 
 function excOptions(): string {
-  return excCatalog.map((exc) => `<option value="${exc.id}">${escapeHtml(exc.name)}</option>`).join("");
+  return EXERCISE_CATEGORIES.map((cat) => {
+    const items = excCatalog.filter((exc) => exc.category === cat);
+    if (items.length === 0) return "";
+    const opts = items.map((exc) => `<option value="${exc.id}">${escapeHtml(exc.name)}</option>`).join("");
+    return `<optgroup label="${escapeHtml(CATEGORY_LABELS[cat])}">${opts}</optgroup>`;
+  }).join("");
 }
 
 function excBlockMarkup(): string {

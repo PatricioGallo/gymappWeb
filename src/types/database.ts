@@ -18,24 +18,30 @@ export type Database = {
       exercises: {
         Row: {
           author_id: string | null
+          category: Database["public"]["Enums"]["exercise_category"]
           created_at: string
           id: string
+          image_url: string | null
           info: string
           is_builtin: boolean
           name: string
         }
         Insert: {
           author_id?: string | null
+          category: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
+          image_url?: string | null
           info: string
           is_builtin?: boolean
           name: string
         }
         Update: {
           author_id?: string | null
+          category?: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
+          image_url?: string | null
           info?: string
           is_builtin?: boolean
           name?: string
@@ -386,6 +392,14 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
+      exercise_category:
+        | "hombros"
+        | "pectorales"
+        | "espalda"
+        | "brazos"
+        | "abdominales"
+        | "piernas"
+        | "estiramiento"
       user_type: "admin" | "gimnasio" | "entrenador" | "usuario"
     }
     CompositeTypes: {
@@ -514,6 +528,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      exercise_category: [
+        "hombros",
+        "pectorales",
+        "espalda",
+        "brazos",
+        "abdominales",
+        "piernas",
+        "estiramiento",
+      ],
       user_type: ["admin", "gimnasio", "entrenador", "usuario"],
     },
   },

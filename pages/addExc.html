@@ -47,6 +47,25 @@
             <textarea id="description" name="description" rows="5" placeholder="Cómo se hace, en qué fijarse (mínimo 100 caracteres)"></textarea>
           </div>
 
+          <div class="field">
+            <label for="category">Categoría</label>
+            <select id="category" name="category">
+              <option value="">Elegí una categoría</option>
+              <option value="hombros">Hombros</option>
+              <option value="pectorales">Pectorales</option>
+              <option value="espalda">Espalda</option>
+              <option value="brazos">Brazos</option>
+              <option value="abdominales">Abdominales</option>
+              <option value="piernas">Piernas</option>
+              <option value="estiramiento">Estiramiento</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="imageUrl">Imagen ilustrativa (opcional)</label>
+            <input type="url" id="imageUrl" name="imageUrl" placeholder="https://ejemplo.com/imagen.jpg">
+          </div>
+
           <div class="alert_message" id="alert_message"></div>
 
           <button type="submit" class="btn btn-primary btn-block">Agregar ejercicio</button>

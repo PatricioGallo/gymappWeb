@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, getSharedRoutine, setRoutineShareable, type RoutineDetail } from "../services/routine.service";
+import { CATEGORY_LABELS, type ExerciseCategory } from "../services/exercise.service";
 
 setupNavToggle();
 setupRevealObserver();
@@ -59,13 +60,23 @@ function initShare(getShareUrl: () => Promise<string>, routineName: string, owne
   });
 }
 
-function openExerciseModal(nombre: string, info: string, nota: string | null, authorLabel: string) {
+function openExerciseModal(
+  nombre: string,
+  info: string,
+  nota: string | null,
+  authorLabel: string,
+  category?: string | null,
+  imageUrl?: string | null
+) {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
+  const categoryLabel = category ? CATEGORY_LABELS[category as ExerciseCategory] : null;
   loaderBody.innerHTML = `
     <div class="success-check-container">
       <div class="modal-card">
         <h2>${escapeHtml(nombre)}</h2>
+        ${categoryLabel ? `<span class="hero-badge">${escapeHtml(categoryLabel)}</span>` : ""}
+        ${imageUrl ? `<img class="exc-modal-image" src="${escapeHtml(imageUrl)}" alt="Ejecución de ${escapeHtml(nombre)}" loading="lazy">` : ""}
         <p class="subtitle">${escapeHtml(info || "Sin descripción cargada.")}</p>
         ${
           nota
@@ -154,7 +165,7 @@ function renderWeekContent(diasBase: RoutineDetail["semanas"][number]["dias"], w
       event.stopPropagation();
       const dia = diasBase[Number(button.dataset.dia)];
       const exc = dia.ejercicios[Number(button.dataset.exc)];
-      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, (exc as any).authorName ?? "GymApp");
+      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "GymApp", exc.category, exc.image_url);
     });
   });
 }
@@ -223,7 +234,7 @@ async function renderShared(token: string) {
         event.stopPropagation();
         const dia = diasBase[Number(button.dataset.dia)];
         const exc = dia.ejercicios[Number(button.dataset.exc)];
-        openExerciseModal(exc.nombre, exc.info, exc.nota, "GymApp");
+        openExerciseModal(exc.nombre, exc.info, exc.nota, "GymApp", exc.category, exc.image_url);
       });
     });
   }

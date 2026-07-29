@@ -1,7 +1,7 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
-import { listExercises, type Exercise } from "../services/exercise.service";
+import { listExercises, CATEGORY_LABELS, EXERCISE_CATEGORIES, type Exercise } from "../services/exercise.service";
 import {
   getRoutineDetail,
   updateRoutineExercise,
@@ -22,7 +22,14 @@ let excCatalog: Exercise[] = [];
 let routine: RoutineDetail | null = null;
 
 function excOptions(selectedId?: string): string {
-  return excCatalog.map((exc) => `<option value="${exc.id}" ${exc.id === selectedId ? "selected" : ""}>${escapeHtml(exc.name)}</option>`).join("");
+  return EXERCISE_CATEGORIES.map((cat) => {
+    const items = excCatalog.filter((exc) => exc.category === cat);
+    if (items.length === 0) return "";
+    const opts = items
+      .map((exc) => `<option value="${exc.id}" ${exc.id === selectedId ? "selected" : ""}>${escapeHtml(exc.name)}</option>`)
+      .join("");
+    return `<optgroup label="${escapeHtml(CATEGORY_LABELS[cat])}">${opts}</optgroup>`;
+  }).join("");
 }
 
 function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {

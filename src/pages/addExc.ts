@@ -1,5 +1,5 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
-import { validateNewExercise, addExercise } from "../services/exercise.service";
+import { validateNewExercise, addExercise, type ExerciseCategory } from "../services/exercise.service";
 import { escapeHtml } from "../lib/dom";
 
 setupNavToggle();
@@ -15,16 +15,20 @@ const ERROR_LABELS: Record<string, string> = {
   name_long: "Nombre del ejercicio muy largo.",
   info_short: "Descripción del ejercicio muy corta (mínimo 100 caracteres).",
   info_long: "Descripción del ejercicio muy larga (máximo 600 caracteres).",
+  category_missing: "Elegí una categoría para el ejercicio.",
+  image_url_invalid: "La imagen tiene que ser una URL http(s) válida.",
 };
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = (document.getElementById("excName") as HTMLInputElement).value.trim();
   const info = (document.getElementById("description") as HTMLTextAreaElement).value.trim();
+  const category = (document.getElementById("category") as HTMLSelectElement).value;
+  const imageUrl = (document.getElementById("imageUrl") as HTMLInputElement).value.trim();
 
   if (alertMessage) alertMessage.innerHTML = "";
 
-  const validationError = validateNewExercise(name, info);
+  const validationError = validateNewExercise(name, info, category, imageUrl);
   if (validationError) {
     if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(ERROR_LABELS[validationError])}</p>`;
     return;
@@ -39,7 +43,7 @@ form?.addEventListener("submit", async (event) => {
     `;
   }
 
-  const { error } = await addExercise(userId, name, info);
+  const { error } = await addExercise(userId, name, info, category as ExerciseCategory, imageUrl);
   if (error) {
     if (loaderBody) loaderBody.innerHTML = "";
     if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(error)}</p>`;
