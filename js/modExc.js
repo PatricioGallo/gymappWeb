@@ -1,4 +1,4 @@
-// GymApp — modificar los ejercicios de una rutina (pages/excView.html)
+// GymApp — modificar una rutina: ejercicios, series, repes (pages/excView.html)
 
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
@@ -10,24 +10,42 @@ if(gymapp_id != null){
     let currentUser = null;
     let currentRutina = null;
 
+    function excOptions(selectedId) {
+        return exc_api_array.map((exc) => `<option value="${exc.id}" ${String(exc.id) === String(selectedId) ? 'selected' : ''}>${exc.name}</option>`).join('');
+    }
+
+    function excBlockMarkup(exc) {
+        const isNoWeight = exc ? exc.peso_anterior === -1 : false;
+        return `
+            <div class="exc-block" data-peso="${exc ? exc.peso : 0}" data-fecha="${exc ? (exc.fecha || '') : ''}">
+                <div class="exc-edit-row">
+                    <select class="excSelectInput">
+                        <option value="">Elegir ejercicio</option>
+                        ${excOptions(exc ? exc.id_exc : undefined)}
+                    </select>
+                    <input type="number" class="mini-input serieInput" value="${exc ? exc.serie : ''}" placeholder="Series" min="1" max="10">
+                    <input type="number" class="mini-input repeInput" value="${exc ? exc.repe : ''}" placeholder="Repes" min="1" max="30">
+                    <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
+                </div>
+                <div class="exc-extra">
+                    <label><input type="checkbox" class="noWeightCheck" ${isNoWeight ? 'checked' : ''}> Sin peso</label>
+                    <input type="text" class="notaInput" placeholder="Nota para este ejercicio (opcional)" maxlength="140" value="${exc && exc.nota ? exc.nota : ''}">
+                </div>
+            </div>
+        `;
+    }
+
     function renderWeek(weekIndex) {
         const semana = currentRutina.semanas[weekIndex];
         const weekContent = document.getElementById('weekContent');
         weekContent.dataset.week = weekIndex;
 
-        weekContent.innerHTML = semana.dias.map((dia, diaIndex) => `
+        weekContent.innerHTML = semana.dias.map((dia) => `
             <div class="day-card reveal">
                 <h3>${dia.nombre}</h3>
                 <div class="exc-edit-header"><span>Ejercicio</span><span>Series</span><span>Repes</span></div>
-                ${dia.ejercicios.map((exc, excIndex) => `
-                    <div class="exc-edit-row" data-dia="${diaIndex}" data-exc="${excIndex}">
-                        <select class="excSelectInput">
-                            ${exc_api_array.map((e) => `<option value="${e.id}" ${e.id == exc.id_exc ? 'selected' : ''}>${e.name}</option>`).join('')}
-                        </select>
-                        <input type="number" class="mini-input serieInput" value="${exc.serie}" placeholder="Series" min="1" max="10">
-                        <input type="number" class="mini-input repeInput" value="${exc.repe}" placeholder="Repes" min="1" max="30">
-                    </div>
-                `).join('')}
+                <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(exc)).join('')}</div>
+                <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
             </div>
         `).join('');
     }
@@ -36,39 +54,58 @@ if(gymapp_id != null){
         const alert_message = document.getElementById('alert_message');
         const weekIndex = Number(document.getElementById('weekContent').dataset.week);
         const semana = currentRutina.semanas[weekIndex];
-        let error = false;
+        const dayCards = document.querySelectorAll('#weekContent .day-card');
+        let error = '';
 
-        document.querySelectorAll('.exc-edit-row').forEach((row) => {
-            const diaIndex = Number(row.dataset.dia);
-            const excIndex = Number(row.dataset.exc);
-            const excId = row.querySelector('.excSelectInput').value;
-            const serie = parseInt(row.querySelector('.serieInput').value);
-            const repe = parseInt(row.querySelector('.repeInput').value);
+        const newDias = Array.from(dayCards).map((dayCard, diaIndex) => {
+            const ejercicios = [];
 
-            if (!excId || isNaN(serie) || isNaN(repe) || serie < 1 || serie > 10 || repe < 1 || repe > 30) {
-                error = true;
-                return;
-            }
+            dayCard.querySelectorAll('.exc-block').forEach((block) => {
+                if (error) return;
+                const excId = block.querySelector('.excSelectInput').value;
+                const serie = parseInt(block.querySelector('.serieInput').value);
+                const repe = parseInt(block.querySelector('.repeInput').value);
+                const noWeight = block.querySelector('.noWeightCheck').checked;
+                const nota = block.querySelector('.notaInput').value.trim();
 
-            const excDef = exc_api_array.find((e) => String(e.id) === String(excId));
-            const target = semana.dias[diaIndex].ejercicios[excIndex];
-            target.id_exc = excDef.id;
-            target.nombre = excDef.name;
-            target.info = excDef.info;
-            target.serie = serie;
-            target.repe = repe;
+                if (!excId) { error = 'Elegí un ejercicio en cada fila.'; return; }
+                if (!serie || serie < 1 || serie > 10) { error = 'Las series tienen que ser entre 1 y 10.'; return; }
+                if (!repe || repe < 1 || repe > 30) { error = 'Las repeticiones tienen que ser entre 1 y 30.'; return; }
+                if (nota.length > 140) { error = 'Las notas tienen un máximo de 140 caracteres.'; return; }
+
+                const excDef = exc_api_array.find((e) => String(e.id) === String(excId));
+                const prevPeso = noWeight ? -1 : Number(block.dataset.peso || 0);
+                const prevFecha = noWeight ? '' : (block.dataset.fecha || '');
+
+                ejercicios.push({
+                    nombre: excDef.name,
+                    info: excDef.info,
+                    id_exc: excDef.id,
+                    serie,
+                    repe,
+                    nota,
+                    peso_anterior: noWeight ? -1 : 0,
+                    peso: prevPeso,
+                    fecha: prevFecha
+                });
+            });
+
+            if (!error && ejercicios.length === 0) error = 'Agregá al menos un ejercicio en cada día.';
+            return { nombre: semana.dias[diaIndex].nombre, ejercicios };
         });
 
         if (error) {
-            alert_message.innerHTML = `<p>Revisá los valores: series entre 1 y 10, repeticiones entre 1 y 30.</p>`;
+            alert_message.innerHTML = `<p>${error}</p>`;
             return;
         }
+
+        semana.dias = newDias;
 
         alert_message.innerHTML = '';
         const loaderBody = document.getElementById('loaderBody');
         loaderBody.innerHTML = `
             <div class="loader-container">
-                <div class="modern-spinner"><div></div><div></div><div></div><div></div></div>
+                <div class="modern-spinner"></div>
                 <p>Actualizando rutina...</p>
             </div>
         `;
@@ -129,12 +166,25 @@ if(gymapp_id != null){
             }
 
             document.getElementById('routineTitle').textContent = currentRutina.nombre;
-            document.getElementById('routineSubtitle').textContent = 'Elegí la semana y editá el ejercicio, las series o las repeticiones de cada día.';
+            document.getElementById('routineSubtitle').textContent = 'Elegí la semana, agregá o quitá ejercicios y editá series, repeticiones o notas de cada día.';
 
             const weekSelect = document.getElementById('weekSelect');
             weekSelect.innerHTML = currentRutina.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join('');
             weekSelect.addEventListener('change', () => renderWeek(Number(weekSelect.value)));
             renderWeek(0);
+
+            // Delegado una sola vez: weekContent se re-arma en cada renderWeek,
+            // pero el elemento en si nunca cambia.
+            document.getElementById('weekContent').addEventListener('click', (event) => {
+                if (event.target.classList.contains('day-add-btn')) {
+                    event.target.previousElementSibling.insertAdjacentHTML('beforeend', excBlockMarkup());
+                }
+                if (event.target.classList.contains('exc-remove')) {
+                    const block = event.target.closest('.exc-block');
+                    const list = block.parentElement;
+                    if (list.children.length > 1) block.remove();
+                }
+            });
 
             document.getElementById('saveChanges').addEventListener('click', saveChanges);
         } catch (error) {

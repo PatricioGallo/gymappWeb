@@ -42,7 +42,7 @@ if(gymapp_id != null){
             const loaderBody = document.getElementById('loaderBody');
             loaderBody.innerHTML = `
                 <div class="loader-container">
-                    <div class="modern-spinner"><div></div><div></div><div></div><div></div></div>
+                    <div class="modern-spinner"></div>
                     <p>Eliminando rutina...</p>
                 </div>
             `;

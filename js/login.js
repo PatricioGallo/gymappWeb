@@ -10,12 +10,7 @@ if(gymapp_id == null){
         let loaderBody = document.getElementById("loaderBody");
         loaderBody.innerHTML = `
         <div id="loading" class="loader-container">
-            <div class="modern-spinner">
-                <div></div>
-                <div></div>
-                <div></div>
-                <div></div>
-            </div>
+            <div class="modern-spinner"></div>
             <p>Ingresando...</p>
         </div>
         `
@@ -33,6 +28,12 @@ if(gymapp_id == null){
             case 2:
                 loaderBody.innerHTML = `
                     <div id="success-check" class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
                         <p>¡Bienvenido!</p>
                     </div>
                 `;

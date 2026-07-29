@@ -456,68 +456,149 @@ if(gymapp_id != null){
 
     // ---------- Rutinas ----------
 
+    let activeRoutineTab = 'active';
+
+    function formatToday() {
+        const d = new Date();
+        return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+    }
+
+    function routineStatsMarkup(rutina) {
+        const pct = porcentaje(rutina);
+        const week = last_week(rutina);
+        const day = last_day(rutina);
+        const lastProgress = (week === "sin entreno previo" || day === "sin entreno previo")
+            ? "Sin entrenos registrados"
+            : `Semana ${week} · ${day}`;
+
+        return `
+            <div class="routine-stats">
+                <div><span>Semanas</span><strong>${arraysCount(rutina.semanas)}</strong></div>
+                <div><span>Días por semana</span><strong>${arraysCount(rutina.semanas[0].dias)}</strong></div>
+                <div><span>Ejercicios</span><strong>${excCount(rutina.semanas[0].dias)}</strong></div>
+                <div><span>Último progreso</span><strong>${lastProgress}</strong></div>
+            </div>
+            <div class="routine-progress">
+                <div class="routine-progress-head"><span>Progreso de la rutina</span><strong>${pct}%</strong></div>
+                <div class="routine-progress-bar"><span style="width:${pct}%"></span></div>
+            </div>
+        `;
+    }
+
     function renderRoutines(user, userId, ownerView) {
         const routinesContent = document.getElementById('routinesContent');
+        const routinesTitle = document.getElementById('routinesTitle');
+        const tabsWrap = document.getElementById('routineTabs');
         if (!routinesContent) return;
 
-        if (!user.rutinas || user.rutinas.length === 0) {
+        user.rutinas = user.rutinas || [];
+        user.rutinasHistoricas = user.rutinasHistoricas || [];
+
+        if (tabsWrap) {
+            tabsWrap.querySelectorAll('.routine-tab').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === activeRoutineTab);
+                btn.onclick = () => {
+                    activeRoutineTab = btn.dataset.tab;
+                    renderRoutines(user, userId, ownerView);
+                };
+            });
+        }
+
+        if (routinesTitle) {
+            routinesTitle.textContent = activeRoutineTab === 'active' ? 'Rutinas activas' : 'Rutinas históricas';
+        }
+
+        if (activeRoutineTab === 'active') {
+            renderActiveRoutines(user, userId, ownerView, routinesContent);
+        } else {
+            renderHistoricRoutines(user, userId, ownerView, routinesContent);
+        }
+    }
+
+    function renderActiveRoutines(user, userId, ownerView, routinesContent) {
+        if (user.rutinas.length === 0) {
             routinesContent.innerHTML = ownerView ? `
                 <div class="empty-state reveal">
                     <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
-                    <h3>Todavía no tenés rutinas</h3>
+                    <h3>Todavía no tenés rutinas activas</h3>
                     <p>Creá tu primera rutina para empezar a entrenar con GymApp.</p>
                     <a href="rutinsView.html?id=${userId}" class="btn btn-primary btn-sm">Crear nueva rutina</a>
                 </div>
             ` : `
                 <div class="empty-state reveal">
                     <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
-                    <h3>Todavía no tiene rutinas</h3>
+                    <h3>Todavía no tiene rutinas activas</h3>
                     <p>Este usuario no cargó ninguna rutina por ahora.</p>
                 </div>
             `;
             return;
         }
 
+        // Un visitante externo solo puede ver la rutina, no modificarla ni borrarla.
         routinesContent.innerHTML = user.rutinas.map((rutina, index) => {
-            const pct = porcentaje(rutina);
-            const week = last_week(rutina);
-            const day = last_day(rutina);
-            const lastProgress = (week === "sin entreno previo" || day === "sin entreno previo")
-                ? "Sin entrenos registrados"
-                : `Semana ${week} · ${day}`;
-
-            // Un visitante externo solo puede ver la rutina, no modificarla ni borrarla.
             const actions = ownerView ? `
                     <button class="btn btn-primary btn-sm addPeso" data-index="${index}">Entrenar hoy</button>
-                    <button class="btn btn-outline btn-sm showExc" data-index="${index}">Mostrar ejercicios</button>
-                    <button class="btn btn-outline btn-sm modExc" data-index="${index}">Modificar ejercicios</button>
-                    <button class="btn btn-danger btn-sm button_red" data-index="${index}">Eliminar rutina</button>
+                    <button class="btn btn-outline btn-sm showExc" data-index="${index}">Mostrar</button>
+                    <button class="btn btn-outline btn-sm modExc" data-index="${index}">Modificar</button>
+                    <button class="btn btn-success btn-sm finishRoutine" data-index="${index}">Finalizar</button>
+                    <button class="btn btn-danger btn-sm button_red" data-index="${index}">Eliminar</button>
             ` : `
-                    <button class="btn btn-outline btn-sm showExc" data-index="${index}">Mostrar ejercicios</button>
+                    <button class="btn btn-outline btn-sm showExc" data-index="${index}">Mostrar</button>
             `;
 
             return `
             <div class="routine-card reveal">
+                ${rutina.fechaInicio ? `<span class="routine-started-tag">Iniciada el ${rutina.fechaInicio}</span>` : ''}
                 <h3>${rutina.nombre}</h3>
-                <div class="routine-stats">
-                    <div><span>Semanas</span><strong>${arraysCount(rutina.semanas)}</strong></div>
-                    <div><span>Días por semana</span><strong>${arraysCount(rutina.semanas[0].dias)}</strong></div>
-                    <div><span>Ejercicios</span><strong>${excCount(rutina.semanas[0].dias)}</strong></div>
-                    <div><span>Último progreso</span><strong>${lastProgress}</strong></div>
-                </div>
-                <div class="routine-progress">
-                    <div class="routine-progress-head"><span>Progreso de la rutina</span><strong>${pct}%</strong></div>
-                    <div class="routine-progress-bar"><span style="width:${pct}%"></span></div>
-                </div>
+                ${routineStatsMarkup(rutina)}
                 <div class="routine-actions">${actions}</div>
             </div>
             `;
         }).join('');
 
-        wireRoutineButtons(userId, ownerView);
+        wireActiveRoutineButtons(user, userId, ownerView);
     }
 
-    function wireRoutineButtons(userId, ownerView) {
+    function renderHistoricRoutines(user, userId, ownerView, routinesContent) {
+        if (user.rutinasHistoricas.length === 0) {
+            routinesContent.innerHTML = ownerView ? `
+                <div class="empty-state reveal">
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
+                    <h3>Todavía no tenés rutinas históricas</h3>
+                    <p>Cuando finalices una rutina activa, va a aparecer acá.</p>
+                </div>
+            ` : `
+                <div class="empty-state reveal">
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
+                    <h3>Este usuario no tiene rutinas históricas</h3>
+                    <p>Todavía no finalizó ninguna rutina.</p>
+                </div>
+            `;
+            return;
+        }
+
+        routinesContent.innerHTML = user.rutinasHistoricas.map((rutina, index) => {
+            const actions = ownerView ? `
+                    <button class="btn btn-outline btn-sm showExcHist" data-index="${index}">Mostrar</button>
+                    <button class="btn btn-primary btn-sm reactivateRoutine" data-index="${index}">Reactivar</button>
+            ` : `
+                    <button class="btn btn-outline btn-sm showExcHist" data-index="${index}">Mostrar</button>
+            `;
+
+            return `
+            <div class="routine-card is-historic reveal">
+                ${rutina.finalizada ? `<span class="routine-finished-tag">Finalizada el ${rutina.finalizada}</span>` : ''}
+                <h3>${rutina.nombre}</h3>
+                ${routineStatsMarkup(rutina)}
+                <div class="routine-actions">${actions}</div>
+            </div>
+            `;
+        }).join('');
+
+        wireHistoricRoutineButtons(user, userId, ownerView);
+    }
+
+    function wireActiveRoutineButtons(user, userId, ownerView) {
         document.querySelectorAll('.showExc').forEach((button) => {
             button.addEventListener('click', () => {
                 window.location.href = `showExc.html?id=${userId}&rutina=${button.dataset.index}`;
@@ -541,6 +622,144 @@ if(gymapp_id != null){
                 window.location.href = `deleteRutins.html?id=${userId}&rutina=${button.dataset.index}`;
             });
         });
+        document.querySelectorAll('.finishRoutine').forEach((button) => {
+            button.addEventListener('click', () => confirmFinishRoutine(user, Number(button.dataset.index)));
+        });
+    }
+
+    function wireHistoricRoutineButtons(user, userId, ownerView) {
+        document.querySelectorAll('.showExcHist').forEach((button) => {
+            button.addEventListener('click', () => {
+                window.location.href = `showExc.html?id=${userId}&rutina=${button.dataset.index}&source=historic`;
+            });
+        });
+
+        if (!ownerView) return;
+
+        document.querySelectorAll('.reactivateRoutine').forEach((button) => {
+            button.addEventListener('click', () => openReactivateModal(user, userId, Number(button.dataset.index)));
+        });
+    }
+
+    // ---------- Finalizar / reactivar rutina ----------
+
+    function closeOverlay() {
+        const loaderBody = document.getElementById('loaderBody');
+        if (loaderBody) loaderBody.innerHTML = '';
+    }
+
+    function showModalError(message) {
+        const loaderBody = document.getElementById('loaderBody');
+        loaderBody.innerHTML = `
+            <div class="success-check-container">
+                <div class="modal-card">
+                    <h2>Ups</h2>
+                    <p class="subtitle">${message}</p>
+                    <div class="modal-actions"><button class="btn btn-outline" id="closeErr">Cerrar</button></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('closeErr').addEventListener('click', closeOverlay);
+    }
+
+    function confirmFinishRoutine(user, index) {
+        const rutina = user.rutinas[index];
+        const loaderBody = document.getElementById('loaderBody');
+        loaderBody.innerHTML = `
+            <div class="success-check-container">
+                <div class="modal-card">
+                    <h2>Finalizar rutina</h2>
+                    <p class="subtitle">"${rutina.nombre}" va a pasar a Históricas. Vas a poder reactivarla cuando quieras.</p>
+                    <div class="modal-actions">
+                        <button class="btn btn-primary" id="confirmFinish">Finalizar</button>
+                        <button class="btn btn-outline" id="cancelFinish">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('cancelFinish').addEventListener('click', closeOverlay);
+        document.getElementById('confirmFinish').addEventListener('click', () => {
+            user.rutinasHistoricas = user.rutinasHistoricas || [];
+            const [finished] = user.rutinas.splice(index, 1);
+            finished.finalizada = formatToday();
+            user.rutinasHistoricas.push(finished);
+            persistRoutineChange(user, 'Finalizando rutina...', '¡Rutina finalizada! Ahora la vas a encontrar en Históricas.');
+        });
+    }
+
+    function openReactivateModal(user, userId, index) {
+        const rutina = user.rutinasHistoricas[index];
+        const loaderBody = document.getElementById('loaderBody');
+        loaderBody.innerHTML = `
+            <div class="success-check-container">
+                <div class="modal-card">
+                    <h2>Reactivar "${rutina.nombre}"</h2>
+                    <p class="subtitle">¿Querés retomarla donde la dejaste o empezar de cero con una rutina nueva?</p>
+                    <div class="modal-actions" style="flex-direction:column;">
+                        <button class="btn btn-primary" id="resumeRoutine">Retomar donde quedé</button>
+                        <button class="btn btn-outline" id="restartRoutine">Empezar de cero</button>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn btn-outline" id="cancelReactivate">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('cancelReactivate').addEventListener('click', closeOverlay);
+
+        document.getElementById('resumeRoutine').addEventListener('click', () => {
+            user.rutinas = user.rutinas || [];
+            const [resumed] = user.rutinasHistoricas.splice(index, 1);
+            delete resumed.finalizada;
+            user.rutinas.push(resumed);
+            persistRoutineChange(user, 'Reactivando rutina...', '¡Rutina reactivada! Ya la tenés de nuevo en Activas.');
+        });
+
+        // Retomarla como nueva implica armarla de cero: la mandamos al
+        // constructor de rutinas normal, no clonamos pesos ni ejercicios viejos.
+        document.getElementById('restartRoutine').addEventListener('click', () => {
+            window.location.href = `rutinsView.html?id=${userId}`;
+        });
+    }
+
+    async function persistRoutineChange(user, loadingText, successText) {
+        activeRoutineTab = 'active';
+        const loaderBody = document.getElementById('loaderBody');
+        loaderBody.innerHTML = `
+            <div class="loader-container">
+                <div class="modern-spinner"></div>
+                <p>${loadingText}</p>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${parseInt(gymapp_id) + 1}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(user)
+            });
+
+            if (response.ok) {
+                loaderBody.innerHTML = `
+                    <div class="success-check-container">
+                        <div class="success-icon">
+                            <svg viewBox="0 0 52 52" class="success-svg">
+                                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+                            </svg>
+                        </div>
+                        <p>${successText}</p>
+                    </div>
+                `;
+                setTimeout(() => { window.location.href = 'profile.html'; }, 2000);
+            } else {
+                showModalError('No se pudo guardar el cambio. Probá de nuevo.');
+            }
+        } catch (error) {
+            showModalError('Hubo un problema con la solicitud. Probá de nuevo.');
+        }
     }
 
     // ---------- Armado de la pagina ----------

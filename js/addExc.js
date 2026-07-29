@@ -13,12 +13,7 @@ if(gymapp_id != null){
         userName = parseInt(userName) + 1;
         loaderBody.innerHTML = `
         <div id="loading" class="loader-container">
-            <div class="modern-spinner">
-                <div></div>
-                <div></div>
-                <div></div>
-                <div></div>
-            </div>
+            <div class="modern-spinner"></div>
             <p>Subiendo ejercicio nuevo...</p>
         </div>
         `

@@ -184,13 +184,16 @@ if(gymapp_id != null){
             dias: JSON.parse(JSON.stringify(days_array))
         }));
 
-        currentUser.rutinas.push({ nombre: name, semanas });
+        const today = new Date();
+        const fechaInicio = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+
+        currentUser.rutinas.push({ nombre: name, fechaInicio, semanas });
 
         alertEl.innerHTML = '';
         const loaderBody = document.getElementById('loaderBody');
         loaderBody.innerHTML = `
             <div class="loader-container">
-                <div class="modern-spinner"><div></div><div></div><div></div><div></div></div>
+                <div class="modern-spinner"></div>
                 <p>Creando rutina...</p>
             </div>
         `;

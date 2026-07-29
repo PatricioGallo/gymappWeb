@@ -8,6 +8,7 @@ const isLoggedIn = gymapp_id != null;
 const params = new URLSearchParams(window.location.search);
 const user_id = params.get('id');
 const rutina_id = params.get('rutina');
+const isHistoric = params.get('source') === 'historic';
 
 let users = [];
 let exc_api_array = [];
@@ -52,50 +53,78 @@ function initShare(routineName, ownerName) {
 function showNotFound(message) {
     document.getElementById('routineTitle').textContent = message;
     const actions = document.getElementById('routineActions');
-    const weekPicker = document.getElementById('weekPicker');
+    const weekStatus = document.getElementById('weekStatus');
     if (actions) actions.remove();
-    if (weekPicker) weekPicker.remove();
+    if (weekStatus) weekStatus.remove();
 }
 
-function renderWeekOptions(rutina) {
-    const select = document.getElementById('weekSelect');
-    const lastIndex = rutina.semanas.length - 1;
-
-    select.innerHTML = rutina.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join('');
-    select.value = lastIndex;
-    select.addEventListener('change', () => renderWeek(rutina, Number(select.value)));
-
-    renderWeek(rutina, lastIndex);
+function renderWeekStatus(rutina) {
+    const weekStatus = document.getElementById('weekStatus');
+    if (!weekStatus) return;
+    const weeks = rutina.semanas.length;
+    weekStatus.innerHTML = `<span class="hero-badge">Rutina de ${weeks} semana${weeks === 1 ? '' : 's'}</span>`;
 }
 
-function renderWeek(rutina, weekIndex) {
-    const semana = rutina.semanas[weekIndex];
+// Fila de la tabla: ejercicio / series / repeticiones / semanas. Nada de
+// pesos ni progreso: esta pantalla es para mostrarle la rutina a otra
+// persona, no para llevar el registro personal de entrenamiento.
+function exerciseRowMarkup(rutina, diaIndex, excIndex, excBase) {
+    const weeks = rutina.semanas.length;
+    return `
+        <div class="exc-table-row">
+            <button class="exc-name" type="button" data-dia="${diaIndex}" data-exc="${excIndex}">
+                ${excBase.nombre}
+                ${excBase.nota ? '<span class="exc-note-dot" title="Tiene nota del entrenador"></span>' : ''}
+            </button>
+            <span>${excBase.serie}</span>
+            <span>${excBase.repe}</span>
+            <span>${weeks}</span>
+        </div>
+    `;
+}
+
+function renderRoutine(rutina) {
     const weekContent = document.getElementById('weekContent');
+    const diasBase = rutina.semanas[0].dias;
 
-    weekContent.innerHTML = semana.dias.map((dia, diaIndex) => `
-        <div class="day-card reveal">
-            <h3>${dia.nombre}</h3>
-            ${dia.ejercicios.map((exc, excIndex) => `
-                <div class="exc-row">
-                    <button class="exc-name" type="button" data-dia="${diaIndex}" data-exc="${excIndex}">
-                        ${exc.nombre}
-                        ${exc.nota ? '<span class="exc-note-dot" title="Tiene nota del entrenador"></span>' : ''}
-                    </button>
-                    <span class="exc-meta">
-                        ${exc.serie}x${exc.repe} · <strong>${exc.peso > 0 ? exc.peso + ' kg' : 'Sin peso'}</strong>${exc.fecha ? ' · ' + exc.fecha : ''}
-                    </span>
+    weekContent.innerHTML = diasBase.map((diaBase, diaIndex) => `
+        <div class="day-accordion reveal" data-dia="${diaIndex}">
+            <button class="day-row" type="button" data-dia="${diaIndex}">
+                <div class="day-row-info">
+                    <h3>${diaBase.nombre}</h3>
+                    <p>${diaBase.ejercicios.length} ejercicio${diaBase.ejercicios.length === 1 ? '' : 's'}</p>
                 </div>
-            `).join('')}
+                <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+            <div class="day-detail" id="dayDetail-${diaIndex}" hidden>
+                <div class="exc-table-scroll">
+                    <div class="exc-table-head"><span>Ejercicio</span><span>Series</span><span>Repeticiones</span><span>Semanas</span></div>
+                    ${diaBase.ejercicios.map((excBase, excIndex) => exerciseRowMarkup(rutina, diaIndex, excIndex, excBase)).join('')}
+                </div>
+            </div>
         </div>
     `).join('');
 
+    weekContent.querySelectorAll('.day-row').forEach((row) => {
+        row.addEventListener('click', () => toggleDay(Number(row.dataset.dia)));
+    });
+
     weekContent.querySelectorAll('.exc-name').forEach((button) => {
-        button.addEventListener('click', () => {
-            const dia = semana.dias[Number(button.dataset.dia)];
-            const exc = dia.ejercicios[Number(button.dataset.exc)];
-            openExerciseModal(exc);
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const diaIndex = Number(button.dataset.dia);
+            const excIndex = Number(button.dataset.exc);
+            openExerciseModal(diasBase[diaIndex].ejercicios[excIndex]);
         });
     });
+}
+
+function toggleDay(diaIndex) {
+    const accordion = document.querySelector(`.day-accordion[data-dia="${diaIndex}"]`);
+    const detail = document.getElementById(`dayDetail-${diaIndex}`);
+    if (!accordion || !detail) return;
+    const isOpen = accordion.classList.toggle('open');
+    detail.hidden = !isOpen;
 }
 
 function openExerciseModal(exc) {
@@ -134,7 +163,7 @@ async function init() {
         exc_api_array = await excRes.json();
 
         const user = users[user_id];
-        const rutina = user ? user.rutinas[rutina_id] : null;
+        const rutina = user ? (isHistoric ? (user.rutinasHistoricas || [])[rutina_id] : user.rutinas[rutina_id]) : null;
 
         if (!user || !rutina) {
             showNotFound('No se encontró esta rutina.');
@@ -145,7 +174,8 @@ async function init() {
         document.getElementById('routineSubtitle').textContent = `Rutina de ${user.nombre} ${user.apellido}`;
 
         initShare(rutina.nombre, `${user.nombre} ${user.apellido}`);
-        renderWeekOptions(rutina);
+        renderWeekStatus(rutina);
+        renderRoutine(rutina);
     } catch (error) {
         console.error('Error al cargar la rutina:', error);
         showNotFound('Ocurrió un error al cargar la rutina.');

@@ -726,47 +726,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Overlays inyectados por login.js / register.js */
 
-.loader-container {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  gap: 14px;
-  background: rgba(10, 12, 15, 0.88);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 15px;
-  z-index: 1000;
-}
-
-.modern-spinner {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  width: 70px;
-  height: 70px;
-}
-
-.modern-spinner div {
-  width: 16px;
-  height: 16px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  border-radius: 50%;
-  animation: bounce 1.2s infinite ease-in-out;
-}
-
-.modern-spinner div:nth-child(1) { animation-delay: -0.4s; }
-.modern-spinner div:nth-child(2) { animation-delay: -0.2s; }
-.modern-spinner div:nth-child(3) { animation-delay: 0s; }
-.modern-spinner div:nth-child(4) { animation-delay: 0.2s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
-}
-
+.loader-container,
 .success-check-container {
   position: fixed;
   inset: 0;
@@ -774,28 +734,61 @@ a { color: inherit; text-decoration: none; }
   justify-content: center;
   align-items: center;
   flex-direction: column;
-  background: rgba(10, 12, 15, 0.88);
+  background: rgba(10, 12, 15, 0.82);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   color: var(--text);
   font-family: inherit;
-  font-size: 17px;
   text-align: center;
   z-index: 1000;
   padding: 0 24px;
+  animation: overlay-in 0.25s ease-out;
 }
 
-.success-icon { width: 72px; height: 72px; margin-bottom: 18px; }
+.loader-container { gap: 18px; font-size: 14px; }
+.loader-container p { margin: 0; color: var(--text-muted); letter-spacing: 0.02em; }
+.success-check-container { font-size: 16px; }
+
+.modern-spinner {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--accent), var(--accent-2), transparent 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.success-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  animation: pop-in 0.35s cubic-bezier(.22, .9, .32, 1.2) both;
+}
 
 .success-svg {
   width: 100%;
   height: 100%;
   stroke: var(--live);
-  stroke-width: 4;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.success-circle { stroke-dasharray: 157; stroke-dashoffset: 157; animation: circle-draw 0.6s ease-in-out forwards; }
-.success-check { stroke-dasharray: 48; stroke-dashoffset: 48; animation: check-draw 0.4s ease-in-out 0.7s forwards; }
+.success-circle { stroke-dasharray: 157; stroke-dashoffset: 157; animation: circle-draw 0.5s ease-out forwards; }
+.success-check { stroke-dasharray: 48; stroke-dashoffset: 48; animation: check-draw 0.35s ease-out 0.45s forwards; }
+
+@keyframes pop-in {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 
 @keyframes circle-draw { to { stroke-dashoffset: 0; } }
 @keyframes check-draw { to { stroke-dashoffset: 0; } }
@@ -1206,6 +1199,40 @@ a { color: inherit; text-decoration: none; }
 .chart-card .chart-sub { margin: 0 0 18px; font-size: 13px; color: var(--text-muted); }
 .chart-wrap { position: relative; height: 220px; }
 
+/* ---------- Routine tabs ---------- */
+
+.routine-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: -16px auto 28px;
+  padding: 4px;
+  max-width: fit-content;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.routine-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: inherit;
+  padding: 9px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.routine-tab:hover { color: var(--text); }
+
+.routine-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0a0c0f;
+}
+
 /* ---------- Routine card ---------- */
 
 .routine-card {
@@ -1213,6 +1240,30 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
+}
+
+.routine-card.is-historic { opacity: 0.9; }
+
+.routine-finished-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.routine-started-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 12px;
 }
 
 .routine-card + .routine-card { margin-top: 14px; }
@@ -1252,6 +1303,14 @@ a { color: inherit; text-decoration: none; }
 }
 
 .btn-danger:hover { background: rgba(255, 90, 90, 0.12); }
+
+.btn-success {
+  background: transparent;
+  border: 1px solid rgba(47, 217, 113, 0.4);
+  color: var(--live);
+}
+
+.btn-success:hover { background: var(--live-soft); }
 
 /* ---------- Dia / ejercicio (showExc) ---------- */
 
@@ -1298,6 +1357,71 @@ a { color: inherit; text-decoration: none; }
   border-radius: 50%;
   background: var(--accent-2);
   flex-shrink: 0;
+}
+
+/* ---------- Dia acordeon (showExc) ---------- */
+
+.day-accordion {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.day-accordion + .day-accordion { margin-top: 10px; }
+
+.day-accordion .day-row { border: none; background: none; border-radius: 0; }
+.day-accordion .day-row:hover { background: var(--surface-2); }
+
+.day-detail {
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.day-detail[hidden] { display: none; }
+
+.day-row-chevron { transition: transform 0.2s ease; }
+.day-accordion.open .day-row-chevron { transform: rotate(90deg); }
+
+/* Tabla de ejercicios (ejercicio / series / repeticiones / semanas) */
+
+.exc-table-scroll { overflow-x: auto; }
+
+.exc-table-head,
+.exc-table-row {
+  display: grid;
+  grid-template-columns: 1.5fr 0.8fr 1.1fr 0.9fr;
+  gap: 6px;
+  align-items: center;
+}
+
+.exc-table-head {
+  padding: 0 0 10px;
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+.exc-table-head span:not(:first-child),
+.exc-table-row > span { text-align: center; }
+
+.exc-table-row {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.exc-table-row:first-of-type { border-top: none; padding-top: 0; }
+
+.exc-table-row > span { font-size: 14px; font-weight: 700; color: var(--text); }
+.exc-table-row .exc-name { font-size: 13.5px; }
+
+@media (min-width: 420px) {
+  .exc-table-head,
+  .exc-table-row { grid-template-columns: 1.6fr 0.8fr 1.1fr 0.9fr; gap: 10px; }
+  .exc-table-head { font-size: 10.5px; letter-spacing: 0.05em; }
 }
 
 .exc-meta {

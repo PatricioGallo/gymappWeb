@@ -25,12 +25,7 @@ myForm.addEventListener("submit", async (event)=>{
         let loaderBody = document.getElementById("loaderBody");
         loaderBody.innerHTML = `
         <div id="loading" class="loader-container">
-            <div class="modern-spinner">
-                <div></div>
-                <div></div>
-                <div></div>
-                <div></div>
-            </div>
+            <div class="modern-spinner"></div>
             <p>Ingresando...</p>
         </div>
         `
