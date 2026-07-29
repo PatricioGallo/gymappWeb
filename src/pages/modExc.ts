@@ -1,7 +1,8 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
-import { listExercises, CATEGORY_LABELS, EXERCISE_CATEGORIES, type Exercise } from "../services/exercise.service";
+import { listExercises, type Exercise } from "../services/exercise.service";
+import { openExercisePicker } from "../lib/exercisePicker";
 import {
   getRoutineDetail,
   updateRoutineExercise,
@@ -21,26 +22,14 @@ const routineId = params.get("rid");
 let excCatalog: Exercise[] = [];
 let routine: RoutineDetail | null = null;
 
-function excOptions(selectedId?: string): string {
-  return EXERCISE_CATEGORIES.map((cat) => {
-    const items = excCatalog.filter((exc) => exc.category === cat);
-    if (items.length === 0) return "";
-    const opts = items
-      .map((exc) => `<option value="${exc.id}" ${exc.id === selectedId ? "selected" : ""}>${escapeHtml(exc.name)}</option>`)
-      .join("");
-    return `<optgroup label="${escapeHtml(CATEGORY_LABELS[cat])}">${opts}</optgroup>`;
-  }).join("");
-}
-
 function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
   const isNoWeight = exc ? !exc.es_medible : false;
+  const selectedLabel = exc ? escapeHtml(exc.nombre_snapshot) : "Elegir ejercicio";
   return `
     <div class="exc-block" data-existing-id="${exc?.id ?? ""}">
       <div class="exc-edit-row">
-        <select class="excSelectInput">
-          <option value="">Elegir ejercicio</option>
-          ${excOptions(exc?.exercise_id)}
-        </select>
+        <button type="button" class="exc-picker-btn">${selectedLabel}</button>
+        <input type="hidden" class="excSelectInput" value="${exc?.exercise_id ?? ""}">
         <input type="number" class="mini-input serieInput" value="${exc?.serie ?? ""}" placeholder="Series" min="1" max="10">
         <input type="number" class="mini-input repeInput" value="${exc?.repe ?? ""}" placeholder="Repes" min="1" max="30">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
@@ -96,7 +85,7 @@ async function saveChanges() {
 
     dayCard.querySelectorAll<HTMLElement>(".exc-block").forEach((block, orden) => {
       if (error) return;
-      const excId = (block.querySelector(".excSelectInput") as HTMLSelectElement).value;
+      const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
       const serie = parseInt((block.querySelector(".serieInput") as HTMLInputElement).value, 10);
       const repe = parseInt((block.querySelector(".repeInput") as HTMLInputElement).value, 10);
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
@@ -215,6 +204,13 @@ async function init() {
       const block = target.closest(".exc-block");
       const list = block?.parentElement;
       if (list && list.children.length > 1) block?.remove();
+    }
+    if (target.classList.contains("exc-picker-btn")) {
+      const block = target.closest<HTMLElement>(".exc-block")!;
+      openExercisePicker(excCatalog, (exc) => {
+        target.textContent = exc.name;
+        block.querySelector<HTMLInputElement>(".excSelectInput")!.value = exc.id;
+      });
     }
   });
 
