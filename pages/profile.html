@@ -18,10 +18,10 @@
       </a>
 
       <nav class="site-nav" id="siteNav">
-        <a href="profile.html" class="active">Perfil</a>
+        <a href="profile.html" class="active" id="navPerfil">Perfil</a>
         <a href="admin.html" id="adminLink">Administrar</a>
         <a href="" id="config">Configuración</a>
-        <a href="exit.html">Salir</a>
+        <a href="exit.html" id="navSalir">Salir</a>
       </nav>
 
       <button class="nav-toggle" id="navToggle" type="button" aria-label="Abrir menú" aria-expanded="false">
@@ -58,9 +58,9 @@
   <section class="features" id="statsSection">
     <div class="container">
       <div class="section-head reveal">
-        <span class="eyebrow">Tu actividad</span>
+        <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
         <h2>Estadísticas</h2>
-        <p>Un resumen de cómo venís entrenando.</p>
+        <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
       </div>
       <div id="statsContent"></div>
     </div>
@@ -69,7 +69,7 @@
   <section class="steps" id="rutinas">
     <div class="container">
       <div class="section-head reveal">
-        <span class="eyebrow">Tus rutinas</span>
+        <span class="eyebrow" id="rutinasEyebrow">Tus rutinas</span>
         <h2 id="routinesTitle">Rutinas activas</h2>
       </div>
       <div class="routine-tabs" id="routineTabs">
@@ -91,9 +91,9 @@
         </div>
 
         <nav class="footer-links">
-          <a href="profile.html">Perfil</a>
+          <a href="profile.html" id="footerPerfil">Perfil</a>
           <a href="contact.html">Contactanos</a>
-          <a href="exit.html">Salir</a>
+          <a href="exit.html" id="footerSalir">Salir</a>
         </nav>
 
         <div class="footer-social">

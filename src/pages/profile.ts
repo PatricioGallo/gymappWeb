@@ -6,7 +6,8 @@ import { calcularEdad } from "../lib/age";
 import { COUNTRIES } from "../lib/countries";
 import {
   getProfile,
-  getProfileBasic,
+  getProfileByUsername,
+  getProfileBasicByUsername,
   updateProfileFields,
   updateEmail,
   updatePassword,
@@ -30,14 +31,21 @@ const { data: sessionData } = await supabase.auth.getSession();
 const myId = sessionData.session?.user.id ?? null;
 
 const urlParams = new URLSearchParams(window.location.search);
-const viewId = urlParams.get("id") ?? myId;
+// El link para compartir usa el username (?u=), mas legible que un uuid.
+const usernameParam = urlParams.get("u");
 
-if (!viewId) {
+if (!usernameParam && !myId) {
   window.location.href = "login.html";
   throw new Error("not authenticated");
 }
 
-const isOwner = viewId === myId;
+// Un visitante sin sesion no tiene "su" perfil al que volver ni por que "salir".
+if (!myId) {
+  document.getElementById("navPerfil")?.remove();
+  document.getElementById("navSalir")?.remove();
+  document.getElementById("footerPerfil")?.remove();
+  document.getElementById("footerSalir")?.remove();
+}
 
 const USER_TYPE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -129,14 +137,15 @@ function initAvatar(profile: Profile) {
 
 // ---------- Compartir perfil ----------
 
-function initShare(profileId: string) {
+function initShare(username: string) {
   const shareBtn = document.getElementById("shareBtn");
   if (!shareBtn) return;
   const originalHTML = shareBtn.innerHTML;
   shareBtn.addEventListener("click", async () => {
-    // Se arma explicitamente con ?id= para que el link funcione para cualquiera
-    // que lo abra sin sesion iniciada (window.location.href de "mi" perfil no lleva id).
-    const url = `${window.location.origin}${window.location.pathname}?id=${profileId}`;
+    // Se arma explicitamente con ?u=<username> (mas legible que un uuid) para que
+    // el link funcione para cualquiera que lo abra sin sesion iniciada (window.location.href
+    // de "mi" perfil no lleva ningun parametro).
+    const url = `${window.location.origin}${window.location.pathname}?u=${encodeURIComponent(username)}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Mi perfil de Gym Social", url });
@@ -173,7 +182,7 @@ function renderBasicBadges(profile: ProfileBasic) {
   `;
 }
 
-function renderProfileActions(profileId: string, ownerView: boolean, viewerLoggedIn: boolean) {
+function renderProfileActions(username: string, ownerView: boolean, viewerLoggedIn: boolean) {
   const actions = document.getElementById("profileActions");
   if (!actions) return;
   actions.innerHTML = `
@@ -183,7 +192,7 @@ function renderProfileActions(profileId: string, ownerView: boolean, viewerLogge
     </button>
     ${ownerView || !viewerLoggedIn ? "" : `<button class="btn btn-primary" id="addFriendBtn" type="button">+ Seguir</button>`}
   `;
-  initShare(profileId);
+  initShare(username);
   if (!ownerView && viewerLoggedIn) {
     const btn = document.getElementById("addFriendBtn");
     btn?.addEventListener("click", () => {
@@ -214,46 +223,49 @@ function renderPrivateNotice(nombre: string) {
   }
 }
 
-function renderQuickActions(userId: string, ownerView: boolean) {
+// Solo se llama para el dueño del perfil: para un visitante estos accesos
+// directos (rutinas propias, progreso completo) no aplican.
+function renderQuickActions(userId: string) {
   const quickActions = document.getElementById("quickActions");
   if (!quickActions) return;
-  const rutinasLabel = ownerView
-    ? "<h3>Tus rutinas</h3><p>Ver y gestionar tus rutinas activas</p>"
-    : "<h3>Rutinas</h3><p>Ver las rutinas activas de este perfil</p>";
 
   quickActions.innerHTML = `
     <a class="quick-card reveal" href="#rutinas">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
-      <div>${rutinasLabel}</div>
+      <div><h3>Tus rutinas</h3><p>Ver y gestionar tus rutinas activas</p></div>
     </a>
     <a class="quick-card reveal" href="progress.html?uid=${userId}">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
       <div><h3>Progreso completo</h3><p>Gráficos detallados por ejercicio</p></div>
     </a>
-    ${
-      ownerView
-        ? `<a class="quick-card reveal" href="rutinsView.html">
+    <a class="quick-card reveal" href="rutinsView.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
       <div><h3>Nueva rutina</h3><p>Armá una rutina desde cero</p></div>
-    </a>`
-        : ""
-    }
+    </a>
   `;
 }
 
 // ---------- Estadisticas ----------
 
-function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number) {
+function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean) {
   const statsContent = document.getElementById("statsContent");
   if (!statsContent) return;
 
   if (logs.length === 0) {
-    statsContent.innerHTML = `
+    statsContent.innerHTML = ownerView
+      ? `
       <div class="empty-state reveal">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
         <h3>Todavía no tenés estadísticas</h3>
         <p>Por ahora no tenés ningún entrenamiento registrado. Cuando cargues el peso de tus ejercicios, tu progreso va a aparecer acá.</p>
         <a href="#rutinas" class="btn btn-primary btn-sm">Ir a mis rutinas</a>
+      </div>
+    `
+      : `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
+        <h3>Todavía no tiene estadísticas</h3>
+        <p>Este usuario todavía no registró ningún entrenamiento.</p>
       </div>
     `;
     return;
@@ -278,7 +290,7 @@ function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number) {
       excProgress.length >= 2
         ? `<div class="chart-card reveal">
       <h3>Progreso: ${escapeHtml(top?.name ?? "")}</h3>
-      <p class="chart-sub">Evolución del peso registrado en tu ejercicio más entrenado.</p>
+      <p class="chart-sub">Evolución del peso registrado en ${ownerView ? "tu" : "su"} ejercicio más entrenado.</p>
       <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
     </div>`
         : ""
@@ -375,7 +387,12 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
   const tabsWrap = document.getElementById("routineTabs");
   if (!routinesContent) return;
 
-  if (tabsWrap) {
+  // Las historicas son algo personal: un visitante solo ve las activas, sin
+  // pestaña para cambiar.
+  if (!ownerView) {
+    activeRoutineTab = "active";
+    tabsWrap?.remove();
+  } else if (tabsWrap) {
     tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === activeRoutineTab);
       btn.onclick = () => {
@@ -666,8 +683,16 @@ async function main() {
   // getProfile trae la fila completa (incluye mail): solo la ven el dueño, un
   // admin o un entrenador con rutinas asignadas al usuario, via RLS. Si no hay
   // acceso completo, caemos a la vista publica (sin mail) para el resto de casos.
-  const profile = await getProfile(viewId!);
-  const basicProfile = profile ? null : await getProfileBasic(viewId!);
+  let profile: Profile | null;
+  let basicProfile: ProfileBasic | null = null;
+
+  if (usernameParam) {
+    profile = await getProfileByUsername(usernameParam);
+    if (!profile) basicProfile = await getProfileBasicByUsername(usernameParam);
+  } else {
+    profile = await getProfile(myId!);
+  }
+
   const displayProfile = profile ?? basicProfile;
 
   if (!displayProfile) {
@@ -676,11 +701,12 @@ async function main() {
     return;
   }
 
+  const isOwner = displayProfile.id === myId;
+  const nombre = displayProfile.nombre ?? "Este usuario";
+
   const profileName = document.getElementById("profileName");
   if (profileName) {
-    profileName.textContent = isOwner
-      ? `Hola, ${escapeHtml(displayProfile.nombre ?? "")}`
-      : `${escapeHtml(displayProfile.nombre ?? "")} ${escapeHtml(displayProfile.apellido ?? "")}`;
+    profileName.textContent = isOwner ? `Hola, ${escapeHtml(nombre)}` : `${escapeHtml(nombre)} ${escapeHtml(displayProfile.apellido ?? "")}`;
   }
 
   if (!isOwner) {
@@ -695,22 +721,36 @@ async function main() {
   if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
   if (isOwner && profile) initAvatar(profile);
 
-  renderProfileActions(displayProfile.id!, isOwner, myId !== null);
+  renderProfileActions(displayProfile.username ?? "", isOwner, myId !== null);
 
   const isPrivateForViewer = !profile && !basicProfile?.is_public;
 
   if (isPrivateForViewer) {
     renderBasicBadges(basicProfile!);
-    renderPrivateNotice(basicProfile!.nombre ?? "Este usuario");
+    renderPrivateNotice(nombre);
     return;
   }
 
+  // El resto de la pagina habla en tercera persona cuando no es el dueño.
+  const statsEyebrow = document.getElementById("statsEyebrow");
+  const statsSubtitle = document.getElementById("statsSubtitle");
+  const rutinasEyebrow = document.getElementById("rutinasEyebrow");
+  if (!isOwner) {
+    if (statsEyebrow) statsEyebrow.textContent = "Su actividad";
+    if (statsSubtitle) statsSubtitle.textContent = `Un resumen de cómo entrena ${nombre}.`;
+    if (rutinasEyebrow) rutinasEyebrow.textContent = `Rutinas de ${nombre}`;
+  }
+
   renderProfileBadges(displayProfile);
-  renderQuickActions(displayProfile.id!, isOwner);
+  if (isOwner) {
+    renderQuickActions(displayProfile.id!);
+  } else {
+    document.getElementById("quickActionsSection")?.remove();
+  }
 
   const logs = await listWeightLogsWithContext(displayProfile.id!);
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs);
-  renderStats(logs, activeCount ?? 0);
+  renderStats(logs, activeCount ?? 0, isOwner);
 
   if (isOwner && profile) configMenu(profile);
 }
