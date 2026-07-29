@@ -1142,6 +1142,8 @@ a { color: inherit; text-decoration: none; }
 .quick-card h3 { margin: 0 0 2px; font-size: 15px; }
 .quick-card p { margin: 0; font-size: 13px; color: var(--text-muted); }
 
+button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family: inherit; color: inherit; }
+
 /* ---------- Stat cards ---------- */
 
 .stat-card {
@@ -1280,6 +1282,10 @@ a { color: inherit; text-decoration: none; }
 
 .routine-card + .routine-card { margin-top: 14px; }
 .routine-card h3 { margin: 0 0 14px; font-size: 17px; }
+
+.routine-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.routine-grid .routine-card + .routine-card { margin-top: 0; }
+@media (min-width: 720px) { .routine-grid { grid-template-columns: 1fr 1fr; } }
 
 .routine-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 18px; }
 .routine-stats span { display: block; font-size: 12.5px; color: var(--text-muted); }
@@ -1702,6 +1708,34 @@ a { color: inherit; text-decoration: none; }
   font-family: inherit;
 }
 
+/* ---------- Vista previa de rutina (plantillas Gym Social / clonado) ---------- */
+
+.tpl-days { max-height: 46vh; overflow-y: auto; padding-right: 4px; margin-bottom: 20px; }
+.tpl-day + .tpl-day { margin-top: 16px; }
+
+.tpl-day h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tpl-day ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.tpl-day li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.tpl-day li span { color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
+
 .day-name-select {
   width: 100%;
   max-width: 220px;
@@ -1847,6 +1881,7 @@ a { color: inherit; text-decoration: none; }
 
 @media (min-width: 640px) {
   .quick-grid { grid-template-columns: repeat(3, 1fr); }
+  .quick-grid-2 { grid-template-columns: repeat(2, 1fr); max-width: 640px; margin: 0 auto; }
 }
 
 /* ---------- Reveal on scroll ---------- */
