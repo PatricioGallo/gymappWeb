@@ -156,7 +156,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .brand img {
-  height: 40px;
+  height: 48px;
   width: auto;
   /* brightness(0) aplana el logo a negro puro (sin importar los grises
      originales del PNG) y el invert(1) lo pasa a blanco puro, asi
@@ -1430,6 +1430,47 @@ a { color: inherit; text-decoration: none; }
   .exc-table-row { grid-template-columns: 1.6fr 0.8fr 1.1fr 0.9fr; gap: 10px; }
   .exc-table-head { font-size: 10.5px; letter-spacing: 0.05em; }
 }
+
+/* ---------- Panel de administracion ---------- */
+
+.inline-loader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 30px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.admin-table-head,
+.admin-table-row {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr 0.7fr 0.9fr 1.1fr 0.8fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 720px;
+}
+
+.admin-table-head {
+  padding: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.admin-table-row {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.admin-table-row:first-of-type { border-top: none; padding-top: 0; }
+
+.admin-user-cell { display: flex; flex-direction: column; gap: 2px; }
+.admin-user-cell strong { font-size: 14px; }
+.admin-user-cell small { color: var(--text-muted); font-size: 12px; }
 
 .exc-meta {
   font-size: 12.5px;

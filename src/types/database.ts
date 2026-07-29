@@ -279,6 +279,42 @@ export type Database = {
           },
         ]
       }
+      site_visits: {
+        Row: {
+          created_at: string
+          id: string
+          path: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          path: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          path?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_visits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_visits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weight_logs: {
         Row: {
           created_at: string
@@ -375,6 +411,32 @@ export type Database = {
       }
     }
     Functions: {
+      admin_daily_visits: {
+        Args: { p_days?: number }
+        Returns: {
+          count: number
+          day: string
+        }[]
+      }
+      admin_list_users: {
+        Args: never
+        Returns: {
+          apellido: string
+          avatar_url: string
+          created_at: string
+          email: string
+          email_confirmed: boolean
+          fecha_nacimiento: string
+          id: string
+          last_sign_in_at: string
+          nacionalidad: string
+          nombre: string
+          routines_count: number
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      admin_site_stats: { Args: never; Returns: Json }
       can_access_day: { Args: { did: string }; Returns: boolean }
       can_access_routine: { Args: { rid: string }; Returns: boolean }
       can_access_week: { Args: { wid: string }; Returns: boolean }

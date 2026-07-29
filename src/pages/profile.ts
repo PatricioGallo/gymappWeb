@@ -166,7 +166,7 @@ function renderProfileActions(ownerView: boolean) {
   if (!actions) return;
   actions.innerHTML = `
     <button class="btn btn-outline" id="shareBtn" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 17.5"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
       Compartir perfil
     </button>
     ${ownerView ? "" : `<button class="btn btn-primary" id="addFriendBtn" type="button">+ Seguir</button>`}
@@ -627,8 +627,10 @@ async function main() {
     document.getElementById("avatarEditWrap")?.remove();
     document.getElementById("avatarHint")?.remove();
     document.getElementById("config")?.remove();
+    document.getElementById("adminLink")?.remove();
   } else {
     document.getElementById("avatarHint")?.remove(); // ya no aplica el aviso de "solo en este navegador"
+    if (profile.user_type !== "admin") document.getElementById("adminLink")?.remove();
   }
 
   initAvatar(profile);
