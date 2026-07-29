@@ -625,11 +625,9 @@ async function main() {
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();
-    document.getElementById("avatarHint")?.remove();
     document.getElementById("config")?.remove();
     document.getElementById("adminLink")?.remove();
   } else {
-    document.getElementById("avatarHint")?.remove(); // ya no aplica el aviso de "solo en este navegador"
     if (profile.user_type !== "admin") document.getElementById("adminLink")?.remove();
   }
 
