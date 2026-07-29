@@ -17,12 +17,12 @@ function renderNav() {
     if (!nav) return;
 
     nav.innerHTML = isLoggedIn
-        ? `<a href="profile.html">Rutinas</a><a href="exit.html">Salir</a>`
+        ? `<a href="profile.html">Perfil</a><a href="exit.html">Salir</a>`
         : `<a href="../index.html">Inicio</a><a href="register.html" class="btn btn-primary nav-cta">Registrate gratis</a>`;
 }
 
 function authorLabel(idExc) {
-    const excDef = exc_api_array[idExc - 1];
+    const excDef = exc_api_array.find((exc) => exc.id == idExc);
     if (!excDef || excDef.author === undefined || excDef.author === 'gymapp') return 'GymApp';
     const author = users[excDef.author - 1];
     return author ? `${author.nombre} ${author.apellido}` : 'GymApp';

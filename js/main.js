@@ -68,8 +68,8 @@ if(gymapp_id != null){
 
     function findMostFrequentId(historial) {
         const id = mostFrequentExcId(historial);
-        if (id === null || !exc_api_array[id - 1]) return "—";
-        return exc_api_array[id-1].name
+        const excDef = exc_api_array.find((exc) => exc.id == id);
+        return excDef ? excDef.name : "—";
     }
 
     function progressForExercise(historial, excId) {
@@ -488,9 +488,9 @@ if(gymapp_id != null){
 
             // Un visitante externo solo puede ver la rutina, no modificarla ni borrarla.
             const actions = ownerView ? `
+                    <button class="btn btn-primary btn-sm addPeso" data-index="${index}">Entrenar hoy</button>
                     <button class="btn btn-outline btn-sm showExc" data-index="${index}">Mostrar ejercicios</button>
                     <button class="btn btn-outline btn-sm modExc" data-index="${index}">Modificar ejercicios</button>
-                    <button class="btn btn-outline btn-sm addPeso" data-index="${index}">Pesos semanales</button>
                     <button class="btn btn-danger btn-sm button_red" data-index="${index}">Eliminar rutina</button>
             ` : `
                     <button class="btn btn-outline btn-sm showExc" data-index="${index}">Mostrar ejercicios</button>

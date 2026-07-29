@@ -1,476 +1,272 @@
+// GymApp — cargar pesos semanales (pages/pesos.html)
+// "peso_anterior" en cada ejercicio de la rutina no es un peso: es un flag.
+// -1 significa "este ejercicio no lleva peso" (ej: elongacion). Cualquier
+// otro valor significa "se le puede cargar peso".
+
 const gymapp_id = localStorage.getItem("gymapp_id")
 if(gymapp_id != null){
-
     const params = new URLSearchParams(window.location.search);
-    const container          = document.getElementById('container');
-
-    // Acceder a un parámetro específico
     const user_id = params.get('id');
     const rutina_id = params.get('rutina');
-    let weekId = 0;
-    let dayId = 0;
-    let exc_api_array;
-    let users;
 
-    function printExc(user){
-        let last_weekId = last_week(user,rutina_id);
-        let last_dayId  = last_day(user,rutina_id);
-       // reinventir_rutina(user,rutina_id);
-        container.innerHTML = `
-            <h1 class="services_taital">Tus pesos</h1>
-            <p class="services_text" id="services_text">${user.nombre} selecciona la semana y el dia de tu rutina: "${user.rutinas[rutina_id].nombre}", para poder ver los ejercicios y agregarle el peso del dia.</p>
-            <br/>
-            <div class="trainer_section_2" id="trainer_section_2">
+    let currentUser = null;
+    let currentRutina = null;
+
+    function currentWeekIndex(rutina) {
+        let found = -1;
+        rutina.semanas.forEach((semana, index) => {
+            semana.dias.forEach((dia) => {
+                dia.ejercicios.forEach((exc) => {
+                    if (exc.peso > 0) found = index;
+                });
+            });
+        });
+        return found === -1 ? 0 : found;
+    }
+
+    function routineProgress(rutina) {
+        let total = 0;
+        let done = 0;
+        rutina.semanas.forEach((semana) => {
+            semana.dias.forEach((dia) => {
+                dia.ejercicios.forEach((exc) => {
+                    total++;
+                    if (exc.peso > 0) done++;
+                });
+            });
+        });
+        return total === 0 ? 0 : Math.round((done / total) * 100);
+    }
+
+    function dayProgress(dia) {
+        const trackable = dia.ejercicios.filter((exc) => exc.peso_anterior !== -1);
+        if (trackable.length === 0) return 100;
+        const done = trackable.filter((exc) => exc.peso > 0).length;
+        return Math.round((done / trackable.length) * 100);
+    }
+
+    function ringMarkup(pct) {
+        const r = 16;
+        const circumference = 2 * Math.PI * r;
+        const offset = circumference * (1 - pct / 100);
+        return `
+            <div class="day-ring">
+                <svg viewBox="0 0 40 40">
+                    <circle class="ring-bg" cx="20" cy="20" r="${r}"></circle>
+                    <circle class="ring-fg" cx="20" cy="20" r="${r}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"></circle>
+                </svg>
+                <span class="day-ring-pct">${pct}%</span>
             </div>
-            <div id=loaderBody></div>
-        `
-        const configBody = document.createElement('div');
-        configBody.classList.add("configBody");
-        const userCardsContainer = document.getElementById('trainer_section_2');
-        let main_body;
-        main_body = `
-            <div class="email_box">
-                <form id="myForm">
-                    <div class="form-group">
-                        <select class="email-bt" id="weeks" name="weeks" required autocomplete="off" autocorrect="off" autocapitalize="none">
-            `
-        user.rutinas[rutina_id].semanas.forEach((week,index) => {
-            main_body += `
-                <option value="${index}" ${index === last_weekId ? 'selected' : ''}>Semana ${week.numero}</option>
-            `
-        })
-        
-        main_body += `
-            </select><br><br>
-            <select class="email-bt" id="day" name="day" required autocomplete="off" autocorrect="off" autocapitalize="none">
-            `
-        user.rutinas[rutina_id].semanas[0].dias.forEach((day,index) => {
-            main_body += `
-                <option value="${index}" ${index === last_dayId ? 'selected' : ''}>${day.nombre}</option>
-            `
-        })
-        main_body +=`
-                                
-                            </select><br><br>
-                            <div class="send_bt">
-                                <button type="submit" class="login-botton">Ver Ejercicios</button>
-                            </div>
-                            <br/><br/>
-                            <p class="services_text" id="services_text">Nota: ${user.nombre}, de manera automática, GymApp identificará el día y la semana que te corresponde entrenar hoy, para que siempre estés al tanto de tu rutina.</p>
-                        </form>
-                    </div>
-                </div>
-            `
-        configBody.innerHTML = main_body;
-        userCardsContainer.appendChild(configBody);
-
-        document.getElementById('myForm').addEventListener('submit', (event) =>{
-            event.preventDefault();
-            weekId = document.getElementById("weeks").value;
-            dayId = document.getElementById("day").value;
-            dayValue = user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre.toLowerCase();
-            services_text = document.getElementById("services_text");
-            services_text.innerHTML = `${user.nombre} ahora podras agregar pesos en los ejercicios de "${user.rutinas[rutina_id].nombre}" semana numero: ${parseInt(weekId)+1} <br/>`
-            main_body = `
-                <div class="configFace">
-                    <div class="configForm">
-                        <form id="myForm">
-                            <table class="training-table">
-                                <thead>
-                                    <tr>
-                                        <th>Día</th>
-                                        <th>Ejercicio (tocar para ver)</th>
-                                        <th>Series</th>
-                                        <th>Repes</th>
-                                        <th>Peso anterior</th>
-                                        <th>Peso actual</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-
-                `
-                    let exc_count = 0;
-                    user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios.forEach((exc,excIndex) => {
-                        if (exc_count == 0) {
-                            main_body += `
-                            <tr class="day-dark">
-                                <td rowspan="${arraysCount(user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios)}">${user.rutinas[rutina_id].semanas[weekId].dias[dayId].nombre}</td>
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
-                                <td>${exc.serie}</td>
-                                <td>${exc.repe}</td>
-                                `
-                                
-                                if(exc.peso_anterior != -1){  //para no poner la entrada de valores en caso de un ejercicio sin peso  
-                                    main_body += `
-                                        <td>${peso_anterior(exc.id_exc)}</td>
-                                        <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" placeholder="${exc.peso}" class="number_input-bt"></center></td>
-                                    </tr>
-                                    `;
-                                }else{
-                                    main_body += `
-                                        <td>Sin peso <input type="number" id="repe-${excIndex}" style="display: none;" value="-1"></td>
-                                        <td></td>
-                                    </tr>
-                                        `
-                                }
-
-                            exc_count++;
-                        } else {
-                            main_body += `
-                            <tr class="day-dark">
-                                <td><button id="excDesc" class="excDesc" type="button" title="Ver informacion del ejercicio">${exc.nombre}${existNote(exc.nota)}</button></td>
-                                <td>${exc.serie}</td>
-                                <td>${exc.repe}</td>
-                                `
-                            if(exc.peso_anterior != -1){   
-                                main_body += `
-                                    <td>${peso_anterior(exc.id_exc)}</td>
-                                    <td><center><input type="number" id="repe-${excIndex}" name="repe-${excIndex}" placeholder="${exc.peso}" class="number_input-bt"></center></td>
-                                </tr>
-                                `;
-                            }else{
-                                main_body += `
-                                    <td>Sin peso <input type="number" id="repe-${excIndex}" style="display: none;" value="-1"></td>
-                                    <td></td>
-                                </tr>
-                                    `
-                            }
-                        }
-                    });
-                // Cerrar la tabla
-                main_body += `
-                            </tbody>
-                        </table>
-                            </br>
-                            <div class="alert_message" id="alert_message"></div>
-                            <div class="send_bt">
-                                <button type="submit" class="login-botton">Guardar</button>
-                            </div>
-                            </br>
-                            </br>
-                            <p class="services_text" id="services_text">Nota: Los ejercicios marcados con un " * " indican que el entrenador ha dejado una nota especial relacionada con ellos.</p>
-                        </form>
-                    </div>
-                </div>
-                `;
-
-            configBody.innerHTML = main_body;
-
-            function arraysCount(arrays){
-                let count = 0;
-                arrays.forEach( () => {
-                    count++;
-                })
-                return count
-            }
-
-            function existNote(nota){
-                if(nota != undefined && nota != ""){
-                    return "*"
-                }else{
-                    return ""
-                }
-            }
-
-            function peso_anterior(id){
-                let peso;
-                let cnt = 0;
-                user.historial.slice().reverse().forEach(e => {
-                    if(e.id_exc == id){
-                        if(cnt == 0){
-                            peso = e.peso;
-                            cnt++;
-                        }
-                    }
-                });
-                if(peso == undefined){
-                    return("Sin peso anterior")
-                }else{
-                    return(peso)
-                }
-            }
-
-            document.getElementById('myForm').addEventListener('submit', (event) =>{
-                event.preventDefault();
-                let alert_message = document.getElementById("alert_message"); 
-                let excPath     = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios;
-                let excCount    = excPath.length;
-                let exc_histo   = user.historial;
-                let switch_resp_array = []
-                let correctValue = 0;
-                let beforeError = 0;
-
-                for (let e= 0; e < excCount; e++) {
-                    let peso_exc = document.getElementById("repe-"+e).value;
-                    let switch_resp = debugItem(peso_exc); //me fijo si se ingreso un valor correcto
-                    switch_resp_array.push(switch_resp)
-
-                    if( switch_resp == 3){
-
-                        let exc_obj = {
-                            nombre: "",
-                            peso_anterior: 0,
-                            peso: 0,
-                            serie: 0,
-                            fecha: "",
-                            repe: 0,
-                            info: "",
-                            id_exc: 4
-                        }
-
-                        let exc_obj_array = {
-                            peso: 0,
-                            fecha: "",
-                            id_exc: 4
-                        }
-                        
-                        const fecha = new Date();
-                        const dia = String(fecha.getDate()).padStart(2, '0');
-                        const mes = String(fecha.getMonth() + 1).padStart(2, '0'); // Los meses empiezan desde 0
-                        const año = String(fecha.getFullYear()); // Obtenemos los últimos 2 dígitos del año
-                        const fechaFormateada = `${dia}-${mes}-${año}`;
-                        
-                        exc_obj.peso_anterior   = excPath[e].peso_anterior;
-                        exc_obj.peso            = peso_exc;
-                        exc_obj.fecha           = fechaFormateada;
-                        exc_obj.info            = excPath[e].info;
-                        exc_obj.id_exc          = excPath[e].id_exc;
-                        exc_obj.nombre          = excPath[e].nombre;;
-                        exc_obj.serie           = excPath[e].serie;;
-                        exc_obj.repe            = excPath[e].repe;;
-
-                        exc_obj_array.peso            = peso_exc;
-                        exc_obj_array.fecha           = fechaFormateada;
-                        exc_obj_array.id_exc          = excPath[e].id_exc;
-
-                        user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios[e] = exc_obj;
-                        exc_histo.push(exc_obj_array);
-                    }
-                }
-                user.historial = exc_histo;
-                let actID = (parseInt(user_id) + 1)
-
-                for (let valor of switch_resp_array) {
-                    if(valor == 3 && beforeError == 0){
-                        correctValue = 1;
-                    } else if(valor == 1 || valor == 2){
-                        correctValue = 0;
-                        beforeError = 1;
-                    }
-                }
-
-                if(correctValue != 0){
-                    let loaderBody = document.getElementById("loaderBody");
-                        loaderBody.innerHTML = `
-                        <div id="loading" class="loader-container">
-                            <div class="modern-spinner">
-                                <div></div>
-                                <div></div>
-                                <div></div>
-                                <div></div>
-                            </div>
-                            <p>Subiendo rutina...</p>
-                        </div>
-                        `
-                    actRutina(actID,user);
-                    alert_message.innerHTML = ``
-                }else{
-                    alert_message.innerHTML = `<p>Ingresaste un valor incorrecto o ningun valor.</p>`
-                }
-
-            });
-
-            document.querySelectorAll('.excDesc').forEach((button, index) => {
-                button.addEventListener('click', function() {
-                    let loaderBody = document.getElementById("loaderBody");
-                    let exc = user.rutinas[rutina_id].semanas[weekId].dias[dayId].ejercicios[index];
-                    loaderBody.innerHTML = `
-                    <div id="success-check" class="success-check-container">
-                        <div class="exc_container">
-                            <div class="exc_info">
-                                <div class="exc_title"><h1>${exc.nombre}</h1></div>
-                                <div class= "exc_detail">
-                                    <h2>Descripcion:</h2>
-                                    <h3>${exc.info}</h3>
-                                    <div id="note">
-                                    </div>
-                                    <br/>
-                                    <h2>Desarrollado por:</h2>
-                                    <h3>${viewAuthorID(exc.id_exc)}</h3>
-                                </div>
-                                <div class= "exc_buttons"><button class="exc_button" onclick="document.getElementById('loaderBody').innerHTML = '';">Cerrar</button></div>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                    if(exc.nota != undefined && exc.nota != ""){
-                        note.innerHTML = `
-                            <br/>
-                            <h2>Nota del entrenador:</h2>
-                            <h3>${exc.nota}</h3>
-                        `
-                    }
-                });
-            });
-            
-            function viewAuthorID(id){
-                let id_author = exc_api_array[id-1].author;
-                return viewAuthor(id_author);
-            }
-
-            function viewAuthor(id){
-                if(id != "gymapp"){
-                    return `${users[id-1].nombre} ${users[id-1].apellido}`;
-                }else{
-                    return "gymapp"
-                }
-            }
-
-            function debugItem(item){
-                if(item == 0){
-                    return 0
-                } else if (item < -1){
-                    return 1
-                } else if(isNaN(item)){
-                    return 2
-                } else{
-                    return 3
-                }
-            }
-        });//End submit
-    
-        function last_week(lastWeekUser, rutinaId) {  
-            let week_num = 0;
-        
-            // Trabaja con una copia del arreglo invertido
-            const semanasInvertidas = [...lastWeekUser.rutinas[rutinaId].semanas].reverse();
-        
-            semanasInvertidas.forEach((semana) => {        
-                // Trabaja con una copia de los días invertidos
-                const diasInvertidos = [...semana.dias].reverse();
-        
-                diasInvertidos.forEach((dia) => {
-                    const ejerciciosInvertidos = [...dia.ejercicios].reverse();
-        
-                    ejerciciosInvertidos.forEach((exc) => {
-                        if (week_num === 0 && exc.peso > 0) {
-                            week_num = semana.numero;
-                        }
-                    });
-                });
-            });   
-        
-            return week_num - 1;
-        }
-        function last_day(lastDayuser, rutinaId) {  
-            let day_name = 0;    
-            const total_count = lastDayuser.rutinas[rutinaId].semanas[0].dias.length;  
-            let count;
-        
-            // Clonar las semanas para evitar modificar el original
-            const semanas = [...lastDayuser.rutinas[rutinaId].semanas];
-        
-            semanas.forEach((semana) => {
-                count = total_count - 1;
-        
-                // Clonar los días para evitar modificar el original
-                const dias = [...semana.dias];
-        
-                dias.forEach((dia) => {
-                    // Clonar los ejercicios para evitar modificar el original
-                    const ejercicios = [...dia.ejercicios];
-        
-                    ejercicios.forEach((exc) => {
-                        if (day_name === 0 && exc.peso > 0) {
-                            day_name = count;
-                        }
-                    });
-                    count--;
-                });
-            });           
-            return day_name;
-        }
-        function reinventir_rutina(user,rutinaId){
-            let day_name = 0;      
-            user.rutinas[rutinaId].semanas.reverse().forEach((semana) => {
-                semana.dias.reverse().forEach((dia, index) => {
-                    dia.ejercicios.reverse().forEach((exc) => {
-                        if(day_name == 0){
-                            if (exc.peso > 0) {
-                                day_name = index
-                            }
-                        }
-                    });
-                });
-            });   
-        }
+        `;
     }
 
-    // Función para obtener los usuarios desde la API
-    async function fetchUsers() {
-        try {
-            // Hacer la solicitud a la API
-            const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
-            users = await response.json();
-
-            printExc(users[user_id]);
-        } catch (error) {
-            console.error('Error al obtener los usuarios:', error);
-        }
+    function renderWeekStatus(rutina, weekIndex) {
+        const semana = rutina.semanas[weekIndex];
+        document.getElementById('weekStatus').innerHTML = `
+            <span class="hero-badge">Estás en la semana ${semana.numero}</span>
+            <span class="hero-badge">Progreso de la rutina: ${routineProgress(rutina)}%</span>
+        `;
     }
 
-    async function fetchExc() {
-        try {
-            // Hacer la solicitud a la API
-            const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/excersices');
-            const exc = await response.json();
-            exc_api_array = exc;
+    function renderWeek(weekIndex) {
+        const semana = currentRutina.semanas[weekIndex];
+        const weekContent = document.getElementById('weekContent');
+        weekContent.dataset.week = weekIndex;
 
-        } catch (error) {
-            console.error('Error al obtener los usuarios:', error);
+        renderWeekStatus(currentRutina, weekIndex);
+
+        weekContent.innerHTML = semana.dias.map((dia, diaIndex) => {
+            const pct = dayProgress(dia);
+            const done = pct >= 100;
+            const trackableCount = dia.ejercicios.filter((exc) => exc.peso_anterior !== -1).length;
+            const doneCount = dia.ejercicios.filter((exc) => exc.peso_anterior !== -1 && exc.peso > 0).length;
+            const subtitle = trackableCount === 0
+                ? 'Sin ejercicios con peso'
+                : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
+
+            return `
+                <button class="day-row reveal ${done ? 'done' : ''}" type="button" data-dia="${diaIndex}">
+                    ${ringMarkup(pct)}
+                    <div class="day-row-info">
+                        <h3>${dia.nombre}</h3>
+                        <p>${subtitle}</p>
+                    </div>
+                    <span class="day-row-status ${done ? 'done' : 'pending'}">${done ? 'Completo' : 'Pendiente'}</span>
+                    <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
+            `;
+        }).join('');
+
+        weekContent.querySelectorAll('.day-row').forEach((row) => {
+            row.addEventListener('click', () => openDay(weekIndex, Number(row.dataset.dia)));
+        });
+    }
+
+    function openDay(weekIndex, diaIndex) {
+        const semana = currentRutina.semanas[weekIndex];
+        const dia = semana.dias[diaIndex];
+        const weekContent = document.getElementById('weekContent');
+        document.getElementById('weekPicker').style.display = 'none';
+        document.getElementById('weekStatus').style.display = 'none';
+
+        const trackable = dia.ejercicios
+            .map((exc, excIndex) => ({ exc, excIndex }))
+            .filter((item) => item.exc.peso_anterior !== -1);
+
+        if (trackable.length === 0) {
+            weekContent.innerHTML = `
+                <a class="back-link" id="backToWeek" href="#"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Volver</a>
+                <div class="empty-state reveal">
+                    <h3>${dia.nombre} no tiene ejercicios con peso</h3>
+                    <p>No hay nada para cargar este día.</p>
+                </div>
+            `;
+            document.getElementById('backToWeek').addEventListener('click', (e) => { e.preventDefault(); backToWeek(weekIndex); });
+            return;
         }
+
+        weekContent.innerHTML = `
+            <a class="back-link" id="backToWeek" href="#"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Volver a la semana</a>
+            <div class="auth-card reveal">
+                <span class="eyebrow">${dia.nombre}</span>
+                <h1>Cargar pesos</h1>
+                <p class="subtitle">${currentRutina.nombre} · Semana ${semana.numero}</p>
+
+                ${trackable.map(({ exc, excIndex }) => `
+                    <div class="weight-field">
+                        <div>
+                            <div class="weight-field-label">${exc.nombre}</div>
+                            <div class="weight-field-sub">${exc.serie}x${exc.repe} · anterior: ${exc.peso > 0 ? exc.peso + ' kg' : 'sin registro'}</div>
+                        </div>
+                        <input type="number" class="mini-input weightInput" data-exc="${excIndex}" placeholder="kg">
+                    </div>
+                `).join('')}
+
+                <div class="alert_message" id="alert_message"></div>
+                <button class="btn btn-primary btn-block" id="saveWeights" type="button">Guardar</button>
+            </div>
+        `;
+
+        document.getElementById('backToWeek').addEventListener('click', (e) => { e.preventDefault(); backToWeek(weekIndex); });
+        document.getElementById('saveWeights').addEventListener('click', () => saveWeights(weekIndex, diaIndex));
+    }
+
+    function backToWeek(weekIndex) {
+        document.getElementById('weekPicker').style.display = '';
+        document.getElementById('weekStatus').style.display = '';
+        renderWeek(weekIndex);
+    }
+
+    function saveWeights(weekIndex, diaIndex) {
+        const alert_message = document.getElementById('alert_message');
+        const dia = currentRutina.semanas[weekIndex].dias[diaIndex];
+        const inputs = document.querySelectorAll('.weightInput');
+
+        const today = new Date();
+        const fecha = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+
+        let touched = 0;
+        let error = false;
+
+        inputs.forEach((input) => {
+            const value = input.value.trim();
+            if (value === '') return;
+            const peso = Number(value);
+            if (isNaN(peso) || peso <= 0) { error = true; return; }
+
+            const excIndex = Number(input.dataset.exc);
+            const exc = dia.ejercicios[excIndex];
+            exc.peso = peso;
+            exc.fecha = fecha;
+            currentUser.historial.push({ peso, fecha, id_exc: exc.id_exc });
+            touched++;
+        });
+
+        if (error) {
+            alert_message.innerHTML = `<p>Ingresá solo números mayores a 0.</p>`;
+            return;
+        }
+        if (touched === 0) {
+            alert_message.innerHTML = `<p>Cargá al menos un peso para guardar.</p>`;
+            return;
+        }
+
+        alert_message.innerHTML = '';
+        const loaderBody = document.getElementById('loaderBody');
+        loaderBody.innerHTML = `
+            <div class="loader-container">
+                <div class="modern-spinner"><div></div><div></div><div></div><div></div></div>
+                <p>Guardando pesos...</p>
+            </div>
+        `;
+        actRutina(parseInt(user_id) + 1, currentUser);
     }
 
     async function actRutina(userId, user) {
-        let alert_message = document.getElementById("alert_message"); 
-        let loaderBody = document.getElementById("loaderBody");
+        const loaderBody = document.getElementById('loaderBody');
         try {
             const response = await fetch(`https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users/${userId}`, {
-                method: 'PUT',  
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(user)  
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(user)
             });
 
             if (response.ok) {
                 loaderBody.innerHTML = `
-                    <div id="success-check" class="success-check-container">
+                    <div class="success-check-container">
                         <div class="success-icon">
                             <svg viewBox="0 0 52 52" class="success-svg">
                                 <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
                                 <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
                             </svg>
                         </div>
-                        <p>¡Peso actualizado con exito!. Espere sera redirigido</p>
+                        <p>¡Peso actualizado con éxito! Espere, será redirigido</p>
                     </div>
                 `;
-                setTimeout(() => {
-                    loaderBody.innerHTML = ``;
-                }, 3000); 
+                setTimeout(() => { window.location.href = `profile.html`; }, 2500);
             } else {
-                loaderBody.innerHTML = ``;
-                alert_message.innerHTML = `<p>ERROR! No se pudo subir la rutina.</p>`
+                loaderBody.innerHTML = '';
+                const alert_message = document.getElementById('alert_message');
+                if (alert_message) alert_message.innerHTML = `<p>ERROR! No se pudo guardar.</p>`;
             }
         } catch (error) {
-            loaderBody.innerHTML = ``;
-            alert_message.innerHTML = `<p>ERROR! Hubo un problema con la solicitud</p>`
+            loaderBody.innerHTML = '';
+            const alert_message = document.getElementById('alert_message');
+            if (alert_message) alert_message.innerHTML = `<p>ERROR! Hubo un problema con la solicitud.</p>`;
         }
     }
 
-    // Llamar a la función para obtener los usuarios al cargar la página
-    fetchUsers();
-    fetchExc();
+    async function init() {
+        try {
+            const response = await fetch('https://66ec441f2b6cf2b89c5de52a.mockapi.io/gymApy/users');
+            const users = await response.json();
+            currentUser = users[user_id];
+            currentRutina = currentUser ? currentUser.rutinas[rutina_id] : null;
+
+            if (!currentUser || !currentRutina) {
+                document.getElementById('routineTitle').textContent = 'No se encontró esta rutina.';
+                document.getElementById('weekPicker').remove();
+                document.getElementById('weekStatus').remove();
+                return;
+            }
+
+            document.getElementById('routineTitle').textContent = currentRutina.nombre;
+            document.getElementById('routineSubtitle').textContent = 'Elegí un día para cargar el peso de hoy.';
+
+            const startWeek = currentWeekIndex(currentRutina);
+
+            const weekSelect = document.getElementById('weekSelect');
+            weekSelect.innerHTML = currentRutina.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join('');
+            weekSelect.value = startWeek;
+            weekSelect.addEventListener('change', () => renderWeek(Number(weekSelect.value)));
+
+            renderWeek(startWeek);
+        } catch (error) {
+            console.error('Error al cargar los pesos:', error);
+        }
+    }
+
+    init();
 } else {
     window.location.href = `login.html`;
 }

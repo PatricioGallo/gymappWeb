@@ -92,6 +92,11 @@ a { color: inherit; text-decoration: none; }
 
 .btn:active { transform: scale(0.97); }
 
+/* Un <svg fill="none" stroke-width="2" ...> sin "stroke" definido no dibuja
+   nada (el default de SVG es stroke:none) pero sigue ocupando su espacio en
+   el flex layout del boton, corriendo el texto hacia la derecha. */
+.btn svg { stroke: currentColor; flex-shrink: 0; }
+
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #0a0c0f;
@@ -705,6 +710,7 @@ a { color: inherit; text-decoration: none; }
 
 .alert_message { font-size: 13.5px; color: #ff7a7a; margin: -4px 0 14px; }
 .alert_message:empty { display: none; margin: 0; }
+.alert_message-center { text-align: center; }
 .alert_message p { margin: 0; }
 
 .auth-foot { text-align: center; margin-top: 22px; font-size: 13.5px; color: var(--text-muted); }
@@ -1302,6 +1308,236 @@ a { color: inherit; text-decoration: none; }
 }
 
 .exc-meta strong { color: var(--text); font-weight: 700; }
+
+.exc-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.exc-edit-row:first-of-type { border-top: none; padding-top: 0; }
+
+.exc-edit-header {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.exc-edit-header span:first-child { flex: 1 1 160px; }
+
+.exc-edit-header span:not(:first-child) {
+  width: 68px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.exc-edit-row select {
+  flex: 1 1 160px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+
+.mini-input {
+  width: 68px;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 10px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.mini-input:focus, .exc-edit-row select:focus { outline: none; border-color: var(--accent-2); }
+.mini-input::placeholder { color: var(--text-muted); }
+
+.exc-remove {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.exc-remove:hover { border-color: #ff8a8a; color: #ff8a8a; }
+
+.day-add-btn {
+  margin-top: 12px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.day-add-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+
+/* ---------- Semana: filas de dia con mini progreso (pesos.html) ---------- */
+
+.week-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: -8px 0 28px;
+}
+
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.day-row + .day-row { margin-top: 10px; }
+.day-row:hover { border-color: var(--accent-2); }
+.day-row.done { border-color: rgba(47, 217, 113, 0.35); }
+
+.day-ring { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+.day-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.day-ring circle { fill: none; stroke-width: 4; }
+.day-ring .ring-bg { stroke: var(--surface-2); }
+.day-ring .ring-fg { stroke: var(--accent-2); stroke-linecap: round; }
+.day-row.done .ring-fg { stroke: var(--live); }
+
+.day-ring-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.day-row-info { flex: 1; min-width: 0; }
+.day-row-info h3 { margin: 0 0 2px; font-size: 15px; }
+.day-row-info p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+
+.day-row-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.day-row-status.pending { background: var(--accent-soft); color: var(--accent-2); }
+.day-row-status.done { background: var(--live-soft); color: var(--live); }
+
+.day-row-chevron { flex-shrink: 0; width: 18px; height: 18px; stroke: var(--text-muted); }
+
+.weight-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.weight-field:first-of-type { border-top: none; padding-top: 0; }
+.weight-field-label { font-weight: 700; font-size: 14.5px; }
+.weight-field-sub { font-weight: 500; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.weight-field input { width: 90px; flex-shrink: 0; }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+.back-link:hover { color: var(--accent-2); }
+.back-link svg { width: 15px; height: 15px; }
+
+/* ---------- Constructor de rutina (rutinsView) ---------- */
+
+.exc-block { padding: 12px 0; border-top: 1px solid var(--border); }
+.exc-block:first-child { padding-top: 0; border-top: none; }
+
+.exc-block .exc-edit-row { border-top: none; padding: 0 0 8px; }
+
+.exc-extra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exc-extra label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.exc-extra input[type="checkbox"] { accent-color: var(--accent-2); }
+
+.exc-extra input[type="text"] {
+  flex: 1;
+  min-width: 140px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.day-name-select {
+  width: 100%;
+  max-width: 220px;
+  margin-bottom: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+}
 
 /* ---------- Modal (overlay generado por JS) ---------- */
 

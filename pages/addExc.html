@@ -1,218 +1,89 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-<!-- basic -->
 <meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- mobile metas -->
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="viewport" content="initial-scale=1, maximum-scale=1">
-<!-- site metas -->
-<title>Nuevo Ejercicio - GymApp</title>
-<meta name="keywords" content="GymApp, fitness, entrenamiento, gimnasio, salud, ejercicios, rutinas personalizadas, progreso físico">
-<meta name="description" content="Descubre GymApp, tu aliado perfecto para el gimnasio. Crea rutinas personalizadas, sigue tu progreso y alcanza tus metas fitness de manera efectiva.">
-<meta name="author" content="GymApp Team">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="index, follow">
+<title>GymApp - Agregar ejercicio</title>
+<meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
-<!-- bootstrap css -->
-<link rel="stylesheet" type="text/css" href="../css/bootstrap.min.css">
-<!-- style css -->
-<link rel="stylesheet" type="text/css" href="../css/style.css">
-<link rel="stylesheet" type="text/css" href="../css/table_style.css">
-<!-- Responsive-->
-<link rel="stylesheet" href="../css/responsive.css">
-<!-- fevicon -->
 <link rel="icon" href="../images/fevicon.png" type="image/gif" />
-<!-- Scrollbar Custom CSS -->
-<link rel="stylesheet" href="../css/jquery.mCustomScrollbar.min.css">
-<!-- Tweaks for older IEs-->
-<link rel="stylesheet" href="https://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css">
-<!-- owl stylesheets --> 
-<link rel="stylesheet" href="../css/owl.carousel.min.css">
-<link rel="stylesheet" href="../css/owl.theme.default.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.css" media="screen">
-
+<link rel="stylesheet" href="../css/modern.css">
 </head>
 <body>
-  <!-- Inicio de la sección del header -->
-  <div class="header_section padding_bottom_0">
-    <div class="container-fluid">
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
-            <div class="logo">
-                <a href="profile.html"><img src="../images/logo.png" alt="Logo"></a>
-            </div>
-            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                <ul class="navbar-nav ml-auto"> <!-- Clase "ml-auto" mueve el navbar a la derecha -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="profile.html">Rutinas</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="exit.html">Salir</a>
-                    </li>
-                </ul>
-            </div>
-        </nav>
-    </div>
-  </div>
-  <!-- Fin de la sección del header -->
-    <!--header section end -->
-    <div class="Contact_section layout_padding">
-      <div class="container">
-        <h1 class="categories_text">Agregar un ejercicio nuevo</h1>
-        <p class="services_text">Completando el siguiente formulario podras ingresar un ejercicio personalizado, que se guardara en nuestra base de datos con tu nombre de autor, para que puedas utilziarlo luego en tus rutinas personalizadas. 
-          <br/>Recuerda compeltar con el nombre especifico del ejercicio y una breve descripcion (maximo 600 caracteres).
-        </p>
-        <div class="email_box">
-          <div class="input_main">
-            <div id=loaderBody></div>
-            <form id="myForm">
-                <div class="form-group">
-                  <input type="text" class="email-bt" placeholder="Nombre del ejercicio" name="excName" id="excName">
-                </div>
-                <div class="form-group">
-                  <textarea id="description" class="email-bt" name="description" rows="6" cols="75" placeholder="Escribe una breve descripción del ejercicio (minimo 100 caracteres)..." required></textarea><br>
-                </div>
-                <div class="alert_message" id="alert_message"></div>
-                <div class="send_bt">
-                  <button type="submit" class="login-botton">AGREGAR</button>
-                </div>
-              </form>                     
-          </div>
-        </div>
-      </div>
-    </div>
-  
-    <!-- Fin de la sección de contacto -->
-    <div class="contact_section_2 layout_padding">
-      <div class="container">
-          <h1 class="services_taital">Sobre GymApp</h1>
-          <p class="services_text">En GymApp, ofrecemos planes de entrenamiento diseñados para adaptarse a tus objetivos.</p>
-          <div id="carouselExampleIndicators" class="carousel slide" data-ride="carousel">
-              <ol class="carousel-indicators">
-                  <li data-target="#carouselExampleIndicators" data-slide-to="0" class="active"></li>
-                  <li data-target="#carouselExampleIndicators" data-slide-to="1"></li>
-                  <li data-target="#carouselExampleIndicators" data-slide-to="2"></li>
-              </ol>
-              <div class="carousel-inner">
-                  <div class="carousel-item active">
-                      <div class="duit_box">
-                          <h1 class="duis_text">Seguimiento</h1>
-                          <p class="dolor_text">Registra cada serie, repetición y peso levantado. GymApp te ayuda a visualizar tu progreso semanalmente para que siempre estés motivado a superar tus marcas.</p>
-                      </div>
-                      <div class="quote_icon"><img src="../images/quote-icon.png"></div>
-                  </div>
-                  <div class="carousel-item">
-                      <div class="duit_box">
-                          <h1 class="duis_text">Planes</h1>
-                          <p class="dolor_text">Crea rutinas adaptadas a tus objetivos: pérdida de peso, ganancia muscular o mejora del rendimiento. GymApp se ajusta a ti, ofreciendo días y ejercicios según tu disponibilidad.</p>
-                      </div>
-                      <div class="quote_icon"><img src="../images/quote-icon.png"></div>
-                  </div>
-                  <div class="carousel-item">
-                      <div class="duit_box">
-                          <h1 class="duis_text">Estadísticas</h1>
-                          <p class="dolor_text">Analiza gráficos y métricas que muestran tu rendimiento a lo largo del tiempo. Descubre tus puntos fuertes y las áreas en las que puedes mejorar.</p>
-                      </div>
-                      <div class="quote_icon"><img src="../images/quote-icon.png"></div>
-                  </div>
-              </div>
-          </div>
-      </div>
-    </div>
-  <!--footer section start -->
-  <div class="footer_section layout_padding">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-6">
-                <h1 class="newsletter_text">Boletín Informativo</h1>
-            </div>
-            <div class="col-md-6">
-                <div class="box_main_2">
-                    <textarea class="email_bt_2" placeholder="Ingresa tu correo electrónico" name=""></textarea>
-                </div>
-                <button class="subscribe_bt_2"><a href="#">Suscribirse</a></button>
-            </div>
-        </div>
-        <div class="footer_taital">
-            <div class="row">
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">DIRECCIÓN</h3>
-                    <div class="location_text">
-                        <img src="../images/map-icon.png">
-                        <span class="padding_left_15">SMT - TUC</span>
-                    </div>
-                    <div class="location_text">
-                        <img src="../images/call-icon.png">
-                        <span class="padding_left_15">+ 549 381 400 400</span>
-                    </div>
-                    <div class="location_text">
-                        <img src="../images/mail-icon.png">
-                        <span class="padding_left_15">admin@gmapp.com</span>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">ENLACES ADICIONALES</h3>
-                    <div class="footer_menu">
-                        <ul>
-                            <li><a href="profile.html">Perfil</a></li>
-                            <li class="active"><a href="addExc.html">Agregar nuevo ejercicio</a></li>
-                            <li><a href="exit.html">Salir</a></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">BOLETÍN INFORMATIVO</h3>
-                    <div class="subscribe_left">
-                        <form>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" placeholder="Ingresa tu correo electrónico">
-                                <div class="input-group-append">
-                                    <span class="input-group-text">Suscribirse</span>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <p class="contrary_text">Puede suscribirte y recibir noticias diarias sobre nosotros, tu gymbro de confianza.</p>
-                </div>
-                <div class="col-sm-6 col-lg-3">
-                    <h3 class="useful_text">Síguenos</h3>
-                    <div class="social_icon">
-                        <ul>
-                            <li><a href="#"><img src="../images/fb-icon.png"></a></li>
-                            <li><a href="#"><img src="../images/twitter-icon.png"></a></li>
-                            <li><a href="https://www.instagram.com/patoogallo"><img src="../images/instagram-icon.png"></a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="copyright_text">
-            © Copyright 2025 Todos los derechos reservados por <a href="https://www.instagram.com/patoogallo">PG</a>
-        </div>
-    </div>
-  </div>
 
-  <!--footer section end -->
-  <!-- Conexión al archivo de JavaScript -->
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="profile.html">
+        <img src="../images/logo.png" alt="GymApp">
+        <span>GymApp</span>
+      </a>
+      <nav class="site-nav" id="siteNav">
+        <a href="profile.html">Perfil</a>
+        <a href="exit.html">Salir</a>
+      </nav>
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="auth-section">
+    <div class="container">
+      <div class="auth-card reveal">
+        <span class="eyebrow">Catálogo de ejercicios</span>
+        <h1>Agregar un ejercicio</h1>
+        <p class="subtitle">Se guarda con tu nombre como autor y vas a poder usarlo en cualquiera de tus rutinas.</p>
+
+        <div id="loaderBody"></div>
+
+        <form id="myForm" novalidate>
+          <div class="field">
+            <label for="excName">Nombre del ejercicio</label>
+            <input type="text" id="excName" name="excName" placeholder="Ej: Press inclinado con mancuernas">
+          </div>
+
+          <div class="field">
+            <label for="description">Descripción</label>
+            <textarea id="description" name="description" rows="5" placeholder="Cómo se hace, en qué fijarse (mínimo 100 caracteres)"></textarea>
+          </div>
+
+          <div class="alert_message" id="alert_message"></div>
+
+          <button type="submit" class="btn btn-primary btn-block">Agregar ejercicio</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="profile.html">
+            <img src="../images/logo.png" alt="GymApp">
+            <span>GymApp</span>
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+        </div>
+        <nav class="footer-links">
+          <a href="profile.html">Perfil</a>
+          <a href="contact.html">Contactanos</a>
+          <a href="exit.html">Salir</a>
+        </nav>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 GymApp. Todos los derechos reservados.</span>
+        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/ui.js"></script>
   <script src="../js/addExc.js"></script>
-  
-  <!--footer section end -->
-  <!-- Javascript files-->
-  <script src="../js/jquery.min.js"></script>
-  <script src="../js/popper.min.js"></script>
-  <script src="../js/bootstrap.bundle.min.js"></script>
-  <script src="../js/jquery-3.0.0.min.js"></script>
-  <script src="../js/plugin.js"></script>
-  <!-- sidebar -->
-  <script src="../js/jquery.mCustomScrollbar.concat.min.js"></script>
-  <script src="../js/custom.js"></script>
-  <!-- javascript --> 
-  <script src="../js/owl.carousel.js"></script>
-  <script src="https:cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.min.js"></script>
 </body>
 </html>
