@@ -150,6 +150,7 @@ export type Database = {
           nota: string | null
           orden: number
           repe: number
+          repe_max: number | null
           serie: number
         }
         Insert: {
@@ -162,6 +163,7 @@ export type Database = {
           nota?: string | null
           orden?: number
           repe: number
+          repe_max?: number | null
           serie: number
         }
         Update: {
@@ -174,6 +176,7 @@ export type Database = {
           nota?: string | null
           orden?: number
           repe?: number
+          repe_max?: number | null
           serie?: number
         }
         Relationships: [

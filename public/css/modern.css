@@ -865,31 +865,76 @@ a { color: inherit; text-decoration: none; }
 }
 
 .success-icon {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 16px;
-  animation: pop-in 0.35s cubic-bezier(.22, .9, .32, 1.2) both;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 18px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 8px 28px rgba(255, 77, 77, 0.4);
+  animation: success-pop 0.5s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+
+/* anillo que se expande y se desvanece una vez, para dar sensacion de "logrado" */
+.success-icon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--accent-2);
+  opacity: 0;
+  animation: success-ring 0.9s ease-out 0.15s;
 }
 
 .success-svg {
-  width: 100%;
-  height: 100%;
-  stroke: var(--live);
-  stroke-width: 3;
+  width: 58%;
+  height: 58%;
+  stroke: #fff;
+  stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
+  position: relative;
+  z-index: 1;
 }
 
-.success-circle { stroke-dasharray: 157; stroke-dashoffset: 157; animation: circle-draw 0.5s ease-out forwards; }
-.success-check { stroke-dasharray: 48; stroke-dashoffset: 48; animation: check-draw 0.35s ease-out 0.45s forwards; }
+/* el circulo ya lo resuelve el fondo en degrade de .success-icon */
+.success-circle { display: none; }
 
-@keyframes pop-in {
-  from { transform: scale(0.6); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+.success-check {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  opacity: 0;
+  animation: check-draw 0.3s ease-out 0.3s forwards;
 }
 
-@keyframes circle-draw { to { stroke-dashoffset: 0; } }
-@keyframes check-draw { to { stroke-dashoffset: 0; } }
+.success-check-container p {
+  opacity: 0;
+  animation: text-rise 0.4s ease-out 0.5s forwards;
+}
+
+@keyframes success-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  65% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes success-ring {
+  0% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+
+@keyframes check-draw {
+  0% { stroke-dashoffset: 48; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes text-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* ---------- Features ---------- */
 
@@ -1606,9 +1651,18 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   color: var(--text-muted);
 }
 
-.exc-edit-header span:first-child { flex: 1 1 160px; }
+.exc-edit-header-name { flex: 1 1 160px; }
+.exc-edit-header-spacer { width: 22px; flex-shrink: 0; }
+/* mismo ancho que .exc-remove, para que la fila de encabezados tenga el mismo
+   total de "columnas fijas" que la fila de inputs y la columna flexible
+   (Ejercicio) no quede con un ancho distinto en una y otra */
+.exc-edit-header-spacer-remove { width: 30px; }
 
-.exc-edit-header span:not(:first-child) {
+/* mismo elemento que el separador "a" de la fila, oculto: ocupa el ancho exacto para que Hasta quede alineado.
+   text-transform: none anula el uppercase del header, si no "a" se renderiza como "A" (mas ancha) y desalinea. */
+.exc-edit-header .exc-repe-sep { visibility: hidden; text-transform: none; }
+
+.exc-edit-header span:not(.exc-edit-header-name):not(.exc-edit-header-spacer):not(.exc-repe-sep) {
   width: 68px;
   flex-shrink: 0;
   text-align: center;
@@ -1655,6 +1709,34 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .exc-remove:hover { border-color: #ff8a8a; color: #ff8a8a; }
+
+.exc-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.exc-move-up, .exc-move-down {
+  width: 22px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.exc-move-up { border-radius: 5px 5px 2px 2px; }
+.exc-move-down { border-radius: 2px 2px 5px 5px; }
+
+.exc-move-up:hover:not(:disabled), .exc-move-down:hover:not(:disabled) { color: var(--accent-2); border-color: var(--accent-2); }
+.exc-move-up:disabled, .exc-move-down:disabled { opacity: 0.3; cursor: default; }
+
+.exc-repe-sep { color: var(--text-muted); font-size: 12.5px; flex-shrink: 0; }
 
 .day-add-btn {
   margin-top: 12px;

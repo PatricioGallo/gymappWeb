@@ -4,6 +4,7 @@ import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, getSharedRoutine, setRoutineShareable, type RoutineDetail } from "../services/routine.service";
 import { CATEGORY_LABELS, type ExerciseCategory } from "../services/exercise.service";
+import { formatRepe } from "../lib/reps";
 
 setupNavToggle();
 setupRevealObserver();
@@ -146,7 +147,7 @@ function renderWeekContent(diasBase: RoutineDetail["semanas"][number]["dias"], w
                 ${exc.nota ? '<span class="exc-note-dot" title="Tiene nota del entrenador"></span>' : ""}
               </button>
               <span>${exc.serie}</span>
-              <span>${exc.repe}</span>
+              <span>${formatRepe(exc.repe, exc.repe_max)}</span>
               <span>${weekCount}</span>
             </div>`
             )
@@ -216,7 +217,7 @@ async function renderShared(token: string) {
                 <button class="exc-name" type="button" data-dia="${diaIndex}" data-exc="${excIndex}">
                   ${escapeHtml(exc.nombre)}${exc.nota ? '<span class="exc-note-dot" title="Tiene nota del entrenador"></span>' : ""}
                 </button>
-                <span>${exc.serie}</span><span>${exc.repe}</span><span>${routine.semanas.length}</span>
+                <span>${exc.serie}</span><span>${formatRepe(exc.repe, exc.repe_max)}</span><span>${routine.semanas.length}</span>
               </div>`
               )
               .join("")}

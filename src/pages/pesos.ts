@@ -3,6 +3,7 @@ import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
 import { insertWeightLogs, getLatestWeights } from "../services/weightLog.service";
+import { formatRepe } from "../lib/reps";
 
 setupNavToggle();
 setupRevealObserver();
@@ -141,7 +142,7 @@ function openDay(weekIndex: number, diaIndex: number) {
         <div class="weight-field">
           <div>
             <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <div class="weight-field-sub">${exc.serie}x${exc.repe} · anterior: ${last ? `${last.peso} kg` : "sin registro"}</div>
+            <div class="weight-field-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)} · anterior: ${last ? `${last.peso} kg` : "sin registro"}</div>
           </div>
           <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${exc.serie}" data-repe="${exc.repe}" placeholder="kg">
         </div>`;
