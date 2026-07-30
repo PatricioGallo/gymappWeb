@@ -12,6 +12,7 @@ export interface NewDayInput {
     info_snapshot: string;
     serie: number;
     repe: number;
+    repe_max?: number | null;
     nota: string;
     es_medible: boolean;
     orden: number;
@@ -133,7 +134,10 @@ export async function deleteRoutine(routineId: string): Promise<void> {
 export async function updateRoutineExercise(
   id: string,
   fields: Partial<
-    Pick<RoutineExercise, "serie" | "repe" | "nota" | "es_medible" | "orden" | "exercise_id" | "nombre_snapshot" | "info_snapshot">
+    Pick<
+      RoutineExercise,
+      "serie" | "repe" | "repe_max" | "nota" | "es_medible" | "orden" | "exercise_id" | "nombre_snapshot" | "info_snapshot"
+    >
   >
 ): Promise<void> {
   const { error } = await supabase.from("routine_exercises").update(fields).eq("id", id);

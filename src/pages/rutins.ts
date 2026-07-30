@@ -6,6 +6,7 @@ import { escapeHtml } from "../lib/dom";
 import { DIA_LABELS, diaLabel, formatFechaCorta } from "../lib/dias";
 import { openExercisePicker } from "../lib/exercisePicker";
 import { ROUTINE_TEMPLATES, LEVEL_LABELS, type RoutineTemplate } from "../lib/routineTemplates";
+import { formatRepe } from "../lib/reps";
 
 setupNavToggle();
 setupRevealObserver();
@@ -178,7 +179,9 @@ function ownRoutineCardMarkup(r: RoutineWithCounts): string {
   `;
 }
 
-function tplDaysPreviewMarkup(days: { dia_semana: number; titulo?: string; items: { nombre: string; serie: number; repe: number }[] }[]): string {
+function tplDaysPreviewMarkup(
+  days: { dia_semana: number; titulo?: string; items: { nombre: string; serie: number; repe: number; repeMax?: number | null }[] }[]
+): string {
   return `
     <div class="tpl-days">
       ${days
@@ -186,7 +189,7 @@ function tplDaysPreviewMarkup(days: { dia_semana: number; titulo?: string; items
           (d) => `
         <div class="tpl-day">
           <h4>${escapeHtml(diaLabel(d.dia_semana))}${d.titulo ? ` · ${escapeHtml(d.titulo)}` : ""}</h4>
-          <ul>${d.items.map((e) => `<li>${escapeHtml(e.nombre)}<span>${e.serie}x${e.repe}</span></li>`).join("")}</ul>
+          <ul>${d.items.map((e) => `<li>${escapeHtml(e.nombre)}<span>${e.serie}x${formatRepe(e.repe, e.repeMax)}</span></li>`).join("")}</ul>
         </div>
       `
         )
@@ -208,6 +211,7 @@ function resolveTemplateDays(t: RoutineTemplate): NewDayInput[] | null {
         info_snapshot: excDef.info,
         serie: item.serie,
         repe: item.repe,
+        repe_max: null,
         nota: item.nota ?? "",
         es_medible: item.es_medible ?? true,
         orden,
@@ -227,7 +231,7 @@ function openTemplatePreview(t: RoutineTemplate) {
         <span class="hero-badge">${escapeHtml(LEVEL_LABELS[t.level])}</span>
         <h2>${escapeHtml(t.label)}</h2>
         <p class="subtitle">${escapeHtml(t.description)}</p>
-        ${tplDaysPreviewMarkup(t.dias.map((d) => ({ dia_semana: d.dia_semana, titulo: d.titulo, items: d.ejercicios.map((e) => ({ nombre: e.name, serie: e.serie, repe: e.repe })) })))}
+        ${tplDaysPreviewMarkup(t.dias.map((d) => ({ dia_semana: d.dia_semana, titulo: d.titulo, items: d.ejercicios.map((e) => ({ nombre: e.name, serie: e.serie, repe: e.repe, repeMax: null })) })))}
         <form id="tplUseForm" novalidate>
           <div class="field"><label for="tplName">Nombre de la rutina</label><input type="text" id="tplName" value="${escapeHtml(t.label)}"></div>
           <div class="field"><label for="tplWeeks">Semanas</label><input type="number" id="tplWeeks" min="1" max="10" value="${t.semanasSugeridas}"></div>
@@ -286,7 +290,7 @@ async function openClonePreview(r: RoutineWithCounts) {
       <div class="modal-card modal-card-lg">
         <h2>${escapeHtml(detail.nombre)}</h2>
         <p class="subtitle">Se va a crear una rutina nueva con los mismos ejercicios, para que empieces de cero.</p>
-        ${tplDaysPreviewMarkup(baseWeek.dias.map((d) => ({ dia_semana: d.dia_semana, items: d.ejercicios.map((e) => ({ nombre: e.nombre_snapshot, serie: e.serie, repe: e.repe })) })))}
+        ${tplDaysPreviewMarkup(baseWeek.dias.map((d) => ({ dia_semana: d.dia_semana, items: d.ejercicios.map((e) => ({ nombre: e.nombre_snapshot, serie: e.serie, repe: e.repe, repeMax: e.repe_max })) })))}
         <form id="cloneForm" novalidate>
           <div class="field"><label for="cloneName">Nombre de la rutina</label><input type="text" id="cloneName" value="${escapeHtml(detail.nombre)}"></div>
           <div class="field"><label for="cloneWeeks">Semanas</label><input type="number" id="cloneWeeks" min="1" max="10" value="${baseWeek ? detail.semanas.length : 4}"></div>
@@ -325,6 +329,7 @@ async function openClonePreview(r: RoutineWithCounts) {
         info_snapshot: e.info_snapshot,
         serie: e.serie,
         repe: e.repe,
+        repe_max: e.repe_max,
         nota: e.nota ?? "",
         es_medible: e.es_medible,
         orden,
@@ -342,10 +347,16 @@ function excBlockMarkup(): string {
   return `
     <div class="exc-block">
       <div class="exc-edit-row">
+        <div class="exc-reorder">
+          <button type="button" class="exc-move-up" title="Subir">▲</button>
+          <button type="button" class="exc-move-down" title="Bajar">▼</button>
+        </div>
         <button type="button" class="exc-picker-btn">Elegir ejercicio</button>
         <input type="hidden" class="excSelectInput" value="">
         <input type="number" class="mini-input serieInput" placeholder="Series" min="1" max="10">
         <input type="number" class="mini-input repeInput" placeholder="Repes" min="1" max="30">
+        <span class="exc-repe-sep">a</span>
+        <input type="number" class="mini-input repeMaxInput" placeholder="opcional" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
       </div>
       <div class="exc-extra">
@@ -354,6 +365,14 @@ function excBlockMarkup(): string {
       </div>
     </div>
   `;
+}
+
+function updateMoveButtons(list: Element): void {
+  const blocks = list.querySelectorAll(".exc-block");
+  blocks.forEach((block, i) => {
+    block.querySelector<HTMLButtonElement>(".exc-move-up")!.disabled = i === 0;
+    block.querySelector<HTMLButtonElement>(".exc-move-down")!.disabled = i === blocks.length - 1;
+  });
 }
 
 function dayCardMarkup(dayIndex: number): string {
@@ -429,15 +448,38 @@ function renderBuilder(name: string, weeks: number, days: number) {
     <div class="auth-trust"><button class="btn btn-primary" id="createRoutine" type="button">Crear rutina</button></div>
   `;
 
+  document.querySelectorAll("#dayCards .exc-list").forEach((list) => updateMoveButtons(list));
+
   document.getElementById("dayCards")?.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     if (target.classList.contains("day-add-btn")) {
-      target.previousElementSibling?.insertAdjacentHTML("beforeend", excBlockMarkup());
+      const list = target.previousElementSibling;
+      list?.insertAdjacentHTML("beforeend", excBlockMarkup());
+      if (list) updateMoveButtons(list);
     }
     if (target.classList.contains("exc-remove")) {
       const block = target.closest(".exc-block");
       const list = block?.parentElement;
-      if (list && list.children.length > 1) block?.remove();
+      if (list && list.children.length > 1) {
+        block?.remove();
+        updateMoveButtons(list);
+      }
+    }
+    if (target.classList.contains("exc-move-up")) {
+      const block = target.closest(".exc-block");
+      const prev = block?.previousElementSibling;
+      if (block && prev) {
+        block.parentElement!.insertBefore(block, prev);
+        updateMoveButtons(block.parentElement!);
+      }
+    }
+    if (target.classList.contains("exc-move-down")) {
+      const block = target.closest(".exc-block");
+      const next = block?.nextElementSibling;
+      if (block && next) {
+        block.parentElement!.insertBefore(next, block);
+        updateMoveButtons(block.parentElement!);
+      }
     }
     if (target.classList.contains("exc-picker-btn")) {
       const block = target.closest<HTMLElement>(".exc-block")!;
@@ -466,6 +508,8 @@ async function submitRoutine(name: string, weeks: number) {
       const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
       const serie = parseInt((block.querySelector(".serieInput") as HTMLInputElement).value, 10);
       const repe = parseInt((block.querySelector(".repeInput") as HTMLInputElement).value, 10);
+      const repeMaxRaw = (block.querySelector(".repeMaxInput") as HTMLInputElement).value;
+      const repeMax = repeMaxRaw ? parseInt(repeMaxRaw, 10) : null;
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
       const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
 
@@ -481,6 +525,10 @@ async function submitRoutine(name: string, weeks: number) {
         error = "Las repeticiones tienen que ser entre 1 y 30.";
         return;
       }
+      if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
+        error = "El 'hasta' del rango tiene que ser mayor o igual a las repeticiones y como máximo 30.";
+        return;
+      }
       if (nota.length > 140) {
         error = "Las notas tienen un máximo de 140 caracteres.";
         return;
@@ -493,6 +541,7 @@ async function submitRoutine(name: string, weeks: number) {
         info_snapshot: excDef.info,
         serie,
         repe,
+        repe_max: repeMax,
         nota,
         es_medible: !noWeight,
         orden,

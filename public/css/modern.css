@@ -1651,9 +1651,18 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   color: var(--text-muted);
 }
 
-.exc-edit-header span:first-child { flex: 1 1 160px; }
+.exc-edit-header-name { flex: 1 1 160px; }
+.exc-edit-header-spacer { width: 22px; flex-shrink: 0; }
+/* mismo ancho que .exc-remove, para que la fila de encabezados tenga el mismo
+   total de "columnas fijas" que la fila de inputs y la columna flexible
+   (Ejercicio) no quede con un ancho distinto en una y otra */
+.exc-edit-header-spacer-remove { width: 30px; }
 
-.exc-edit-header span:not(:first-child) {
+/* mismo elemento que el separador "a" de la fila, oculto: ocupa el ancho exacto para que Hasta quede alineado.
+   text-transform: none anula el uppercase del header, si no "a" se renderiza como "A" (mas ancha) y desalinea. */
+.exc-edit-header .exc-repe-sep { visibility: hidden; text-transform: none; }
+
+.exc-edit-header span:not(.exc-edit-header-name):not(.exc-edit-header-spacer):not(.exc-repe-sep) {
   width: 68px;
   flex-shrink: 0;
   text-align: center;
@@ -1700,6 +1709,34 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .exc-remove:hover { border-color: #ff8a8a; color: #ff8a8a; }
+
+.exc-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.exc-move-up, .exc-move-down {
+  width: 22px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.exc-move-up { border-radius: 5px 5px 2px 2px; }
+.exc-move-down { border-radius: 2px 2px 5px 5px; }
+
+.exc-move-up:hover:not(:disabled), .exc-move-down:hover:not(:disabled) { color: var(--accent-2); border-color: var(--accent-2); }
+.exc-move-up:disabled, .exc-move-down:disabled { opacity: 0.3; cursor: default; }
+
+.exc-repe-sep { color: var(--text-muted); font-size: 12.5px; flex-shrink: 0; }
 
 .day-add-btn {
   margin-top: 12px;

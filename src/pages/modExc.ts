@@ -28,10 +28,16 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
   return `
     <div class="exc-block" data-existing-id="${exc?.id ?? ""}">
       <div class="exc-edit-row">
+        <div class="exc-reorder">
+          <button type="button" class="exc-move-up" title="Subir">▲</button>
+          <button type="button" class="exc-move-down" title="Bajar">▼</button>
+        </div>
         <button type="button" class="exc-picker-btn">${selectedLabel}</button>
         <input type="hidden" class="excSelectInput" value="${exc?.exercise_id ?? ""}">
         <input type="number" class="mini-input serieInput" value="${exc?.serie ?? ""}" placeholder="Series" min="1" max="10">
         <input type="number" class="mini-input repeInput" value="${exc?.repe ?? ""}" placeholder="Repes" min="1" max="30">
+        <span class="exc-repe-sep">a</span>
+        <input type="number" class="mini-input repeMaxInput" value="${exc?.repe_max ?? ""}" placeholder="opcional" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
       </div>
       <div class="exc-extra">
@@ -40,6 +46,14 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
       </div>
     </div>
   `;
+}
+
+function updateMoveButtons(list: Element): void {
+  const blocks = list.querySelectorAll(".exc-block");
+  blocks.forEach((block, i) => {
+    block.querySelector<HTMLButtonElement>(".exc-move-up")!.disabled = i === 0;
+    block.querySelector<HTMLButtonElement>(".exc-move-down")!.disabled = i === blocks.length - 1;
+  });
 }
 
 function renderWeek(weekIndex: number) {
@@ -52,13 +66,15 @@ function renderWeek(weekIndex: number) {
       (dia) => `
     <div class="day-card reveal" data-day-id="${dia.id}">
       <h3>${escapeHtml(diaLabel(dia.dia_semana))}</h3>
-      <div class="exc-edit-header"><span>Ejercicio</span><span>Series</span><span>Repes</span></div>
+      <div class="exc-edit-header"><span class="exc-edit-header-spacer"></span><span class="exc-edit-header-name">Ejercicio</span><span>Series</span><span>Repes</span><span class="exc-repe-sep" aria-hidden="true">a</span><span>Hasta</span><span class="exc-edit-header-spacer exc-edit-header-spacer-remove"></span></div>
       <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(exc)).join("")}</div>
       <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
     </div>
   `
     )
     .join("");
+
+  weekContent.querySelectorAll(".exc-list").forEach((list) => updateMoveButtons(list));
 }
 
 async function saveChanges() {
@@ -69,11 +85,22 @@ async function saveChanges() {
   const dayCards = weekContent.querySelectorAll<HTMLElement>(".day-card");
   let error = "";
 
+  interface PendingRow {
+    exercise_id: string;
+    nombre_snapshot: string;
+    info_snapshot: string;
+    serie: number;
+    repe: number;
+    repe_max: number | null;
+    nota: string;
+    es_medible: boolean;
+    orden: number;
+  }
   interface PendingDay {
     dayId: string;
     keepIds: Set<string>;
-    updates: { id: string; exercise_id: string; nombre_snapshot: string; info_snapshot: string; serie: number; repe: number; nota: string; es_medible: boolean; orden: number }[];
-    inserts: { exercise_id: string; nombre_snapshot: string; info_snapshot: string; serie: number; repe: number; nota: string; es_medible: boolean; orden: number }[];
+    updates: (PendingRow & { id: string })[];
+    inserts: PendingRow[];
   }
   const pending: PendingDay[] = [];
 
@@ -88,6 +115,8 @@ async function saveChanges() {
       const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
       const serie = parseInt((block.querySelector(".serieInput") as HTMLInputElement).value, 10);
       const repe = parseInt((block.querySelector(".repeInput") as HTMLInputElement).value, 10);
+      const repeMaxRaw = (block.querySelector(".repeMaxInput") as HTMLInputElement).value;
+      const repeMax = repeMaxRaw ? parseInt(repeMaxRaw, 10) : null;
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
       const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
       const existingId = block.dataset.existingId;
@@ -104,18 +133,23 @@ async function saveChanges() {
         error = "Las repeticiones tienen que ser entre 1 y 30.";
         return;
       }
+      if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
+        error = "El 'hasta' del rango tiene que ser mayor o igual a las repeticiones y como máximo 30.";
+        return;
+      }
       if (nota.length > 140) {
         error = "Las notas tienen un máximo de 140 caracteres.";
         return;
       }
 
       const excDef = excCatalog.find((e) => e.id === excId)!;
-      const row = {
+      const row: PendingRow = {
         exercise_id: excDef.id,
         nombre_snapshot: excDef.name,
         info_snapshot: excDef.info,
         serie,
         repe,
+        repe_max: repeMax,
         nota,
         es_medible: !noWeight,
         orden,
@@ -198,12 +232,33 @@ async function init() {
   document.getElementById("weekContent")?.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     if (target.classList.contains("day-add-btn")) {
-      target.previousElementSibling?.insertAdjacentHTML("beforeend", excBlockMarkup());
+      const list = target.previousElementSibling;
+      list?.insertAdjacentHTML("beforeend", excBlockMarkup());
+      if (list) updateMoveButtons(list);
     }
     if (target.classList.contains("exc-remove")) {
       const block = target.closest(".exc-block");
       const list = block?.parentElement;
-      if (list && list.children.length > 1) block?.remove();
+      if (list && list.children.length > 1) {
+        block?.remove();
+        updateMoveButtons(list);
+      }
+    }
+    if (target.classList.contains("exc-move-up")) {
+      const block = target.closest(".exc-block");
+      const prev = block?.previousElementSibling;
+      if (block && prev) {
+        block.parentElement!.insertBefore(block, prev);
+        updateMoveButtons(block.parentElement!);
+      }
+    }
+    if (target.classList.contains("exc-move-down")) {
+      const block = target.closest(".exc-block");
+      const next = block?.nextElementSibling;
+      if (block && next) {
+        block.parentElement!.insertBefore(next, block);
+        updateMoveButtons(block.parentElement!);
+      }
     }
     if (target.classList.contains("exc-picker-btn")) {
       const block = target.closest<HTMLElement>(".exc-block")!;
