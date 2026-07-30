@@ -15,6 +15,7 @@ export interface NewDayInput {
     repe_max?: number | null;
     nota: string;
     es_medible: boolean;
+    mismo_peso: boolean;
     orden: number;
   }[];
 }
@@ -136,7 +137,7 @@ export async function updateRoutineExercise(
   fields: Partial<
     Pick<
       RoutineExercise,
-      "serie" | "repe" | "repe_max" | "nota" | "es_medible" | "orden" | "exercise_id" | "nombre_snapshot" | "info_snapshot"
+      "serie" | "repe" | "repe_max" | "nota" | "es_medible" | "mismo_peso" | "orden" | "exercise_id" | "nombre_snapshot" | "info_snapshot"
     >
   >
 ): Promise<void> {

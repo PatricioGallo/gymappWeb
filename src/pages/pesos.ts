@@ -2,8 +2,44 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
-import { insertWeightLogs, getLatestWeights } from "../services/weightLog.service";
+import { insertWeightLogs, getLatestWeights, getExerciseHistory, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
+
+const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
+
+function unitOptionsMarkup(selected: WeightUnit): string {
+  return (Object.keys(UNIT_LABELS) as WeightUnit[])
+    .map((u) => `<option value="${u}" ${u === selected ? "selected" : ""}>${UNIT_LABELS[u]}</option>`)
+    .join("");
+}
+
+const TODAY = new Date().toISOString().slice(0, 10);
+
+// Muestra el ultimo valor guardado por unidad, sin importar la fecha: puede ser de
+// otra semana de la rutina o de hoy mismo (si ya se cargo en otra ocurrencia del ejercicio).
+function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
+  if (!entries || entries.length === 0) return "sin registro";
+  return entries.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
+}
+
+function todayEntry(entries: LatestWeightEntry[] | undefined): LatestWeightEntry | null {
+  return entries?.find((e) => e.fecha === TODAY) ?? null;
+}
+
+function defaultUnit(entries: LatestWeightEntry[] | undefined): WeightUnit {
+  return entries && entries.length > 0 ? entries[0].unidad : "kg";
+}
+
+// Unidad sugerida a nivel ejercicio: la mas reciente entre todas las series,
+// ya que la unidad se elige una sola vez para todo el ejercicio.
+function exerciseDefaultUnit(bySerie: Map<number, LatestWeightEntry[]> | undefined, serieCount: number): WeightUnit {
+  let best: LatestWeightEntry | null = null;
+  for (let i = 1; i <= serieCount; i++) {
+    const top = bySerie?.get(i)?.[0];
+    if (top && (!best || top.fecha > best.fecha)) best = top;
+  }
+  return best ? best.unidad : "kg";
+}
 
 setupNavToggle();
 setupRevealObserver();
@@ -13,7 +49,10 @@ const params = new URLSearchParams(window.location.search);
 const routineId = params.get("rid");
 
 let routine: RoutineDetail | null = null;
-let latestWeights = new Map<string, { peso: number; fecha: string }>();
+let latestWeights: LatestWeightsMap = new Map();
+let exerciseHistory: LatestWeightsMap = new Map();
+let allExerciseIds: string[] = [];
+let allCatalogExerciseIds: string[] = [];
 
 function ringMarkup(pct: number): string {
   const r = 16;
@@ -138,13 +177,43 @@ function openDay(weekIndex: number, diaIndex: number) {
       ${trackable
         .map((exc) => {
           const last = latestWeights.get(exc.id);
-          return `
+          const history = exerciseHistory.get(exc.exercise_id);
+
+          if (exc.mismo_peso) {
+            const today = todayEntry(last?.get(1));
+            const historyEntries = history?.get(1);
+            return `
         <div class="weight-field">
-          <div>
+          <div class="weight-field-info">
             <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <div class="weight-field-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)} · anterior: ${last ? `${last.peso} kg` : "sin registro"}</div>
+            <div class="weight-field-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones · anterior: ${previousValuesText(historyEntries)}</div>
           </div>
-          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${exc.serie}" data-repe="${exc.repe}" placeholder="kg">
+          <div class="weight-input-group">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(defaultUnit(historyEntries))}</select>
+          </div>
+        </div>`;
+          }
+
+          const serieRows = Array.from({ length: exc.serie }, (_, i) => {
+            const setIndex = i + 1;
+            const today = todayEntry(last?.get(setIndex));
+            const historyEntries = history?.get(setIndex);
+            return `
+        <div class="weight-field-serie">
+          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${previousValuesText(historyEntries)}</div>
+          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
+        </div>`;
+          }).join("");
+
+          return `
+        <div class="weight-field-group">
+          <div class="weight-field-group-head">
+            <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(exerciseDefaultUnit(history, exc.serie))}</select>
+          </div>
+          <div class="weight-field-sub weight-field-group-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones</div>
+          ${serieRows}
         </div>`;
         })
         .join("")}
@@ -157,15 +226,15 @@ function openDay(weekIndex: number, diaIndex: number) {
     e.preventDefault();
     backToWeek(weekIndex);
   });
-  document.getElementById("saveWeights")?.addEventListener("click", () => saveWeights(weekIndex));
+  document.getElementById("saveWeights")?.addEventListener("click", () => saveWeights(weekIndex, diaIndex));
 }
 
-async function saveWeights(weekIndex: number) {
+async function saveWeights(weekIndex: number, diaIndex: number) {
   const alertMessage = document.getElementById("alert_message")!;
   const inputs = document.querySelectorAll<HTMLInputElement>(".weightInput");
   const today = new Date().toISOString().slice(0, 10);
 
-  const entries: { routine_exercise_id: string; exercise_id: string; fecha: string; peso: number; serie: number; repe: number }[] = [];
+  const entries: { routine_exercise_id: string; exercise_id: string; fecha: string; peso: number; serie: number; repe: number; unidad: WeightUnit }[] = [];
   let error = false;
 
   inputs.forEach((input) => {
@@ -176,6 +245,7 @@ async function saveWeights(weekIndex: number) {
       error = true;
       return;
     }
+    const unitSelect = input.closest(".weight-field, .weight-field-group")?.querySelector<HTMLSelectElement>(".weightUnitSelect");
     entries.push({
       routine_exercise_id: input.dataset.id!,
       exercise_id: input.dataset.excCatalog!,
@@ -183,6 +253,7 @@ async function saveWeights(weekIndex: number) {
       peso,
       serie: Number(input.dataset.serie),
       repe: Number(input.dataset.repe),
+      unidad: (unitSelect?.value as WeightUnit) ?? "kg",
     });
   });
 
@@ -204,16 +275,17 @@ async function saveWeights(weekIndex: number) {
     loaderBody.innerHTML = `
       <div class="success-check-container">
         <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-        <p>¡Peso actualizado con éxito! Espere, será redirigido.</p>
+        <p>¡Peso actualizado con éxito!</p>
       </div>
     `;
+    [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
     setTimeout(() => {
-      window.location.href = "profile.html";
-    }, 2000);
+      loaderBody.innerHTML = "";
+      openDay(weekIndex, diaIndex);
+    }, 1500);
   } catch {
     loaderBody.innerHTML = "";
     alertMessage.innerHTML = "<p>ERROR! No se pudo guardar.</p>";
-    void weekIndex;
   }
 }
 
@@ -228,8 +300,9 @@ async function init() {
     return;
   }
 
-  const allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
-  latestWeights = await getLatestWeights(allExerciseIds);
+  allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
+  allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
+  [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
 
   const title = document.getElementById("routineTitle");
   const subtitle = document.getElementById("routineSubtitle");

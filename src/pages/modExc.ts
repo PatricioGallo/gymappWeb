@@ -42,6 +42,7 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
       </div>
       <div class="exc-extra">
         <label><input type="checkbox" class="noWeightCheck" ${isNoWeight ? "checked" : ""}> Sin peso</label>
+        <label><input type="checkbox" class="mismoPesoCheck" ${exc ? (exc.mismo_peso ? "checked" : "") : "checked"}> Mismo peso en todas las series</label>
         <input type="text" class="notaInput" placeholder="Nota para este ejercicio (opcional)" maxlength="140" value="${escapeHtml(exc?.nota ?? "")}">
       </div>
     </div>
@@ -94,6 +95,7 @@ async function saveChanges() {
     repe_max: number | null;
     nota: string;
     es_medible: boolean;
+    mismo_peso: boolean;
     orden: number;
   }
   interface PendingDay {
@@ -118,6 +120,7 @@ async function saveChanges() {
       const repeMaxRaw = (block.querySelector(".repeMaxInput") as HTMLInputElement).value;
       const repeMax = repeMaxRaw ? parseInt(repeMaxRaw, 10) : null;
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
+      const mismoPeso = (block.querySelector(".mismoPesoCheck") as HTMLInputElement).checked;
       const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
       const existingId = block.dataset.existingId;
 
@@ -152,6 +155,7 @@ async function saveChanges() {
         repe_max: repeMax,
         nota,
         es_medible: !noWeight,
+        mismo_peso: mismoPeso,
         orden,
       };
 
