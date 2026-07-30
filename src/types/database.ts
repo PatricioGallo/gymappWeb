@@ -339,6 +339,7 @@ export type Database = {
           repe: number | null
           routine_exercise_id: string | null
           serie: number | null
+          unidad: Database["public"]["Enums"]["weight_unit"]
           user_id: string
         }
         Insert: {
@@ -350,6 +351,7 @@ export type Database = {
           repe?: number | null
           routine_exercise_id?: string | null
           serie?: number | null
+          unidad?: Database["public"]["Enums"]["weight_unit"]
           user_id: string
         }
         Update: {
@@ -361,6 +363,7 @@ export type Database = {
           repe?: number | null
           routine_exercise_id?: string | null
           serie?: number | null
+          unidad?: Database["public"]["Enums"]["weight_unit"]
           user_id?: string
         }
         Relationships: [
@@ -493,6 +496,7 @@ export type Database = {
         | "piernas"
         | "estiramiento"
       user_type: "admin" | "gimnasio" | "entrenador" | "usuario"
+      weight_unit: "kg" | "lb" | "bloques"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -630,6 +634,7 @@ export const Constants = {
         "estiramiento",
       ],
       user_type: ["admin", "gimnasio", "entrenador", "usuario"],
+      weight_unit: ["kg", "lb", "bloques"],
     },
   },
 } as const

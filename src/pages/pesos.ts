@@ -2,8 +2,36 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
-import { insertWeightLogs, getLatestWeights, type LatestWeightsMap } from "../services/weightLog.service";
+import { insertWeightLogs, getLatestWeights, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
+
+const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
+
+function unitOptionsMarkup(selected: WeightUnit): string {
+  return (Object.keys(UNIT_LABELS) as WeightUnit[])
+    .map((u) => `<option value="${u}" ${u === selected ? "selected" : ""}>${UNIT_LABELS[u]}</option>`)
+    .join("");
+}
+
+function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
+  if (!entries || entries.length === 0) return "sin registro";
+  return entries.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
+}
+
+function defaultUnit(entries: LatestWeightEntry[] | undefined): WeightUnit {
+  return entries && entries.length > 0 ? entries[0].unidad : "kg";
+}
+
+// Unidad sugerida a nivel ejercicio: la mas reciente entre todas las series,
+// ya que la unidad se elige una sola vez para todo el ejercicio.
+function exerciseDefaultUnit(bySerie: Map<number, LatestWeightEntry[]> | undefined, serieCount: number): WeightUnit {
+  let best: LatestWeightEntry | null = null;
+  for (let i = 1; i <= serieCount; i++) {
+    const top = bySerie?.get(i)?.[0];
+    if (top && (!best || top.fecha > best.fecha)) best = top;
+  }
+  return best ? best.unidad : "kg";
+}
 
 setupNavToggle();
 setupRevealObserver();
@@ -140,31 +168,37 @@ function openDay(weekIndex: number, diaIndex: number) {
           const last = latestWeights.get(exc.id);
 
           if (exc.mismo_peso) {
-            const prev = last?.get(1);
+            const entries = last?.get(1);
             return `
         <div class="weight-field">
-          <div>
+          <div class="weight-field-info">
             <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <div class="weight-field-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)} · anterior: ${prev ? `${prev.peso} kg` : "sin registro"}</div>
+            <div class="weight-field-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones · anterior: ${previousValuesText(entries)}</div>
           </div>
-          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="kg">
+          <div class="weight-input-group">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="valor">
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(defaultUnit(entries))}</select>
+          </div>
         </div>`;
           }
 
           const serieRows = Array.from({ length: exc.serie }, (_, i) => {
             const setIndex = i + 1;
-            const prev = last?.get(setIndex);
+            const entries = last?.get(setIndex);
             return `
-        <div class="weight-field weight-field-serie">
-          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${prev ? `${prev.peso} kg` : "sin registro"}</div>
-          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="kg">
+        <div class="weight-field-serie">
+          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${previousValuesText(entries)}</div>
+          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor">
         </div>`;
           }).join("");
 
           return `
         <div class="weight-field-group">
-          <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-          <div class="weight-field-sub weight-field-group-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)}</div>
+          <div class="weight-field-group-head">
+            <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(exerciseDefaultUnit(last, exc.serie))}</select>
+          </div>
+          <div class="weight-field-sub weight-field-group-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones</div>
           ${serieRows}
         </div>`;
         })
@@ -186,7 +220,7 @@ async function saveWeights(weekIndex: number) {
   const inputs = document.querySelectorAll<HTMLInputElement>(".weightInput");
   const today = new Date().toISOString().slice(0, 10);
 
-  const entries: { routine_exercise_id: string; exercise_id: string; fecha: string; peso: number; serie: number; repe: number }[] = [];
+  const entries: { routine_exercise_id: string; exercise_id: string; fecha: string; peso: number; serie: number; repe: number; unidad: WeightUnit }[] = [];
   let error = false;
 
   inputs.forEach((input) => {
@@ -197,6 +231,7 @@ async function saveWeights(weekIndex: number) {
       error = true;
       return;
     }
+    const unitSelect = input.closest(".weight-field, .weight-field-group")?.querySelector<HTMLSelectElement>(".weightUnitSelect");
     entries.push({
       routine_exercise_id: input.dataset.id!,
       exercise_id: input.dataset.excCatalog!,
@@ -204,6 +239,7 @@ async function saveWeights(weekIndex: number) {
       peso,
       serie: Number(input.dataset.serie),
       repe: Number(input.dataset.repe),
+      unidad: (unitSelect?.value as WeightUnit) ?? "kg",
     });
   });
 
