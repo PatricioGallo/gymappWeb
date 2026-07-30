@@ -208,6 +208,7 @@ async function init() {
     if (target.classList.contains("exc-picker-btn")) {
       const block = target.closest<HTMLElement>(".exc-block")!;
       openExercisePicker(excCatalog, (exc) => {
+        if (!excCatalog.some((e) => e.id === exc.id)) excCatalog.push(exc);
         target.textContent = exc.name;
         block.querySelector<HTMLInputElement>(".excSelectInput")!.value = exc.id;
       });
