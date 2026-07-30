@@ -146,6 +146,7 @@ export type Database = {
           exercise_id: string
           id: string
           info_snapshot: string
+          mismo_peso: boolean
           nombre_snapshot: string
           nota: string | null
           orden: number
@@ -159,6 +160,7 @@ export type Database = {
           exercise_id: string
           id?: string
           info_snapshot: string
+          mismo_peso?: boolean
           nombre_snapshot: string
           nota?: string | null
           orden?: number
@@ -172,6 +174,7 @@ export type Database = {
           exercise_id?: string
           id?: string
           info_snapshot?: string
+          mismo_peso?: boolean
           nombre_snapshot?: string
           nota?: string | null
           orden?: number

@@ -2,7 +2,7 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
-import { insertWeightLogs, getLatestWeights } from "../services/weightLog.service";
+import { insertWeightLogs, getLatestWeights, type LatestWeightsMap } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
 
 setupNavToggle();
@@ -13,7 +13,7 @@ const params = new URLSearchParams(window.location.search);
 const routineId = params.get("rid");
 
 let routine: RoutineDetail | null = null;
-let latestWeights = new Map<string, { peso: number; fecha: string }>();
+let latestWeights: LatestWeightsMap = new Map();
 
 function ringMarkup(pct: number): string {
   const r = 16;
@@ -138,13 +138,34 @@ function openDay(weekIndex: number, diaIndex: number) {
       ${trackable
         .map((exc) => {
           const last = latestWeights.get(exc.id);
-          return `
+
+          if (exc.mismo_peso) {
+            const prev = last?.get(1);
+            return `
         <div class="weight-field">
           <div>
             <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <div class="weight-field-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)} · anterior: ${last ? `${last.peso} kg` : "sin registro"}</div>
+            <div class="weight-field-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)} · anterior: ${prev ? `${prev.peso} kg` : "sin registro"}</div>
           </div>
-          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${exc.serie}" data-repe="${exc.repe}" placeholder="kg">
+          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="kg">
+        </div>`;
+          }
+
+          const serieRows = Array.from({ length: exc.serie }, (_, i) => {
+            const setIndex = i + 1;
+            const prev = last?.get(setIndex);
+            return `
+        <div class="weight-field weight-field-serie">
+          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${prev ? `${prev.peso} kg` : "sin registro"}</div>
+          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="kg">
+        </div>`;
+          }).join("");
+
+          return `
+        <div class="weight-field-group">
+          <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
+          <div class="weight-field-sub weight-field-group-sub">${exc.serie}x${formatRepe(exc.repe, exc.repe_max)}</div>
+          ${serieRows}
         </div>`;
         })
         .join("")}

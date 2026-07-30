@@ -14,13 +14,15 @@ export async function insertWeightLogs(userId: string, entries: NewWeightLog[]):
   if (error) throw error;
 }
 
-export async function getLatestWeights(routineExerciseIds: string[]): Promise<Map<string, { peso: number; fecha: string }>> {
-  const map = new Map<string, { peso: number; fecha: string }>();
+export type LatestWeightsMap = Map<string, Map<number, { peso: number; fecha: string }>>;
+
+export async function getLatestWeights(routineExerciseIds: string[]): Promise<LatestWeightsMap> {
+  const map: LatestWeightsMap = new Map();
   if (routineExerciseIds.length === 0) return map;
 
   const { data, error } = await supabase
     .from("weight_logs")
-    .select("routine_exercise_id, peso, fecha")
+    .select("routine_exercise_id, peso, fecha, serie")
     .in("routine_exercise_id", routineExerciseIds)
     .order("fecha", { ascending: false });
 
@@ -28,7 +30,14 @@ export async function getLatestWeights(routineExerciseIds: string[]): Promise<Ma
 
   (data ?? []).forEach((row) => {
     const id = row.routine_exercise_id;
-    if (id && !map.has(id)) map.set(id, { peso: row.peso, fecha: row.fecha });
+    if (!id) return;
+    const serieIndex = row.serie ?? 1;
+    let bySerie = map.get(id);
+    if (!bySerie) {
+      bySerie = new Map();
+      map.set(id, bySerie);
+    }
+    if (!bySerie.has(serieIndex)) bySerie.set(serieIndex, { peso: row.peso, fecha: row.fecha });
   });
   return map;
 }

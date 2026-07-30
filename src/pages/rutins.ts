@@ -214,6 +214,7 @@ function resolveTemplateDays(t: RoutineTemplate): NewDayInput[] | null {
         repe_max: null,
         nota: item.nota ?? "",
         es_medible: item.es_medible ?? true,
+        mismo_peso: true,
         orden,
       });
     });
@@ -332,6 +333,7 @@ async function openClonePreview(r: RoutineWithCounts) {
         repe_max: e.repe_max,
         nota: e.nota ?? "",
         es_medible: e.es_medible,
+        mismo_peso: e.mismo_peso,
         orden,
       })),
     }));
@@ -361,6 +363,7 @@ function excBlockMarkup(): string {
       </div>
       <div class="exc-extra">
         <label><input type="checkbox" class="noWeightCheck"> Sin peso</label>
+        <label><input type="checkbox" class="mismoPesoCheck" checked> Mismo peso en todas las series</label>
         <input type="text" class="notaInput" placeholder="Nota para este ejercicio (opcional)" maxlength="140">
       </div>
     </div>
@@ -511,6 +514,7 @@ async function submitRoutine(name: string, weeks: number) {
       const repeMaxRaw = (block.querySelector(".repeMaxInput") as HTMLInputElement).value;
       const repeMax = repeMaxRaw ? parseInt(repeMaxRaw, 10) : null;
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
+      const mismoPeso = (block.querySelector(".mismoPesoCheck") as HTMLInputElement).checked;
       const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
 
       if (!excId) {
@@ -544,6 +548,7 @@ async function submitRoutine(name: string, weeks: number) {
         repe_max: repeMax,
         nota,
         es_medible: !noWeight,
+        mismo_peso: mismoPeso,
         orden,
       });
     });

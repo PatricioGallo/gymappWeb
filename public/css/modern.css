@@ -1832,6 +1832,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .weight-field-sub { font-weight: 500; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .weight-field input { width: 90px; flex-shrink: 0; }
 
+.weight-field-group { padding: 14px 0; border-top: 1px solid var(--border); }
+.weight-field-group:first-of-type { border-top: none; padding-top: 0; }
+.weight-field-group-sub { margin-bottom: 8px; }
+.weight-field-serie { padding: 8px 0 8px 12px; border-top: 1px dashed var(--border); }
+.weight-field-serie:first-of-type { border-top: none; padding-top: 4px; }
+
 .back-link {
   display: inline-flex;
   align-items: center;
