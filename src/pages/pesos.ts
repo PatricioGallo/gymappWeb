@@ -2,7 +2,7 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
-import { insertWeightLogs, getLatestWeights, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
+import { insertWeightLogs, getLatestWeights, getExerciseHistory, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
@@ -15,12 +15,11 @@ function unitOptionsMarkup(selected: WeightUnit): string {
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
-// El registro de hoy no cuenta como "anterior": es el valor que ya se cargo en esta
-// sesion y se prellena en el input para poder continuar donde se dejo.
+// Muestra el ultimo valor guardado por unidad, sin importar la fecha: puede ser de
+// otra semana de la rutina o de hoy mismo (si ya se cargo en otra ocurrencia del ejercicio).
 function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
-  const historic = (entries ?? []).filter((e) => e.fecha !== TODAY);
-  if (historic.length === 0) return "sin registro";
-  return historic.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
+  if (!entries || entries.length === 0) return "sin registro";
+  return entries.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
 }
 
 function todayEntry(entries: LatestWeightEntry[] | undefined): LatestWeightEntry | null {
@@ -51,7 +50,9 @@ const routineId = params.get("rid");
 
 let routine: RoutineDetail | null = null;
 let latestWeights: LatestWeightsMap = new Map();
+let exerciseHistory: LatestWeightsMap = new Map();
 let allExerciseIds: string[] = [];
+let allCatalogExerciseIds: string[] = [];
 
 function ringMarkup(pct: number): string {
   const r = 16;
@@ -176,30 +177,31 @@ function openDay(weekIndex: number, diaIndex: number) {
       ${trackable
         .map((exc) => {
           const last = latestWeights.get(exc.id);
+          const history = exerciseHistory.get(exc.exercise_id);
 
           if (exc.mismo_peso) {
-            const entries = last?.get(1);
-            const today = todayEntry(entries);
+            const today = todayEntry(last?.get(1));
+            const historyEntries = history?.get(1);
             return `
         <div class="weight-field">
           <div class="weight-field-info">
             <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <div class="weight-field-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones · anterior: ${previousValuesText(entries)}</div>
+            <div class="weight-field-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones · anterior: ${previousValuesText(historyEntries)}</div>
           </div>
           <div class="weight-input-group">
             <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
-            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(defaultUnit(entries))}</select>
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(defaultUnit(historyEntries))}</select>
           </div>
         </div>`;
           }
 
           const serieRows = Array.from({ length: exc.serie }, (_, i) => {
             const setIndex = i + 1;
-            const entries = last?.get(setIndex);
-            const today = todayEntry(entries);
+            const today = todayEntry(last?.get(setIndex));
+            const historyEntries = history?.get(setIndex);
             return `
         <div class="weight-field-serie">
-          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${previousValuesText(entries)}</div>
+          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${previousValuesText(historyEntries)}</div>
           <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
         </div>`;
           }).join("");
@@ -208,7 +210,7 @@ function openDay(weekIndex: number, diaIndex: number) {
         <div class="weight-field-group">
           <div class="weight-field-group-head">
             <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(exerciseDefaultUnit(last, exc.serie))}</select>
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(exerciseDefaultUnit(history, exc.serie))}</select>
           </div>
           <div class="weight-field-sub weight-field-group-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones</div>
           ${serieRows}
@@ -276,7 +278,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
         <p>¡Peso actualizado con éxito!</p>
       </div>
     `;
-    latestWeights = await getLatestWeights(allExerciseIds);
+    [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
     setTimeout(() => {
       loaderBody.innerHTML = "";
       openDay(weekIndex, diaIndex);
@@ -299,7 +301,8 @@ async function init() {
   }
 
   allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
-  latestWeights = await getLatestWeights(allExerciseIds);
+  allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
+  [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
 
   const title = document.getElementById("routineTitle");
   const subtitle = document.getElementById("routineSubtitle");
