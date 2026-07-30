@@ -36,7 +36,8 @@ export async function getLatestWeights(routineExerciseIds: string[]): Promise<La
     .from("weight_logs")
     .select("routine_exercise_id, peso, fecha, serie, unidad")
     .in("routine_exercise_id", routineExerciseIds)
-    .order("fecha", { ascending: false });
+    .order("fecha", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
 

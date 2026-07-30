@@ -13,9 +13,18 @@ function unitOptionsMarkup(selected: WeightUnit): string {
     .join("");
 }
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
+// El registro de hoy no cuenta como "anterior": es el valor que ya se cargo en esta
+// sesion y se prellena en el input para poder continuar donde se dejo.
 function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
-  if (!entries || entries.length === 0) return "sin registro";
-  return entries.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
+  const historic = (entries ?? []).filter((e) => e.fecha !== TODAY);
+  if (historic.length === 0) return "sin registro";
+  return historic.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
+}
+
+function todayEntry(entries: LatestWeightEntry[] | undefined): LatestWeightEntry | null {
+  return entries?.find((e) => e.fecha === TODAY) ?? null;
 }
 
 function defaultUnit(entries: LatestWeightEntry[] | undefined): WeightUnit {
@@ -42,6 +51,7 @@ const routineId = params.get("rid");
 
 let routine: RoutineDetail | null = null;
 let latestWeights: LatestWeightsMap = new Map();
+let allExerciseIds: string[] = [];
 
 function ringMarkup(pct: number): string {
   const r = 16;
@@ -169,6 +179,7 @@ function openDay(weekIndex: number, diaIndex: number) {
 
           if (exc.mismo_peso) {
             const entries = last?.get(1);
+            const today = todayEntry(entries);
             return `
         <div class="weight-field">
           <div class="weight-field-info">
@@ -176,7 +187,7 @@ function openDay(weekIndex: number, diaIndex: number) {
             <div class="weight-field-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones · anterior: ${previousValuesText(entries)}</div>
           </div>
           <div class="weight-input-group">
-            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="valor">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
             <select class="mini-input weightUnitSelect">${unitOptionsMarkup(defaultUnit(entries))}</select>
           </div>
         </div>`;
@@ -185,10 +196,11 @@ function openDay(weekIndex: number, diaIndex: number) {
           const serieRows = Array.from({ length: exc.serie }, (_, i) => {
             const setIndex = i + 1;
             const entries = last?.get(setIndex);
+            const today = todayEntry(entries);
             return `
         <div class="weight-field-serie">
           <div class="weight-field-sub">Serie ${setIndex} · anterior: ${previousValuesText(entries)}</div>
-          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor">
+          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
         </div>`;
           }).join("");
 
@@ -212,10 +224,10 @@ function openDay(weekIndex: number, diaIndex: number) {
     e.preventDefault();
     backToWeek(weekIndex);
   });
-  document.getElementById("saveWeights")?.addEventListener("click", () => saveWeights(weekIndex));
+  document.getElementById("saveWeights")?.addEventListener("click", () => saveWeights(weekIndex, diaIndex));
 }
 
-async function saveWeights(weekIndex: number) {
+async function saveWeights(weekIndex: number, diaIndex: number) {
   const alertMessage = document.getElementById("alert_message")!;
   const inputs = document.querySelectorAll<HTMLInputElement>(".weightInput");
   const today = new Date().toISOString().slice(0, 10);
@@ -261,16 +273,17 @@ async function saveWeights(weekIndex: number) {
     loaderBody.innerHTML = `
       <div class="success-check-container">
         <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-        <p>¡Peso actualizado con éxito! Espere, será redirigido.</p>
+        <p>¡Peso actualizado con éxito!</p>
       </div>
     `;
+    latestWeights = await getLatestWeights(allExerciseIds);
     setTimeout(() => {
-      window.location.href = "profile.html";
-    }, 2000);
+      loaderBody.innerHTML = "";
+      openDay(weekIndex, diaIndex);
+    }, 1500);
   } catch {
     loaderBody.innerHTML = "";
     alertMessage.innerHTML = "<p>ERROR! No se pudo guardar.</p>";
-    void weekIndex;
   }
 }
 
@@ -285,7 +298,7 @@ async function init() {
     return;
   }
 
-  const allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
+  allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
   latestWeights = await getLatestWeights(allExerciseIds);
 
   const title = document.getElementById("routineTitle");
