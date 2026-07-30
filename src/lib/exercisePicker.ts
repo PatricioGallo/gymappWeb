@@ -1,5 +1,5 @@
 import { escapeHtml } from "./dom";
-import { CATEGORY_LABELS, EXERCISE_CATEGORIES, type Exercise, type ExerciseCategory } from "../services/exercise.service";
+import { CATEGORY_LABELS, EXERCISE_CATEGORIES, listExercises, type Exercise, type ExerciseCategory } from "../services/exercise.service";
 
 const DUMBBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg>`;
 
@@ -9,19 +9,24 @@ export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise
 
   let search = "";
   let activeCategory: ExerciseCategory | "" = "";
+  let items = catalog;
 
   loaderBody.innerHTML = `
     <div class="success-check-container">
       <div class="modal-card modal-card-lg">
         <h2>Elegir ejercicio</h2>
         <p class="subtitle">Buscá por nombre o filtrá por categoría.</p>
-        <input type="search" id="excPickerSearch" class="exc-picker-search" placeholder="Buscar ejercicio...">
+        <div class="exc-pick-search-row">
+          <input type="search" id="excPickerSearch" class="exc-picker-search" placeholder="Buscar ejercicio...">
+          <button type="button" class="exc-pick-refresh" id="excPickerRefresh" title="Actualizar catálogo">↻</button>
+        </div>
         <div class="exc-pick-chips" id="excPickerChips">
           <button type="button" class="exc-pick-chip active" data-cat="">Todos</button>
           ${EXERCISE_CATEGORIES.map((cat) => `<button type="button" class="exc-pick-chip" data-cat="${cat}">${escapeHtml(CATEGORY_LABELS[cat])}</button>`).join("")}
         </div>
         <div class="exc-pick-results" id="excPickerResults"></div>
         <div class="modal-actions">
+          <a href="addExc.html" target="_blank" rel="noopener" class="btn btn-outline" id="excPickerCreate">+ Crear ejercicio nuevo</a>
           <button class="btn btn-outline" id="excPickerClose" type="button">Cerrar</button>
         </div>
       </div>
@@ -36,13 +41,13 @@ export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise
 
     const sections = categories
       .map((cat) => {
-        const items = catalog.filter((exc) => exc.category === cat && exc.name.toLowerCase().includes(term));
-        if (items.length === 0) return "";
+        const catItems = items.filter((exc) => exc.category === cat && exc.name.toLowerCase().includes(term));
+        if (catItems.length === 0) return "";
         return `
           <div class="exc-pick-section">
             <h4>${escapeHtml(CATEGORY_LABELS[cat])}</h4>
             <div class="exc-pick-grid">
-              ${items
+              ${catItems
                 .map(
                   (exc) => `
                 <button type="button" class="exc-pick-card" data-id="${exc.id}">
@@ -81,13 +86,40 @@ export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise
   resultsEl.addEventListener("click", (event) => {
     const card = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-card");
     if (!card) return;
-    const exc = catalog.find((item) => item.id === card.dataset.id);
+    const exc = items.find((item) => item.id === card.dataset.id);
     if (!exc) return;
     onSelect(exc);
-    loaderBody.innerHTML = "";
+    closePicker();
   });
 
-  document.getElementById("excPickerClose")?.addEventListener("click", () => {
-    loaderBody.innerHTML = "";
-  });
+  // El "+ Crear ejercicio nuevo" abre addExc.html en una pestaña aparte para no
+  // perder la rutina que se esta armando; al volver el foco a esta pestaña,
+  // refrescamos el catalogo para que el ejercicio recien creado ya aparezca.
+  function refreshCatalog(): void {
+    listExercises()
+      .then((fresh) => {
+        items = fresh.sort((a, b) => a.name.localeCompare(b.name));
+        render();
+      })
+      .catch(() => {
+        // si falla el refresco seguimos mostrando el catalogo que ya teniamos
+      });
+  }
+  function onVisible(): void {
+    if (document.visibilityState === "visible") refreshCatalog();
+  }
+  // "focus"/"visibilitychange" cubren la vuelta desde la pestaña de creación,
+  // pero no son 100% consistentes entre navegadores: el botón de al lado del
+  // buscador es el respaldo manual.
+  window.addEventListener("focus", refreshCatalog);
+  document.addEventListener("visibilitychange", onVisible);
+  document.getElementById("excPickerRefresh")?.addEventListener("click", refreshCatalog);
+
+  function closePicker(): void {
+    window.removeEventListener("focus", refreshCatalog);
+    document.removeEventListener("visibilitychange", onVisible);
+    loaderBody!.innerHTML = "";
+  }
+
+  document.getElementById("excPickerClose")?.addEventListener("click", closePicker);
 }

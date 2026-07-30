@@ -26,6 +26,7 @@ export type Database = {
           image_url: string | null
           info: string
           is_builtin: boolean
+          is_public: boolean
           name: string
         }
         Insert: {
@@ -36,6 +37,7 @@ export type Database = {
           image_url?: string | null
           info: string
           is_builtin?: boolean
+          is_public?: boolean
           name: string
         }
         Update: {
@@ -46,6 +48,7 @@ export type Database = {
           image_url?: string | null
           info?: string
           is_builtin?: boolean
+          is_public?: boolean
           name?: string
         }
         Relationships: [
