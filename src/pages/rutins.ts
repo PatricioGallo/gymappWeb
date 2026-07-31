@@ -347,7 +347,7 @@ async function openClonePreview(r: RoutineWithCounts) {
 
 function excBlockMarkup(): string {
   return `
-    <div class="exc-block">
+    <div class="exc-block exc-block-create">
       <div class="exc-top-row">
         <div class="exc-reorder">
           <button type="button" class="exc-move-up" title="Subir">▲</button>
@@ -358,15 +358,17 @@ function excBlockMarkup(): string {
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
       </div>
       <div class="exc-fields-row">
-        <label class="exc-field">
+        <label class="exc-field exc-field-series">
           <span class="exc-field-label">Series</span>
           <input type="number" class="mini-input serieInput" placeholder="Ej: 3" min="1" max="10">
         </label>
-        <label class="exc-field">
+        <span class="exc-field-sep" aria-hidden="true">x</span>
+        <label class="exc-field exc-field-repe">
           <span class="exc-field-label">Repeticiones</span>
           <input type="number" class="mini-input repeInput" placeholder="Ej: 10" min="1" max="30">
         </label>
-        <label class="exc-field">
+        <span class="exc-field-sep" aria-hidden="true">-</span>
+        <label class="exc-field exc-field-hasta">
           <span class="exc-field-label">Hasta <em>(opcional)</em></span>
           <input type="number" class="mini-input repeMaxInput" placeholder="Rango" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
         </label>
@@ -378,6 +380,49 @@ function excBlockMarkup(): string {
       </div>
     </div>
   `;
+}
+
+function openBuilderHelp(): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Cómo cargo los ejercicios?</h2>
+        <p class="subtitle">Guía rápida para armar el día de entrenamiento.</p>
+        <div class="help-list">
+          <div class="help-item">
+            <strong>Elegir ejercicio</strong>
+            <p>Tocá el botón para buscar en el catálogo por nombre o categoría.</p>
+          </div>
+          <div class="help-item">
+            <strong>Series x Repeticiones</strong>
+            <p>Cuántas series vas a hacer y cuántas repeticiones en cada una.</p>
+          </div>
+          <div class="help-item">
+            <strong>Hasta (opcional)</strong>
+            <p>Completalo solo si preferís dejar un rango de repeticiones, por ejemplo "8 a 12" en vez de un número fijo.</p>
+          </div>
+          <div class="help-item">
+            <strong>Sin peso</strong>
+            <p>Tildalo si el ejercicio no usa peso, como una elongación o un ejercicio de movilidad.</p>
+          </div>
+          <div class="help-item">
+            <strong>Mismo peso en todas las series</strong>
+            <p>Tildado, vas a cargar un solo peso para todo el ejercicio. Destildalo si querés anotar un peso distinto en cada serie.</p>
+          </div>
+          <div class="help-item">
+            <strong>Nota</strong>
+            <p>Un mensaje opcional para quien entrene con esta rutina, como una indicación de técnica.</p>
+          </div>
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" id="closeBuilderHelp">Entendido</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById("closeBuilderHelp")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
 }
 
 function updateMoveButtons(list: Element): void {
@@ -454,12 +499,14 @@ function renderBuilder(name: string, weeks: number, days: number) {
     <div class="section-head reveal">
       <span class="eyebrow">${escapeHtml(name)}</span>
       <h2>Cargá los ejercicios de cada día</h2>
-      <p>Se van a repetir en las ${weeks} semana${weeks > 1 ? "s" : ""} de la rutina.</p>
+      <p>Se van a repetir en las ${weeks} semana${weeks > 1 ? "s" : ""} de la rutina. <button type="button" class="help-link" id="builderHelpBtn">¿Cómo cargo esto?</button></p>
     </div>
     <div id="dayCards">${dayCards}</div>
     <div class="alert_message" id="builderAlert"></div>
     <div class="auth-trust"><button class="btn btn-primary" id="createRoutine" type="button">Crear rutina</button></div>
   `;
+
+  document.getElementById("builderHelpBtn")?.addEventListener("click", openBuilderHelp);
 
   document.querySelectorAll("#dayCards .exc-list").forEach((list) => updateMoveButtons(list));
 
@@ -515,6 +562,7 @@ async function submitRoutine(name: string, weeks: number) {
 
   dayCardsEls.forEach((dayCard) => {
     const diaSemana = Number((dayCard.querySelector(".day-name-select") as HTMLSelectElement).value);
+    const diaSemanaLabel = diaLabel(diaSemana);
     const ejercicios: NewDayInput["ejercicios"] = [];
 
     dayCard.querySelectorAll(".exc-block").forEach((block, orden) => {
@@ -526,25 +574,26 @@ async function submitRoutine(name: string, weeks: number) {
       const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
       const mismoPeso = (block.querySelector(".mismoPesoCheck") as HTMLInputElement).checked;
       const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
+      const ubicacion = `${diaSemanaLabel}, ejercicio ${orden + 1}`;
 
       if (!excId) {
-        error = "Elegí un ejercicio en cada fila.";
+        error = `Te falta elegir un ejercicio (${ubicacion}). Tocá "Elegir ejercicio" para buscarlo en el catálogo.`;
         return;
       }
       if (!serie || serie < 1 || serie > 10) {
-        error = "Las series tienen que ser entre 1 y 10.";
+        error = `Revisá las series en ${ubicacion}: tienen que ser un número entre 1 y 10.`;
         return;
       }
       if (!repe || repe < 1 || repe > 30) {
-        error = "Las repeticiones tienen que ser entre 1 y 30.";
+        error = `Revisá las repeticiones en ${ubicacion}: tienen que ser un número entre 1 y 30.`;
         return;
       }
       if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
-        error = "El 'hasta' del rango tiene que ser mayor o igual a las repeticiones y como máximo 30.";
+        error = `Revisá el "hasta" en ${ubicacion}: tiene que ser mayor o igual a las repeticiones y como máximo 30.`;
         return;
       }
       if (nota.length > 140) {
-        error = "Las notas tienen un máximo de 140 caracteres.";
+        error = `La nota en ${ubicacion} es muy larga: dejala en 140 caracteres o menos.`;
         return;
       }
 
@@ -563,12 +612,13 @@ async function submitRoutine(name: string, weeks: number) {
       });
     });
 
-    if (!error && ejercicios.length === 0) error = "Agregá al menos un ejercicio en cada día.";
+    if (!error && ejercicios.length === 0) error = `Agregá al menos un ejercicio en ${diaSemanaLabel}.`;
     diasArray.push({ dia_semana: diaSemana, ejercicios });
   });
 
   if (error) {
     alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
+    alertEl.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
 

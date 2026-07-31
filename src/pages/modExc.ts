@@ -112,6 +112,8 @@ async function saveChanges() {
     const updates: PendingDay["updates"] = [];
     const inserts: PendingDay["inserts"] = [];
 
+    const diaLabelText = dayCard.querySelector("h3")?.textContent ?? "este día";
+
     dayCard.querySelectorAll<HTMLElement>(".exc-block").forEach((block, orden) => {
       if (error) return;
       const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
@@ -123,25 +125,26 @@ async function saveChanges() {
       const mismoPeso = (block.querySelector(".mismoPesoCheck") as HTMLInputElement).checked;
       const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
       const existingId = block.dataset.existingId;
+      const ubicacion = `${diaLabelText}, ejercicio ${orden + 1}`;
 
       if (!excId) {
-        error = "Elegí un ejercicio en cada fila.";
+        error = `Te falta elegir un ejercicio (${ubicacion}). Tocá "Elegir ejercicio" para buscarlo en el catálogo.`;
         return;
       }
       if (!serie || serie < 1 || serie > 10) {
-        error = "Las series tienen que ser entre 1 y 10.";
+        error = `Revisá las series en ${ubicacion}: tienen que ser un número entre 1 y 10.`;
         return;
       }
       if (!repe || repe < 1 || repe > 30) {
-        error = "Las repeticiones tienen que ser entre 1 y 30.";
+        error = `Revisá las repeticiones en ${ubicacion}: tienen que ser un número entre 1 y 30.`;
         return;
       }
       if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
-        error = "El 'hasta' del rango tiene que ser mayor o igual a las repeticiones y como máximo 30.";
+        error = `Revisá el "hasta" en ${ubicacion}: tiene que ser mayor o igual a las repeticiones y como máximo 30.`;
         return;
       }
       if (nota.length > 140) {
-        error = "Las notas tienen un máximo de 140 caracteres.";
+        error = `La nota en ${ubicacion} es muy larga: dejala en 140 caracteres o menos.`;
         return;
       }
 
@@ -167,13 +170,14 @@ async function saveChanges() {
       }
     });
 
-    if (!error && dayCard.querySelectorAll(".exc-block").length === 0) error = "Agregá al menos un ejercicio en cada día.";
+    if (!error && dayCard.querySelectorAll(".exc-block").length === 0) error = `Agregá al menos un ejercicio en ${diaLabelText}.`;
     pending.push({ dayId, keepIds, updates, inserts });
     void diaIndex;
   });
 
   if (error) {
     alertMessage.innerHTML = `<p>${escapeHtml(error)}</p>`;
+    alertMessage.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
 

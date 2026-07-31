@@ -806,10 +806,41 @@ a { color: inherit; text-decoration: none; }
 
 .field-check a { color: var(--accent-2); font-weight: 700; }
 
-.alert_message { font-size: 13.5px; color: #ff7a7a; margin: -4px 0 14px; }
-.alert_message:empty { display: none; margin: 0; }
-.alert_message-center { text-align: center; }
-.alert_message p { margin: 0; }
+.alert_message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  color: #ffc2c2;
+  background: rgba(255, 90, 90, 0.08);
+  border: 1px solid rgba(255, 90, 90, 0.35);
+  border-left: 3px solid #ff5a5a;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  animation: alert-in 0.2s ease-out;
+}
+
+.alert_message:empty { display: none; margin: 0; padding: 0; border: none; background: none; }
+
+.alert_message:not(:empty)::before {
+  content: "";
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff5a5a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cline x1='12' y1='8' x2='12' y2='13'/%3E%3Cline x1='12' y1='16' x2='12' y2='16.01'/%3E%3C/svg%3E");
+}
+
+.alert_message-center { justify-content: center; }
+.alert_message p { margin: 0; line-height: 1.45; }
+
+@keyframes alert-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .auth-foot { text-align: center; margin-top: 22px; font-size: 13.5px; color: var(--text-muted); }
 .auth-foot a { color: var(--accent-2); font-weight: 700; }
@@ -1916,6 +1947,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .exc-field-label em { font-style: normal; text-transform: none; font-weight: 600; }
 .exc-field .mini-input { width: 100%; }
+.exc-field-sep { display: none; }
 
 .exc-extra {
   display: flex;
@@ -1946,6 +1978,60 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-size: 12.5px;
   font-family: inherit;
 }
+
+/* En desktop el ejercicio no necesita su propia fila: reorder, nombre, series,
+   repeticiones, hasta y quitar entran comodos en una sola linea. ".exc-top-row"
+   y ".exc-fields-row" pasan a "display: contents" para que sus hijos se aplanen
+   como hijos directos de ".exc-block-create" (que es el flex row real). Solo
+   afecta a la pagina de creacion (clase exclusiva) para no tocar la de editar. */
+@media (min-width: 640px) {
+  .exc-block-create {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .exc-block-create .exc-top-row,
+  .exc-block-create .exc-fields-row {
+    display: contents;
+  }
+
+  .exc-block-create .exc-top-row .exc-picker-btn { flex: 1 1 200px; }
+
+  .exc-block-create .exc-field { order: 1; flex: 0 1 88px; }
+  .exc-block-create .exc-field .mini-input { padding: 10px 6px; font-size: 13px; }
+  .exc-block-create .exc-field-label { font-size: 9.5px; text-align: center; }
+  .exc-block-create .exc-field-label em { font-size: 9px; }
+
+  .exc-block-create .exc-field-sep {
+    display: block;
+    order: 1;
+    align-self: flex-end;
+    padding-bottom: 9px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .exc-block-create .exc-remove { order: 2; align-self: flex-end; margin-bottom: 4.5px; }
+  .exc-block-create .exc-extra { order: 3; flex: 1 1 100%; }
+}
+
+.help-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent-2);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.help-list { display: flex; flex-direction: column; gap: 14px; margin: 18px 0; text-align: left; }
+.help-item strong { display: block; font-size: 14px; margin-bottom: 3px; }
+.help-item p { margin: 0; font-size: 13px; color: var(--text-muted); }
 
 /* ---------- Vista previa de rutina (plantillas Gym Social / clonado) ---------- */
 
@@ -1987,6 +2073,24 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
+}
+
+@media (max-width: 639px) {
+  .day-name-select {
+    max-width: none;
+    margin-bottom: 22px;
+    padding: 10px 38px 10px 12px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa1ac' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 16px;
+  }
+
+  .exc-field-label { text-align: center; }
+  .exc-extra { justify-content: center; }
 }
 
 /* ---------- Modal (overlay generado por JS) ---------- */
