@@ -1,6 +1,6 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { diaLabel } from "../lib/dias";
+import { dayDisplayLabel } from "../lib/dias";
 import { listExercises, type Exercise } from "../services/exercise.service";
 import { openExercisePicker } from "../lib/exercisePicker";
 import {
@@ -66,7 +66,7 @@ function renderWeek(weekIndex: number) {
     .map(
       (dia) => `
     <div class="day-card reveal" data-day-id="${dia.id}">
-      <h3>${escapeHtml(diaLabel(dia.dia_semana))}</h3>
+      <h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3>
       <div class="exc-edit-header"><span class="exc-edit-header-spacer"></span><span class="exc-edit-header-name">Ejercicio</span><span>Series</span><span>Repes</span><span class="exc-repe-sep" aria-hidden="true">a</span><span>Hasta</span><span class="exc-edit-header-spacer exc-edit-header-spacer-remove"></span></div>
       <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(exc)).join("")}</div>
       <button class="day-add-btn" type="button">+ Agregar ejercicio</button>

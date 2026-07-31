@@ -117,16 +117,19 @@ export type Database = {
         Row: {
           dia_semana: number
           id: string
+          nombre: string | null
           week_id: string
         }
         Insert: {
           dia_semana: number
           id?: string
+          nombre?: string | null
           week_id: string
         }
         Update: {
           dia_semana?: number
           id?: string
+          nombre?: string | null
           week_id?: string
         }
         Relationships: [

@@ -234,7 +234,7 @@ function resolveTemplateDays(t: RoutineTemplate): NewDayInput[] | null {
       });
     });
     if (ejercicios.length === 0) return null;
-    dias.push({ dia_semana: day.dia_semana, ejercicios });
+    dias.push({ dia_semana: day.dia_semana, nombre: day.titulo ?? null, ejercicios });
   }
   return dias;
 }
@@ -308,7 +308,7 @@ async function openClonePreview(r: RoutineWithCounts) {
       <div class="modal-card modal-card-lg">
         <h2>${escapeHtml(detail.nombre)}</h2>
         <p class="subtitle">Se va a crear una rutina nueva con los mismos ejercicios, para que empieces de cero.</p>
-        ${tplDaysPreviewMarkup(baseWeek.dias.map((d) => ({ dia_semana: d.dia_semana, items: d.ejercicios.map((e) => ({ nombre: e.nombre_snapshot, serie: e.serie, repe: e.repe, repeMax: e.repe_max })) })))}
+        ${tplDaysPreviewMarkup(baseWeek.dias.map((d) => ({ dia_semana: d.dia_semana, titulo: d.nombre ?? undefined, items: d.ejercicios.map((e) => ({ nombre: e.nombre_snapshot, serie: e.serie, repe: e.repe, repeMax: e.repe_max })) })))}
         <form id="cloneForm" novalidate>
           <div class="field"><label for="cloneName">Nombre de la rutina</label><input type="text" id="cloneName" value="${escapeHtml(detail.nombre)}"></div>
           <div class="field"><label for="cloneWeeks">Semanas</label><input type="number" id="cloneWeeks" min="1" max="10" value="${baseWeek ? detail.semanas.length : 4}"></div>
@@ -342,6 +342,7 @@ async function openClonePreview(r: RoutineWithCounts) {
 
     const dias: NewDayInput[] = baseWeek.dias.map((d) => ({
       dia_semana: d.dia_semana,
+      nombre: d.nombre,
       ejercicios: d.ejercicios.map((e, orden) => ({
         exercise_id: e.exercise_id,
         nombre_snapshot: e.nombre_snapshot,
@@ -411,6 +412,10 @@ function openBuilderHelp(): void {
         <p class="subtitle">Guía rápida para armar el día de entrenamiento.</p>
         <div class="help-list">
           <div class="help-item">
+            <strong>Nombre del día</strong>
+            <p>Viene precargado como Lunes, Martes, etc. Si no entrenás en días fijos, borralo y escribí lo que quieras (por ejemplo "Día 1" o "Día de pierna").</p>
+          </div>
+          <div class="help-item">
             <strong>Elegir ejercicio</strong>
             <p>Tocá el botón para buscar en el catálogo por nombre o categoría.</p>
           </div>
@@ -457,11 +462,10 @@ function updateMoveButtons(list: Element): void {
 }
 
 function dayCardMarkup(dayIndex: number): string {
+  const defaultDia = (dayIndex % 7) + 1;
   return `
-    <div class="day-card reveal" data-day="${dayIndex}">
-      <select class="day-name-select">
-        ${DIA_LABELS.map((name, i) => `<option value="${i + 1}" ${i === dayIndex % 7 ? "selected" : ""}>${name}</option>`).join("")}
-      </select>
+    <div class="day-card reveal" data-day="${dayIndex}" data-dia-semana="${defaultDia}">
+      <input type="text" class="day-name-input" value="${DIA_LABELS[dayIndex % 7]}" maxlength="40">
       <div class="exc-list">${excBlockMarkup()}</div>
       <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
     </div>
@@ -586,8 +590,9 @@ async function submitRoutine(name: string, weeks: number, isPublic: boolean) {
   let error = "";
 
   dayCardsEls.forEach((dayCard) => {
-    const diaSemana = Number((dayCard.querySelector(".day-name-select") as HTMLSelectElement).value);
-    const diaSemanaLabel = diaLabel(diaSemana);
+    const diaSemana = Number(dayCard.dataset.diaSemana);
+    const customName = (dayCard.querySelector(".day-name-input") as HTMLInputElement).value.trim();
+    const diaSemanaLabel = customName || diaLabel(diaSemana);
     const ejercicios: NewDayInput["ejercicios"] = [];
 
     dayCard.querySelectorAll(".exc-block").forEach((block, orden) => {
@@ -638,7 +643,7 @@ async function submitRoutine(name: string, weeks: number, isPublic: boolean) {
     });
 
     if (!error && ejercicios.length === 0) error = `Agregá al menos un ejercicio en ${diaSemanaLabel}.`;
-    diasArray.push({ dia_semana: diaSemana, ejercicios });
+    diasArray.push({ dia_semana: diaSemana, nombre: customName || null, ejercicios });
   });
 
   if (error) {

@@ -1,6 +1,6 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { diaLabel } from "../lib/dias";
+import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
 import { insertWeightLogs, getLatestWeights, getExerciseHistory, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
@@ -141,7 +141,7 @@ function renderWeek(weekIndex: number) {
       return `
         <button class="day-row reveal ${done ? "done" : ""}" type="button" data-dia="${diaIndex}">
           ${ringMarkup(pct)}
-          <div class="day-row-info"><h3>${escapeHtml(diaLabel(dia.dia_semana))}</h3><p>${subtitle}</p></div>
+          <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
           <span class="day-row-status ${done ? "done" : "pending"}">${done ? "Completo" : "Pendiente"}</span>
           <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
@@ -207,7 +207,7 @@ function openDay(weekIndex: number, diaIndex: number) {
   if (trackable.length === 0) {
     weekContent.innerHTML = `
       <a class="back-link" id="backToWeek" href="#"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Volver</a>
-      <div class="empty-state reveal"><h3>${escapeHtml(diaLabel(dia.dia_semana))} no tiene ejercicios con peso</h3><p>No hay nada para cargar este día.</p></div>
+      <div class="empty-state reveal"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))} no tiene ejercicios con peso</h3><p>No hay nada para cargar este día.</p></div>
     `;
     document.getElementById("backToWeek")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -219,7 +219,7 @@ function openDay(weekIndex: number, diaIndex: number) {
   weekContent.innerHTML = `
     <a class="back-link" id="backToWeek" href="#"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Volver a la semana</a>
     <div class="auth-card reveal">
-      <span class="eyebrow">${escapeHtml(diaLabel(dia.dia_semana))}</span>
+      <span class="eyebrow">${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</span>
       <h1>Cargar pesos</h1>
       <p class="subtitle">${escapeHtml(routine!.nombre)} · Semana ${semana.numero} · <button type="button" class="help-link" id="weightsHelpBtn">¿Cómo cargo esto?</button></p>
       ${trackable

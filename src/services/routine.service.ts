@@ -6,6 +6,7 @@ export type RoutineExercise = Tables<"routine_exercises">;
 
 export interface NewDayInput {
   dia_semana: number;
+  nombre?: string | null;
   ejercicios: {
     exercise_id: string;
     nombre_snapshot: string;
@@ -55,6 +56,7 @@ export interface RoutineExerciseWithAuthor extends RoutineExercise {
 export interface RoutineDetailDay {
   id: string;
   dia_semana: number;
+  nombre: string | null;
   ejercicios: RoutineExerciseWithAuthor[];
 }
 export interface RoutineDetailWeek {
@@ -71,7 +73,7 @@ export async function getRoutineDetail(routineId: string): Promise<RoutineDetail
     .from("routines")
     .select(
       `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, created_at, updated_at,
-       routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( *, exercises ( is_builtin, category, image_url, profiles ( nombre, apellido ) ) ) ) )`
+       routine_weeks ( id, numero, routine_days ( id, dia_semana, nombre, routine_exercises ( *, exercises ( is_builtin, category, image_url, profiles ( nombre, apellido ) ) ) ) )`
     )
     .eq("id", routineId)
     .maybeSingle();
@@ -90,6 +92,7 @@ export async function getRoutineDetail(routineId: string): Promise<RoutineDetail
         .map((d: any) => ({
           id: d.id,
           dia_semana: d.dia_semana,
+          nombre: d.nombre ?? null,
           ejercicios: [...(d.routine_exercises ?? [])]
             .sort((a: any, b: any) => a.orden - b.orden)
             .map((e: any) => {
