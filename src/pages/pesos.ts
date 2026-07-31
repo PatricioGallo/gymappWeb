@@ -4,6 +4,7 @@ import { diaLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
 import { insertWeightLogs, getLatestWeights, getExerciseHistory, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
+import { openExerciseModal } from "../lib/exerciseModal";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
 
@@ -175,45 +176,35 @@ function openDay(weekIndex: number, diaIndex: number) {
       <h1>Cargar pesos</h1>
       <p class="subtitle">${escapeHtml(routine!.nombre)} · Semana ${semana.numero}</p>
       ${trackable
-        .map((exc) => {
+        .map((exc, idx) => {
           const last = latestWeights.get(exc.id);
           const history = exerciseHistory.get(exc.exercise_id);
+          const unit = exc.mismo_peso ? defaultUnit(history?.get(1)) : exerciseDefaultUnit(history, exc.serie);
 
-          if (exc.mismo_peso) {
-            const today = todayEntry(last?.get(1));
-            const historyEntries = history?.get(1);
-            return `
-        <div class="weight-field">
-          <div class="weight-field-info">
-            <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <div class="weight-field-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones · anterior: ${previousValuesText(historyEntries)}</div>
-          </div>
-          <div class="weight-input-group">
-            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="1" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
-            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(defaultUnit(historyEntries))}</select>
-          </div>
-        </div>`;
-          }
+          const rows = exc.mismo_peso
+            ? [{ setIndex: 1, subLabel: "Anterior" }]
+            : Array.from({ length: exc.serie }, (_, i) => ({ setIndex: i + 1, subLabel: `Serie ${i + 1} · anterior` }));
 
-          const serieRows = Array.from({ length: exc.serie }, (_, i) => {
-            const setIndex = i + 1;
-            const today = todayEntry(last?.get(setIndex));
-            const historyEntries = history?.get(setIndex);
-            return `
+          const rowsMarkup = rows
+            .map(({ setIndex, subLabel }) => {
+              const today = todayEntry(last?.get(setIndex));
+              const historyEntries = history?.get(setIndex);
+              return `
         <div class="weight-field-serie">
-          <div class="weight-field-sub">Serie ${setIndex} · anterior: ${previousValuesText(historyEntries)}</div>
+          <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
           <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
         </div>`;
-          }).join("");
+            })
+            .join("");
 
           return `
         <div class="weight-field-group">
           <div class="weight-field-group-head">
-            <div class="weight-field-label">${escapeHtml(exc.nombre_snapshot)}</div>
-            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(exerciseDefaultUnit(history, exc.serie))}</select>
+            <button type="button" class="weight-field-label exc-info-btn" data-exc-idx="${idx}">${escapeHtml(exc.nombre_snapshot)}</button>
+            <select class="mini-input weightUnitSelect">${unitOptionsMarkup(unit)}</select>
           </div>
           <div class="weight-field-sub weight-field-group-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones</div>
-          ${serieRows}
+          ${rowsMarkup}
         </div>`;
         })
         .join("")}
@@ -221,6 +212,13 @@ function openDay(weekIndex: number, diaIndex: number) {
       <button class="btn btn-primary btn-block" id="saveWeights" type="button">Guardar</button>
     </div>
   `;
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".exc-info-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const exc = trackable[Number(btn.dataset.excIdx)];
+      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
+    });
+  });
 
   document.getElementById("backToWeek")?.addEventListener("click", (e) => {
     e.preventDefault();

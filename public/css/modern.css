@@ -1449,6 +1449,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .routine-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
+@media (max-width: 639px) {
+  .routine-actions { flex-direction: column; }
+  .routine-actions .btn { width: 100%; }
+}
+
 .btn-sm { padding: 9px 16px; font-size: 13px; }
 
 .btn-danger {
@@ -1818,20 +1823,22 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .day-row-chevron { flex-shrink: 0; width: 18px; height: 18px; stroke: var(--text-muted); }
 
-.weight-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 0;
-  border-top: 1px solid var(--border);
+.weight-field-label {
+  font-weight: 700;
+  font-size: 14.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-
-.weight-field:first-of-type { border-top: none; padding-top: 0; }
-.weight-field-info { min-width: 0; flex: 1; }
-.weight-field-label { font-weight: 700; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weight-field-label:hover, .weight-field-label:focus-visible { color: var(--accent-2); text-decoration: underline; }
 .weight-field-sub { font-weight: 500; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.weight-field input { width: 90px; flex-shrink: 0; }
 
 .weight-field-group { padding: 14px 0; border-top: 1px solid var(--border); }
 .weight-field-group:first-of-type { border-top: none; padding-top: 0; }
@@ -1850,9 +1857,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .weight-field-serie .weight-field-sub { flex: 1; min-width: 0; margin-top: 0; }
 .weight-field-serie input { width: 90px; flex-shrink: 0; }
 
-.weight-input-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.weight-input-group input.mini-input { width: 72px; }
-.weight-input-group select.mini-input { width: 92px; padding-right: 4px; }
 .weight-field-group-head select.mini-input { width: 92px; flex-shrink: 0; padding-right: 4px; }
 
 .back-link {
@@ -1874,6 +1878,44 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-block:first-child { padding-top: 0; border-top: none; }
 
 .exc-block .exc-edit-row { border-top: none; padding: 0 0 8px; }
+
+.exc-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.exc-top-row .exc-picker-btn { flex: 1 1 auto; min-width: 0; }
+
+.exc-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.exc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 84px;
+  min-width: 0;
+}
+
+.exc-field-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exc-field-label em { font-style: normal; text-transform: none; font-weight: 600; }
+.exc-field .mini-input { width: 100%; }
 
 .exc-extra {
   display: flex;
