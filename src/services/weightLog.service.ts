@@ -22,6 +22,7 @@ export interface LatestWeightEntry {
   peso: number;
   fecha: string;
   unidad: WeightUnit;
+  repe: number | null;
 }
 
 // Cada serie puede tener un historial por unidad (kg/lb/bloques); el primer elemento
@@ -34,6 +35,7 @@ interface RawWeightRow {
   fecha: string;
   serie: number | null;
   unidad: WeightUnit;
+  repe: number | null;
 }
 
 function groupLatestWeights(rows: RawWeightRow[]): LatestWeightsMap {
@@ -59,7 +61,7 @@ function groupLatestWeights(rows: RawWeightRow[]): LatestWeightsMap {
       entries = [];
       bySerie.set(serieIndex, entries);
     }
-    entries.push({ peso: row.peso, fecha: row.fecha, unidad });
+    entries.push({ peso: row.peso, fecha: row.fecha, unidad, repe: row.repe });
   });
   return map;
 }
@@ -71,7 +73,7 @@ export async function getLatestWeights(routineExerciseIds: string[]): Promise<La
 
   const { data, error } = await supabase
     .from("weight_logs")
-    .select("id:routine_exercise_id, peso, fecha, serie, unidad")
+    .select("id:routine_exercise_id, peso, fecha, serie, unidad, repe")
     .in("routine_exercise_id", routineExerciseIds)
     .order("fecha", { ascending: false })
     .order("created_at", { ascending: false });
@@ -87,7 +89,7 @@ export async function getExerciseHistory(exerciseIds: string[]): Promise<LatestW
 
   const { data, error } = await supabase
     .from("weight_logs")
-    .select("id:exercise_id, peso, fecha, serie, unidad")
+    .select("id:exercise_id, peso, fecha, serie, unidad, repe")
     .in("exercise_id", exerciseIds)
     .order("fecha", { ascending: false })
     .order("created_at", { ascending: false });

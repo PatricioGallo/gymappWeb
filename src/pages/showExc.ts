@@ -1,7 +1,7 @@
 import { setupNavToggle, setupRevealObserver } from "../lib/nav";
 import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
-import { diaLabel } from "../lib/dias";
+import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, getSharedRoutine, setRoutineShareable, type RoutineDetail } from "../services/routine.service";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
@@ -99,7 +99,7 @@ function renderWeekContent(diasBase: RoutineDetail["semanas"][number]["dias"], w
       (dia, diaIndex) => `
     <div class="day-accordion reveal" data-dia="${diaIndex}">
       <button class="day-row" type="button" data-dia="${diaIndex}">
-        <div class="day-row-info"><h3>${escapeHtml(diaLabel(dia.dia_semana))}</h3><p>${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}</p></div>
+        <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}</p></div>
         <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
       </button>
       <div class="day-detail" id="dayDetail-${diaIndex}" hidden>
@@ -171,7 +171,7 @@ async function renderShared(token: string) {
         (dia: any, diaIndex: number) => `
       <div class="day-accordion reveal" data-dia="${diaIndex}">
         <button class="day-row" type="button" data-dia="${diaIndex}">
-          <div class="day-row-info"><h3>${escapeHtml(diaLabel(dia.dia_semana))}</h3><p>${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}</p></div>
+          <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}</p></div>
           <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
         <div class="day-detail" id="dayDetail-${diaIndex}" hidden>

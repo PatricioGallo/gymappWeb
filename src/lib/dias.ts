@@ -4,6 +4,10 @@ export function diaLabel(diaSemana: number): string {
   return DIA_LABELS[diaSemana - 1] ?? "Día";
 }
 
+export function dayDisplayLabel(diaSemana: number, nombre?: string | null): string {
+  return nombre?.trim() || diaLabel(diaSemana);
+}
+
 export function formatFechaCorta(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${d}/${m}/${y}`;
