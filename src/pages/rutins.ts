@@ -348,18 +348,28 @@ async function openClonePreview(r: RoutineWithCounts) {
 function excBlockMarkup(): string {
   return `
     <div class="exc-block">
-      <div class="exc-edit-row">
+      <div class="exc-top-row">
         <div class="exc-reorder">
           <button type="button" class="exc-move-up" title="Subir">▲</button>
           <button type="button" class="exc-move-down" title="Bajar">▼</button>
         </div>
         <button type="button" class="exc-picker-btn">Elegir ejercicio</button>
         <input type="hidden" class="excSelectInput" value="">
-        <input type="number" class="mini-input serieInput" placeholder="Series" min="1" max="10">
-        <input type="number" class="mini-input repeInput" placeholder="Repes" min="1" max="30">
-        <span class="exc-repe-sep">a</span>
-        <input type="number" class="mini-input repeMaxInput" placeholder="opcional" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
+      </div>
+      <div class="exc-fields-row">
+        <label class="exc-field">
+          <span class="exc-field-label">Series</span>
+          <input type="number" class="mini-input serieInput" placeholder="Ej: 3" min="1" max="10">
+        </label>
+        <label class="exc-field">
+          <span class="exc-field-label">Repeticiones</span>
+          <input type="number" class="mini-input repeInput" placeholder="Ej: 10" min="1" max="30">
+        </label>
+        <label class="exc-field">
+          <span class="exc-field-label">Hasta <em>(opcional)</em></span>
+          <input type="number" class="mini-input repeMaxInput" placeholder="Rango" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
+        </label>
       </div>
       <div class="exc-extra">
         <label><input type="checkbox" class="noWeightCheck"> Sin peso</label>
