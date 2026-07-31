@@ -1,0 +1,72 @@
+<!--
+  Template de Supabase Auth: "Confirm signup".
+  Pegar este HTML en: Supabase Dashboard > Authentication > Emails > Confirm signup.
+  Variables disponibles: {{ .ConfirmationURL }} {{ .Email }} {{ .SiteURL }} {{ .Token }} {{ .TokenHash }}
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirmá tu cuenta</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0a0c0f; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0c0f; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#14171c; border:1px solid #262b33; border-radius:16px; overflow:hidden;">
+
+          <tr>
+            <td align="center" style="padding:32px 32px 0 32px;">
+              <img src="https://gymsocial.com.ar/images/logo.png" alt="Gym Social" width="140" style="display:block; max-width:140px; height:auto;">
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:24px 32px 8px 32px;">
+              <p style="margin:0 0 4px 0; font-size:12px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#ff8a3d;">Registro</p>
+              <h1 style="margin:0; font-size:22px; line-height:1.3; color:#f4f5f6;">Confirmá tu cuenta</h1>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:12px 32px 0 32px;">
+              <p style="margin:0; font-size:15px; line-height:1.6; color:#9aa1ac;">
+                ¡Gracias por sumarte a Gym Social! Confirmá tu mail para activar tu cuenta y empezar a armar tus rutinas.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:28px 32px 8px 32px;">
+              <a href="{{ .ConfirmationURL }}"
+                 style="display:inline-block; padding:14px 32px; background-color:#ff4d4d; color:#ffffff; font-size:15px; font-weight:600; text-decoration:none; border-radius:10px;">
+                Confirmar mi cuenta
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:16px 32px 0 32px;">
+              <p style="margin:0; font-size:13px; line-height:1.6; color:#9aa1ac;">
+                Si el botón no funciona, copiá y pegá este link en tu navegador:<br>
+                <a href="{{ .ConfirmationURL }}" style="color:#ff8a3d; word-break:break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 32px 32px 32px; border-top:1px solid #262b33; margin-top:24px;">
+              <p style="margin:24px 0 0 0; font-size:12px; line-height:1.6; color:#9aa1ac;">
+                Si no creaste esta cuenta, podés ignorar este mail.<br>
+                © 2026 Gym Social
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

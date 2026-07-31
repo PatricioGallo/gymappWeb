@@ -39,6 +39,7 @@ export async function signUp(fields: SignUpFields): Promise<{ error?: string }> 
     email: fields.email,
     password: fields.password,
     options: {
+      emailRedirectTo: `${window.location.origin}/pages/login.html`,
       data: {
         nombre: fields.nombre,
         apellido: fields.apellido,
