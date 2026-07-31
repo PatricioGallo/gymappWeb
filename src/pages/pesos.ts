@@ -20,7 +20,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 // otra semana de la rutina o de hoy mismo (si ya se cargo en otra ocurrencia del ejercicio).
 function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
   if (!entries || entries.length === 0) return "sin registro";
-  return entries.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}`).join(" · ");
+  return entries.map((e) => `${e.peso} ${UNIT_LABELS[e.unidad]}${e.repe ? ` x ${e.repe} reps` : ""}`).join(" · ");
 }
 
 function todayEntry(entries: LatestWeightEntry[] | undefined): LatestWeightEntry | null {
@@ -91,6 +91,19 @@ function routineProgress(): number {
   return total === 0 ? 0 : Math.round((done / total) * 100);
 }
 
+function weekProgress(weekIndex: number): number {
+  const semana = routine!.semanas[weekIndex];
+  let total = 0;
+  let done = 0;
+  semana.dias.forEach((dia) => {
+    dia.ejercicios.forEach((e) => {
+      total++;
+      if (latestWeights.has(e.id)) done++;
+    });
+  });
+  return total === 0 ? 0 : Math.round((done / total) * 100);
+}
+
 function currentWeekIndex(): number {
   let found = -1;
   routine!.semanas.forEach((semana, index) => {
@@ -108,6 +121,7 @@ function renderWeekStatus(weekIndex: number) {
   const weekStatus = document.getElementById("weekStatus")!;
   weekStatus.innerHTML = `
     <span class="hero-badge">Estás en la semana ${semana.numero}</span>
+    <span class="hero-badge">Progreso de la semana: ${weekProgress(weekIndex)}%</span>
     <span class="hero-badge">Progreso de la rutina: ${routineProgress()}%</span>
   `;
 }
@@ -148,6 +162,41 @@ function backToWeek(weekIndex: number) {
   renderWeek(weekIndex);
 }
 
+function openWeightsHelp(): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Cómo cargo los pesos?</h2>
+        <p class="subtitle">Guía rápida para registrar tu entrenamiento.</p>
+        <div class="help-list">
+          <div class="help-item">
+            <strong>Peso</strong>
+            <p>El peso que levantaste en esa serie. Elegí la unidad (Kg, Lb o Bloques) en el selector de arriba.</p>
+          </div>
+          <div class="help-item">
+            <strong>Reps</strong>
+            <p>Cuántas repeticiones hiciste realmente en esa serie. Viene precargado con las repeticiones sugeridas por la rutina, pero podés cambiarlo si hiciste más o menos.</p>
+          </div>
+          <div class="help-item">
+            <strong>Anterior</strong>
+            <p>Te muestra el último peso y las repeticiones que registraste en esa serie, para que puedas comparar tu progreso.</p>
+          </div>
+          <div class="help-item">
+            <strong>Guardar</strong>
+            <p>Guarda todas las series que hayas completado. Podés dejar series vacías si todavía no las hiciste y cargarlas más tarde.</p>
+          </div>
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" id="closeWeightsHelp">Entendido</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById("closeWeightsHelp")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+}
+
 function openDay(weekIndex: number, diaIndex: number) {
   const semana = routine!.semanas[weekIndex];
   const dia = semana.dias[diaIndex];
@@ -174,7 +223,7 @@ function openDay(weekIndex: number, diaIndex: number) {
     <div class="auth-card reveal">
       <span class="eyebrow">${escapeHtml(diaLabel(dia.dia_semana))}</span>
       <h1>Cargar pesos</h1>
-      <p class="subtitle">${escapeHtml(routine!.nombre)} · Semana ${semana.numero}</p>
+      <p class="subtitle">${escapeHtml(routine!.nombre)} · Semana ${semana.numero} · <button type="button" class="help-link" id="weightsHelpBtn">¿Cómo cargo esto?</button></p>
       ${trackable
         .map((exc, idx) => {
           const last = latestWeights.get(exc.id);
@@ -189,10 +238,15 @@ function openDay(weekIndex: number, diaIndex: number) {
             .map(({ setIndex, subLabel }) => {
               const today = todayEntry(last?.get(setIndex));
               const historyEntries = history?.get(setIndex);
+              const repeValue = today ? today.repe ?? exc.repe : exc.repe;
               return `
         <div class="weight-field-serie">
           <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
-          <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" data-repe="${exc.repe}" placeholder="valor" value="${today ? today.peso : ""}">
+          <div class="weight-field-inputs">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="kg" value="${today ? today.peso : ""}">
+            <span class="weight-field-x">x</span>
+            <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
+          </div>
         </div>`;
             })
             .join("");
@@ -220,6 +274,8 @@ function openDay(weekIndex: number, diaIndex: number) {
     });
   });
 
+  document.getElementById("weightsHelpBtn")?.addEventListener("click", openWeightsHelp);
+
   document.getElementById("backToWeek")?.addEventListener("click", (e) => {
     e.preventDefault();
     backToWeek(weekIndex);
@@ -239,7 +295,10 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
     const value = input.value.trim();
     if (value === "") return;
     const peso = Number(value);
-    if (Number.isNaN(peso) || peso <= 0) {
+    const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
+    const repeValue = repInput?.value.trim() ?? "";
+    const repe = repeValue === "" ? NaN : Number(repeValue);
+    if (Number.isNaN(peso) || peso <= 0 || Number.isNaN(repe) || repe <= 0) {
       error = true;
       return;
     }
@@ -250,7 +309,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
       fecha: today,
       peso,
       serie: Number(input.dataset.serie),
-      repe: Number(input.dataset.repe),
+      repe,
       unidad: (unitSelect?.value as WeightUnit) ?? "kg",
     });
   });

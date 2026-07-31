@@ -1930,6 +1930,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .weight-field-serie:first-of-type { border-top: none; padding-top: 4px; }
 .weight-field-serie .weight-field-sub { flex: 1; min-width: 0; margin-top: 0; }
 .weight-field-serie input { width: 90px; flex-shrink: 0; }
+.weight-field-inputs { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.weight-field-inputs input { width: 62px; }
+.weight-field-x { font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
 
 .weight-field-group-head select.mini-input { width: 92px; flex-shrink: 0; padding-right: 4px; }
 
