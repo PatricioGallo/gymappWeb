@@ -13,12 +13,25 @@ import {
   type AdminUserRow,
   type AdminDailyVisit,
 } from "../services/admin.service";
+import {
+  listExercisesAdmin,
+  addExercise,
+  addBuiltinExercise,
+  updateExercise,
+  deleteExercise,
+  uploadExerciseImage,
+  validateNewExercise,
+  EXERCISE_CATEGORIES,
+  CATEGORY_LABELS,
+  type AdminExerciseRow,
+  type ExerciseCategory,
+} from "../services/exercise.service";
 
 declare const Chart: any;
 
 setupNavToggle();
 setupRevealObserver();
-await requireAuth();
+const adminId = await requireAuth();
 
 if (!(await isCurrentUserAdmin())) {
   window.location.href = "profile.html";
@@ -28,6 +41,10 @@ if (!(await isCurrentUserAdmin())) {
 let users: AdminUserRow[] = [];
 let statsLoaded = false;
 let usersLoaded = false;
+
+let exercises: AdminExerciseRow[] = [];
+let exercisesLoaded = false;
+let excAdminSubTab: "builtin" | "custom" = "builtin";
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
@@ -45,6 +62,7 @@ function setupTabs() {
   const tabsWrap = document.getElementById("adminTabs");
   const statsTab = document.getElementById("statsTab")!;
   const usersTab = document.getElementById("usersTab")!;
+  const exercisesTab = document.getElementById("exercisesTab")!;
   if (!tabsWrap) return;
 
   tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
@@ -53,6 +71,7 @@ function setupTabs() {
       const tab = btn.dataset.tab;
       statsTab.hidden = tab !== "stats";
       usersTab.hidden = tab !== "users";
+      exercisesTab.hidden = tab !== "exercises";
       if (tab === "stats" && !statsLoaded) {
         statsLoaded = true;
         await renderStatsTab();
@@ -60,6 +79,10 @@ function setupTabs() {
       if (tab === "users" && !usersLoaded) {
         usersLoaded = true;
         await loadUsers();
+      }
+      if (tab === "exercises" && !exercisesLoaded) {
+        exercisesLoaded = true;
+        await loadExercises();
       }
     });
   });
@@ -151,7 +174,7 @@ function renderUsersTab(filter: string) {
     : users;
 
   usersTab.innerHTML = `
-    <input type="search" id="userSearch" class="exc-picker-search" placeholder="Buscar por nombre, usuario o mail..." value="${escapeHtml(filter)}">
+    <input type="search" id="userSearch" class="exc-picker-search admin-search" placeholder="Buscar por nombre, usuario o mail..." value="${escapeHtml(filter)}">
     <div class="exc-table-scroll">
       <div class="admin-table-head">
         <span>Usuario</span><span>Rol</span><span>Rutinas</span><span>Registrado</span><span>Última conexión</span><span></span>
@@ -267,6 +290,324 @@ function openEditUserModal(userId: string) {
     Object.assign(user, { nombre, apellido, username, fecha_nacimiento: fechaNacimiento, nacionalidad, user_type: userType });
     loaderBody.innerHTML = "";
     renderUsersTab((document.getElementById("userSearch") as HTMLInputElement | null)?.value ?? "");
+  });
+}
+
+// ---------- Ejercicios ----------
+
+const DUMBBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg>`;
+
+const EXC_ERROR_LABELS: Record<string, string> = {
+  name_short: "Nombre del ejercicio muy corto.",
+  name_long: "Nombre del ejercicio muy largo.",
+  info_short: "Descripción del ejercicio muy corta (mínimo 100 caracteres).",
+  info_long: "Descripción del ejercicio muy larga (máximo 600 caracteres).",
+  category_missing: "Elegí una categoría para el ejercicio.",
+};
+
+let excSearchTerm = "";
+
+async function loadExercises() {
+  const exercisesTab = document.getElementById("exercisesTab")!;
+  exercisesTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando ejercicios...</p></div>`;
+  exercises = await listExercisesAdmin();
+  renderExercisesTab();
+}
+
+function renderExercisesTab() {
+  const exercisesTab = document.getElementById("exercisesTab")!;
+
+  exercisesTab.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div class="exc-pick-chips" id="excAdminSubTabs">
+        <button type="button" class="exc-pick-chip ${excAdminSubTab === "builtin" ? "active" : ""}" data-sub="builtin">Gym Social</button>
+        <button type="button" class="exc-pick-chip ${excAdminSubTab === "custom" ? "active" : ""}" data-sub="custom">Creados por usuarios</button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="excAdminAddBtn" type="button">+ Agregar ejercicio</button>
+    </div>
+    <input type="search" id="excAdminSearch" class="exc-picker-search admin-search" placeholder="Buscar ejercicio..." value="${escapeHtml(excSearchTerm)}">
+    <div id="excAdminResults"></div>
+  `;
+
+  renderExerciseResults();
+
+  document.getElementById("excAdminSubTabs")?.addEventListener("click", (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
+    if (!btn) return;
+    excAdminSubTab = btn.dataset.sub as "builtin" | "custom";
+    renderExercisesTab();
+  });
+
+  document.getElementById("excAdminSearch")?.addEventListener("input", (event) => {
+    excSearchTerm = (event.target as HTMLInputElement).value;
+    renderExerciseResults();
+  });
+
+  document.getElementById("excAdminAddBtn")?.addEventListener("click", () => openExerciseFormModal(null));
+}
+
+function renderExerciseResults() {
+  const resultsEl = document.getElementById("excAdminResults");
+  if (!resultsEl) return;
+
+  const term = excSearchTerm.trim().toLowerCase();
+  const scoped = exercises.filter((e) => (excAdminSubTab === "builtin" ? e.is_builtin : !e.is_builtin));
+  const filtered = term ? scoped.filter((e) => e.name.toLowerCase().includes(term)) : scoped;
+
+  const sections = EXERCISE_CATEGORIES.map((cat) => {
+    const items = filtered.filter((e) => e.category === cat);
+    if (items.length === 0) return "";
+    return `
+      <div class="exc-pick-section">
+        <h4>${escapeHtml(CATEGORY_LABELS[cat])}</h4>
+        <div class="exc-pick-grid">
+          ${items
+            .map(
+              (exc) => `
+            <div class="exc-admin-card" data-id="${exc.id}">
+              <span class="exc-pick-thumb">${exc.image_url ? `<img src="${escapeHtml(exc.image_url)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
+              <span class="exc-admin-name">${escapeHtml(exc.name)}</span>
+              ${exc.authorName ? `<span class="exc-admin-author">${escapeHtml(exc.authorName)}</span>` : ""}
+              <div class="exc-admin-actions">
+                <button type="button" class="exc-admin-edit" data-id="${exc.id}">Editar</button>
+                <button type="button" class="exc-admin-delete" data-id="${exc.id}">Eliminar</button>
+              </div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  })
+    .filter(Boolean)
+    .join("");
+
+  resultsEl.innerHTML = sections || `<p class="exc-pick-empty">No encontramos ejercicios con ese criterio.</p>`;
+
+  resultsEl.querySelectorAll<HTMLButtonElement>(".exc-admin-edit").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const exc = exercises.find((e) => e.id === btn.dataset.id);
+      if (exc) openExerciseFormModal(exc);
+    });
+  });
+  resultsEl.querySelectorAll<HTMLButtonElement>(".exc-admin-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const exc = exercises.find((e) => e.id === btn.dataset.id);
+      if (exc) openDeleteExerciseModal(exc);
+    });
+  });
+}
+
+function openExerciseFormModal(existing: AdminExerciseRow | null) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  const isBuiltin = existing ? existing.is_builtin : excAdminSubTab === "builtin";
+  const currentImageUrl = existing?.image_url ?? null;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>${existing ? "Editar ejercicio" : "Agregar ejercicio"}</h2>
+        <p class="subtitle">${isBuiltin ? "Ejercicio del catálogo de Gym Social." : "Ejercicio creado por un usuario."}</p>
+
+        <div class="field"><label for="excFormName">Nombre</label><input type="text" id="excFormName" value="${escapeHtml(existing?.name ?? "")}"></div>
+        <div class="field"><label for="excFormInfo">Descripción</label><textarea id="excFormInfo" rows="5">${escapeHtml(existing?.info ?? "")}</textarea></div>
+        <div class="field">
+          <label for="excFormCategory">Categoría</label>
+          <select id="excFormCategory">
+            ${EXERCISE_CATEGORIES.map((c) => `<option value="${c}" ${existing?.category === c ? "selected" : ""}>${escapeHtml(CATEGORY_LABELS[c])}</option>`).join("")}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="excFormImage">Imagen ilustrativa (opcional)</label>
+          <div class="dropzone ${currentImageUrl ? "has-file" : ""}" id="excFormDropzone">
+            <input type="file" id="excFormImage" accept="image/*" class="dropzone-input" aria-label="Imagen ilustrativa del ejercicio">
+            <div class="dropzone-empty" id="excFormDropzoneEmpty" ${currentImageUrl ? "hidden" : ""}>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <p><strong>Hacé clic para subir</strong> o arrastrá una imagen acá</p>
+              <span class="field-hint">JPG, PNG o WEBP · hasta 2MB</span>
+            </div>
+            <div class="dropzone-preview" id="excFormDropzonePreview" ${currentImageUrl ? "" : "hidden"}>
+              <img id="excFormDropzonePreviewImg" alt="" src="${currentImageUrl ? escapeHtml(currentImageUrl) : ""}">
+              <span class="dropzone-filename" id="excFormDropzoneFileName">${currentImageUrl ? "Imagen actual" : ""}</span>
+              <button type="button" class="dropzone-remove" id="excFormDropzoneRemove" title="Quitar imagen">×</button>
+            </div>
+          </div>
+        </div>
+
+        ${
+          !isBuiltin
+            ? `
+        <div class="field">
+          <label for="excFormPublic">Visibilidad</label>
+          <select id="excFormPublic">
+            <option value="true" ${existing?.is_public !== false ? "selected" : ""}>Público (cualquiera lo puede agregar a sus rutinas)</option>
+            <option value="false" ${existing?.is_public === false ? "selected" : ""}>Privado (solo el autor)</option>
+          </select>
+        </div>`
+            : ""
+        }
+
+        <div class="alert_message" id="excFormAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="excFormSave" type="button">Guardar</button>
+          <button class="btn btn-outline" id="excFormClose" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  let selectedFile: File | null = null;
+  let imageRemoved = false;
+  let objectUrl: string | null = null;
+
+  const dropzone = document.getElementById("excFormDropzone");
+  const imageInput = document.getElementById("excFormImage") as HTMLInputElement | null;
+  const dzEmpty = document.getElementById("excFormDropzoneEmpty");
+  const dzPreview = document.getElementById("excFormDropzonePreview");
+  const dzPreviewImg = document.getElementById("excFormDropzonePreviewImg") as HTMLImageElement | null;
+  const dzFileName = document.getElementById("excFormDropzoneFileName");
+
+  function showPreview(file: File): void {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    if (dzPreviewImg) dzPreviewImg.src = objectUrl;
+    if (dzFileName) dzFileName.textContent = file.name;
+    dropzone?.classList.add("has-file");
+    dzEmpty?.setAttribute("hidden", "");
+    dzPreview?.removeAttribute("hidden");
+    selectedFile = file;
+    imageRemoved = false;
+  }
+
+  function clearPreview(): void {
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    }
+    if (imageInput) imageInput.value = "";
+    dropzone?.classList.remove("has-file");
+    dzPreview?.setAttribute("hidden", "");
+    dzEmpty?.removeAttribute("hidden");
+    selectedFile = null;
+    imageRemoved = true;
+  }
+
+  imageInput?.addEventListener("change", () => {
+    const file = imageInput.files?.[0];
+    if (file) showPreview(file);
+  });
+  document.getElementById("excFormDropzoneRemove")?.addEventListener("click", clearPreview);
+  dropzone?.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone?.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone?.addEventListener("drop", (event) => {
+    event.preventDefault();
+    dropzone.classList.remove("dragover");
+    const file = event.dataTransfer?.files?.[0];
+    if (file && imageInput) {
+      imageInput.files = event.dataTransfer!.files;
+      showPreview(file);
+    }
+  });
+
+  document.getElementById("excFormClose")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("excFormSave")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("excFormAlert")!;
+    alertBox.innerHTML = "";
+
+    const name = (document.getElementById("excFormName") as HTMLInputElement).value.trim();
+    const info = (document.getElementById("excFormInfo") as HTMLTextAreaElement).value.trim();
+    const category = (document.getElementById("excFormCategory") as HTMLSelectElement).value;
+    const isPublic = !isBuiltin ? (document.getElementById("excFormPublic") as HTMLSelectElement).value === "true" : false;
+
+    const validationError = validateNewExercise(name, info, category);
+    if (validationError) {
+      alertBox.innerHTML = `<p>${escapeHtml(EXC_ERROR_LABELS[validationError])}</p>`;
+      return;
+    }
+
+    let imageUrl: string | null = currentImageUrl;
+    if (selectedFile) {
+      const { url, error: uploadError } = await uploadExerciseImage(adminId, selectedFile);
+      if (uploadError) {
+        alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
+        return;
+      }
+      imageUrl = url ?? null;
+    } else if (imageRemoved) {
+      imageUrl = null;
+    }
+
+    if (existing) {
+      const { error } = await updateExercise(existing.id, {
+        name,
+        info,
+        category: category as ExerciseCategory,
+        image_url: imageUrl,
+        ...(isBuiltin ? {} : { is_public: isPublic }),
+      });
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+      Object.assign(existing, { name, info, category, image_url: imageUrl, ...(isBuiltin ? {} : { is_public: isPublic }) });
+    } else {
+      const { error } = isBuiltin
+        ? await addBuiltinExercise(name, info, category as ExerciseCategory, imageUrl ?? undefined)
+        : await addExercise(adminId, name, info, category as ExerciseCategory, isPublic, imageUrl ?? undefined);
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+      exercises = await listExercisesAdmin();
+    }
+
+    loaderBody.innerHTML = "";
+    renderExerciseResults();
+  });
+}
+
+function openDeleteExerciseModal(exc: AdminExerciseRow) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar "${escapeHtml(exc.name)}"?</h2>
+        <p class="subtitle">Esta acción no se puede deshacer. Si alguna rutina usa este ejercicio, no se va a poder eliminar hasta quitarlo de esa rutina.</p>
+        <div class="alert_message" id="excDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="excDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="excDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("excDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("excDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("excDeleteAlert")!;
+    const { error } = await deleteExercise(exc.id);
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    exercises = exercises.filter((e) => e.id !== exc.id);
+    loaderBody.innerHTML = "";
+    renderExerciseResults();
   });
 }
 
