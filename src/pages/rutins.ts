@@ -20,6 +20,21 @@ let excCatalog: Exercise[] = [];
 
 const BACK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`;
 
+function visibilityFieldMarkup(id: string): string {
+  return `
+    <div class="field">
+      <label for="${id}">Visibilidad de la rutina</label>
+      <select id="${id}">
+        <option value="true">Pública</option>
+        <option value="false" selected>Privada</option>
+      </select>
+    </div>`;
+}
+
+function readVisibilityField(id: string): boolean {
+  return (document.getElementById(id) as HTMLSelectElement).value === "true";
+}
+
 // ---------- Paso 0: elegir cómo armar la rutina ----------
 
 function renderChooser() {
@@ -236,6 +251,7 @@ function openTemplatePreview(t: RoutineTemplate) {
         <form id="tplUseForm" novalidate>
           <div class="field"><label for="tplName">Nombre de la rutina</label><input type="text" id="tplName" value="${escapeHtml(t.label)}"></div>
           <div class="field"><label for="tplWeeks">Semanas</label><input type="number" id="tplWeeks" min="1" max="10" value="${t.semanasSugeridas}"></div>
+          ${visibilityFieldMarkup("tplVisibility")}
           <div class="alert_message" id="tplAlert"></div>
           <div class="modal-actions">
             <button type="button" class="btn btn-outline" id="tplCancel">Cancelar</button>
@@ -269,7 +285,8 @@ function openTemplatePreview(t: RoutineTemplate) {
       return;
     }
 
-    const error = await createAndFinish(name, weeks, dias);
+    const isPublic = readVisibilityField("tplVisibility");
+    const error = await createAndFinish(name, weeks, dias, isPublic);
     if (error) alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
   });
 }
@@ -295,6 +312,7 @@ async function openClonePreview(r: RoutineWithCounts) {
         <form id="cloneForm" novalidate>
           <div class="field"><label for="cloneName">Nombre de la rutina</label><input type="text" id="cloneName" value="${escapeHtml(detail.nombre)}"></div>
           <div class="field"><label for="cloneWeeks">Semanas</label><input type="number" id="cloneWeeks" min="1" max="10" value="${baseWeek ? detail.semanas.length : 4}"></div>
+          ${visibilityFieldMarkup("cloneVisibility")}
           <div class="alert_message" id="cloneAlert"></div>
           <div class="modal-actions">
             <button type="button" class="btn btn-outline" id="cloneCancel">Cancelar</button>
@@ -338,7 +356,8 @@ async function openClonePreview(r: RoutineWithCounts) {
       })),
     }));
 
-    const error = await createAndFinish(name, weeks, dias);
+    const isPublic = readVisibilityField("cloneVisibility");
+    const error = await createAndFinish(name, weeks, dias, isPublic);
     if (error) alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
   });
 }
@@ -415,6 +434,10 @@ function openBuilderHelp(): void {
             <strong>Nota</strong>
             <p>Un mensaje opcional para quien entrene con esta rutina, como una indicación de técnica.</p>
           </div>
+          <div class="help-item">
+            <strong>Visibilidad de la rutina</strong>
+            <p>Pública: otros usuarios con perfil público la pueden ver. Privada: solo la vas a ver vos.</p>
+          </div>
         </div>
         <div class="modal-actions"><button class="btn btn-outline" id="closeBuilderHelp">Entendido</button></div>
       </div>
@@ -458,6 +481,7 @@ function renderSetupForm() {
           <div class="field"><label for="weeksInput">Semanas</label><input type="number" id="weeksInput" min="1" max="10" placeholder="Ej: 4"></div>
           <div class="field"><label for="daysInput">Días por semana</label><input type="number" id="daysInput" min="1" max="7" placeholder="Ej: 3"></div>
         </div>
+        ${visibilityFieldMarkup("visibilityInput")}
         <div class="alert_message" id="setupAlert"></div>
         <button type="submit" class="btn btn-primary btn-block">Continuar</button>
       </form>
@@ -488,11 +512,12 @@ function renderSetupForm() {
       alertEl.innerHTML = "<p>La cantidad de días tiene que ser entre 1 y 7.</p>";
       return;
     }
-    renderBuilder(name, weeks, days);
+    const isPublic = readVisibilityField("visibilityInput");
+    renderBuilder(name, weeks, days, isPublic);
   });
 }
 
-function renderBuilder(name: string, weeks: number, days: number) {
+function renderBuilder(name: string, weeks: number, days: number, isPublic: boolean) {
   const dayCards = Array.from({ length: days }, (_, i) => dayCardMarkup(i)).join("");
 
   container.innerHTML = `
@@ -551,10 +576,10 @@ function renderBuilder(name: string, weeks: number, days: number) {
     }
   });
 
-  document.getElementById("createRoutine")?.addEventListener("click", () => submitRoutine(name, weeks));
+  document.getElementById("createRoutine")?.addEventListener("click", () => submitRoutine(name, weeks, isPublic));
 }
 
-async function submitRoutine(name: string, weeks: number) {
+async function submitRoutine(name: string, weeks: number, isPublic: boolean) {
   const alertEl = document.getElementById("builderAlert")!;
   const dayCardsEls = document.querySelectorAll<HTMLElement>("#dayCards .day-card");
   const diasArray: NewDayInput[] = [];
@@ -623,19 +648,19 @@ async function submitRoutine(name: string, weeks: number) {
   }
 
   alertEl.innerHTML = "";
-  const createError = await createAndFinish(name, weeks, diasArray);
+  const createError = await createAndFinish(name, weeks, diasArray, isPublic);
   if (createError) alertEl.innerHTML = `<p>${escapeHtml(createError)}</p>`;
 }
 
 // ---------- Compartido: creación final + redirección ----------
 
-async function createAndFinish(name: string, weeks: number, dias: NewDayInput[]): Promise<string | null> {
+async function createAndFinish(name: string, weeks: number, dias: NewDayInput[], isPublic: boolean): Promise<string | null> {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `
     <div class="loader-container"><div class="modern-spinner"></div><p>Creando rutina...</p></div>
   `;
 
-  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias);
+  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic);
 
   if (createError) {
     loaderBody.innerHTML = "";

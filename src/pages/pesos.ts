@@ -117,10 +117,8 @@ function currentWeekIndex(): number {
 }
 
 function renderWeekStatus(weekIndex: number) {
-  const semana = routine!.semanas[weekIndex];
   const weekStatus = document.getElementById("weekStatus")!;
   weekStatus.innerHTML = `
-    <span class="hero-badge">Estás en la semana ${semana.numero}</span>
     <span class="hero-badge">Progreso de la semana: ${weekProgress(weekIndex)}%</span>
     <span class="hero-badge">Progreso de la rutina: ${routineProgress()}%</span>
   `;
@@ -364,7 +362,7 @@ async function init() {
   const title = document.getElementById("routineTitle");
   const subtitle = document.getElementById("routineSubtitle");
   if (title) title.textContent = routine.nombre;
-  if (subtitle) subtitle.textContent = "Elegí un día para cargar el peso de hoy.";
+  if (subtitle) subtitle.textContent = "Elegí la semana y el día para cargar el peso de hoy.";
 
   const startWeek = currentWeekIndex();
   const weekSelect = document.getElementById("weekSelect") as HTMLSelectElement;

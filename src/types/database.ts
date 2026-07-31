@@ -232,6 +232,7 @@ export type Database = {
           fecha_inicio: string
           finalizada_at: string | null
           id: string
+          is_public: boolean
           is_shareable: boolean
           nombre: string
           share_token: string
@@ -244,6 +245,7 @@ export type Database = {
           fecha_inicio?: string
           finalizada_at?: string | null
           id?: string
+          is_public?: boolean
           is_shareable?: boolean
           nombre: string
           share_token?: string
@@ -256,6 +258,7 @@ export type Database = {
           fecha_inicio?: string
           finalizada_at?: string | null
           id?: string
+          is_public?: boolean
           is_shareable?: boolean
           nombre?: string
           share_token?: string
@@ -472,6 +475,7 @@ export type Database = {
       create_routine: {
         Args: {
           p_fecha_inicio: string
+          p_is_public?: boolean
           p_nombre: string
           p_user_id: string
           p_weeks: Json
