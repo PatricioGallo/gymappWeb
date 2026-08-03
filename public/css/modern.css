@@ -1883,7 +1883,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   justify-content: center;
   margin: -16px auto 28px;
   padding: 4px;
-  max-width: fit-content;
+  width: fit-content;
+  max-width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -1913,8 +1914,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 @media (max-width: 639px) {
   .routine-tabs {
-    max-width: 100%;
-    justify-content: flex-start;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
