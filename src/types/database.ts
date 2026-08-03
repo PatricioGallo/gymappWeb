@@ -136,6 +136,7 @@ export type Database = {
           updated_at: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
+          zoom_enabled: boolean
         }
         Insert: {
           apellido: string
@@ -153,6 +154,7 @@ export type Database = {
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username: string
+          zoom_enabled?: boolean
         }
         Update: {
           apellido?: string
@@ -170,6 +172,7 @@ export type Database = {
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username?: string
+          zoom_enabled?: boolean
         }
         Relationships: []
       }
