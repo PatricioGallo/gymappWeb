@@ -19,6 +19,16 @@ export interface FollowRequestRow {
   createdAt: string;
 }
 
+export interface FollowListRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  followedAt: string;
+}
+
 export async function getFollowStatus(targetId: string): Promise<FollowStatus> {
   const { data, error } = await supabase.rpc("get_follow_status", { p_target_id: targetId });
   if (error) throw error;
@@ -30,6 +40,37 @@ export async function getFollowCounts(userId: string): Promise<FollowCounts> {
   if (error) throw error;
   const row = data?.[0];
   return { followers: row?.followers ?? 0, following: row?.following ?? 0 };
+}
+
+// La RPC (SECURITY DEFINER) hace el chequeo de privacidad server-side via
+// is_profile_public: si el perfil es privado y el visitante no lo sigue
+// (o no es el dueno/admin), devuelve 0 filas aunque el llamado no falle.
+export async function listFollowers(userId: string, search = ""): Promise<FollowListRow[]> {
+  const { data, error } = await supabase.rpc("list_followers", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    userType: r.user_type,
+    followedAt: r.followed_at,
+  }));
+}
+
+export async function listFollowing(userId: string, search = ""): Promise<FollowListRow[]> {
+  const { data, error } = await supabase.rpc("list_following", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    userType: r.user_type,
+    followedAt: r.followed_at,
+  }));
 }
 
 /** Inserta la fila de seguimiento; un trigger decide si queda 'accepted' o 'pending' segun la privacidad del destino. */
