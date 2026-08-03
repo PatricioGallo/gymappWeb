@@ -119,6 +119,54 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          link: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           apellido: string
@@ -558,13 +606,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "weight_logs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
@@ -638,6 +679,15 @@ export type Database = {
           username: string
         }[]
       }
+      admin_send_notification: {
+        Args: {
+          p_body: string
+          p_link?: string
+          p_title: string
+          p_user_id: string
+        }
+        Returns: number
+      }
       admin_site_stats: { Args: never; Returns: Json }
       can_access_day: { Args: { did: string }; Returns: boolean }
       can_access_routine: { Args: { rid: string }; Returns: boolean }
@@ -662,6 +712,19 @@ export type Database = {
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
+      search_profiles: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          id: string
+          nacionalidad: string
+          nombre: string
+          score: number
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
     }
     Enums: {
       exercise_category:

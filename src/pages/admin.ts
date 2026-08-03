@@ -54,6 +54,7 @@ import {
   type IssueSeverity,
   type IssueStatus,
 } from "../services/issue.service";
+import { adminSendNotification } from "../services/notification.service";
 
 declare const Chart: any;
 
@@ -99,6 +100,7 @@ function setupTabs() {
   const exercisesTab = document.getElementById("exercisesTab")!;
   const roadmapTab = document.getElementById("roadmapTab")!;
   const issuesTab = document.getElementById("issuesTab")!;
+  const notifsTab = document.getElementById("notifsTab")!;
   if (!tabsWrap) return;
 
   tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
@@ -110,6 +112,7 @@ function setupTabs() {
       exercisesTab.hidden = tab !== "exercises";
       roadmapTab.hidden = tab !== "roadmap";
       issuesTab.hidden = tab !== "issues";
+      notifsTab.hidden = tab !== "notifs";
       if (tab === "stats" && !statsLoaded) {
         statsLoaded = true;
         await renderStatsTab();
@@ -129,6 +132,13 @@ function setupTabs() {
       if (tab === "issues" && !issuesLoaded) {
         issuesLoaded = true;
         await loadIssues();
+      }
+      if (tab === "notifs") {
+        if (!usersLoaded) {
+          usersLoaded = true;
+          await loadUsers();
+        }
+        renderNotifsTab();
       }
     });
   });
@@ -1067,6 +1077,70 @@ function openDeleteIssueModal(issue: IssueReport) {
     issueReports = issueReports.filter((i) => i.id !== issue.id);
     loaderBody.innerHTML = "";
     renderIssuesTab();
+  });
+}
+
+// ---------- Notificaciones ----------
+
+function renderNotifsTab() {
+  const notifsTab = document.getElementById("notifsTab")!;
+
+  notifsTab.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div>
+        <h3>Enviar notificación</h3>
+        <p class="chart-sub">Se muestra en la campana del header del destinatario (o de todos, si elegís broadcast).</p>
+      </div>
+    </div>
+    <div class="field">
+      <label for="notifTarget">Destinatario</label>
+      <select id="notifTarget">
+        <option value="">Todos los usuarios (broadcast)</option>
+        ${users
+          .map((u) => `<option value="${u.id}">@${escapeHtml(u.username)} · ${escapeHtml(u.nombre)} ${escapeHtml(u.apellido)}</option>`)
+          .join("")}
+      </select>
+    </div>
+    <div class="field"><label for="notifTitle">Título</label><input type="text" id="notifTitle" maxlength="200"></div>
+    <div class="field"><label for="notifBody">Mensaje (opcional)</label><textarea id="notifBody" rows="4" maxlength="2000"></textarea></div>
+    <div class="field"><label for="notifLink">Link al hacer clic (opcional)</label><input type="text" id="notifLink" placeholder="ej: showExc.html?rid=..."></div>
+    <div class="alert_message" id="notifSendAlert"></div>
+    <p class="chart-sub" id="notifSendSuccess"></p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="notifSendBtn" type="button">Enviar notificación</button>
+    </div>
+  `;
+
+  document.getElementById("notifSendBtn")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("notifSendAlert")!;
+    const successBox = document.getElementById("notifSendSuccess")!;
+    alertBox.innerHTML = "";
+    successBox.textContent = "";
+
+    const target = (document.getElementById("notifTarget") as HTMLSelectElement).value;
+    const title = (document.getElementById("notifTitle") as HTMLInputElement).value.trim();
+    const body = (document.getElementById("notifBody") as HTMLTextAreaElement).value.trim();
+    const link = (document.getElementById("notifLink") as HTMLInputElement).value.trim();
+
+    if (title.length < 1 || title.length > 200) {
+      alertBox.innerHTML = `<p>El título tiene que tener entre 1 y 200 caracteres.</p>`;
+      return;
+    }
+
+    const sendBtn = document.getElementById("notifSendBtn") as HTMLButtonElement;
+    sendBtn.disabled = true;
+    const { error, count } = await adminSendNotification(target || null, title, body, link);
+    sendBtn.disabled = false;
+
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+
+    successBox.textContent = `Notificación enviada a ${count} usuario${count === 1 ? "" : "s"}.`;
+    (document.getElementById("notifTitle") as HTMLInputElement).value = "";
+    (document.getElementById("notifBody") as HTMLTextAreaElement).value = "";
+    (document.getElementById("notifLink") as HTMLInputElement).value = "";
   });
 }
 

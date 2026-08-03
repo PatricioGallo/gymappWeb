@@ -238,6 +238,376 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 
+/* ---------- Campana de notificaciones ---------- */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notif-bell-wrap { position: relative; }
+
+.notif-bell-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.notif-bell-btn:hover,
+.notif-bell-btn.open { background: var(--surface-2); border-color: var(--border); }
+
+.notif-bell-btn svg { width: 20px; height: 20px; stroke: currentColor; }
+
+.notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: #0a0c0f;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
+
+.notif-badge[hidden] { display: none; }
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 120;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  padding: 8px;
+}
+
+.notif-dropdown[hidden] { display: none; }
+
+@media (max-width: 859px) {
+  /* En mobile el click en la campana redirige a notifications.html en vez de abrir esto. */
+  .notif-dropdown { display: none !important; }
+}
+
+.notif-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notif-dropdown-head h4 { margin: 0; font-size: 14px; }
+
+.notif-mark-all {
+  background: none;
+  border: none;
+  color: var(--accent-2);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.notif-mark-all:hover { text-decoration: underline; }
+
+.notif-list {
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.notif-item {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 8px;
+  margin-bottom: 2px;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.notif-item:hover { background: var(--surface-2); }
+.notif-item.unread { background: var(--accent-soft); }
+
+.notif-item-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.notif-item-body {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.notif-item-time {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.notif-empty {
+  padding: 24px 10px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.notif-view-all {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+.notif-view-all:hover { text-decoration: underline; }
+
+/* ---------- Pagina completa de notificaciones ---------- */
+
+.notif-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.notif-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notif-page-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.notif-page-item:hover { border-color: var(--accent-2); }
+.notif-page-item.unread { border-color: var(--accent-2); background: var(--accent-soft); }
+
+.notif-page-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.notif-page-item.unread .notif-page-dot { opacity: 1; }
+
+.notif-page-body { flex: 1; min-width: 0; }
+
+.notif-page-title { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+
+.notif-page-text { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+
+.notif-page-time {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- Buscador del header ---------- */
+
+.header-search { position: relative; }
+
+.header-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.header-search-btn:hover,
+.header-search-btn.open { background: var(--surface-2); border-color: var(--border); }
+
+.header-search-btn svg { width: 20px; height: 20px; stroke: currentColor; }
+
+.header-search-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 120;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  padding: 10px;
+}
+
+.header-search-panel[hidden] { display: none; }
+
+@media (max-width: 859px) {
+  /* En mobile el click en la lupa redirige a search.html en vez de abrir esto. */
+  .header-search-panel { display: none !important; }
+}
+
+.header-search-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.header-search-input::placeholder { color: var(--text-muted); }
+.header-search-input:focus { outline: none; border-color: var(--accent-2); }
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.search-result-item:hover { background: var(--surface-2); }
+
+.search-result-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.search-result-body { min-width: 0; display: flex; flex-direction: column; }
+
+.search-result-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-username {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Pagina completa de busqueda ---------- */
+
+.search-page-form { display: flex; gap: 10px; margin-bottom: 20px; }
+.search-page-form .header-search-input { margin-bottom: 0; }
+
+.search-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search-page-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  color: var(--text);
+}
+
+.search-page-item:hover { border-color: var(--accent-2); }
+
+.search-page-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.search-page-body { flex: 1; min-width: 0; }
+
+.search-page-name { margin: 0 0 2px; font-size: 15px; font-weight: 700; }
+
+.search-page-meta { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+.search-page-badge {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+
 .site-nav {
   position: fixed;
   inset: var(--header-h) 0 0 0;

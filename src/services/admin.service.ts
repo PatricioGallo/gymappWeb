@@ -10,7 +10,7 @@ export const USER_TYPE_LABELS: Record<UserType, string> = {
   admin: "Admin",
   gimnasio: "Gimnasio",
   entrenador: "Entrenador",
-  usuario: "Usuario",
+  usuario: "Gymbro",
 };
 
 export interface AdminUserRow {
