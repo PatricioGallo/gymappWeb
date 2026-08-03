@@ -2,22 +2,19 @@ import { setupNavToggle, setupRevealObserver } from "../lib/nav";
 import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
-import { calcularEdad } from "../lib/age";
-import { COUNTRIES } from "../lib/countries";
 import {
   getProfile,
   getProfileByUsername,
   getProfileBasicByUsername,
-  updateProfileFields,
-  updateEmail,
-  updatePassword,
   uploadAvatar,
   listRoutines,
   finishRoutine,
   reactivateRoutine,
   listWeightLogsWithContext,
+  parseProfileLinks,
   type Profile,
   type ProfileBasic,
+  type ProfileLink,
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
@@ -51,13 +48,6 @@ if (!myId) {
   document.getElementById("footerPerfil")?.remove();
   document.getElementById("footerSalir")?.remove();
 }
-
-const USER_TYPE_LABELS: Record<string, string> = {
-  admin: "Admin",
-  gimnasio: "Gimnasio",
-  entrenador: "Entrenador",
-  usuario: "Usuario",
-};
 
 function parseFechaISO(fecha: string): Date {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -167,30 +157,60 @@ function initShare(username: string) {
   });
 }
 
-function renderProfileBadges(profile: Profile | ProfileBasic) {
-  const badges = document.getElementById("profileBadges");
-  if (!badges) return;
-  badges.innerHTML = `
-    <span class="profile-badge">${escapeHtml(USER_TYPE_LABELS[profile.user_type ?? "usuario"] ?? "Usuario")}</span>
-    <span class="profile-badge">${calcularEdad(profile.fecha_nacimiento!)} años</span>
-    ${profile.nacionalidad ? `<span class="profile-badge">${escapeHtml(profile.nacionalidad)}</span>` : ""}
-    <span class="profile-badge">@${escapeHtml(profile.username ?? "")}</span>
+// ---------- Identidad, estadisticas, bio y enlaces ----------
+
+function renderProfileIdentity(username: string, nombre: string, apellido: string) {
+  const usernameEl = document.getElementById("profileUsername");
+  if (usernameEl) usernameEl.textContent = `@${username}`;
+  const fullnameEl = document.getElementById("profileFullname");
+  if (fullnameEl) fullnameEl.textContent = `${nombre} ${apellido}`.trim();
+}
+
+function renderProfileStats() {
+  const stats = document.getElementById("profileStats");
+  if (!stats) return;
+  // Publicaciones, seguidores y seguidos todavia no existen (llegan con la red
+  // social): se muestran en 0 hasta que se sumen esos sistemas.
+  stats.innerHTML = `
+    <span class="profile-stat"><strong>0</strong> publicaciones</span>
+    <span class="profile-stat"><strong>0</strong> seguidores</span>
+    <span class="profile-stat"><strong>0</strong> seguidos</span>
   `;
 }
 
-function renderBasicBadges(profile: ProfileBasic) {
-  const badges = document.getElementById("profileBadges");
-  if (!badges) return;
-  badges.innerHTML = `
-    <span class="profile-badge">${calcularEdad(profile.fecha_nacimiento!)} años</span>
-    <span class="profile-badge">@${escapeHtml(profile.username ?? "")}</span>
-  `;
+function renderProfileBio(bio: string | null) {
+  const bioEl = document.getElementById("profileBio");
+  if (!bioEl) return;
+  if (!bio) {
+    bioEl.remove();
+    return;
+  }
+  bioEl.textContent = bio;
+}
+
+function renderProfileLinks(links: ProfileLink[]) {
+  const linksEl = document.getElementById("profileLinks");
+  if (!linksEl) return;
+  if (links.length === 0) {
+    linksEl.remove();
+    return;
+  }
+  linksEl.innerHTML = links
+    .map(
+      (l) => `
+    <a class="profile-link-chip" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer nofollow">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      ${escapeHtml(l.label)}
+    </a>`
+    )
+    .join("");
 }
 
 function renderProfileActions(username: string, ownerView: boolean, viewerLoggedIn: boolean) {
   const actions = document.getElementById("profileActions");
   if (!actions) return;
   actions.innerHTML = `
+    ${ownerView ? `<a class="btn btn-outline" href="/pages/settings.html">Editar perfil</a>` : ""}
     <button class="btn btn-outline" id="shareBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
       Compartir perfil
@@ -553,134 +573,6 @@ function openReactivateModal(routineId: string) {
   });
 }
 
-// ---------- Configuracion (owner) ----------
-
-function configMenu(profile: Profile) {
-  const config = document.getElementById("config");
-  if (!config) return;
-
-  config.addEventListener("click", (e) => {
-    e.preventDefault();
-    const loaderBody = document.getElementById("loaderBody");
-    if (!loaderBody) return;
-    loaderBody.innerHTML = `
-      <div class="success-check-container">
-        <div class="modal-card">
-          <h2>Configuración</h2>
-          <p class="subtitle">Dejá vacío lo que no quieras cambiar.</p>
-          <div class="field"><label for="userName">Nombre</label><input type="text" placeholder="${escapeHtml(profile.nombre)}" id="userName"></div>
-          <div class="field"><label for="sname">Apellido</label><input type="text" placeholder="${escapeHtml(profile.apellido)}" id="sname"></div>
-          <div class="field"><label for="birthdateField">Fecha de nacimiento</label><input type="date" id="birthdateField" value="${profile.fecha_nacimiento}"></div>
-          <div class="field">
-            <label for="nationalityField">Nacionalidad</label>
-            <select id="nationalityField">
-              ${COUNTRIES.map((country) => `<option value="${escapeHtml(country)}" ${country === profile.nacionalidad ? "selected" : ""}>${escapeHtml(country)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <label for="visibilityField">Visibilidad del perfil</label>
-            <select id="visibilityField">
-              <option value="true" ${profile.is_public ? "selected" : ""}>Público (se ven tus rutinas y estadísticas)</option>
-              <option value="false" ${!profile.is_public ? "selected" : ""}>Privado (solo se ve tu información básica)</option>
-            </select>
-          </div>
-          <div class="field"><label for="mailField">Mail</label><input type="email" placeholder="${escapeHtml(profile.email)}" id="mailField"></div>
-          <div class="field"><label for="pswd">Contraseña nueva</label><input type="password" placeholder="••••••••••••" id="pswd"></div>
-          <div class="alert_message" id="configAlert"></div>
-          <div class="modal-actions">
-            <button class="btn btn-primary" id="saveChanges">Guardar</button>
-            <button class="btn btn-outline" id="closeConfig">Cerrar</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("closeConfig")?.addEventListener("click", closeOverlay);
-    document.getElementById("saveChanges")?.addEventListener("click", async () => {
-      const alertBox = document.getElementById("configAlert")!;
-      alertBox.innerHTML = "";
-
-      const nombre = (document.getElementById("userName") as HTMLInputElement).value.trim();
-      const apellido = (document.getElementById("sname") as HTMLInputElement).value.trim();
-      const fechaNacimiento = (document.getElementById("birthdateField") as HTMLInputElement).value;
-      const nacionalidad = (document.getElementById("nationalityField") as HTMLSelectElement).value;
-      const isPublic = (document.getElementById("visibilityField") as HTMLSelectElement).value === "true";
-      const mail = (document.getElementById("mailField") as HTMLInputElement).value.trim();
-      const pass = (document.getElementById("pswd") as HTMLInputElement).value;
-
-      if (
-        !nombre &&
-        !apellido &&
-        !mail &&
-        !pass &&
-        fechaNacimiento === profile.fecha_nacimiento &&
-        nacionalidad === profile.nacionalidad &&
-        isPublic === profile.is_public
-      ) {
-        alertBox.innerHTML = "<p>Ingresá al menos un valor para cambiar.</p>";
-        return;
-      }
-
-      const fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public">> = {};
-      if (nombre) {
-        if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
-          alertBox.innerHTML = "<p>Ingresaste un nombre incorrecto.</p>";
-          return;
-        }
-        fields.nombre = nombre;
-      }
-      if (apellido) {
-        if (apellido.length < 2 || !Number.isNaN(Number(apellido))) {
-          alertBox.innerHTML = "<p>Ingresaste un apellido incorrecto.</p>";
-          return;
-        }
-        fields.apellido = apellido;
-      }
-      if (fechaNacimiento && fechaNacimiento !== profile.fecha_nacimiento) {
-        if (calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
-          alertBox.innerHTML = "<p>Ingresaste una fecha de nacimiento incorrecta.</p>";
-          return;
-        }
-        fields.fecha_nacimiento = fechaNacimiento;
-      }
-      if (nacionalidad && nacionalidad !== profile.nacionalidad) {
-        fields.nacionalidad = nacionalidad;
-      }
-      if (isPublic !== profile.is_public) {
-        fields.is_public = isPublic;
-      }
-
-      try {
-        if (Object.keys(fields).length > 0) await updateProfileFields(profile.id, fields);
-        if (mail) {
-          const { error } = await updateEmail(mail);
-          if (error) {
-            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-            return;
-          }
-        }
-        if (pass) {
-          const { error } = await updatePassword(pass);
-          if (error) {
-            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-            return;
-          }
-        }
-      } catch {
-        alertBox.innerHTML = "<p>Error al guardar cambios.</p>";
-        return;
-      }
-
-      loaderBody.innerHTML = `
-        <div class="success-check-container">
-          <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-          <p>¡Cambios guardados con éxito! Espere será redirigido.</p>
-        </div>
-      `;
-      setTimeout(() => window.location.reload(), 2000);
-    });
-  });
-}
 
 // ---------- Armado de la pagina ----------
 
@@ -701,25 +593,20 @@ async function main() {
   const displayProfile = profile ?? basicProfile;
 
   if (!displayProfile) {
-    const profileName = document.getElementById("profileName");
-    if (profileName) profileName.textContent = "Este perfil no existe";
+    const usernameEl = document.getElementById("profileUsername");
+    if (usernameEl) usernameEl.textContent = "Este perfil no existe";
+    document.getElementById("profileTop")?.remove();
     return;
   }
 
   const isOwner = displayProfile.id === myId;
   const nombre = displayProfile.nombre ?? "Este usuario";
 
-  const profileName = document.getElementById("profileName");
-  if (profileName) {
-    profileName.textContent = isOwner ? `Hola, ${escapeHtml(nombre)}` : `${escapeHtml(nombre)} ${escapeHtml(displayProfile.apellido ?? "")}`;
-  }
+  renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "");
+  renderProfileStats();
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();
-    document.getElementById("config")?.remove();
-    document.getElementById("adminLink")?.remove();
-  } else if (profile && profile.user_type !== "admin") {
-    document.getElementById("adminLink")?.remove();
   }
 
   const avatarImg = document.getElementById("avatarImg") as HTMLImageElement | null;
@@ -731,10 +618,14 @@ async function main() {
   const isPrivateForViewer = !profile && !basicProfile?.is_public;
 
   if (isPrivateForViewer) {
-    renderBasicBadges(basicProfile!);
+    document.getElementById("profileBio")?.remove();
+    document.getElementById("profileLinks")?.remove();
     renderPrivateNotice(nombre);
     return;
   }
+
+  renderProfileBio(displayProfile.bio ?? null);
+  renderProfileLinks(parseProfileLinks(displayProfile.links ?? []));
 
   // El resto de la pagina habla en tercera persona cuando no es el dueño.
   const statsEyebrow = document.getElementById("statsEyebrow");
@@ -746,7 +637,6 @@ async function main() {
     if (rutinasEyebrow) rutinasEyebrow.textContent = `Rutinas de ${nombre}`;
   }
 
-  renderProfileBadges(displayProfile);
   if (isOwner) {
     renderQuickActions(displayProfile.id!);
   } else {
@@ -756,8 +646,6 @@ async function main() {
   const logs = await listWeightLogsWithContext(displayProfile.id!);
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs);
   renderStats(logs, activeCount ?? 0, isOwner);
-
-  if (isOwner && profile) configMenu(profile);
 }
 
 main();

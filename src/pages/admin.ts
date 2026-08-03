@@ -228,7 +228,7 @@ function renderUsersTab(filter: string) {
       ${filtered
         .map(
           (u) => `
-        <div class="admin-table-row" data-id="${u.id}">
+        <div class="admin-table-row admin-table-row-clickable" data-id="${u.id}" title="Ver perfil de @${escapeHtml(u.username)}">
           <span class="admin-user-cell">
             <strong>${escapeHtml(u.nombre)} ${escapeHtml(u.apellido)}</strong>
             <small>@${escapeHtml(u.username)} · ${escapeHtml(u.email)}</small>
@@ -250,7 +250,17 @@ function renderUsersTab(filter: string) {
   });
 
   usersTab.querySelectorAll<HTMLButtonElement>(".admin-edit-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openEditUserModal(btn.dataset.id!));
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEditUserModal(btn.dataset.id!);
+    });
+  });
+
+  usersTab.querySelectorAll<HTMLDivElement>(".admin-table-row-clickable").forEach((row) => {
+    row.addEventListener("click", () => {
+      const user = users.find((u) => u.id === row.dataset.id);
+      if (user) window.location.href = `/${user.username}`;
+    });
   });
 }
 
