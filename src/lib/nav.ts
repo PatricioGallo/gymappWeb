@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { logVisitOncePerSession } from "../services/visits.service";
+import { setupNotificationBell } from "./notifications";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -57,6 +58,7 @@ async function populateUserMenuTrigger(): Promise<void> {
   if (usernameEl) usernameEl.textContent = data.username ?? "";
   if (data.user_type !== "admin") document.getElementById("adminLink")?.remove();
 
+  setupNotificationBell();
   void applyZoomPreference(userId);
 }
 

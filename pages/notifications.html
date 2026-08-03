@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Gym Social - Mi Perfil</title>
+<title>Gym Social - Notificaciones</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
@@ -16,14 +16,12 @@
       <a class="brand" href="profile.html">
         <img src="/images/logo.png" alt="Gym Social">
       </a>
-
       <nav class="site-nav account-nav" id="siteNav">
-        <a href="profile.html" class="active" id="navPerfil">Mi perfil</a>
+        <a href="profile.html" id="navPerfil">Mi perfil</a>
         <a href="admin.html" id="adminLink">Administrar</a>
         <a href="settings.html">Configuración</a>
         <a href="exit.html" id="navSalir">Salir</a>
       </nav>
-
       <div class="header-actions">
         <div class="notif-bell-wrap">
           <button class="notif-bell-btn" id="notifBellBtn" type="button" aria-label="Notificaciones" aria-expanded="false">
@@ -50,58 +48,21 @@
 
   <div id="loaderBody"></div>
 
-  <section class="profile-hero">
+  <section class="page-hero">
     <div class="container">
-      <div class="profile-top" id="profileTop">
-        <div class="avatar-wrap">
-          <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
-          <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
-            <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
-          </label>
-        </div>
-        <div class="profile-info">
-          <h1 class="profile-username" id="profileUsername">@usuario</h1>
-          <p class="profile-fullname" id="profileFullname"></p>
-          <div class="profile-stats" id="profileStats"></div>
-          <p class="profile-bio" id="profileBio"></p>
-        </div>
-      </div>
-
-      <div class="profile-links" id="profileLinks"></div>
-
-      <div class="profile-actions" id="profileActions"></div>
+      <span class="eyebrow">Notificaciones</span>
+      <h1>Todas tus notificaciones</h1>
+      <p>Rutinas asignadas, novedades de tus reportes y avisos del equipo de Gym Social.</p>
     </div>
   </section>
 
-  <section class="quick-actions" id="quickActionsSection">
+  <section class="features">
     <div class="container">
-      <div class="quick-grid" id="quickActions"></div>
-    </div>
-  </section>
-
-  <section class="features" id="statsSection">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
-        <h2>Estadísticas</h2>
-        <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
+      <div class="notif-page-toolbar">
+        <p class="chart-sub" id="notifPageSummary">Cargando...</p>
+        <button class="btn btn-outline btn-sm" id="notifPageMarkAllBtn" type="button">Marcar todas como leídas</button>
       </div>
-      <div id="statsContent"></div>
-    </div>
-  </section>
-
-  <section class="steps" id="rutinas">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow" id="rutinasEyebrow">Tus rutinas</span>
-        <h2 id="routinesTitle">Rutinas activas</h2>
-      </div>
-      <div class="routine-tabs" id="routineTabs">
-        <button class="routine-tab active" data-tab="active" type="button">Activas</button>
-        <button class="routine-tab" data-tab="historic" type="button">Históricas</button>
-      </div>
-      <div id="routinesContent"></div>
+      <div class="notif-page-list" id="notifPageList"></div>
     </div>
   </section>
 
@@ -114,20 +75,17 @@
           </a>
           <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
         </div>
-
         <nav class="footer-links">
-          <a href="profile.html" id="footerPerfil">Perfil</a>
+          <a href="profile.html">Perfil</a>
           <a href="contact.html">Contactanos</a>
-          <a href="exit.html" id="footerSalir">Salir</a>
+          <a href="exit.html">Salir</a>
         </nav>
-
         <div class="footer-social">
           <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
           </a>
         </div>
       </div>
-
       <div class="footer-bottom">
         <span>© 2026 Gym Social. Todos los derechos reservados.</span>
         <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
@@ -135,7 +93,6 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" src="/src/pages/profile.ts"></script>
+  <script type="module" src="/src/pages/notifications.ts"></script>
 </body>
 </html>
