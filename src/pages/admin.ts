@@ -26,6 +26,34 @@ import {
   type AdminExerciseRow,
   type ExerciseCategory,
 } from "../services/exercise.service";
+import {
+  listRoadmapTasks,
+  addRoadmapTask,
+  updateRoadmapTask,
+  deleteRoadmapTask,
+  validateRoadmapTask,
+  ROADMAP_CATEGORIES,
+  ROADMAP_CATEGORY_LABELS,
+  ROADMAP_STATUS_OPTIONS,
+  ROADMAP_STATUS_LABELS,
+  type RoadmapTask,
+  type RoadmapCategory,
+  type RoadmapStatus,
+} from "../services/roadmap.service";
+import {
+  listIssueReports,
+  addIssueReport,
+  updateIssueReport,
+  deleteIssueReport,
+  validateIssueReport,
+  ISSUE_SEVERITY_OPTIONS,
+  ISSUE_SEVERITY_LABELS,
+  ISSUE_STATUS_OPTIONS,
+  ISSUE_STATUS_LABELS,
+  type IssueReport,
+  type IssueSeverity,
+  type IssueStatus,
+} from "../services/issue.service";
 
 declare const Chart: any;
 
@@ -46,6 +74,12 @@ let exercises: AdminExerciseRow[] = [];
 let exercisesLoaded = false;
 let excAdminSubTab: "builtin" | "custom" = "builtin";
 
+let roadmapTasks: RoadmapTask[] = [];
+let roadmapLoaded = false;
+
+let issueReports: IssueReport[] = [];
+let issuesLoaded = false;
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -63,6 +97,8 @@ function setupTabs() {
   const statsTab = document.getElementById("statsTab")!;
   const usersTab = document.getElementById("usersTab")!;
   const exercisesTab = document.getElementById("exercisesTab")!;
+  const roadmapTab = document.getElementById("roadmapTab")!;
+  const issuesTab = document.getElementById("issuesTab")!;
   if (!tabsWrap) return;
 
   tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
@@ -72,6 +108,8 @@ function setupTabs() {
       statsTab.hidden = tab !== "stats";
       usersTab.hidden = tab !== "users";
       exercisesTab.hidden = tab !== "exercises";
+      roadmapTab.hidden = tab !== "roadmap";
+      issuesTab.hidden = tab !== "issues";
       if (tab === "stats" && !statsLoaded) {
         statsLoaded = true;
         await renderStatsTab();
@@ -83,6 +121,14 @@ function setupTabs() {
       if (tab === "exercises" && !exercisesLoaded) {
         exercisesLoaded = true;
         await loadExercises();
+      }
+      if (tab === "roadmap" && !roadmapLoaded) {
+        roadmapLoaded = true;
+        await loadRoadmap();
+      }
+      if (tab === "issues" && !issuesLoaded) {
+        issuesLoaded = true;
+        await loadIssues();
       }
     });
   });
@@ -608,6 +654,409 @@ function openDeleteExerciseModal(exc: AdminExerciseRow) {
     exercises = exercises.filter((e) => e.id !== exc.id);
     loaderBody.innerHTML = "";
     renderExerciseResults();
+  });
+}
+
+// ---------- Roadmap ----------
+
+async function loadRoadmap() {
+  const roadmapTab = document.getElementById("roadmapTab")!;
+  roadmapTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando roadmap...</p></div>`;
+  roadmapTasks = await listRoadmapTasks();
+  renderRoadmapTab();
+}
+
+function renderRoadmapTab() {
+  const roadmapTab = document.getElementById("roadmapTab")!;
+
+  const sections = ROADMAP_CATEGORIES.map((cat) => {
+    const items = roadmapTasks.filter((t) => t.category === cat);
+    const doneCount = items.filter((t) => t.status === "done").length;
+    const pct = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+
+    return `
+      <div class="roadmap-section reveal">
+        <div class="roadmap-section-head">
+          <div>
+            <h3>${escapeHtml(ROADMAP_CATEGORY_LABELS[cat])}</h3>
+            <p class="chart-sub">${doneCount}/${items.length} tareas hechas</p>
+          </div>
+          <button class="btn btn-outline btn-sm roadmap-add-btn" type="button" data-category="${cat}">+ Agregar tarea</button>
+        </div>
+        <div class="roadmap-progress-bar"><div class="roadmap-progress-fill" style="width:${pct}%"></div></div>
+        <div class="roadmap-tasks">
+          ${
+            items
+              .map(
+                (t) => `
+            <div class="roadmap-task roadmap-status-${t.status}" data-id="${t.id}">
+              <input type="checkbox" class="roadmap-task-check" data-id="${t.id}" ${t.status === "done" ? "checked" : ""} aria-label="Marcar como hecha">
+              <div class="roadmap-task-body">
+                <span class="roadmap-task-title">${escapeHtml(t.title)}</span>
+                ${t.description ? `<p class="roadmap-task-desc">${escapeHtml(t.description)}</p>` : ""}
+              </div>
+              <select class="roadmap-task-status" data-id="${t.id}" aria-label="Estado de la tarea">
+                ${ROADMAP_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === t.status ? "selected" : ""}>${ROADMAP_STATUS_LABELS[s]}</option>`).join("")}
+              </select>
+              <div class="roadmap-task-actions">
+                <button type="button" class="roadmap-task-edit" data-id="${t.id}">Editar</button>
+                <button type="button" class="roadmap-task-delete" data-id="${t.id}">Eliminar</button>
+              </div>
+            </div>
+          `
+              )
+              .join("") || `<p class="exc-pick-empty">Todavía no hay tareas en esta categoría.</p>`
+          }
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  roadmapTab.innerHTML = sections;
+
+  roadmapTab.querySelectorAll<HTMLButtonElement>(".roadmap-add-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openRoadmapFormModal(null, btn.dataset.category as RoadmapCategory));
+  });
+
+  roadmapTab.querySelectorAll<HTMLInputElement>(".roadmap-task-check").forEach((cb) => {
+    cb.addEventListener("change", async () => {
+      const task = roadmapTasks.find((t) => t.id === cb.dataset.id);
+      if (!task) return;
+      const newStatus: RoadmapStatus = cb.checked ? "done" : "pending";
+      cb.disabled = true;
+      const { error } = await updateRoadmapTask(task.id, { status: newStatus });
+      cb.disabled = false;
+      if (error) {
+        cb.checked = task.status === "done";
+        return;
+      }
+      task.status = newStatus;
+      renderRoadmapTab();
+    });
+  });
+
+  roadmapTab.querySelectorAll<HTMLSelectElement>(".roadmap-task-status").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const task = roadmapTasks.find((t) => t.id === sel.dataset.id);
+      if (!task) return;
+      const newStatus = sel.value as RoadmapStatus;
+      sel.disabled = true;
+      const { error } = await updateRoadmapTask(task.id, { status: newStatus });
+      sel.disabled = false;
+      if (error) {
+        sel.value = task.status;
+        return;
+      }
+      task.status = newStatus;
+      renderRoadmapTab();
+    });
+  });
+
+  roadmapTab.querySelectorAll<HTMLButtonElement>(".roadmap-task-edit").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const task = roadmapTasks.find((t) => t.id === btn.dataset.id);
+      if (task) openRoadmapFormModal(task, task.category as RoadmapCategory);
+    });
+  });
+
+  roadmapTab.querySelectorAll<HTMLButtonElement>(".roadmap-task-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const task = roadmapTasks.find((t) => t.id === btn.dataset.id);
+      if (task) openDeleteRoadmapModal(task);
+    });
+  });
+}
+
+function openRoadmapFormModal(existing: RoadmapTask | null, defaultCategory: RoadmapCategory) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>${existing ? "Editar tarea" : "Agregar tarea"}</h2>
+
+        <div class="field">
+          <label for="roadmapFormCategory">Categoría</label>
+          <select id="roadmapFormCategory">
+            ${ROADMAP_CATEGORIES.map((c) => `<option value="${c}" ${(existing?.category ?? defaultCategory) === c ? "selected" : ""}>${escapeHtml(ROADMAP_CATEGORY_LABELS[c])}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label for="roadmapFormTitle">Título</label><input type="text" id="roadmapFormTitle" value="${escapeHtml(existing?.title ?? "")}"></div>
+        <div class="field"><label for="roadmapFormDesc">Descripción (opcional)</label><textarea id="roadmapFormDesc" rows="4">${escapeHtml(existing?.description ?? "")}</textarea></div>
+        <div class="field">
+          <label for="roadmapFormStatus">Estado</label>
+          <select id="roadmapFormStatus">
+            ${ROADMAP_STATUS_OPTIONS.map((s) => `<option value="${s}" ${(existing?.status ?? "pending") === s ? "selected" : ""}>${ROADMAP_STATUS_LABELS[s]}</option>`).join("")}
+          </select>
+        </div>
+
+        <div class="alert_message" id="roadmapFormAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="roadmapFormSave" type="button">Guardar</button>
+          <button class="btn btn-outline" id="roadmapFormClose" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("roadmapFormClose")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("roadmapFormSave")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("roadmapFormAlert")!;
+    alertBox.innerHTML = "";
+
+    const category = (document.getElementById("roadmapFormCategory") as HTMLSelectElement).value as RoadmapCategory;
+    const title = (document.getElementById("roadmapFormTitle") as HTMLInputElement).value.trim();
+    const description = (document.getElementById("roadmapFormDesc") as HTMLTextAreaElement).value.trim();
+    const status = (document.getElementById("roadmapFormStatus") as HTMLSelectElement).value as RoadmapStatus;
+
+    const validationError = validateRoadmapTask(title);
+    if (validationError) {
+      alertBox.innerHTML = `<p>${validationError === "title_short" ? "El título es muy corto." : "El título es muy largo."}</p>`;
+      return;
+    }
+
+    if (existing) {
+      const { error } = await updateRoadmapTask(existing.id, { category, title, description: description || null, status });
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+      Object.assign(existing, { category, title, description: description || null, status });
+    } else {
+      const { error } = await addRoadmapTask(adminId, category, title, description, status);
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+      roadmapTasks = await listRoadmapTasks();
+    }
+
+    loaderBody.innerHTML = "";
+    renderRoadmapTab();
+  });
+}
+
+function openDeleteRoadmapModal(task: RoadmapTask) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar "${escapeHtml(task.title)}"?</h2>
+        <p class="subtitle">Esta acción no se puede deshacer.</p>
+        <div class="alert_message" id="roadmapDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="roadmapDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="roadmapDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("roadmapDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("roadmapDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("roadmapDeleteAlert")!;
+    const { error } = await deleteRoadmapTask(task.id);
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    roadmapTasks = roadmapTasks.filter((t) => t.id !== task.id);
+    loaderBody.innerHTML = "";
+    renderRoadmapTab();
+  });
+}
+
+// ---------- Issues ----------
+
+async function loadIssues() {
+  const issuesTab = document.getElementById("issuesTab")!;
+  issuesTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando issues...</p></div>`;
+  issueReports = await listIssueReports();
+  renderIssuesTab();
+}
+
+function renderIssuesTab() {
+  const issuesTab = document.getElementById("issuesTab")!;
+  const openCount = issueReports.filter((i) => i.status !== "resolved").length;
+
+  issuesTab.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div>
+        <h3>Issues reportados</h3>
+        <p class="chart-sub">${openCount} sin resolver de ${issueReports.length} en total.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" id="issueAddBtn" type="button">+ Reportar issue</button>
+    </div>
+    <div class="roadmap-tasks">
+      ${
+        issueReports
+          .map(
+            (i) => `
+        <div class="roadmap-task issue-severity-${i.severity} roadmap-status-${i.status === "resolved" ? "done" : i.status}" data-id="${i.id}">
+          <span class="issue-severity-badge issue-severity-badge-${i.severity}">${ISSUE_SEVERITY_LABELS[i.severity as IssueSeverity]}</span>
+          <div class="roadmap-task-body">
+            <span class="roadmap-task-title">${escapeHtml(i.title)}</span>
+            ${i.page ? `<p class="roadmap-task-desc"><strong>Pantalla:</strong> ${escapeHtml(i.page)}</p>` : ""}
+            ${i.description ? `<p class="roadmap-task-desc">${escapeHtml(i.description)}</p>` : ""}
+          </div>
+          <select class="roadmap-task-status issue-status-select" data-id="${i.id}" aria-label="Estado del issue">
+            ${ISSUE_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === i.status ? "selected" : ""}>${ISSUE_STATUS_LABELS[s]}</option>`).join("")}
+          </select>
+          <div class="roadmap-task-actions">
+            <button type="button" class="issue-edit" data-id="${i.id}">Editar</button>
+            <button type="button" class="issue-delete" data-id="${i.id}">Eliminar</button>
+          </div>
+        </div>
+      `
+          )
+          .join("") || `<p class="exc-pick-empty">Todavía no reportaste ningún issue. ¡Buena señal!</p>`
+      }
+    </div>
+  `;
+
+  document.getElementById("issueAddBtn")?.addEventListener("click", () => openIssueFormModal(null));
+
+  issuesTab.querySelectorAll<HTMLSelectElement>(".issue-status-select").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const issue = issueReports.find((i) => i.id === sel.dataset.id);
+      if (!issue) return;
+      const newStatus = sel.value as IssueStatus;
+      sel.disabled = true;
+      const { error } = await updateIssueReport(issue.id, { status: newStatus });
+      sel.disabled = false;
+      if (error) {
+        sel.value = issue.status;
+        return;
+      }
+      issue.status = newStatus;
+      renderIssuesTab();
+    });
+  });
+
+  issuesTab.querySelectorAll<HTMLButtonElement>(".issue-edit").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const issue = issueReports.find((i) => i.id === btn.dataset.id);
+      if (issue) openIssueFormModal(issue);
+    });
+  });
+
+  issuesTab.querySelectorAll<HTMLButtonElement>(".issue-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const issue = issueReports.find((i) => i.id === btn.dataset.id);
+      if (issue) openDeleteIssueModal(issue);
+    });
+  });
+}
+
+function openIssueFormModal(existing: IssueReport | null) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>${existing ? "Editar issue" : "Reportar issue"}</h2>
+
+        <div class="field"><label for="issueFormTitle">Título</label><input type="text" id="issueFormTitle" value="${escapeHtml(existing?.title ?? "")}" placeholder="Ej: El botón de guardar no responde"></div>
+        <div class="field"><label for="issueFormPage">Pantalla / sección (opcional)</label><input type="text" id="issueFormPage" value="${escapeHtml(existing?.page ?? "")}" placeholder="Ej: Pantalla de rutinas"></div>
+        <div class="field"><label for="issueFormDesc">Descripción (opcional)</label><textarea id="issueFormDesc" rows="4">${escapeHtml(existing?.description ?? "")}</textarea></div>
+        <div class="field">
+          <label for="issueFormSeverity">Severidad</label>
+          <select id="issueFormSeverity">
+            ${ISSUE_SEVERITY_OPTIONS.map((s) => `<option value="${s}" ${(existing?.severity ?? "medium") === s ? "selected" : ""}>${ISSUE_SEVERITY_LABELS[s]}</option>`).join("")}
+          </select>
+        </div>
+
+        <div class="alert_message" id="issueFormAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="issueFormSave" type="button">Guardar</button>
+          <button class="btn btn-outline" id="issueFormClose" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("issueFormClose")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("issueFormSave")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("issueFormAlert")!;
+    alertBox.innerHTML = "";
+
+    const title = (document.getElementById("issueFormTitle") as HTMLInputElement).value.trim();
+    const page = (document.getElementById("issueFormPage") as HTMLInputElement).value.trim();
+    const description = (document.getElementById("issueFormDesc") as HTMLTextAreaElement).value.trim();
+    const severity = (document.getElementById("issueFormSeverity") as HTMLSelectElement).value as IssueSeverity;
+
+    const validationError = validateIssueReport(title);
+    if (validationError) {
+      alertBox.innerHTML = `<p>${validationError === "title_short" ? "El título es muy corto." : "El título es muy largo."}</p>`;
+      return;
+    }
+
+    if (existing) {
+      const { error } = await updateIssueReport(existing.id, { title, page: page || null, description: description || null, severity });
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+      Object.assign(existing, { title, page: page || null, description: description || null, severity });
+    } else {
+      const { error } = await addIssueReport(adminId, title, description, page, severity);
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+      issueReports = await listIssueReports();
+    }
+
+    loaderBody.innerHTML = "";
+    renderIssuesTab();
+  });
+}
+
+function openDeleteIssueModal(issue: IssueReport) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar "${escapeHtml(issue.title)}"?</h2>
+        <p class="subtitle">Esta acción no se puede deshacer.</p>
+        <div class="alert_message" id="issueDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="issueDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="issueDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("issueDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("issueDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("issueDeleteAlert")!;
+    const { error } = await deleteIssueReport(issue.id);
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    issueReports = issueReports.filter((i) => i.id !== issue.id);
+    loaderBody.innerHTML = "";
+    renderIssuesTab();
   });
 }
 
