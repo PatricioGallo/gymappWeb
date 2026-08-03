@@ -607,10 +607,6 @@ async function main() {
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();
-    document.getElementById("config")?.remove();
-    document.getElementById("adminLink")?.remove();
-  } else if (profile && profile.user_type !== "admin") {
-    document.getElementById("adminLink")?.remove();
   }
 
   const avatarImg = document.getElementById("avatarImg") as HTMLImageElement | null;

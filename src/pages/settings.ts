@@ -25,9 +25,6 @@ if (!profile) {
   throw new Error("profile not found");
 }
 
-if (profile.user_type !== "admin") {
-  document.getElementById("adminLink")?.remove();
-}
 
 // ---------- Tabs ----------
 

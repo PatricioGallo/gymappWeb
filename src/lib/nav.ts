@@ -23,6 +23,39 @@ export function setupNavToggle(): void {
     navToggle.classList.remove("open");
     navToggle.setAttribute("aria-expanded", "false");
   });
+
+  // En desktop el menu es un dropdown chico (no pantalla completa como en
+  // mobile): cerralo si tocan afuera.
+  document.addEventListener("click", (e) => {
+    if (!siteNav.classList.contains("open")) return;
+    const target = e.target as Node;
+    if (siteNav.contains(target) || navToggle.contains(target)) return;
+    siteNav.classList.remove("open");
+    navToggle.classList.remove("open");
+    navToggle.setAttribute("aria-expanded", "false");
+  });
+
+  void populateUserMenuTrigger();
+}
+
+// Completa el trigger del menu de cuenta (foto + username) y oculta
+// "Administrar" si la sesion actual no es admin. Es un no-op en paginas que
+// no tienen ese trigger (ej. las de marketing, que siguen con el hamburger).
+async function populateUserMenuTrigger(): Promise<void> {
+  const avatarEl = document.getElementById("navMenuAvatar") as HTMLImageElement | null;
+  const usernameEl = document.getElementById("navMenuUsername");
+  if (!avatarEl && !usernameEl) return;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) return;
+
+  const { data } = await supabase.from("profiles_public").select("username, avatar_url, user_type").eq("id", userId).maybeSingle();
+  if (!data) return;
+
+  if (avatarEl && data.avatar_url) avatarEl.src = data.avatar_url;
+  if (usernameEl) usernameEl.textContent = data.username ?? "";
+  if (data.user_type !== "admin") document.getElementById("adminLink")?.remove();
 }
 
 export function setupRevealObserver(): void {
