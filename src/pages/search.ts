@@ -29,7 +29,7 @@ function renderList(results: ProfileSearchResult[], query: string) {
   listEl.innerHTML = results
     .map(
       (r) => `
-    <a class="search-page-item" href="profile.html?id=${r.id}">
+    <a class="search-page-item" href="profile.html?u=${encodeURIComponent(r.username)}">
       <img src="${escapeHtml(resultAvatar(r))}" alt="" class="search-page-avatar">
       <span class="search-page-body">
         <p class="search-page-name">${escapeHtml(resultFullName(r))}</p>

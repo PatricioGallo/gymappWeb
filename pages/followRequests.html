@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Gym Social - Buscar</title>
+<title>Gym Social - Solicitudes de seguimiento</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
@@ -16,7 +16,6 @@
       <a class="brand" href="profile.html">
         <img src="/images/logo.png" alt="Gym Social">
       </a>
-
       <nav class="site-nav account-nav" id="siteNav">
         <a href="profile.html" id="navPerfil">Mi perfil</a>
         <a href="admin.html" id="adminLink">Administrar</a>
@@ -24,7 +23,6 @@
         <a href="settings.html">Configuración</a>
         <a href="exit.html" id="navSalir">Salir</a>
       </nav>
-
       <div class="header-actions">
         <div class="header-search" id="headerSearchWrap">
           <button class="header-search-btn" id="headerSearchBtn" type="button" aria-label="Buscar usuarios">
@@ -63,19 +61,16 @@
 
   <section class="page-hero">
     <div class="container">
-      <span class="eyebrow">Buscar</span>
-      <h1>Encontrá usuarios, entrenadores y gimnasios</h1>
-      <p>Buscá por nombre de usuario, nombre o apellido. No hace falta escribirlo exacto.</p>
+      <span class="eyebrow">Seguidores</span>
+      <h1>Solicitudes de seguimiento</h1>
+      <p>Personas que quieren seguirte y esperan tu aprobación.</p>
     </div>
   </section>
 
   <section class="features">
     <div class="container">
-      <form class="search-page-form" id="searchPageForm">
-        <input type="search" id="searchPageInput" class="header-search-input" placeholder="Buscar usuarios, entrenadores o gimnasios...">
-      </form>
-      <p class="chart-sub" id="searchPageSummary"></p>
-      <div class="search-page-list" id="searchPageList"></div>
+      <p class="chart-sub" id="followReqSummary">Cargando...</p>
+      <div class="notif-page-list" id="followReqList"></div>
     </div>
   </section>
 
@@ -106,6 +101,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/search.ts"></script>
+  <script type="module" src="/src/pages/followRequests.ts"></script>
 </body>
 </html>
