@@ -19,6 +19,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(rootDir, "index.html"),
+        notFound: resolve(rootDir, "404.html"),
         ...pageEntries,
       },
     },

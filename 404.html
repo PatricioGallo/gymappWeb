@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gym Social - Perfil</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="language" content="es">
+<base href="/">
+<link rel="icon" href="/images/fevicon.png" type="image/png" />
+<link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="pages/profile.html">
+        <img src="/images/logo.png" alt="Gym Social">
+      </a>
+
+      <nav class="site-nav" id="siteNav">
+        <a href="pages/profile.html" id="navPerfil">Perfil</a>
+        <a href="pages/admin.html" id="adminLink">Administrar</a>
+        <a href="" id="config">Configuración</a>
+        <a href="pages/exit.html" id="navSalir">Salir</a>
+      </nav>
+
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div id="loaderBody"></div>
+
+  <section class="profile-hero">
+    <div class="container">
+      <div class="avatar-wrap">
+        <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
+        <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+          <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
+        </label>
+      </div>
+
+      <h1 class="profile-name" id="profileName">Hola</h1>
+      <div class="profile-badges" id="profileBadges"></div>
+
+      <div class="profile-actions" id="profileActions"></div>
+    </div>
+  </section>
+
+  <section class="quick-actions" id="quickActionsSection">
+    <div class="container">
+      <div class="quick-grid" id="quickActions"></div>
+    </div>
+  </section>
+
+  <section class="features" id="statsSection">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
+        <h2>Estadísticas</h2>
+        <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
+      </div>
+      <div id="statsContent"></div>
+    </div>
+  </section>
+
+  <section class="steps" id="rutinas">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow" id="rutinasEyebrow">Tus rutinas</span>
+        <h2 id="routinesTitle">Rutinas activas</h2>
+      </div>
+      <div class="routine-tabs" id="routineTabs">
+        <button class="routine-tab active" data-tab="active" type="button">Activas</button>
+        <button class="routine-tab" data-tab="historic" type="button">Históricas</button>
+      </div>
+      <div id="routinesContent"></div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="pages/profile.html">
+            <img src="/images/logo.png" alt="Gym Social">
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+        </div>
+
+        <nav class="footer-links">
+          <a href="pages/profile.html" id="footerPerfil">Perfil</a>
+          <a href="pages/contact.html">Contactanos</a>
+          <a href="pages/exit.html" id="footerSalir">Salir</a>
+        </nav>
+
+        <div class="footer-social">
+          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 Gym Social. Todos los derechos reservados.</span>
+        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" src="/src/pages/profile.ts"></script>
+</body>
+</html>

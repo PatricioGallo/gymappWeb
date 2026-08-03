@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { isReservedUsername } from "../lib/reservedUsernames";
 
 export interface SignUpFields {
   email: string;
@@ -33,6 +34,9 @@ export async function signUp(fields: SignUpFields): Promise<{ error?: string }> 
   const username = normalizeUsername(fields.username);
   if (!isValidUsername(username)) {
     return { error: "El nombre de usuario debe tener 3-30 caracteres: minúsculas, números o guion bajo." };
+  }
+  if (isReservedUsername(username)) {
+    return { error: "Ese nombre de usuario no está disponible." };
   }
 
   const { data, error } = await supabase.auth.signUp({

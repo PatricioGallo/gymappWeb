@@ -1,5 +1,6 @@
 import { setupNavToggle, setupRevealObserver, redirectIfAuthenticated } from "../lib/nav";
 import { signUp, isUsernameAvailable, isValidUsername, normalizeUsername } from "../services/auth.service";
+import { isReservedUsername } from "../lib/reservedUsernames";
 import { escapeHtml } from "../lib/dom";
 import { supabase } from "../lib/supabaseClient";
 import { calcularEdad } from "../lib/age";
@@ -44,6 +45,10 @@ form?.addEventListener("submit", async (event) => {
   }
   if (!isValidUsername(username)) {
     showError("ERROR! El usuario debe tener 3-30 caracteres: minúsculas, números o guion bajo.");
+    return;
+  }
+  if (isReservedUsername(username)) {
+    showError("ERROR! Ese nombre de usuario no está disponible.");
     return;
   }
   if (pass !== pass2 || pass.length < 8) {
