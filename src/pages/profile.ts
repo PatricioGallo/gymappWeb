@@ -253,6 +253,11 @@ function initFollowButton(targetId: string, initialStatus: FollowStatus) {
           return;
         }
         status = "none";
+        // Si el perfil es privado, dejar de seguir debe ocultar bio/links/stats/rutinas
+        // que ya se habían pintado con acceso de seguidor. Recargamos para re-evaluar
+        // isPrivateForViewer en main(), igual que confirmFinishRoutine/openReactivateModal.
+        window.location.reload();
+        return;
       }
       paint();
     } finally {
