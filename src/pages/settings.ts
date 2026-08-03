@@ -35,6 +35,7 @@ function setupTabs() {
   const editTab = document.getElementById("editTab")!;
   const privacyTab = document.getElementById("privacyTab")!;
   const notificationsTab = document.getElementById("notificationsTab")!;
+  const personalizationTab = document.getElementById("personalizationTab")!;
   const blockedTab = document.getElementById("blockedTab")!;
   if (!tabsWrap) return;
 
@@ -45,6 +46,7 @@ function setupTabs() {
       editTab.hidden = tab !== "edit";
       privacyTab.hidden = tab !== "privacy";
       notificationsTab.hidden = tab !== "notifications";
+      personalizationTab.hidden = tab !== "personalization";
       blockedTab.hidden = tab !== "blocked";
       if (tab === "blocked" && !blockedLoaded) {
         blockedLoaded = true;
@@ -343,6 +345,46 @@ function renderNotificationsTab() {
   });
 }
 
+// ---------- Personalizacion ----------
+
+function renderPersonalizationTab() {
+  const personalizationTab = document.getElementById("personalizationTab")!;
+  personalizationTab.innerHTML = `
+    <div class="chart-card reveal">
+      <h3>Personalización</h3>
+      <div class="settings-toggle-row">
+        <div>
+          <span class="switch-label">Permitir zoom en la web</span>
+          <p class="chart-sub" style="margin:4px 0 0;">Por defecto está desactivado para que no moleste al cargar pesos desde el celular. Activalo si preferís poder hacer zoom.</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="zoomToggle" ${profile!.zoom_enabled ? "checked" : ""}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <div class="alert_message" id="personalizationAlert"></div>
+    </div>
+  `;
+
+  document.getElementById("zoomToggle")?.addEventListener("change", async (e) => {
+    const alertBox = document.getElementById("personalizationAlert")!;
+    alertBox.innerHTML = "";
+    const toggle = e.target as HTMLInputElement;
+    const zoomEnabled = toggle.checked;
+    toggle.disabled = true;
+    const { error } = await updateProfileFields(userId, { zoom_enabled: zoomEnabled });
+    toggle.disabled = false;
+    if (error) {
+      toggle.checked = !zoomEnabled;
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    profile!.zoom_enabled = zoomEnabled;
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) viewport.setAttribute("content", zoomEnabled ? "width=device-width, initial-scale=1" : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
+  });
+}
+
 // ---------- Usuarios bloqueados ----------
 
 async function loadBlocked() {
@@ -397,3 +439,4 @@ setupTabs();
 renderEditTab();
 renderPrivacyTab();
 renderNotificationsTab();
+renderPersonalizationTab();

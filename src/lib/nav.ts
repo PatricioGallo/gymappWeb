@@ -56,6 +56,19 @@ async function populateUserMenuTrigger(): Promise<void> {
   if (avatarEl && data.avatar_url) avatarEl.src = data.avatar_url;
   if (usernameEl) usernameEl.textContent = data.username ?? "";
   if (data.user_type !== "admin") document.getElementById("adminLink")?.remove();
+
+  void applyZoomPreference(userId);
+}
+
+// El viewport de todas las paginas viene con el zoom deshabilitado por defecto
+// (molesta al cargar pesos desde el celular); si el usuario lo habilito en
+// Configuracion > Personalizacion, se lo re-habilitamos aca.
+async function applyZoomPreference(userId: string): Promise<void> {
+  const { data } = await supabase.from("profiles").select("zoom_enabled").eq("id", userId).maybeSingle();
+  if (!data?.zoom_enabled) return;
+
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) viewport.setAttribute("content", "width=device-width, initial-scale=1");
 }
 
 export function setupRevealObserver(): void {

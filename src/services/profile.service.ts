@@ -41,7 +41,7 @@ export async function getProfileBasicByUsername(username: string): Promise<Profi
 
 export async function updateProfileFields(
   userId: string,
-  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs">>
+  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled">>
 ): Promise<{ error?: string }> {
   const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
   if (error) return { error: "No se pudieron guardar los cambios. Probá de nuevo." };
