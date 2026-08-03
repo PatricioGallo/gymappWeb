@@ -254,12 +254,11 @@ function initFollowButton(targetId: string, initialStatus: FollowStatus) {
   });
 }
 
-async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean) {
+async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean): Promise<FollowStatus> {
   const actions = document.getElementById("profileActions");
-  if (!actions) return;
-
   const showFollowBtn = !ownerView && viewerLoggedIn;
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
+  if (!actions) return followStatus;
 
   actions.innerHTML = `
     ${ownerView ? `<a class="btn btn-outline" href="/pages/settings.html">Editar perfil</a>` : ""}
@@ -271,6 +270,7 @@ async function renderProfileActions(targetId: string, username: string, ownerVie
   `;
   initShare(username);
   if (showFollowBtn) initFollowButton(targetId, followStatus);
+  return followStatus;
 }
 
 // ---------- Perfil privado (visitante sin acceso completo) ----------
@@ -657,9 +657,11 @@ async function main() {
   if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
   if (isOwner && profile) initAvatar(profile);
 
-  await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null);
+  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null);
 
-  const isPrivateForViewer = !profile && !basicProfile?.is_public;
+  // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
+  // que ya usan las RLS de rutinas/pesos via is_profile_public en la base).
+  const isPrivateForViewer = !profile && !basicProfile?.is_public && followStatus !== "accepted";
 
   if (isPrivateForViewer) {
     document.getElementById("profileBio")?.remove();
