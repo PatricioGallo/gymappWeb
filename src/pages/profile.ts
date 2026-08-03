@@ -169,16 +169,23 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   if (fullnameEl) fullnameEl.textContent = `${nombre} ${apellido}`.trim();
 }
 
-async function renderProfileStats(userId: string) {
+async function renderProfileStats(userId: string, username: string, canViewLists: boolean) {
   const stats = document.getElementById("profileStats");
   if (!stats) return;
   // Publicaciones todavia no existe (llega con el feed de la red social): se
   // muestra en 0 hasta que se sume ese sistema. Seguidores/seguidos si son reales.
   const counts = await getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 }));
+  const u = encodeURIComponent(username);
+
+  function stat(count: number, label: string, tab: "followers" | "following"): string {
+    const inner = `<strong>${count}</strong> ${label}`;
+    return canViewLists ? `<a class="profile-stat" href="followers.html?u=${u}&tab=${tab}">${inner}</a>` : `<span class="profile-stat">${inner}</span>`;
+  }
+
   stats.innerHTML = `
     <span class="profile-stat"><strong>0</strong> publicaciones</span>
-    <span class="profile-stat"><strong>${counts.followers}</strong> seguidores</span>
-    <span class="profile-stat"><strong>${counts.following}</strong> seguidos</span>
+    ${stat(counts.followers, "seguidores", "followers")}
+    ${stat(counts.following, "seguidos", "following")}
   `;
 }
 
@@ -647,7 +654,6 @@ async function main() {
   const nombre = displayProfile.nombre ?? "Este usuario";
 
   renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "");
-  void renderProfileStats(displayProfile.id!);
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();
@@ -662,6 +668,11 @@ async function main() {
   // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
   // que ya usan las RLS de rutinas/pesos via is_profile_public en la base).
   const isPrivateForViewer = !profile && !basicProfile?.is_public && followStatus !== "accepted";
+
+  // El link a seguidores/seguidos usa la misma regla: si el perfil es privado
+  // para este visitante, ni siquiera se muestra clickeable (la RPC tambien lo
+  // bloquea server-side, pero evitamos el link muerto).
+  void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer);
 
   if (isPrivateForViewer) {
     document.getElementById("profileBio")?.remove();

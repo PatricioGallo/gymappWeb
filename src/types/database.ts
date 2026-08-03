@@ -1,6 +1,3 @@
-// Auto-generado con `mcp__supabase__generate_typescript_types` a partir del esquema real.
-// No editar a mano: volver a generar despues de cada migracion nueva.
-
 export type Json =
   | string
   | number
@@ -783,6 +780,40 @@ export type Database = {
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
+      list_followers: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_user_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          followed_at: string
+          id: string
+          nombre: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      list_following: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_user_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          followed_at: string
+          id: string
+          nombre: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
       search_profiles: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
