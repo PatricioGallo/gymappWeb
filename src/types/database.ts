@@ -570,9 +570,11 @@ export type Database = {
         Row: {
           apellido: string | null
           avatar_url: string | null
+          bio: string | null
           fecha_nacimiento: string | null
           id: string | null
           is_public: boolean | null
+          links: Json | null
           nacionalidad: string | null
           nombre: string | null
           user_type: Database["public"]["Enums"]["user_type"] | null
@@ -581,9 +583,11 @@ export type Database = {
         Insert: {
           apellido?: string | null
           avatar_url?: string | null
+          bio?: string | null
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
+          links?: Json | null
           nacionalidad?: string | null
           nombre?: string | null
           user_type?: Database["public"]["Enums"]["user_type"] | null
@@ -592,9 +596,11 @@ export type Database = {
         Update: {
           apellido?: string | null
           avatar_url?: string | null
+          bio?: string | null
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
+          links?: Json | null
           nacionalidad?: string | null
           nombre?: string | null
           user_type?: Database["public"]["Enums"]["user_type"] | null

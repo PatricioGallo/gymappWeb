@@ -35,16 +35,23 @@
 
   <section class="profile-hero">
     <div class="container">
-      <div class="avatar-wrap">
-        <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
-        <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
-          <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
-        </label>
+      <div class="profile-top" id="profileTop">
+        <div class="avatar-wrap">
+          <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
+          <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+            <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
+          </label>
+        </div>
+        <div class="profile-info">
+          <h1 class="profile-username" id="profileUsername">@usuario</h1>
+          <p class="profile-fullname" id="profileFullname"></p>
+          <div class="profile-stats" id="profileStats"></div>
+          <p class="profile-bio" id="profileBio"></p>
+        </div>
       </div>
 
-      <h1 class="profile-name" id="profileName">Hola</h1>
-      <div class="profile-badges" id="profileBadges"></div>
+      <div class="profile-links" id="profileLinks"></div>
 
       <div class="profile-actions" id="profileActions"></div>
     </div>
