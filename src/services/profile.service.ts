@@ -5,6 +5,22 @@ export type Profile = Tables<"profiles">;
 export type Routine = Tables<"routines">;
 export type ProfileBasic = Tables<"profiles_public">;
 
+export interface ProfileLink {
+  label: string;
+  url: string;
+}
+
+export const MAX_PROFILE_LINKS = 5;
+export const MAX_BIO_LENGTH = 150;
+
+export function parseProfileLinks(raw: Profile["links"]): ProfileLink[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[]).filter((l): l is ProfileLink => {
+    const link = l as Partial<ProfileLink> | null;
+    return typeof link === "object" && link !== null && typeof link.label === "string" && typeof link.url === "string";
+  });
+}
+
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
   if (error) throw error;
@@ -25,10 +41,11 @@ export async function getProfileBasicByUsername(username: string): Promise<Profi
 
 export async function updateProfileFields(
   userId: string,
-  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public">>
-): Promise<void> {
+  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs">>
+): Promise<{ error?: string }> {
   const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
-  if (error) throw error;
+  if (error) return { error: "No se pudieron guardar los cambios. Probá de nuevo." };
+  return {};
 }
 
 export async function updateEmail(email: string): Promise<{ error?: string }> {

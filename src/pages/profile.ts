@@ -3,14 +3,10 @@ import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
 import { calcularEdad } from "../lib/age";
-import { COUNTRIES } from "../lib/countries";
 import {
   getProfile,
   getProfileByUsername,
   getProfileBasicByUsername,
-  updateProfileFields,
-  updateEmail,
-  updatePassword,
   uploadAvatar,
   listRoutines,
   finishRoutine,
@@ -553,134 +549,6 @@ function openReactivateModal(routineId: string) {
   });
 }
 
-// ---------- Configuracion (owner) ----------
-
-function configMenu(profile: Profile) {
-  const config = document.getElementById("config");
-  if (!config) return;
-
-  config.addEventListener("click", (e) => {
-    e.preventDefault();
-    const loaderBody = document.getElementById("loaderBody");
-    if (!loaderBody) return;
-    loaderBody.innerHTML = `
-      <div class="success-check-container">
-        <div class="modal-card">
-          <h2>Configuración</h2>
-          <p class="subtitle">Dejá vacío lo que no quieras cambiar.</p>
-          <div class="field"><label for="userName">Nombre</label><input type="text" placeholder="${escapeHtml(profile.nombre)}" id="userName"></div>
-          <div class="field"><label for="sname">Apellido</label><input type="text" placeholder="${escapeHtml(profile.apellido)}" id="sname"></div>
-          <div class="field"><label for="birthdateField">Fecha de nacimiento</label><input type="date" id="birthdateField" value="${profile.fecha_nacimiento}"></div>
-          <div class="field">
-            <label for="nationalityField">Nacionalidad</label>
-            <select id="nationalityField">
-              ${COUNTRIES.map((country) => `<option value="${escapeHtml(country)}" ${country === profile.nacionalidad ? "selected" : ""}>${escapeHtml(country)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <label for="visibilityField">Visibilidad del perfil</label>
-            <select id="visibilityField">
-              <option value="true" ${profile.is_public ? "selected" : ""}>Público (se ven tus rutinas y estadísticas)</option>
-              <option value="false" ${!profile.is_public ? "selected" : ""}>Privado (solo se ve tu información básica)</option>
-            </select>
-          </div>
-          <div class="field"><label for="mailField">Mail</label><input type="email" placeholder="${escapeHtml(profile.email)}" id="mailField"></div>
-          <div class="field"><label for="pswd">Contraseña nueva</label><input type="password" placeholder="••••••••••••" id="pswd"></div>
-          <div class="alert_message" id="configAlert"></div>
-          <div class="modal-actions">
-            <button class="btn btn-primary" id="saveChanges">Guardar</button>
-            <button class="btn btn-outline" id="closeConfig">Cerrar</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("closeConfig")?.addEventListener("click", closeOverlay);
-    document.getElementById("saveChanges")?.addEventListener("click", async () => {
-      const alertBox = document.getElementById("configAlert")!;
-      alertBox.innerHTML = "";
-
-      const nombre = (document.getElementById("userName") as HTMLInputElement).value.trim();
-      const apellido = (document.getElementById("sname") as HTMLInputElement).value.trim();
-      const fechaNacimiento = (document.getElementById("birthdateField") as HTMLInputElement).value;
-      const nacionalidad = (document.getElementById("nationalityField") as HTMLSelectElement).value;
-      const isPublic = (document.getElementById("visibilityField") as HTMLSelectElement).value === "true";
-      const mail = (document.getElementById("mailField") as HTMLInputElement).value.trim();
-      const pass = (document.getElementById("pswd") as HTMLInputElement).value;
-
-      if (
-        !nombre &&
-        !apellido &&
-        !mail &&
-        !pass &&
-        fechaNacimiento === profile.fecha_nacimiento &&
-        nacionalidad === profile.nacionalidad &&
-        isPublic === profile.is_public
-      ) {
-        alertBox.innerHTML = "<p>Ingresá al menos un valor para cambiar.</p>";
-        return;
-      }
-
-      const fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public">> = {};
-      if (nombre) {
-        if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
-          alertBox.innerHTML = "<p>Ingresaste un nombre incorrecto.</p>";
-          return;
-        }
-        fields.nombre = nombre;
-      }
-      if (apellido) {
-        if (apellido.length < 2 || !Number.isNaN(Number(apellido))) {
-          alertBox.innerHTML = "<p>Ingresaste un apellido incorrecto.</p>";
-          return;
-        }
-        fields.apellido = apellido;
-      }
-      if (fechaNacimiento && fechaNacimiento !== profile.fecha_nacimiento) {
-        if (calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
-          alertBox.innerHTML = "<p>Ingresaste una fecha de nacimiento incorrecta.</p>";
-          return;
-        }
-        fields.fecha_nacimiento = fechaNacimiento;
-      }
-      if (nacionalidad && nacionalidad !== profile.nacionalidad) {
-        fields.nacionalidad = nacionalidad;
-      }
-      if (isPublic !== profile.is_public) {
-        fields.is_public = isPublic;
-      }
-
-      try {
-        if (Object.keys(fields).length > 0) await updateProfileFields(profile.id, fields);
-        if (mail) {
-          const { error } = await updateEmail(mail);
-          if (error) {
-            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-            return;
-          }
-        }
-        if (pass) {
-          const { error } = await updatePassword(pass);
-          if (error) {
-            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-            return;
-          }
-        }
-      } catch {
-        alertBox.innerHTML = "<p>Error al guardar cambios.</p>";
-        return;
-      }
-
-      loaderBody.innerHTML = `
-        <div class="success-check-container">
-          <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-          <p>¡Cambios guardados con éxito! Espere será redirigido.</p>
-        </div>
-      `;
-      setTimeout(() => window.location.reload(), 2000);
-    });
-  });
-}
 
 // ---------- Armado de la pagina ----------
 
@@ -756,8 +624,6 @@ async function main() {
   const logs = await listWeightLogsWithContext(displayProfile.id!);
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs);
   renderStats(logs, activeCount ?? 0, isOwner);
-
-  if (isOwner && profile) configMenu(profile);
 }
 
 main();

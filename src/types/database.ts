@@ -123,13 +123,16 @@ export type Database = {
         Row: {
           apellido: string
           avatar_url: string | null
+          bio: string | null
           created_at: string
           email: string
           fecha_nacimiento: string
           id: string
           is_public: boolean
+          links: Json
           nacionalidad: string | null
           nombre: string
+          notification_prefs: Json
           updated_at: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
@@ -137,13 +140,16 @@ export type Database = {
         Insert: {
           apellido: string
           avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           email: string
           fecha_nacimiento: string
           id: string
           is_public?: boolean
+          links?: Json
           nacionalidad?: string | null
           nombre: string
+          notification_prefs?: Json
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username: string
@@ -151,13 +157,16 @@ export type Database = {
         Update: {
           apellido?: string
           avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           email?: string
           fecha_nacimiento?: string
           id?: string
           is_public?: boolean
+          links?: Json
           nacionalidad?: string | null
           nombre?: string
+          notification_prefs?: Json
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username?: string
@@ -431,6 +440,56 @@ export type Database = {
           {
             foreignKeyName: "site_visits_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
