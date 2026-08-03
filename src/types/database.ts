@@ -712,6 +712,19 @@ export type Database = {
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
+      search_profiles: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          id: string
+          nacionalidad: string
+          nombre: string
+          score: number
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
     }
     Enums: {
       exercise_category:

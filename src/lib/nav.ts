@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { logVisitOncePerSession } from "../services/visits.service";
 import { setupNotificationBell } from "./notifications";
+import { setupHeaderSearch } from "./search";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -36,6 +37,7 @@ export function setupNavToggle(): void {
     navToggle.setAttribute("aria-expanded", "false");
   });
 
+  setupHeaderSearch();
   void populateUserMenuTrigger();
 }
 
