@@ -10,7 +10,7 @@ export const USER_TYPE_BADGE: Record<string, string> = {
   admin: "Admin",
   gimnasio: "Gimnasio",
   entrenador: "Entrenador",
-  usuario: "Usuario",
+  usuario: "Gymbro",
 };
 
 export function resultAvatar(r: ProfileSearchResult): string {
