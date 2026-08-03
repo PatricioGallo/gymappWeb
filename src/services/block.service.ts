@@ -14,23 +14,41 @@ export interface BlockedUserRow {
 }
 
 export async function listBlockedUsers(userId: string): Promise<BlockedUserRow[]> {
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from("user_blocks")
-    .select("id, blocked_id, created_at, profiles:blocked_id ( username, nombre, apellido, avatar_url )")
+    .select("id, blocked_id, created_at")
     .eq("blocker_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? [])
-    .filter((row: any) => row.profiles)
-    .map((row: any) => ({
-      id: row.id,
-      blockedId: row.blocked_id,
-      username: row.profiles.username,
-      nombre: row.profiles.nombre,
-      apellido: row.profiles.apellido,
-      avatarUrl: row.profiles.avatar_url,
-      createdAt: row.created_at,
-    }));
+  if (!rows || rows.length === 0) return [];
+
+  // Consulta separada a profiles_public en vez de un embed de PostgREST: la vista
+  // no es "simple" (bypassea RLS a proposito) y el embed automatico contra ella
+  // devuelve null en el join real aunque la relacion se detecte sin error.
+  const blockedIds = [...new Set(rows.map((r) => r.blocked_id))];
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles_public")
+    .select("id, username, nombre, apellido, avatar_url")
+    .in("id", blockedIds);
+  if (profilesError) throw profilesError;
+
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  return rows
+    .map((r) => {
+      const p = profileById.get(r.blocked_id);
+      if (!p) return null;
+      return {
+        id: r.id,
+        blockedId: r.blocked_id,
+        username: p.username ?? "",
+        nombre: p.nombre ?? "",
+        apellido: p.apellido ?? "",
+        avatarUrl: p.avatar_url,
+        createdAt: r.created_at,
+      };
+    })
+    .filter((r): r is BlockedUserRow => r !== null);
 }
 
 export async function blockUser(blockerId: string, blockedId: string): Promise<{ error?: string }> {

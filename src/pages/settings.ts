@@ -308,7 +308,7 @@ function renderNotificationsTab() {
   notificationsTab.innerHTML = `
     <div class="chart-card reveal">
       <h3>Notificaciones</h3>
-      <p class="chart-sub">Todavía no enviamos notificaciones ni hay publicaciones: estas preferencias van a aplicarse en cuanto sumemos esa parte de la red social.</p>
+      <p class="chart-sub">"Nuevos seguidores" ya está activo. El resto (me gusta, comentarios, menciones) va a aplicarse en cuanto sumemos publicaciones a la red social.</p>
       ${items
         .map(
           (item) => `

@@ -16,6 +16,10 @@ const TYPE_ICON: Record<string, string> = {
   routine_assigned: "🏋️",
   issue_status: "🛠️",
   admin_message: "📣",
+  follow: "👥",
+  follow_request: "🔔",
+  follow_accepted: "✅",
+  follow_rejected: "🚫",
 };
 
 function relativeTime(iso: string): string {

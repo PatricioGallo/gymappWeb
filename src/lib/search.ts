@@ -44,7 +44,7 @@ export function setupHeaderSearch(): void {
       list
         .map(
           (r) => `
-        <a class="search-result-item" href="profile.html?id=${r.id}">
+        <a class="search-result-item" href="profile.html?u=${encodeURIComponent(r.username)}">
           <img src="${escapeHtml(resultAvatar(r))}" alt="" class="search-result-avatar">
           <span class="search-result-body">
             <span class="search-result-name">${escapeHtml(resultFullName(r))}</span>

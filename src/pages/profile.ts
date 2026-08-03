@@ -18,6 +18,7 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
+import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
 
 declare const Chart: any;
 
@@ -41,10 +42,12 @@ if (!usernameParam && !myId) {
   throw new Error("not authenticated");
 }
 
-// Un visitante sin sesion no tiene "su" perfil al que volver ni por que "salir".
+// Un visitante sin sesion no tiene "su" perfil al que volver, ni "por que salir",
+// ni solicitudes de seguimiento propias.
 if (!myId) {
   document.getElementById("navPerfil")?.remove();
   document.getElementById("navSalir")?.remove();
+  document.getElementById("navFollowRequests")?.remove();
   document.getElementById("footerPerfil")?.remove();
   document.getElementById("footerSalir")?.remove();
 }
@@ -166,15 +169,16 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   if (fullnameEl) fullnameEl.textContent = `${nombre} ${apellido}`.trim();
 }
 
-function renderProfileStats() {
+async function renderProfileStats(userId: string) {
   const stats = document.getElementById("profileStats");
   if (!stats) return;
-  // Publicaciones, seguidores y seguidos todavia no existen (llegan con la red
-  // social): se muestran en 0 hasta que se sumen esos sistemas.
+  // Publicaciones todavia no existe (llega con el feed de la red social): se
+  // muestra en 0 hasta que se sume ese sistema. Seguidores/seguidos si son reales.
+  const counts = await getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 }));
   stats.innerHTML = `
     <span class="profile-stat"><strong>0</strong> publicaciones</span>
-    <span class="profile-stat"><strong>0</strong> seguidores</span>
-    <span class="profile-stat"><strong>0</strong> seguidos</span>
+    <span class="profile-stat"><strong>${counts.followers}</strong> seguidores</span>
+    <span class="profile-stat"><strong>${counts.following}</strong> seguidos</span>
   `;
 }
 
@@ -206,27 +210,67 @@ function renderProfileLinks(links: ProfileLink[]) {
     .join("");
 }
 
-function renderProfileActions(username: string, ownerView: boolean, viewerLoggedIn: boolean) {
+function followButtonLabel(status: FollowStatus): string {
+  if (status === "pending") return "Solicitud enviada";
+  if (status === "accepted") return "Siguiendo";
+  return "+ Seguir";
+}
+
+function initFollowButton(targetId: string, initialStatus: FollowStatus) {
+  const btn = document.getElementById("followBtn") as HTMLButtonElement | null;
+  if (!btn || !myId) return;
+  let status: FollowStatus = initialStatus;
+
+  function paint() {
+    btn!.textContent = followButtonLabel(status);
+    btn!.classList.toggle("btn-primary", status === "none");
+    btn!.classList.toggle("btn-outline", status !== "none");
+  }
+  paint();
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      if (status === "none") {
+        const { status: newStatus, error } = await followUser(myId!, targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = newStatus ?? "accepted";
+      } else {
+        // "Solicitud enviada" -> cancela; "Siguiendo" -> deja de seguir. Misma operación.
+        const { error } = await unfollowOrCancel(myId!, targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = "none";
+      }
+      paint();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean) {
   const actions = document.getElementById("profileActions");
   if (!actions) return;
+
+  const showFollowBtn = !ownerView && viewerLoggedIn;
+  const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
+
   actions.innerHTML = `
     ${ownerView ? `<a class="btn btn-outline" href="/pages/settings.html">Editar perfil</a>` : ""}
     <button class="btn btn-outline" id="shareBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
       Compartir perfil
     </button>
-    ${ownerView || !viewerLoggedIn ? "" : `<button class="btn btn-primary" id="addFriendBtn" type="button">+ Seguir</button>`}
+    ${showFollowBtn ? `<button class="btn ${followStatus === "none" ? "btn-primary" : "btn-outline"}" id="followBtn" type="button">${followButtonLabel(followStatus)}</button>` : ""}
   `;
   initShare(username);
-  if (!ownerView && viewerLoggedIn) {
-    const btn = document.getElementById("addFriendBtn");
-    btn?.addEventListener("click", () => {
-      btn.textContent = "Función en camino";
-      setTimeout(() => {
-        btn.textContent = "+ Seguir";
-      }, 2000);
-    });
-  }
+  if (showFollowBtn) initFollowButton(targetId, followStatus);
 }
 
 // ---------- Perfil privado (visitante sin acceso completo) ----------
@@ -603,7 +647,7 @@ async function main() {
   const nombre = displayProfile.nombre ?? "Este usuario";
 
   renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "");
-  renderProfileStats();
+  void renderProfileStats(displayProfile.id!);
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();
@@ -613,7 +657,7 @@ async function main() {
   if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
   if (isOwner && profile) initAvatar(profile);
 
-  renderProfileActions(displayProfile.username ?? "", isOwner, myId !== null);
+  await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null);
 
   const isPrivateForViewer = !profile && !basicProfile?.is_public;
 
