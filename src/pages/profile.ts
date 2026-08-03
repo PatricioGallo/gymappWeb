@@ -31,8 +31,13 @@ const { data: sessionData } = await supabase.auth.getSession();
 const myId = sessionData.session?.user.id ?? null;
 
 const urlParams = new URLSearchParams(window.location.search);
-// El link para compartir usa el username (?u=), mas legible que un uuid.
-const usernameParam = urlParams.get("u");
+// pages/profile.html (nav "Perfil") es siempre TU perfil salvo que le pasen ?u=.
+// Cualquier otra ruta (gymsocial.com.ar/<username>) llega aca via 404.html:
+// GitHub Pages no tiene rewrites, asi que 404.html sirve este mismo script y
+// leemos el username directo del path en vez de la query.
+const onOwnProfilePage = window.location.pathname.endsWith("/pages/profile.html");
+const pathUsername = onOwnProfilePage ? null : window.location.pathname.replace(/^\/+|\/+$/g, "") || null;
+const usernameParam = urlParams.get("u") ?? pathUsername;
 
 if (!usernameParam && !myId) {
   window.location.href = "login.html";
@@ -142,10 +147,10 @@ function initShare(username: string) {
   if (!shareBtn) return;
   const originalHTML = shareBtn.innerHTML;
   shareBtn.addEventListener("click", async () => {
-    // Se arma explicitamente con ?u=<username> (mas legible que un uuid) para que
-    // el link funcione para cualquiera que lo abra sin sesion iniciada (window.location.href
-    // de "mi" perfil no lleva ningun parametro).
-    const url = `${window.location.origin}${window.location.pathname}?u=${encodeURIComponent(username)}`;
+    // gymsocial.com.ar/<username>: mas lindo que ?u= y funciona para cualquiera
+    // que lo abra sin sesion iniciada (window.location.href de "mi" perfil no
+    // lleva ningun parametro).
+    const url = `${window.location.origin}/${encodeURIComponent(username)}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Mi perfil de Gym Social", url });
@@ -234,11 +239,11 @@ function renderQuickActions(userId: string) {
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
       <div><h3>Tus rutinas</h3><p>Ver y gestionar tus rutinas activas</p></div>
     </a>
-    <a class="quick-card reveal" href="progress.html?uid=${userId}">
+    <a class="quick-card reveal" href="/pages/progress.html?uid=${userId}">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
       <div><h3>Progreso completo</h3><p>Gráficos detallados por ejercicio</p></div>
     </a>
-    <a class="quick-card reveal" href="rutinsView.html">
+    <a class="quick-card reveal" href="/pages/rutinsView.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
       <div><h3>Nueva rutina</h3><p>Armá una rutina desde cero</p></div>
     </a>
@@ -416,7 +421,7 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
 function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean, container: HTMLElement, logs: WeightLogEntry[]) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
-      ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas activas</h3><p>Creá tu primera rutina para empezar a entrenar con Gym Social.</p><a href="rutinsView.html" class="btn btn-primary btn-sm">Crear nueva rutina</a></div>`
+      ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas activas</h3><p>Creá tu primera rutina para empezar a entrenar con Gym Social.</p><a href="/pages/rutinsView.html" class="btn btn-primary btn-sm">Crear nueva rutina</a></div>`
       : `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tiene rutinas activas</h3><p>Este usuario no cargó ninguna rutina por ahora.</p></div>`;
     return;
   }

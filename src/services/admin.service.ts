@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { isReservedUsername } from "../lib/reservedUsernames";
 import type { Enums } from "../types/database";
 
 export type UserType = Enums<"user_type">;
@@ -82,9 +83,13 @@ export interface AdminEditableUserFields {
 }
 
 export async function updateUserAsAdmin(userId: string, fields: AdminEditableUserFields): Promise<{ error?: string }> {
+  if (fields.username && isReservedUsername(fields.username)) {
+    return { error: "Ese nombre de usuario no está disponible." };
+  }
   const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
   if (error) {
     if (error.code === "23505") return { error: "Ese nombre de usuario ya está en uso." };
+    if (error.code === "23514") return { error: "Ese nombre de usuario no está disponible." };
     return { error: "No se pudo guardar el usuario. Probá de nuevo." };
   }
   return {};
