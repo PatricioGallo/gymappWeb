@@ -769,6 +769,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_type"]
       }
+      get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_follow_counts: {
         Args: { p_user_id: string }
         Returns: {
@@ -776,11 +777,11 @@ export type Database = {
           following: number
         }[]
       }
-      get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
+      is_staff: { Args: never; Returns: boolean }
       list_followers: {
         Args: {
           p_limit?: number
@@ -838,7 +839,7 @@ export type Database = {
         | "abdominales"
         | "piernas"
         | "estiramiento"
-      user_type: "admin" | "gimnasio" | "entrenador" | "usuario"
+      user_type: "admin" | "gimnasio" | "entrenador" | "usuario" | "colaborador"
       weight_unit: "kg" | "lb" | "bloques"
     }
     CompositeTypes: {
@@ -976,7 +977,7 @@ export const Constants = {
         "piernas",
         "estiramiento",
       ],
-      user_type: ["admin", "gimnasio", "entrenador", "usuario"],
+      user_type: ["admin", "gimnasio", "entrenador", "usuario", "colaborador"],
       weight_unit: ["kg", "lb", "bloques"],
     },
   },

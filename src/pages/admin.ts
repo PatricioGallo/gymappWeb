@@ -4,6 +4,7 @@ import { formatFechaCorta } from "../lib/dias";
 import { COUNTRIES } from "../lib/countries";
 import {
   isCurrentUserAdmin,
+  isCurrentUserStaff,
   getAdminSiteStats,
   getAdminDailyVisits,
   listAllUsersAdmin,
@@ -51,6 +52,7 @@ import {
   ISSUE_STATUS_OPTIONS,
   ISSUE_STATUS_LABELS,
   type IssueReport,
+  type IssueReportWithReporter,
   type IssueSeverity,
   type IssueStatus,
 } from "../services/issue.service";
@@ -62,10 +64,13 @@ setupNavToggle();
 setupRevealObserver();
 const adminId = await requireAuth();
 
-if (!(await isCurrentUserAdmin())) {
+if (!(await isCurrentUserStaff())) {
   window.location.href = "profile.html";
-  throw new Error("not admin");
+  throw new Error("not staff");
 }
+
+// Colaborador: mismo panel que admin, pero usuarios y roadmap son de solo lectura.
+const isAdmin = await isCurrentUserAdmin();
 
 let users: AdminUserRow[] = [];
 let statsLoaded = false;
@@ -78,7 +83,7 @@ let excAdminSubTab: "builtin" | "custom" = "builtin";
 let roadmapTasks: RoadmapTask[] = [];
 let roadmapLoaded = false;
 
-let issueReports: IssueReport[] = [];
+let issueReports: IssueReportWithReporter[] = [];
 let issuesLoaded = false;
 
 function formatDateTime(iso: string | null): string {
@@ -247,7 +252,7 @@ function renderUsersTab(filter: string) {
           <span>${u.routines_count}</span>
           <span>${formatDate(u.created_at)}</span>
           <span>${formatDateTime(u.last_sign_in_at)}</span>
-          <button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>
+          <span>${isAdmin ? `<button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>` : ""}</span>
         </div>
       `
         )
@@ -701,7 +706,7 @@ function renderRoadmapTab() {
             <h3>${escapeHtml(ROADMAP_CATEGORY_LABELS[cat])}</h3>
             <p class="chart-sub">${doneCount}/${items.length} tareas hechas</p>
           </div>
-          <button class="btn btn-outline btn-sm roadmap-add-btn" type="button" data-category="${cat}">+ Agregar tarea</button>
+          ${isAdmin ? `<button class="btn btn-outline btn-sm roadmap-add-btn" type="button" data-category="${cat}">+ Agregar tarea</button>` : ""}
         </div>
         <div class="roadmap-progress-bar"><div class="roadmap-progress-fill" style="width:${pct}%"></div></div>
         <div class="roadmap-tasks">
@@ -710,18 +715,22 @@ function renderRoadmapTab() {
               .map(
                 (t) => `
             <div class="roadmap-task roadmap-status-${t.status}" data-id="${t.id}">
-              <input type="checkbox" class="roadmap-task-check" data-id="${t.id}" ${t.status === "done" ? "checked" : ""} aria-label="Marcar como hecha">
+              <input type="checkbox" class="roadmap-task-check" data-id="${t.id}" ${t.status === "done" ? "checked" : ""} ${isAdmin ? "" : "disabled"} aria-label="Marcar como hecha">
               <div class="roadmap-task-body">
                 <span class="roadmap-task-title">${escapeHtml(t.title)}</span>
                 ${t.description ? `<p class="roadmap-task-desc">${escapeHtml(t.description)}</p>` : ""}
               </div>
-              <select class="roadmap-task-status" data-id="${t.id}" aria-label="Estado de la tarea">
+              <select class="roadmap-task-status" data-id="${t.id}" aria-label="Estado de la tarea" ${isAdmin ? "" : "disabled"}>
                 ${ROADMAP_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === t.status ? "selected" : ""}>${ROADMAP_STATUS_LABELS[s]}</option>`).join("")}
               </select>
-              <div class="roadmap-task-actions">
+              ${
+                isAdmin
+                  ? `<div class="roadmap-task-actions">
                 <button type="button" class="roadmap-task-edit" data-id="${t.id}">Editar</button>
                 <button type="button" class="roadmap-task-delete" data-id="${t.id}">Eliminar</button>
-              </div>
+              </div>`
+                  : ""
+              }
             </div>
           `
               )
@@ -925,6 +934,7 @@ function renderIssuesTab() {
           <span class="issue-severity-badge issue-severity-badge-${i.severity}">${ISSUE_SEVERITY_LABELS[i.severity as IssueSeverity]}</span>
           <div class="roadmap-task-body">
             <span class="roadmap-task-title">${escapeHtml(i.title)}</span>
+            ${i.reporterName ? `<p class="roadmap-task-desc"><strong>Reportado por:</strong> ${escapeHtml(i.reporterName)}</p>` : ""}
             ${i.page ? `<p class="roadmap-task-desc"><strong>Pantalla:</strong> ${escapeHtml(i.page)}</p>` : ""}
             ${i.description ? `<p class="roadmap-task-desc">${escapeHtml(i.description)}</p>` : ""}
           </div>

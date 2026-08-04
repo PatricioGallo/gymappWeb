@@ -58,7 +58,7 @@ async function populateUserMenuTrigger(): Promise<void> {
 
   if (avatarEl && data.avatar_url) avatarEl.src = data.avatar_url;
   if (usernameEl) usernameEl.textContent = data.username ?? "";
-  if (data.user_type !== "admin") document.getElementById("adminLink")?.remove();
+  if (data.user_type !== "admin" && data.user_type !== "colaborador") document.getElementById("adminLink")?.remove();
 
   setupNotificationBell();
   void applyZoomPreference(userId);
