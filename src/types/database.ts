@@ -727,6 +727,7 @@ export type Database = {
           day: string
         }[]
       }
+      admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
       admin_list_users: {
         Args: never
         Returns: {

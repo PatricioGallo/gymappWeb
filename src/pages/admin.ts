@@ -9,6 +9,7 @@ import {
   getAdminDailyVisits,
   listAllUsersAdmin,
   updateUserAsAdmin,
+  deleteUserAsAdmin,
   USER_TYPE_OPTIONS,
   USER_TYPE_LABELS,
   CONFIGURABLE_VERIFIED_TYPES,
@@ -255,7 +256,10 @@ function renderUsersTab(filter: string) {
           <span>${u.routines_count}</span>
           <span>${formatDate(u.created_at)}</span>
           <span>${formatDateTime(u.last_sign_in_at)}</span>
-          <span>${isAdmin ? `<button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>` : ""}</span>
+          <span class="admin-row-actions">
+            ${isAdmin ? `<button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>` : ""}
+            ${isAdmin && !["admin", "colaborador"].includes(u.user_type) ? `<button class="btn btn-danger btn-sm admin-delete-btn" type="button" data-id="${u.id}">Eliminar</button>` : ""}
+          </span>
         </div>
       `
         )
@@ -271,6 +275,14 @@ function renderUsersTab(filter: string) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       openEditUserModal(btn.dataset.id!);
+    });
+  });
+
+  usersTab.querySelectorAll<HTMLButtonElement>(".admin-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const user = users.find((u) => u.id === btn.dataset.id);
+      if (user) openDeleteUserModal(user);
     });
   });
 
@@ -395,6 +407,46 @@ function openEditUserModal(userId: string) {
     }
 
     Object.assign(user, { nombre, apellido, username, fecha_nacimiento: fechaNacimiento, nacionalidad, user_type: userType, is_verified: isVerified });
+    loaderBody.innerHTML = "";
+    renderUsersTab((document.getElementById("userSearch") as HTMLInputElement | null)?.value ?? "");
+  });
+}
+
+function openDeleteUserModal(user: AdminUserRow) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar a @${escapeHtml(user.username)}?</h2>
+        <p class="subtitle">Esta acción no se puede deshacer. Se van a borrar también sus rutinas, pesos registrados, notificaciones y relaciones de seguimiento.</p>
+        <div class="alert_message" id="userDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="userDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="userDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("userDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("userDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("userDeleteAlert")!;
+    const confirmBtn = document.getElementById("userDeleteConfirm") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+
+    const { error } = await deleteUserAsAdmin(user.id);
+    if (error) {
+      confirmBtn.disabled = false;
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+
+    users = users.filter((u) => u.id !== user.id);
     loaderBody.innerHTML = "";
     renderUsersTab((document.getElementById("userSearch") as HTMLInputElement | null)?.value ?? "");
   });

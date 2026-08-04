@@ -2147,10 +2147,10 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .admin-table-head,
 .admin-table-row {
   display: grid;
-  grid-template-columns: 2fr 0.8fr 0.7fr 0.9fr 1.1fr 0.8fr;
+  grid-template-columns: 2fr 0.8fr 0.7fr 0.9fr 1.1fr 1.5fr;
   gap: 10px;
   align-items: center;
-  min-width: 720px;
+  min-width: 780px;
 }
 
 .admin-table-head {
@@ -2173,6 +2173,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .admin-table-row-clickable { cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s ease; }
 .admin-table-row-clickable:hover { background: var(--surface-2); }
 .admin-table-row-clickable .admin-edit-btn { cursor: pointer; }
+
+.admin-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
 .admin-user-cell { display: flex; flex-direction: column; gap: 2px; }
 .admin-user-cell strong { font-size: 14px; }

@@ -107,3 +107,10 @@ export async function updateUserAsAdmin(userId: string, fields: AdminEditableUse
   }
   return {};
 }
+
+/** Borra la cuenta (auth.users + cascada a profiles/rutinas/pesos/notificaciones/follows). El RPC bloquea auto-borrado y admin/colaborador. */
+export async function deleteUserAsAdmin(userId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
+  if (error) return { error: "No se pudo eliminar el usuario. Probá de nuevo." };
+  return {};
+}
