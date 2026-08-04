@@ -776,6 +776,7 @@ export type Database = {
           following: number
         }[]
       }
+      get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }

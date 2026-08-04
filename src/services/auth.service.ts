@@ -73,12 +73,25 @@ export async function signUp(fields: SignUpFields): Promise<{ error?: string }> 
   return {};
 }
 
-export async function signIn(email: string, password: string): Promise<{ error?: string }> {
+export async function signIn(identifier: string, password: string): Promise<{ error?: string }> {
+  const genericError = { error: "Mail o contraseña incorrectos." };
+
+  let email = identifier.trim();
+  if (!email.includes("@")) {
+    const { data, error: rpcError } = await supabase.rpc("get_email_by_username", {
+      p_username: email,
+    });
+    if (rpcError || !data) {
+      return genericError;
+    }
+    email = data;
+  }
+
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     // Mensaje generico a proposito: no distinguimos "no existe" de "contraseña
     // incorrecta" para no facilitar enumeracion de cuentas.
-    return { error: "Mail o contraseña incorrectos." };
+    return genericError;
   }
   return {};
 }
