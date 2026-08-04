@@ -7,6 +7,7 @@ import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
+const UNIT_PLACEHOLDERS: Record<WeightUnit, string> = { kg: "kg", lb: "lb", bloques: "bl" };
 
 function unitOptionsMarkup(selected: WeightUnit): string {
   return (Object.keys(UNIT_LABELS) as WeightUnit[])
@@ -70,10 +71,22 @@ function ringMarkup(pct: number): string {
   `;
 }
 
+// Un ejercicio se considera completo solo cuando TODAS sus series tienen peso
+// cargado (una sola serie, con mismo_peso, cuenta como todas).
+function isExerciseDone(e: { id: string; serie: number; mismo_peso: boolean }): boolean {
+  const bySerie = latestWeights.get(e.id);
+  if (!bySerie) return false;
+  const requiredSeries = e.mismo_peso ? 1 : e.serie;
+  for (let i = 1; i <= requiredSeries; i++) {
+    if (!bySerie.get(i)?.length) return false;
+  }
+  return true;
+}
+
 function dayProgress(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
   const trackable = dia.ejercicios.filter((e) => e.es_medible);
   if (trackable.length === 0) return 100;
-  const done = trackable.filter((e) => latestWeights.has(e.id)).length;
+  const done = trackable.filter((e) => isExerciseDone(e)).length;
   return Math.round((done / trackable.length) * 100);
 }
 
@@ -84,7 +97,7 @@ function routineProgress(): number {
     semana.dias.forEach((dia) => {
       dia.ejercicios.forEach((e) => {
         total++;
-        if (latestWeights.has(e.id)) done++;
+        if (isExerciseDone(e)) done++;
       });
     });
   });
@@ -98,7 +111,7 @@ function weekProgress(weekIndex: number): number {
   semana.dias.forEach((dia) => {
     dia.ejercicios.forEach((e) => {
       total++;
-      if (latestWeights.has(e.id)) done++;
+      if (isExerciseDone(e)) done++;
     });
   });
   return total === 0 ? 0 : Math.round((done / total) * 100);
@@ -109,7 +122,7 @@ function currentWeekIndex(): number {
   routine!.semanas.forEach((semana, index) => {
     semana.dias.forEach((dia) => {
       dia.ejercicios.forEach((e) => {
-        if (latestWeights.has(e.id)) found = index;
+        if (isExerciseDone(e)) found = index;
       });
     });
   });
@@ -135,7 +148,7 @@ function renderWeek(weekIndex: number) {
       const pct = dayProgress(dia);
       const done = pct >= 100;
       const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
-      const doneCount = dia.ejercicios.filter((e) => e.es_medible && latestWeights.has(e.id)).length;
+      const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
       const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
 
       return `
@@ -241,7 +254,7 @@ function openDay(weekIndex: number, diaIndex: number) {
         <div class="weight-field-serie">
           <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
           <div class="weight-field-inputs">
-            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="kg" value="${today ? today.peso : ""}">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${today ? today.peso : ""}">
             <span class="weight-field-x">x</span>
             <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
           </div>
@@ -269,6 +282,16 @@ function openDay(weekIndex: number, diaIndex: number) {
     btn.addEventListener("click", () => {
       const exc = trackable[Number(btn.dataset.excIdx)];
       openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLSelectElement>(".weightUnitSelect").forEach((select) => {
+    select.addEventListener("change", () => {
+      const placeholder = UNIT_PLACEHOLDERS[select.value as WeightUnit];
+      select
+        .closest(".weight-field-group")
+        ?.querySelectorAll<HTMLInputElement>(".weightInput")
+        .forEach((input) => (input.placeholder = placeholder));
     });
   });
 

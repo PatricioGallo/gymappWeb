@@ -2291,8 +2291,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 @media (max-width: 640px) {
   .roadmap-task { flex-wrap: wrap; }
-  .roadmap-task-status { order: 3; }
-  .roadmap-task-actions { order: 4; }
+  .roadmap-task-status { order: 3; flex: 1 0 100%; margin-top: 6px; }
+  .roadmap-task-actions { order: 4; flex: 1 0 100%; }
 }
 
 .issue-severity-badge {
