@@ -680,7 +680,7 @@ async function main() {
   void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer);
 
   if (isPrivateForViewer) {
-    document.getElementById("profileBio")?.remove();
+    renderProfileBio(displayProfile.bio ?? null);
     document.getElementById("profileLinks")?.remove();
     renderPrivateNotice(nombre);
     return;
