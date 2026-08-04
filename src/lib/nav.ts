@@ -2,6 +2,8 @@ import { supabase } from "./supabaseClient";
 import { logVisitOncePerSession } from "../services/visits.service";
 import { setupNotificationBell } from "./notifications";
 import { setupHeaderSearch } from "./search";
+import { renderVerifiedBadge } from "./verifiedBadge";
+import { escapeHtml } from "./dom";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -53,11 +55,11 @@ async function populateUserMenuTrigger(): Promise<void> {
   const userId = sessionData.session?.user.id;
   if (!userId) return;
 
-  const { data } = await supabase.from("profiles_public").select("username, avatar_url, user_type").eq("id", userId).maybeSingle();
+  const { data } = await supabase.from("profiles_public").select("username, avatar_url, user_type, is_verified").eq("id", userId).maybeSingle();
   if (!data) return;
 
   if (avatarEl && data.avatar_url) avatarEl.src = data.avatar_url;
-  if (usernameEl) usernameEl.textContent = data.username ?? "";
+  if (usernameEl) usernameEl.innerHTML = `${escapeHtml(data.username ?? "")}${data.user_type ? renderVerifiedBadge(data.user_type, data.is_verified ?? false) : ""}`;
   if (data.user_type !== "admin" && data.user_type !== "colaborador") document.getElementById("adminLink")?.remove();
 
   setupNotificationBell();

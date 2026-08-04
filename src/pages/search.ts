@@ -2,6 +2,7 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { searchProfiles, type ProfileSearchResult } from "../services/search.service";
 import { USER_TYPE_BADGE, resultAvatar, resultFullName } from "../lib/search";
+import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
 setupNavToggle();
 setupRevealObserver();
@@ -32,7 +33,7 @@ function renderList(results: ProfileSearchResult[], query: string) {
     <a class="search-page-item" href="profile.html?u=${encodeURIComponent(r.username)}">
       <img src="${escapeHtml(resultAvatar(r))}" alt="" class="search-page-avatar">
       <span class="search-page-body">
-        <p class="search-page-name">${escapeHtml(resultFullName(r))}</p>
+        <p class="search-page-name">${escapeHtml(resultFullName(r))}${renderVerifiedBadge(r.user_type, r.is_verified)}</p>
         <p class="search-page-meta">@${escapeHtml(r.username)}${r.nacionalidad ? ` · ${escapeHtml(r.nacionalidad)}` : ""}</p>
       </span>
       <span class="search-page-badge">${escapeHtml(USER_TYPE_BADGE[r.user_type] ?? r.user_type)}</span>

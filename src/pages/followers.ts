@@ -3,6 +3,7 @@ import { escapeHtml } from "../lib/dom";
 import { getProfile, getProfileByUsername, getProfileBasicByUsername, type Profile, type ProfileBasic } from "../services/profile.service";
 import { getFollowStatus, listFollowers, listFollowing, type FollowListRow, type FollowStatus } from "../services/follow.service";
 import { USER_TYPE_BADGE } from "../lib/search";
+import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
 setupNavToggle();
 setupRevealObserver();
@@ -95,7 +96,7 @@ async function main() {
       <a class="search-page-item" href="profile.html?u=${encodeURIComponent(r.username)}">
         <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-page-avatar">
         <span class="search-page-body">
-          <p class="search-page-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}</p>
+          <p class="search-page-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}${renderVerifiedBadge(r.userType, r.isVerified)}</p>
           <p class="search-page-meta">@${escapeHtml(r.username)}</p>
         </span>
         <span class="search-page-badge">${escapeHtml(USER_TYPE_BADGE[r.userType] ?? r.userType)}</span>

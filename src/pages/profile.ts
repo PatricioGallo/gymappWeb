@@ -19,6 +19,7 @@ import {
   type WeightLogEntry,
 } from "../services/profile.service";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
+import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 
 declare const Chart: any;
 
@@ -162,11 +163,17 @@ function initShare(username: string) {
 
 // ---------- Identidad, estadisticas, bio y enlaces ----------
 
-function renderProfileIdentity(username: string, nombre: string, apellido: string) {
+function renderProfileIdentity(username: string, nombre: string, apellido: string, userType: Profile["user_type"], isVerified: boolean) {
   const usernameEl = document.getElementById("profileUsername");
-  if (usernameEl) usernameEl.textContent = `@${username}`;
+  if (usernameEl) usernameEl.innerHTML = `@${escapeHtml(username)}${renderVerifiedBadge(userType, isVerified, 20)}`;
   const fullnameEl = document.getElementById("profileFullname");
   if (fullnameEl) fullnameEl.textContent = `${nombre} ${apellido}`.trim();
+  const roleEl = document.getElementById("profileRole");
+  if (roleEl) {
+    const label = getUserTypeLabel(userType, isVerified);
+    if (label) roleEl.textContent = label;
+    else roleEl.remove();
+  }
 }
 
 async function renderProfileStats(userId: string, username: string, canViewLists: boolean) {
@@ -658,7 +665,7 @@ async function main() {
   const isOwner = displayProfile.id === myId;
   const nombre = displayProfile.nombre ?? "Este usuario";
 
-  renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "");
+  renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "", displayProfile.user_type ?? "usuario", displayProfile.is_verified ?? false);
 
   if (!isOwner) {
     document.getElementById("avatarEditWrap")?.remove();

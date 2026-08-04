@@ -1717,6 +1717,7 @@ a { color: inherit; text-decoration: none; }
 
 .profile-username { font-size: clamp(18px, 5vw, 22px); margin: 0; font-weight: 800; display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
 .profile-fullname { margin: 4px 0 0; color: var(--text-muted); font-size: 14px; }
+.profile-role { margin: 2px 0 0; color: var(--text-muted); font-size: 11.5px; letter-spacing: 0.3px; opacity: 0.75; }
 
 .profile-stats { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 22px; margin-top: 14px; font-size: 12px; color: var(--text-muted); }
 .profile-stat strong { color: var(--text); font-weight: 800; margin-right: 4px; }
@@ -1740,6 +1741,15 @@ a.profile-stat:hover { color: var(--accent-2); }
   padding: 6px 12px;
   border-radius: 999px;
 }
+
+.verified-badge {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+  flex: none;
+}
+.verified-badge-blue { color: #3897f0; }
+.verified-badge-green { color: #22c55e; }
 
 .profile-bio { margin: 22px 0 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 
@@ -2137,10 +2147,10 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .admin-table-head,
 .admin-table-row {
   display: grid;
-  grid-template-columns: 2fr 0.8fr 0.7fr 0.9fr 1.1fr 0.8fr;
+  grid-template-columns: 2fr 0.8fr 0.7fr 0.9fr 1.1fr 1.5fr;
   gap: 10px;
   align-items: center;
-  min-width: 720px;
+  min-width: 780px;
 }
 
 .admin-table-head {
@@ -2163,6 +2173,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .admin-table-row-clickable { cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s ease; }
 .admin-table-row-clickable:hover { background: var(--surface-2); }
 .admin-table-row-clickable .admin-edit-btn { cursor: pointer; }
+
+.admin-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
 .admin-user-cell { display: flex; flex-direction: column; gap: 2px; }
 .admin-user-cell strong { font-size: 14px; }
