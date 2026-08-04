@@ -7,6 +7,7 @@ import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
+const UNIT_PLACEHOLDERS: Record<WeightUnit, string> = { kg: "kg", lb: "lb", bloques: "bl" };
 
 function unitOptionsMarkup(selected: WeightUnit): string {
   return (Object.keys(UNIT_LABELS) as WeightUnit[])
@@ -241,7 +242,7 @@ function openDay(weekIndex: number, diaIndex: number) {
         <div class="weight-field-serie">
           <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
           <div class="weight-field-inputs">
-            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="kg" value="${today ? today.peso : ""}">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${today ? today.peso : ""}">
             <span class="weight-field-x">x</span>
             <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
           </div>
@@ -269,6 +270,16 @@ function openDay(weekIndex: number, diaIndex: number) {
     btn.addEventListener("click", () => {
       const exc = trackable[Number(btn.dataset.excIdx)];
       openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLSelectElement>(".weightUnitSelect").forEach((select) => {
+    select.addEventListener("change", () => {
+      const placeholder = UNIT_PLACEHOLDERS[select.value as WeightUnit];
+      select
+        .closest(".weight-field-group")
+        ?.querySelectorAll<HTMLInputElement>(".weightInput")
+        .forEach((input) => (input.placeholder = placeholder));
     });
   });
 
