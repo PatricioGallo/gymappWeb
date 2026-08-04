@@ -22,15 +22,22 @@ export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
   resolved: "Resuelto",
 };
 
-export async function listIssueReports(): Promise<IssueReport[]> {
+export interface IssueReportWithReporter extends IssueReport {
+  reporterName: string | null;
+}
+
+export async function listIssueReports(): Promise<IssueReportWithReporter[]> {
   const { data, error } = await supabase
     .from("issue_reports")
-    .select("*")
+    .select("*, profiles ( username, nombre, apellido )")
     .order("status", { ascending: true })
     .order("severity", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row: any) => {
+    const { profiles, ...issue } = row;
+    return { ...issue, reporterName: profiles ? `${profiles.nombre} ${profiles.apellido} (@${profiles.username})` : null };
+  });
 }
 
 export function validateIssueReport(title: string): "title_short" | "title_long" | null {

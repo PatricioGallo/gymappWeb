@@ -8,6 +8,7 @@ const INLINE_RESULTS_LIMIT = 6;
 
 export const USER_TYPE_BADGE: Record<string, string> = {
   admin: "Admin",
+  colaborador: "Colaborador",
   gimnasio: "Gimnasio",
   entrenador: "Entrenador",
   usuario: "Gymbro",

@@ -4,10 +4,11 @@ import type { Enums } from "../types/database";
 
 export type UserType = Enums<"user_type">;
 
-export const USER_TYPE_OPTIONS: UserType[] = ["admin", "gimnasio", "entrenador", "usuario"];
+export const USER_TYPE_OPTIONS: UserType[] = ["admin", "colaborador", "gimnasio", "entrenador", "usuario"];
 
 export const USER_TYPE_LABELS: Record<UserType, string> = {
   admin: "Admin",
+  colaborador: "Colaborador",
   gimnasio: "Gimnasio",
   entrenador: "Entrenador",
   usuario: "Gymbro",
@@ -51,6 +52,13 @@ export interface AdminDailyVisit {
 
 export async function isCurrentUserAdmin(): Promise<boolean> {
   const { data, error } = await supabase.rpc("is_admin");
+  if (error) return false;
+  return Boolean(data);
+}
+
+/** true para admin o colaborador: quien puede entrar al panel de Administrar. */
+export async function isCurrentUserStaff(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_staff");
   if (error) return false;
   return Boolean(data);
 }
