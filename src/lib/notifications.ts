@@ -115,15 +115,26 @@ export function setupNotificationBell(): void {
     if (!loaded) void loadRecent();
   }
 
-  bellBtn.addEventListener("click", () => {
+  bellBtn.addEventListener("click", () => void handleBellClick());
+
+  async function handleBellClick() {
+    // Un click en la campana da por leidas todas las notificaciones, sea cual sea la vista.
+    unread = 0;
+    recent = recent.map((n) => ({ ...n, is_read: true }));
+    renderBadge();
+    renderList();
+    await markAllNotificationsRead().catch(() => {
+      // silencioso: si falla, el badge local ya quedo en 0; se resincroniza en el proximo poll
+    });
+
     // En mobile el dropdown no entra comodo: mandamos directo a la pagina completa.
     if (window.matchMedia(MOBILE_QUERY).matches) {
       window.location.href = "notifications.html";
       return;
     }
-    if (dropdown.hidden) openDropdown();
+    if (dropdown!.hidden) openDropdown();
     else closeDropdown();
-  });
+  }
 
   document.addEventListener("click", (e) => {
     if (dropdown.hidden) return;
