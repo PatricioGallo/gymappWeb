@@ -230,6 +230,7 @@ export type Database = {
           fecha_nacimiento: string
           id: string
           is_public: boolean
+          is_verified: boolean
           links: Json
           nacionalidad: string | null
           nombre: string
@@ -248,6 +249,7 @@ export type Database = {
           fecha_nacimiento: string
           id: string
           is_public?: boolean
+          is_verified?: boolean
           links?: Json
           nacionalidad?: string | null
           nombre: string
@@ -266,6 +268,7 @@ export type Database = {
           fecha_nacimiento?: string
           id?: string
           is_public?: boolean
+          is_verified?: boolean
           links?: Json
           nacionalidad?: string | null
           nombre?: string
@@ -678,6 +681,7 @@ export type Database = {
           fecha_nacimiento: string | null
           id: string | null
           is_public: boolean | null
+          is_verified: boolean | null
           links: Json | null
           nacionalidad: string | null
           nombre: string | null
@@ -691,6 +695,7 @@ export type Database = {
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
+          is_verified?: boolean | null
           links?: Json | null
           nacionalidad?: string | null
           nombre?: string | null
@@ -704,6 +709,7 @@ export type Database = {
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
+          is_verified?: boolean | null
           links?: Json | null
           nacionalidad?: string | null
           nombre?: string | null
@@ -731,6 +737,7 @@ export type Database = {
           email_confirmed: boolean
           fecha_nacimiento: string
           id: string
+          is_verified: boolean
           last_sign_in_at: string
           nacionalidad: string
           nombre: string
@@ -794,6 +801,7 @@ export type Database = {
           avatar_url: string
           followed_at: string
           id: string
+          is_verified: boolean
           nombre: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
@@ -811,6 +819,7 @@ export type Database = {
           avatar_url: string
           followed_at: string
           id: string
+          is_verified: boolean
           nombre: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
@@ -822,6 +831,7 @@ export type Database = {
           apellido: string
           avatar_url: string
           id: string
+          is_verified: boolean
           nacionalidad: string
           nombre: string
           score: number

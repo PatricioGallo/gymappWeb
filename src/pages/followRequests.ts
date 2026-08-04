@@ -1,6 +1,7 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { listFollowRequests, acceptFollowRequest, rejectFollowRequest, type FollowRequestRow } from "../services/follow.service";
+import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
 setupNavToggle();
 setupRevealObserver();
@@ -27,7 +28,7 @@ function renderList() {
         <a class="follow-request-user" href="profile.html?u=${encodeURIComponent(r.username)}">
           <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
           <span class="search-result-body">
-            <span class="search-result-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}</span>
+            <span class="search-result-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
             <span class="search-result-username">@${escapeHtml(r.username)}</span>
           </span>
         </a>

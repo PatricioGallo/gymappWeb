@@ -28,7 +28,11 @@ export interface AdminUserRow {
   last_sign_in_at: string | null;
   email_confirmed: boolean;
   routines_count: number;
+  is_verified: boolean;
 }
+
+/** Roles donde la tilde es una eleccion del admin (papeleria / cuenta famosa); en los demas roles es obligatoria u obligatoriamente ausente. */
+export const CONFIGURABLE_VERIFIED_TYPES: UserType[] = ["entrenador", "usuario"];
 
 export interface AdminSiteStats {
   total_users: number;
@@ -88,6 +92,7 @@ export interface AdminEditableUserFields {
   fecha_nacimiento?: string;
   nacionalidad?: string;
   user_type?: UserType;
+  is_verified?: boolean;
 }
 
 export async function updateUserAsAdmin(userId: string, fields: AdminEditableUserFields): Promise<{ error?: string }> {

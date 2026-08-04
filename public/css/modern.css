@@ -1741,6 +1741,15 @@ a.profile-stat:hover { color: var(--accent-2); }
   border-radius: 999px;
 }
 
+.verified-badge {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+  flex: none;
+}
+.verified-badge-blue { color: #3897f0; }
+.verified-badge-green { color: #22c55e; }
+
 .profile-bio { margin: 22px 0 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 
 .profile-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }

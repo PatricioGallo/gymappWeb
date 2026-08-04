@@ -1,5 +1,6 @@
 import { escapeHtml } from "./dom";
 import { searchProfiles, type ProfileSearchResult } from "../services/search.service";
+import { renderVerifiedBadge } from "./verifiedBadge";
 
 // Mismo breakpoint que .user-menu-toggle/.notif-dropdown en modern.css (860px).
 const MOBILE_QUERY = "(max-width: 859px)";
@@ -48,7 +49,7 @@ export function setupHeaderSearch(): void {
         <a class="search-result-item" href="profile.html?u=${encodeURIComponent(r.username)}">
           <img src="${escapeHtml(resultAvatar(r))}" alt="" class="search-result-avatar">
           <span class="search-result-body">
-            <span class="search-result-name">${escapeHtml(resultFullName(r))}</span>
+            <span class="search-result-name">${escapeHtml(resultFullName(r))}${renderVerifiedBadge(r.user_type, r.is_verified)}</span>
             <span class="search-result-username">@${escapeHtml(r.username)} · ${escapeHtml(USER_TYPE_BADGE[r.user_type] ?? r.user_type)}</span>
           </span>
         </a>

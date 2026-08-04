@@ -16,6 +16,8 @@ export interface FollowRequestRow {
   nombre: string;
   apellido: string;
   avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
   createdAt: string;
 }
 
@@ -26,6 +28,7 @@ export interface FollowListRow {
   apellido: string;
   avatarUrl: string | null;
   userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
   followedAt: string;
 }
 
@@ -55,6 +58,7 @@ export async function listFollowers(userId: string, search = ""): Promise<Follow
     apellido: r.apellido ?? "",
     avatarUrl: r.avatar_url,
     userType: r.user_type,
+    isVerified: r.is_verified,
     followedAt: r.followed_at,
   }));
 }
@@ -69,6 +73,7 @@ export async function listFollowing(userId: string, search = ""): Promise<Follow
     apellido: r.apellido ?? "",
     avatarUrl: r.avatar_url,
     userType: r.user_type,
+    isVerified: r.is_verified,
     followedAt: r.followed_at,
   }));
 }
@@ -110,7 +115,7 @@ export async function listFollowRequests(userId: string): Promise<FollowRequestR
   const followerIds = [...new Set(rows.map((r) => r.follower_id))];
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles_public")
-    .select("id, username, nombre, apellido, avatar_url")
+    .select("id, username, nombre, apellido, avatar_url, user_type, is_verified")
     .in("id", followerIds);
   if (profilesError) throw profilesError;
 
@@ -119,7 +124,7 @@ export async function listFollowRequests(userId: string): Promise<FollowRequestR
   return rows
     .map((r) => {
       const p = profileById.get(r.follower_id);
-      if (!p) return null;
+      if (!p || !p.user_type) return null;
       return {
         id: r.id,
         followerId: r.follower_id,
@@ -127,6 +132,8 @@ export async function listFollowRequests(userId: string): Promise<FollowRequestR
         nombre: p.nombre ?? "",
         apellido: p.apellido ?? "",
         avatarUrl: p.avatar_url,
+        userType: p.user_type,
+        isVerified: p.is_verified ?? false,
         createdAt: r.created_at,
       };
     })

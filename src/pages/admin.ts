@@ -11,9 +11,12 @@ import {
   updateUserAsAdmin,
   USER_TYPE_OPTIONS,
   USER_TYPE_LABELS,
+  CONFIGURABLE_VERIFIED_TYPES,
   type AdminUserRow,
   type AdminDailyVisit,
+  type UserType,
 } from "../services/admin.service";
+import { renderVerifiedBadge, getVerifiedBadgeColor } from "../lib/verifiedBadge";
 import {
   listExercisesAdmin,
   addExercise,
@@ -245,7 +248,7 @@ function renderUsersTab(filter: string) {
           (u) => `
         <div class="admin-table-row admin-table-row-clickable" data-id="${u.id}" title="Ver perfil de @${escapeHtml(u.username)}">
           <span class="admin-user-cell">
-            <strong>${escapeHtml(u.nombre)} ${escapeHtml(u.apellido)}</strong>
+            <strong>${escapeHtml(u.nombre)} ${escapeHtml(u.apellido)}${renderVerifiedBadge(u.user_type, u.is_verified)}</strong>
             <small>@${escapeHtml(u.username)} · ${escapeHtml(u.email)}</small>
           </span>
           <span class="profile-badge">${USER_TYPE_LABELS[u.user_type]}</span>
@@ -310,6 +313,7 @@ function openEditUserModal(userId: string) {
             ${USER_TYPE_OPTIONS.map((t) => `<option value="${t}" ${t === user.user_type ? "selected" : ""}>${USER_TYPE_LABELS[t]}</option>`).join("")}
           </select>
         </div>
+        <div class="field" id="editVerifiedField"></div>
 
         <div class="alert_message" id="editUserAlert"></div>
         <div class="modal-actions">
@@ -319,6 +323,34 @@ function openEditUserModal(userId: string) {
       </div>
     </div>
   `;
+
+  function renderVerifiedField(userType: UserType, checked: boolean) {
+    const field = document.getElementById("editVerifiedField");
+    if (!field) return;
+    if (!CONFIGURABLE_VERIFIED_TYPES.includes(userType)) {
+      const mandatoryColor = getVerifiedBadgeColor(userType, false);
+      field.innerHTML = mandatoryColor
+        ? `<p class="field-hint">Este rol tiene tilde ${mandatoryColor === "blue" ? "azul" : "verde"} obligatoria, no configurable.</p>`
+        : `<p class="field-hint">Este rol no tiene tilde de verificación.</p>`;
+      return;
+    }
+    const label =
+      userType === "entrenador" ? "Tilde verde: presentó la papelería que certifica su actividad." : "Tilde azul: cuenta reconocida/famosa.";
+    field.innerHTML = `
+      <div class="field-check">
+        <input type="checkbox" id="editVerified" ${checked ? "checked" : ""}>
+        <label for="editVerified">${escapeHtml(label)}</label>
+      </div>
+    `;
+  }
+
+  renderVerifiedField(user.user_type, user.is_verified);
+
+  document.getElementById("editRole")?.addEventListener("change", (e) => {
+    const userType = (e.target as HTMLSelectElement).value as UserType;
+    const currentChecked = (document.getElementById("editVerified") as HTMLInputElement | null)?.checked ?? user.is_verified;
+    renderVerifiedField(userType, currentChecked);
+  });
 
   document.getElementById("closeEditUser")?.addEventListener("click", () => {
     loaderBody.innerHTML = "";
@@ -334,6 +366,9 @@ function openEditUserModal(userId: string) {
     const fechaNacimiento = (document.getElementById("editBirthdate") as HTMLInputElement).value;
     const nacionalidad = (document.getElementById("editNationality") as HTMLSelectElement).value;
     const userType = (document.getElementById("editRole") as HTMLSelectElement).value as AdminUserRow["user_type"];
+    const isVerified = CONFIGURABLE_VERIFIED_TYPES.includes(userType)
+      ? ((document.getElementById("editVerified") as HTMLInputElement | null)?.checked ?? false)
+      : user.is_verified;
 
     if (nombre.length < 2 || apellido.length < 2) {
       alertBox.innerHTML = "<p>Nombre o apellido inválidos.</p>";
@@ -351,6 +386,7 @@ function openEditUserModal(userId: string) {
       fecha_nacimiento: fechaNacimiento,
       nacionalidad,
       user_type: userType,
+      is_verified: isVerified,
     });
 
     if (error) {
@@ -358,7 +394,7 @@ function openEditUserModal(userId: string) {
       return;
     }
 
-    Object.assign(user, { nombre, apellido, username, fecha_nacimiento: fechaNacimiento, nacionalidad, user_type: userType });
+    Object.assign(user, { nombre, apellido, username, fecha_nacimiento: fechaNacimiento, nacionalidad, user_type: userType, is_verified: isVerified });
     loaderBody.innerHTML = "";
     renderUsersTab((document.getElementById("userSearch") as HTMLInputElement | null)?.value ?? "");
   });
