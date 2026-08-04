@@ -19,7 +19,7 @@ import {
   type WeightLogEntry,
 } from "../services/profile.service";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
-import { renderVerifiedBadge } from "../lib/verifiedBadge";
+import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 
 declare const Chart: any;
 
@@ -168,6 +168,12 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   if (usernameEl) usernameEl.innerHTML = `@${escapeHtml(username)}${renderVerifiedBadge(userType, isVerified, 20)}`;
   const fullnameEl = document.getElementById("profileFullname");
   if (fullnameEl) fullnameEl.textContent = `${nombre} ${apellido}`.trim();
+  const roleEl = document.getElementById("profileRole");
+  if (roleEl) {
+    const label = getUserTypeLabel(userType, isVerified);
+    if (label) roleEl.textContent = label;
+    else roleEl.remove();
+  }
 }
 
 async function renderProfileStats(userId: string, username: string, canViewLists: boolean) {

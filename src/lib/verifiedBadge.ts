@@ -18,6 +18,21 @@ export function getVerifiedBadgeColor(userType: UserType, isVerified: boolean): 
   return null;
 }
 
+/**
+ * Etiqueta minimalista de rol para debajo del nombre en el perfil.
+ * admin/colaborador: rol tal cual. gimnasio: "Gimnasio verificado".
+ * entrenador: "Entrenador verificado" solo con tilde verde, sino "Entrenador".
+ * usuario: nada, salvo "Cuenta oficial" si tiene tilde azul.
+ */
+export function getUserTypeLabel(userType: UserType, isVerified: boolean): string | null {
+  if (userType === "admin") return "Administrador";
+  if (userType === "colaborador") return "Colaborador";
+  if (userType === "gimnasio") return "Gimnasio verificado";
+  if (userType === "entrenador") return isVerified ? "Entrenador verificado" : "Entrenador";
+  if (userType === "usuario") return isVerified ? "Cuenta oficial" : null;
+  return null;
+}
+
 const BADGE_TITLES: Record<BadgeColor, string> = {
   blue: "Cuenta verificada",
   green: "Autenticidad certificada por Gym Social",
