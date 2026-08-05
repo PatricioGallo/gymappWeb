@@ -61,6 +61,13 @@ import {
   type IssueStatus,
 } from "../services/issue.service";
 import { adminSendNotification } from "../services/notification.service";
+import {
+  listContactMessages,
+  markContactMessageRead,
+  deleteContactMessage,
+  getUnreadContactMessageCount,
+  type ContactMessage,
+} from "../services/contact.service";
 
 declare const Chart: any;
 
@@ -90,6 +97,9 @@ let roadmapLoaded = false;
 let issueReports: IssueReportWithReporter[] = [];
 let issuesLoaded = false;
 
+let contactMessages: ContactMessage[] = [];
+let messagesLoaded = false;
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -109,6 +119,7 @@ function setupTabs() {
   const exercisesTab = document.getElementById("exercisesTab")!;
   const roadmapTab = document.getElementById("roadmapTab")!;
   const issuesTab = document.getElementById("issuesTab")!;
+  const messagesTab = document.getElementById("messagesTab")!;
   const notifsTab = document.getElementById("notifsTab")!;
   if (!tabsWrap) return;
 
@@ -121,6 +132,7 @@ function setupTabs() {
       exercisesTab.hidden = tab !== "exercises";
       roadmapTab.hidden = tab !== "roadmap";
       issuesTab.hidden = tab !== "issues";
+      messagesTab.hidden = tab !== "messages";
       notifsTab.hidden = tab !== "notifs";
       if (tab === "stats" && !statsLoaded) {
         statsLoaded = true;
@@ -141,6 +153,10 @@ function setupTabs() {
       if (tab === "issues" && !issuesLoaded) {
         issuesLoaded = true;
         await loadIssues();
+      }
+      if (tab === "messages" && !messagesLoaded) {
+        messagesLoaded = true;
+        await loadContactMessages();
       }
       if (tab === "notifs") {
         if (!usersLoaded) {
@@ -1178,6 +1194,123 @@ function openDeleteIssueModal(issue: IssueReport) {
   });
 }
 
+// ---------- Mensajes de contacto ----------
+
+function setMessagesDot(hasUnread: boolean) {
+  const tabDot = document.getElementById("messagesTabDot");
+  if (tabDot) tabDot.hidden = !hasUnread;
+  const navDot = document.getElementById("adminLinkDot");
+  if (navDot) navDot.hidden = !hasUnread;
+}
+
+async function refreshMessagesDot() {
+  try {
+    const unread = await getUnreadContactMessageCount();
+    setMessagesDot(unread > 0);
+  } catch {
+    // silencioso: el punto simplemente no se actualiza en este ciclo
+  }
+}
+
+async function loadContactMessages() {
+  const messagesTab = document.getElementById("messagesTab")!;
+  messagesTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando mensajes...</p></div>`;
+  contactMessages = await listContactMessages();
+  renderMessagesTab();
+}
+
+function renderMessagesTab() {
+  const messagesTab = document.getElementById("messagesTab")!;
+  const unreadCount = contactMessages.filter((m) => !m.is_read).length;
+  setMessagesDot(unreadCount > 0);
+
+  messagesTab.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div>
+        <h3>Mensajes de contacto</h3>
+        <p class="chart-sub">${unreadCount} sin leer de ${contactMessages.length} en total.</p>
+      </div>
+    </div>
+    <div class="roadmap-tasks">
+      ${
+        contactMessages
+          .map(
+            (m) => `
+        <div class="roadmap-task roadmap-status-${m.is_read ? "done" : "pending"}" data-id="${m.id}">
+          <div class="roadmap-task-body">
+            <span class="roadmap-task-title">${escapeHtml(m.name)} · ${escapeHtml(m.email)}</span>
+            <p class="roadmap-task-desc">${escapeHtml(m.message)}</p>
+            <p class="roadmap-task-desc"><strong>Recibido:</strong> ${formatDateTime(m.created_at)}</p>
+          </div>
+          <div class="roadmap-task-actions">
+            <button type="button" class="message-toggle-read" data-id="${m.id}">${m.is_read ? "Marcar no leído" : "Marcar leído"}</button>
+            <button type="button" class="message-delete" data-id="${m.id}">Eliminar</button>
+          </div>
+        </div>
+      `
+          )
+          .join("") || `<p class="exc-pick-empty">Todavía no llegó ningún mensaje.</p>`
+      }
+    </div>
+  `;
+
+  messagesTab.querySelectorAll<HTMLButtonElement>(".message-toggle-read").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const msg = contactMessages.find((m) => m.id === btn.dataset.id);
+      if (!msg) return;
+      const newRead = !msg.is_read;
+      btn.disabled = true;
+      const { error } = await markContactMessageRead(msg.id, newRead);
+      btn.disabled = false;
+      if (error) return;
+      msg.is_read = newRead;
+      renderMessagesTab();
+    });
+  });
+
+  messagesTab.querySelectorAll<HTMLButtonElement>(".message-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const msg = contactMessages.find((m) => m.id === btn.dataset.id);
+      if (msg) openDeleteMessageModal(msg);
+    });
+  });
+}
+
+function openDeleteMessageModal(msg: ContactMessage) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar este mensaje?</h2>
+        <p class="subtitle">De ${escapeHtml(msg.name)} (${escapeHtml(msg.email)}). Esta acción no se puede deshacer.</p>
+        <div class="alert_message" id="messageDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="messageDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="messageDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("messageDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("messageDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("messageDeleteAlert")!;
+    const { error } = await deleteContactMessage(msg.id);
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    contactMessages = contactMessages.filter((m) => m.id !== msg.id);
+    loaderBody.innerHTML = "";
+    renderMessagesTab();
+  });
+}
+
 // ---------- Notificaciones ----------
 
 function renderNotifsTab() {
@@ -1247,3 +1380,4 @@ function renderNotifsTab() {
 setupTabs();
 statsLoaded = true;
 await renderStatsTab();
+void refreshMessagesDot();

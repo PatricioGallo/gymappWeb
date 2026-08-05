@@ -4,6 +4,8 @@ import { setupNotificationBell } from "./notifications";
 import { setupHeaderSearch } from "./search";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { escapeHtml } from "./dom";
+import { getPendingFollowRequestCount } from "../services/follow.service";
+import { getUnreadContactMessageCount } from "../services/contact.service";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -60,10 +62,40 @@ async function populateUserMenuTrigger(): Promise<void> {
 
   if (avatarEl && data.avatar_url) avatarEl.src = data.avatar_url;
   if (usernameEl) usernameEl.innerHTML = `${escapeHtml(data.username ?? "")}${data.user_type ? renderVerifiedBadge(data.user_type, data.is_verified ?? false) : ""}`;
-  if (data.user_type !== "admin" && data.user_type !== "colaborador") document.getElementById("adminLink")?.remove();
+  if (data.user_type !== "admin" && data.user_type !== "colaborador") {
+    document.getElementById("adminLink")?.remove();
+  } else {
+    void refreshAdminMessagesDot();
+  }
 
   setupNotificationBell();
   void applyZoomPreference(userId);
+  void refreshFollowRequestsBadge(userId);
+}
+
+/** Punto naranja junto a "Administrar" si hay mensajes de contacto sin leer. Solo se llama para staff. */
+async function refreshAdminMessagesDot(): Promise<void> {
+  const dot = document.getElementById("adminLinkDot");
+  if (!dot) return;
+  try {
+    const unread = await getUnreadContactMessageCount();
+    dot.hidden = unread <= 0;
+  } catch {
+    // silencioso: el punto simplemente no se actualiza en este ciclo
+  }
+}
+
+/** Numero de solicitudes de seguimiento pendientes junto al link del nav. No-op si el link no esta en esta pagina. */
+async function refreshFollowRequestsBadge(userId: string): Promise<void> {
+  const badge = document.getElementById("followReqBadge");
+  if (!badge) return;
+  try {
+    const count = await getPendingFollowRequestCount(userId);
+    badge.hidden = count <= 0;
+    badge.textContent = count > 9 ? "9+" : String(count);
+  } catch {
+    // silencioso: el badge simplemente no se actualiza en este ciclo
+  }
 }
 
 // El viewport de todas las paginas viene con el zoom deshabilitado por defecto
