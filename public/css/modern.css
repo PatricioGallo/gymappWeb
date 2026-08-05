@@ -626,6 +626,17 @@ a { color: inherit; text-decoration: none; }
 
 /* ---------- Pagina completa de busqueda ---------- */
 
+/* El buscador es la accion principal de esta pagina: lo acercamos al titulo
+   en vez de dejarle el espaciado generico de hero+seccion (pensado para
+   paginas de contenido largo, no para un buscador). */
+.search-page-hero { padding-bottom: 4px; }
+.search-page-features { padding-top: 12px; }
+
+@media (max-width: 639px) {
+  .search-page-hero { padding-top: 28px; padding-bottom: 0; }
+  .search-page-features { padding-top: 8px; }
+}
+
 .search-page-form { display: flex; gap: 10px; margin-bottom: 20px; }
 .search-page-form .header-search-input { margin-bottom: 0; }
 
