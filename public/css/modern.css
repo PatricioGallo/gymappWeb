@@ -2799,6 +2799,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .weight-field-group-head select.mini-input { width: 92px; flex-shrink: 0; padding-right: 4px; }
 
+.weight-menu-wrap { position: relative; flex-shrink: 0; }
+.weight-menu-panel { left: auto; right: 0; }
+.profile-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.profile-menu-item:disabled:hover { background: none; }
+
 .back-link {
   display: flex;
   align-items: center;

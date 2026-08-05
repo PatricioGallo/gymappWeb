@@ -18,6 +18,18 @@ export async function insertWeightLogs(userId: string, entries: NewWeightLog[]):
   if (error) throw error;
 }
 
+// Borra unicamente la carga de hoy para este ejercicio (todas sus series), sin tocar
+// registros de dias anteriores: "deshacer" lo que se acaba de guardar por error.
+export async function deleteTodayWeightLog(userId: string, routineExerciseId: string, fecha: string): Promise<void> {
+  const { error } = await supabase
+    .from("weight_logs")
+    .delete()
+    .eq("user_id", userId)
+    .eq("routine_exercise_id", routineExerciseId)
+    .eq("fecha", fecha);
+  if (error) throw error;
+}
+
 export interface LatestWeightEntry {
   peso: number;
   fecha: string;
