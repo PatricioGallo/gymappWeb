@@ -2777,7 +2777,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .weight-field-label:hover, .weight-field-label:focus-visible { color: var(--accent-2); text-decoration: underline; }
 .weight-field-sub { font-weight: 500; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
-.weight-field-group { padding: 14px 0; border-top: 1px solid var(--border); }
+.weight-field-group { padding: 14px 0; border-top: 2px solid var(--border); }
 .weight-field-group:first-of-type { border-top: none; padding-top: 0; }
 .weight-field-group-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: nowrap; }
 .weight-field-group-head .weight-field-label { flex: 1; min-width: 0; }
@@ -2797,7 +2797,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .weight-field-inputs input { width: 62px; }
 .weight-field-x { font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
 
-.weight-field-group-head select.mini-input { width: 92px; flex-shrink: 0; padding-right: 4px; }
+.weight-field-group-head select.mini-input { width: 84px; flex-shrink: 0; align-self: center; padding: 9px 6px 7px; font-size: 13px; line-height: 1; }
 
 .weight-menu-wrap { position: relative; flex-shrink: 0; }
 .weight-menu-panel { left: auto; right: 0; }
