@@ -31,7 +31,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </button>
           <div class="header-search-panel" id="headerSearchPanel" hidden>
-            <input type="search" id="headerSearchInput" class="header-search-input" placeholder="Buscar usuarios, entrenadores o gimnasios...">
+            <input type="search" id="headerSearchInput" class="header-search-input" placeholder="Buscar usuarios, entrenadores o gimnasios..." autocomplete="off">
             <div id="headerSearchResults"></div>
             <a href="search.html" class="notif-view-all" id="headerSearchViewAll" hidden>Ver todos los resultados</a>
           </div>
@@ -61,7 +61,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
+  <section class="page-hero search-page-hero">
     <div class="container">
       <span class="eyebrow">Buscar</span>
       <h1>Encontrá usuarios, entrenadores y gimnasios</h1>
@@ -69,10 +69,10 @@
     </div>
   </section>
 
-  <section class="features">
+  <section class="features search-page-features">
     <div class="container">
       <form class="search-page-form" id="searchPageForm">
-        <input type="search" id="searchPageInput" class="header-search-input" placeholder="Buscar usuarios, entrenadores o gimnasios...">
+        <input type="search" id="searchPageInput" class="header-search-input" placeholder="Buscar usuarios, entrenadores o gimnasios..." autocomplete="off">
       </form>
       <p class="chart-sub" id="searchPageSummary"></p>
       <div class="search-page-list" id="searchPageList"></div>

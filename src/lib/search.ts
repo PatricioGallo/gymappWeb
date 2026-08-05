@@ -1,6 +1,7 @@
 import { escapeHtml } from "./dom";
 import { searchProfiles, type ProfileSearchResult } from "../services/search.service";
 import { renderVerifiedBadge } from "./verifiedBadge";
+import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches, type RecentSearchEntry } from "./recentSearches";
 
 // Mismo breakpoint que .user-menu-toggle/.notif-dropdown en modern.css (860px).
 const MOBILE_QUERY = "(max-width: 859px)";
@@ -15,12 +16,33 @@ export const USER_TYPE_BADGE: Record<string, string> = {
   usuario: "Gymbro",
 };
 
-export function resultAvatar(r: ProfileSearchResult): string {
+export function resultAvatar(r: { avatar_url: string | null }): string {
   return r.avatar_url || "/images/avatars/default.svg";
 }
 
-export function resultFullName(r: ProfileSearchResult): string {
+export function resultFullName(r: { nombre: string; apellido: string }): string {
   return `${r.nombre} ${r.apellido}`.trim();
+}
+
+function resultBodyHtml(r: { username: string; nombre: string; apellido: string; user_type: ProfileSearchResult["user_type"]; is_verified: boolean }): string {
+  return `
+    <span class="search-result-body">
+      <span class="search-result-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.user_type, r.is_verified)}</span>
+      <span class="search-result-username">${escapeHtml(resultFullName(r))}</span>
+    </span>
+  `;
+}
+
+function toRecentEntry(r: ProfileSearchResult): RecentSearchEntry {
+  return {
+    id: r.id,
+    username: r.username,
+    nombre: r.nombre,
+    apellido: r.apellido,
+    avatar_url: r.avatar_url,
+    user_type: r.user_type,
+    is_verified: r.is_verified,
+  };
 }
 
 /** Buscador del header (lupa junto al brand). No-op en paginas sin el markup. */
@@ -35,10 +57,54 @@ export function setupHeaderSearch(): void {
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let requestId = 0;
 
-  function renderResults(list: ProfileSearchResult[], query: string) {
-    if (query.trim().length < 2) {
+  function renderRecents() {
+    const recents = getRecentSearches();
+    if (recents.length === 0) {
       results!.innerHTML = `<p class="notif-empty">Escribí al menos 2 letras para buscar.</p>`;
       viewAll!.hidden = true;
+      return;
+    }
+
+    results!.innerHTML = `
+      <div class="search-recent-header">
+        <span>Recientes</span>
+        <button type="button" class="search-recent-clear">Borrar todo</button>
+      </div>
+      ${recents
+        .map(
+          (r) => `
+        <div class="search-result-item search-recent-item" data-username="${encodeURIComponent(r.username)}">
+          <img src="${escapeHtml(resultAvatar(r))}" alt="" class="search-result-avatar">
+          ${resultBodyHtml(r)}
+          <button type="button" class="search-recent-remove" data-id="${escapeHtml(r.id)}" aria-label="Quitar de recientes" title="Quitar de recientes">×</button>
+        </div>
+      `
+        )
+        .join("")}
+    `;
+    viewAll!.hidden = true;
+
+    results!.querySelectorAll<HTMLDivElement>(".search-recent-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        window.location.href = `profile.html?u=${item.dataset.username}`;
+      });
+    });
+    results!.querySelectorAll<HTMLButtonElement>(".search-recent-remove").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeRecentSearch(btn.dataset.id!);
+        renderRecents();
+      });
+    });
+    results!.querySelector(".search-recent-clear")?.addEventListener("click", () => {
+      clearRecentSearches();
+      renderRecents();
+    });
+  }
+
+  function renderResults(list: ProfileSearchResult[], query: string) {
+    if (query.trim().length < 2) {
+      renderRecents();
       return;
     }
 
@@ -46,16 +112,20 @@ export function setupHeaderSearch(): void {
       list
         .map(
           (r) => `
-        <a class="search-result-item" href="profile.html?u=${encodeURIComponent(r.username)}">
+        <a class="search-result-item" href="profile.html?u=${encodeURIComponent(r.username)}" data-id="${escapeHtml(r.id)}">
           <img src="${escapeHtml(resultAvatar(r))}" alt="" class="search-result-avatar">
-          <span class="search-result-body">
-            <span class="search-result-name">${escapeHtml(resultFullName(r))}${renderVerifiedBadge(r.user_type, r.is_verified)}</span>
-            <span class="search-result-username">@${escapeHtml(r.username)} · ${escapeHtml(USER_TYPE_BADGE[r.user_type] ?? r.user_type)}</span>
-          </span>
+          ${resultBodyHtml(r)}
         </a>
       `
         )
         .join("") || `<p class="notif-empty">No encontramos resultados para "${escapeHtml(query)}".</p>`;
+
+    results!.querySelectorAll<HTMLAnchorElement>(".search-result-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const r = list.find((item) => item.id === el.dataset.id);
+        if (r) addRecentSearch(toRecentEntry(r));
+      });
+    });
 
     viewAll!.href = `search.html?q=${encodeURIComponent(query)}`;
     viewAll!.hidden = false;
