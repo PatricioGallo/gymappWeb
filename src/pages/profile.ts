@@ -121,18 +121,24 @@ function lastTrainingLabel(logs: WeightLogEntry[]): string {
 function initAvatar(profile: Profile) {
   const avatarImg = document.getElementById("avatarImg") as HTMLImageElement | null;
   const avatarInput = document.getElementById("avatarInput") as HTMLInputElement | null;
+  const uploadingOverlay = document.getElementById("avatarUploading");
   if (!avatarInput || !avatarImg) return;
 
   avatarInput.addEventListener("change", async () => {
     const file = avatarInput.files?.[0];
     if (!file) return;
-    const { url, error } = await uploadAvatar(profile.id, file);
-    if (error) {
-      alert(error);
-      avatarInput.value = "";
-      return;
+    if (uploadingOverlay) uploadingOverlay.hidden = false;
+    try {
+      const { url, error } = await uploadAvatar(profile.id, file);
+      if (error) {
+        alert(error);
+        avatarInput.value = "";
+        return;
+      }
+      if (url) avatarImg.src = url;
+    } finally {
+      if (uploadingOverlay) uploadingOverlay.hidden = true;
     }
-    if (url) avatarImg.src = url;
   });
 }
 
