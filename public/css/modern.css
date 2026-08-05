@@ -3132,6 +3132,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-pick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 
 .exc-pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 999px;

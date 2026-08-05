@@ -119,6 +119,7 @@ let userReports: UserReportWithNames[] = [];
 let userReportsLoaded = false;
 let messagesSubTab: "contact" | "errors" | "users" = "contact";
 let messagesTabInitialized = false;
+let messagesSearchTerm = "";
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
@@ -1224,6 +1225,11 @@ function setMessagesDot(hasUnread: boolean) {
   if (navDot) navDot.hidden = !hasUnread;
 }
 
+function setChipDot(id: string, hasUnread: boolean) {
+  const dot = document.getElementById(id);
+  if (dot) dot.hidden = !hasUnread;
+}
+
 async function refreshMessagesDot() {
   try {
     const [contactUnread, errorUnread, userUnread] = await Promise.all([
@@ -1232,20 +1238,30 @@ async function refreshMessagesDot() {
       getUnreadUserReportCount(),
     ]);
     setMessagesDot(contactUnread + errorUnread + userUnread > 0);
+    setChipDot("msgDotContact", contactUnread > 0);
+    setChipDot("msgDotErrors", errorUnread > 0);
+    setChipDot("msgDotUsers", userUnread > 0);
   } catch {
     // silencioso: el punto simplemente no se actualiza en este ciclo
   }
 }
+
+const MESSAGES_SEARCH_PLACEHOLDER: Record<"contact" | "errors" | "users", string> = {
+  contact: "Buscar por nombre, mail o mensaje...",
+  errors: "Buscar por usuario, asunto o mensaje...",
+  users: "Buscar por usuario o motivo...",
+};
 
 async function renderMessagesTab() {
   const messagesTab = document.getElementById("messagesTab")!;
 
   messagesTab.innerHTML = `
     <div class="exc-pick-chips" id="messagesSubTabs">
-      <button type="button" class="exc-pick-chip ${messagesSubTab === "contact" ? "active" : ""}" data-sub="contact">Contacto</button>
-      <button type="button" class="exc-pick-chip ${messagesSubTab === "errors" ? "active" : ""}" data-sub="errors">Reporte de errores</button>
-      <button type="button" class="exc-pick-chip ${messagesSubTab === "users" ? "active" : ""}" data-sub="users">Reporte de usuarios</button>
+      <button type="button" class="exc-pick-chip ${messagesSubTab === "contact" ? "active" : ""}" data-sub="contact">Contacto<span class="nav-dot" id="msgDotContact" hidden></span></button>
+      <button type="button" class="exc-pick-chip ${messagesSubTab === "errors" ? "active" : ""}" data-sub="errors">Reporte de errores<span class="nav-dot" id="msgDotErrors" hidden></span></button>
+      <button type="button" class="exc-pick-chip ${messagesSubTab === "users" ? "active" : ""}" data-sub="users">Reporte de usuarios<span class="nav-dot" id="msgDotUsers" hidden></span></button>
     </div>
+    <input type="search" id="messagesSearch" class="exc-picker-search admin-search" placeholder="${MESSAGES_SEARCH_PLACEHOLDER[messagesSubTab]}" value="${escapeHtml(messagesSearchTerm)}">
     <div id="messagesResults"></div>
   `;
 
@@ -1253,7 +1269,13 @@ async function renderMessagesTab() {
     const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
     if (!btn) return;
     messagesSubTab = btn.dataset.sub as "contact" | "errors" | "users";
+    messagesSearchTerm = "";
     void renderMessagesTab();
+  });
+
+  document.getElementById("messagesSearch")?.addEventListener("input", (event) => {
+    messagesSearchTerm = (event.target as HTMLInputElement).value;
+    void renderMessagesResults();
   });
 
   await renderMessagesResults();
@@ -1291,6 +1313,8 @@ async function renderMessagesResults() {
 
 function renderContactList(resultsEl: HTMLElement) {
   const unreadCount = contactMessages.filter((m) => !m.is_read).length;
+  const term = messagesSearchTerm.trim().toLowerCase();
+  const filtered = term ? contactMessages.filter((m) => [m.name, m.email, m.message].some((f) => f.toLowerCase().includes(term))) : contactMessages;
 
   resultsEl.innerHTML = `
     <div class="exc-admin-toolbar">
@@ -1301,7 +1325,7 @@ function renderContactList(resultsEl: HTMLElement) {
     </div>
     <div class="roadmap-tasks">
       ${
-        contactMessages
+        filtered
           .map(
             (m) => `
         <div class="roadmap-task roadmap-status-${m.is_read ? "done" : "pending"}" data-id="${m.id}">
@@ -1318,7 +1342,7 @@ function renderContactList(resultsEl: HTMLElement) {
         </div>
       `
           )
-          .join("") || `<p class="exc-pick-empty">Todavía no llegó ningún mensaje.</p>`
+          .join("") || `<p class="exc-pick-empty">${term ? "No encontramos mensajes con ese criterio." : "Todavía no llegó ningún mensaje."}</p>`
       }
     </div>
   `;
@@ -1383,6 +1407,10 @@ function openDeleteMessageModal(msg: ContactMessageWithReader) {
 
 function renderErrorReportsList(resultsEl: HTMLElement) {
   const unreadCount = errorReports.filter((r) => !r.is_read).length;
+  const term = messagesSearchTerm.trim().toLowerCase();
+  const filtered = term
+    ? errorReports.filter((r) => [r.subject, r.message ?? "", r.reporterName ?? "", r.page ?? ""].some((f) => f.toLowerCase().includes(term)))
+    : errorReports;
 
   resultsEl.innerHTML = `
     <div class="exc-admin-toolbar">
@@ -1393,7 +1421,7 @@ function renderErrorReportsList(resultsEl: HTMLElement) {
     </div>
     <div class="roadmap-tasks">
       ${
-        errorReports
+        filtered
           .map(
             (r) => `
         <div class="roadmap-task roadmap-status-${r.is_read ? "done" : "pending"}" data-id="${r.id}">
@@ -1412,7 +1440,7 @@ function renderErrorReportsList(resultsEl: HTMLElement) {
         </div>
       `
           )
-          .join("") || `<p class="exc-pick-empty">Todavía no llegó ningún reporte de error.</p>`
+          .join("") || `<p class="exc-pick-empty">${term ? "No encontramos reportes con ese criterio." : "Todavía no llegó ningún reporte de error."}</p>`
       }
     </div>
   `;
@@ -1477,6 +1505,10 @@ function openDeleteErrorReportModal(report: ErrorReportWithReporter) {
 
 function renderUserReportsList(resultsEl: HTMLElement) {
   const unreadCount = userReports.filter((r) => !r.is_read).length;
+  const term = messagesSearchTerm.trim().toLowerCase();
+  const filtered = term
+    ? userReports.filter((r) => [r.reporterName ?? "", r.reportedName ?? "", r.reason].some((f) => f.toLowerCase().includes(term)))
+    : userReports;
 
   resultsEl.innerHTML = `
     <div class="exc-admin-toolbar">
@@ -1487,7 +1519,7 @@ function renderUserReportsList(resultsEl: HTMLElement) {
     </div>
     <div class="roadmap-tasks">
       ${
-        userReports
+        filtered
           .map(
             (r) => `
         <div class="roadmap-task roadmap-status-${r.is_read ? "done" : "pending"}" data-id="${r.id}">
@@ -1504,7 +1536,7 @@ function renderUserReportsList(resultsEl: HTMLElement) {
         </div>
       `
           )
-          .join("") || `<p class="exc-pick-empty">Todavía no llegó ningún reporte de usuario.</p>`
+          .join("") || `<p class="exc-pick-empty">${term ? "No encontramos reportes con ese criterio." : "Todavía no llegó ningún reporte de usuario."}</p>`
       }
     </div>
   `;
