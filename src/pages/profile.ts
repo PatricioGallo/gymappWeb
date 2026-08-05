@@ -20,6 +20,8 @@ import {
 } from "../services/profile.service";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
 import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
+import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
+import { submitUserReport, validateUserReport } from "../services/userReport.service";
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 
 declare const Chart: any;
@@ -311,6 +313,8 @@ function profileMenuIcon(path: string): string {
 const SHARE_ICON = profileMenuIcon(`<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/>`);
 const SETTINGS_ICON = profileMenuIcon(`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>`);
 const BLOCK_ICON = profileMenuIcon(`<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>`);
+const REPORT_ICON = profileMenuIcon(`<path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>`);
+const REPORT_USER_ICON = profileMenuIcon(`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>`);
 
 function renderProfileMenu(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus) {
   const wrap = document.getElementById("profileMenuWrap");
@@ -318,12 +322,14 @@ function renderProfileMenu(targetId: string, username: string, ownerView: boolea
   if (!wrap || !panel) return;
 
   const shareItem = `<button class="profile-menu-item" id="menuShareBtn" type="button">${SHARE_ICON}Compartir perfil</button>`;
+  const reportItem = `<button class="profile-menu-item" id="menuReportBtn" type="button">${REPORT_ICON}Reportar un error</button>`;
+  const reportUserItem = `<button class="profile-menu-item profile-menu-item-danger" id="menuReportUserBtn" type="button">${REPORT_USER_ICON}Reportar usuario</button>`;
 
   if (ownerView) {
-    panel.innerHTML = `${shareItem}<a class="profile-menu-item" href="/pages/settings.html">${SETTINGS_ICON}Configuración</a>`;
+    panel.innerHTML = `${shareItem}<a class="profile-menu-item" href="/pages/settings.html">${SETTINGS_ICON}Configuración</a>${reportItem}`;
   } else if (viewerLoggedIn) {
     const blockLabel = blockStatus === "blocked_by_me" ? "Desbloquear usuario" : "Bloquear usuario";
-    panel.innerHTML = `${shareItem}<button class="profile-menu-item profile-menu-item-danger" id="menuBlockBtn" type="button">${BLOCK_ICON}${blockLabel}</button>`;
+    panel.innerHTML = `${shareItem}<button class="profile-menu-item profile-menu-item-danger" id="menuBlockBtn" type="button">${BLOCK_ICON}${blockLabel}</button>${reportUserItem}${reportItem}`;
   } else {
     panel.innerHTML = shareItem;
   }
@@ -340,10 +346,142 @@ function renderProfileMenu(targetId: string, username: string, ownerView: boolea
     }
   });
 
+  document.getElementById("menuReportBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    openReportErrorModal();
+  });
+
+  document.getElementById("menuReportUserBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    openReportUserModal(targetId, username);
+  });
+
   panel.querySelectorAll<HTMLAnchorElement>("a.profile-menu-item").forEach((a) => {
     a.addEventListener("click", () => {
       panel.hidden = true;
     });
+  });
+}
+
+function openReportErrorModal() {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody || !myId) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>Reportar un error</h2>
+        <p class="subtitle">Contanos qué encontraste, lo revisamos desde el panel de administración.</p>
+
+        <div class="field"><label for="reportSubject">Asunto</label><input type="text" id="reportSubject" placeholder="Ej: El botón de guardar no responde"></div>
+        <div class="field"><label for="reportMessage">Mensaje</label><textarea id="reportMessage" rows="5" placeholder="Contanos qué pasó y qué esperabas que pasara"></textarea></div>
+
+        <div class="alert_message" id="reportAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="reportSubmit" type="button">Enviar</button>
+          <button class="btn btn-outline" id="reportCancel" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("reportCancel")?.addEventListener("click", closeOverlay);
+
+  document.getElementById("reportSubmit")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("reportAlert")!;
+    alertBox.innerHTML = "";
+
+    const subject = (document.getElementById("reportSubject") as HTMLInputElement).value;
+    const message = (document.getElementById("reportMessage") as HTMLTextAreaElement).value;
+
+    const validationError = validateErrorReport(subject, message);
+    if (validationError) {
+      alertBox.innerHTML = `<p>${validationError === "subject_short" ? "Ingresá un asunto." : validationError === "subject_long" ? "El asunto es muy largo." : "El mensaje es muy largo."}</p>`;
+      return;
+    }
+
+    const submitBtn = document.getElementById("reportSubmit") as HTMLButtonElement;
+    submitBtn.disabled = true;
+    const { error } = await submitErrorReport(myId!, subject, message, window.location.pathname);
+    submitBtn.disabled = false;
+
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Gracias! Recibimos tu reporte.</p>
+      </div>
+    `;
+    setTimeout(closeOverlay, 1800);
+  });
+}
+
+function openReportUserModal(targetId: string, username: string) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody || !myId) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Reportar a @${escapeHtml(username)}</h2>
+        <p class="subtitle">Contanos por qué. Lo revisa el equipo de Gym Social desde el panel de administración.</p>
+
+        <div class="field"><label for="reportUserReason">Motivo</label><textarea id="reportUserReason" rows="5" placeholder="Contanos qué pasó"></textarea></div>
+
+        <div class="alert_message" id="reportUserAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="reportUserSubmit" type="button">Enviar reporte</button>
+          <button class="btn btn-outline" id="reportUserCancel" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("reportUserCancel")?.addEventListener("click", closeOverlay);
+
+  document.getElementById("reportUserSubmit")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("reportUserAlert")!;
+    alertBox.innerHTML = "";
+
+    const reason = (document.getElementById("reportUserReason") as HTMLTextAreaElement).value;
+
+    const validationError = validateUserReport(reason);
+    if (validationError) {
+      alertBox.innerHTML = `<p>${validationError === "reason_short" ? "Contanos un poco más (mínimo 5 caracteres)." : "El motivo es muy largo."}</p>`;
+      return;
+    }
+
+    const submitBtn = document.getElementById("reportUserSubmit") as HTMLButtonElement;
+    submitBtn.disabled = true;
+    const { error } = await submitUserReport(myId!, targetId, reason);
+    submitBtn.disabled = false;
+
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>Gracias, recibimos tu reporte.</p>
+      </div>
+    `;
+    setTimeout(closeOverlay, 1800);
   });
 }
 

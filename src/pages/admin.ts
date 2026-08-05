@@ -66,8 +66,22 @@ import {
   markContactMessageRead,
   deleteContactMessage,
   getUnreadContactMessageCount,
-  type ContactMessage,
+  type ContactMessageWithReader,
 } from "../services/contact.service";
+import {
+  listErrorReports,
+  markErrorReportRead,
+  deleteErrorReport,
+  getUnreadErrorReportCount,
+  type ErrorReportWithReporter,
+} from "../services/errorReport.service";
+import {
+  listUserReports,
+  markUserReportRead,
+  deleteUserReport,
+  getUnreadUserReportCount,
+  type UserReportWithNames,
+} from "../services/userReport.service";
 
 declare const Chart: any;
 
@@ -97,8 +111,14 @@ let roadmapLoaded = false;
 let issueReports: IssueReportWithReporter[] = [];
 let issuesLoaded = false;
 
-let contactMessages: ContactMessage[] = [];
-let messagesLoaded = false;
+let contactMessages: ContactMessageWithReader[] = [];
+let contactMessagesLoaded = false;
+let errorReports: ErrorReportWithReporter[] = [];
+let errorReportsLoaded = false;
+let userReports: UserReportWithNames[] = [];
+let userReportsLoaded = false;
+let messagesSubTab: "contact" | "errors" | "users" = "contact";
+let messagesTabInitialized = false;
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
@@ -154,9 +174,9 @@ function setupTabs() {
         issuesLoaded = true;
         await loadIssues();
       }
-      if (tab === "messages" && !messagesLoaded) {
-        messagesLoaded = true;
-        await loadContactMessages();
+      if (tab === "messages" && !messagesTabInitialized) {
+        messagesTabInitialized = true;
+        await renderMessagesTab();
       }
       if (tab === "notifs") {
         if (!usersLoaded) {
@@ -1194,7 +1214,7 @@ function openDeleteIssueModal(issue: IssueReport) {
   });
 }
 
-// ---------- Mensajes de contacto ----------
+// ---------- Mensajes (contacto / reporte de errores / reporte de usuarios) ----------
 
 function setMessagesDot(hasUnread: boolean) {
   const tabDot = document.getElementById("messagesTabDot");
@@ -1205,26 +1225,73 @@ function setMessagesDot(hasUnread: boolean) {
 
 async function refreshMessagesDot() {
   try {
-    const unread = await getUnreadContactMessageCount();
-    setMessagesDot(unread > 0);
+    const [contactUnread, errorUnread, userUnread] = await Promise.all([
+      getUnreadContactMessageCount(),
+      getUnreadErrorReportCount(),
+      getUnreadUserReportCount(),
+    ]);
+    setMessagesDot(contactUnread + errorUnread + userUnread > 0);
   } catch {
     // silencioso: el punto simplemente no se actualiza en este ciclo
   }
 }
 
-async function loadContactMessages() {
+async function renderMessagesTab() {
   const messagesTab = document.getElementById("messagesTab")!;
-  messagesTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando mensajes...</p></div>`;
-  contactMessages = await listContactMessages();
-  renderMessagesTab();
-}
-
-function renderMessagesTab() {
-  const messagesTab = document.getElementById("messagesTab")!;
-  const unreadCount = contactMessages.filter((m) => !m.is_read).length;
-  setMessagesDot(unreadCount > 0);
 
   messagesTab.innerHTML = `
+    <div class="exc-pick-chips" id="messagesSubTabs">
+      <button type="button" class="exc-pick-chip ${messagesSubTab === "contact" ? "active" : ""}" data-sub="contact">Contacto</button>
+      <button type="button" class="exc-pick-chip ${messagesSubTab === "errors" ? "active" : ""}" data-sub="errors">Reporte de errores</button>
+      <button type="button" class="exc-pick-chip ${messagesSubTab === "users" ? "active" : ""}" data-sub="users">Reporte de usuarios</button>
+    </div>
+    <div id="messagesResults"></div>
+  `;
+
+  document.getElementById("messagesSubTabs")?.addEventListener("click", (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
+    if (!btn) return;
+    messagesSubTab = btn.dataset.sub as "contact" | "errors" | "users";
+    void renderMessagesTab();
+  });
+
+  await renderMessagesResults();
+}
+
+async function renderMessagesResults() {
+  const resultsEl = document.getElementById("messagesResults");
+  if (!resultsEl) return;
+
+  if (messagesSubTab === "contact") {
+    if (!contactMessagesLoaded) {
+      resultsEl.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando mensajes...</p></div>`;
+      contactMessages = await listContactMessages();
+      contactMessagesLoaded = true;
+    }
+    renderContactList(resultsEl);
+  } else if (messagesSubTab === "errors") {
+    if (!errorReportsLoaded) {
+      resultsEl.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando reportes...</p></div>`;
+      errorReports = await listErrorReports();
+      errorReportsLoaded = true;
+    }
+    renderErrorReportsList(resultsEl);
+  } else {
+    if (!userReportsLoaded) {
+      resultsEl.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando reportes...</p></div>`;
+      userReports = await listUserReports();
+      userReportsLoaded = true;
+    }
+    renderUserReportsList(resultsEl);
+  }
+
+  void refreshMessagesDot();
+}
+
+function renderContactList(resultsEl: HTMLElement) {
+  const unreadCount = contactMessages.filter((m) => !m.is_read).length;
+
+  resultsEl.innerHTML = `
     <div class="exc-admin-toolbar">
       <div>
         <h3>Mensajes de contacto</h3>
@@ -1241,6 +1308,7 @@ function renderMessagesTab() {
             <span class="roadmap-task-title">${escapeHtml(m.name)} · ${escapeHtml(m.email)}</span>
             <p class="roadmap-task-desc">${escapeHtml(m.message)}</p>
             <p class="roadmap-task-desc"><strong>Recibido:</strong> ${formatDateTime(m.created_at)}</p>
+            ${m.is_read && m.readByName ? `<p class="roadmap-task-desc"><strong>Leído por:</strong> @${escapeHtml(m.readByName)}</p>` : ""}
           </div>
           <div class="roadmap-task-actions">
             <button type="button" class="message-toggle-read" data-id="${m.id}">${m.is_read ? "Marcar no leído" : "Marcar leído"}</button>
@@ -1254,21 +1322,22 @@ function renderMessagesTab() {
     </div>
   `;
 
-  messagesTab.querySelectorAll<HTMLButtonElement>(".message-toggle-read").forEach((btn) => {
+  resultsEl.querySelectorAll<HTMLButtonElement>(".message-toggle-read").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const msg = contactMessages.find((m) => m.id === btn.dataset.id);
       if (!msg) return;
       const newRead = !msg.is_read;
       btn.disabled = true;
-      const { error } = await markContactMessageRead(msg.id, newRead);
+      const { error } = await markContactMessageRead(msg.id, newRead, newRead ? adminId : null);
       btn.disabled = false;
       if (error) return;
-      msg.is_read = newRead;
-      renderMessagesTab();
+      contactMessages = await listContactMessages();
+      renderContactList(resultsEl);
+      void refreshMessagesDot();
     });
   });
 
-  messagesTab.querySelectorAll<HTMLButtonElement>(".message-delete").forEach((btn) => {
+  resultsEl.querySelectorAll<HTMLButtonElement>(".message-delete").forEach((btn) => {
     btn.addEventListener("click", () => {
       const msg = contactMessages.find((m) => m.id === btn.dataset.id);
       if (msg) openDeleteMessageModal(msg);
@@ -1276,7 +1345,7 @@ function renderMessagesTab() {
   });
 }
 
-function openDeleteMessageModal(msg: ContactMessage) {
+function openDeleteMessageModal(msg: ContactMessageWithReader) {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
 
@@ -1307,7 +1376,193 @@ function openDeleteMessageModal(msg: ContactMessage) {
     }
     contactMessages = contactMessages.filter((m) => m.id !== msg.id);
     loaderBody.innerHTML = "";
-    renderMessagesTab();
+    void renderMessagesResults();
+  });
+}
+
+function renderErrorReportsList(resultsEl: HTMLElement) {
+  const unreadCount = errorReports.filter((r) => !r.is_read).length;
+
+  resultsEl.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div>
+        <h3>Reportes de error</h3>
+        <p class="chart-sub">${unreadCount} sin leer de ${errorReports.length} en total.</p>
+      </div>
+    </div>
+    <div class="roadmap-tasks">
+      ${
+        errorReports
+          .map(
+            (r) => `
+        <div class="roadmap-task roadmap-status-${r.is_read ? "done" : "pending"}" data-id="${r.id}">
+          <div class="roadmap-task-body">
+            <span class="roadmap-task-title">${escapeHtml(r.subject)}</span>
+            ${r.reporterName ? `<p class="roadmap-task-desc"><strong>Reportado por:</strong> @${escapeHtml(r.reporterName)}</p>` : ""}
+            ${r.page ? `<p class="roadmap-task-desc"><strong>Pantalla:</strong> ${escapeHtml(r.page)}</p>` : ""}
+            ${r.message ? `<p class="roadmap-task-desc">${escapeHtml(r.message)}</p>` : ""}
+            <p class="roadmap-task-desc"><strong>Recibido:</strong> ${formatDateTime(r.created_at)}</p>
+            ${r.is_read && r.readByName ? `<p class="roadmap-task-desc"><strong>Leído por:</strong> @${escapeHtml(r.readByName)}</p>` : ""}
+          </div>
+          <div class="roadmap-task-actions">
+            <button type="button" class="error-toggle-read" data-id="${r.id}">${r.is_read ? "Marcar no leído" : "Marcar leído"}</button>
+            <button type="button" class="error-delete" data-id="${r.id}">Eliminar</button>
+          </div>
+        </div>
+      `
+          )
+          .join("") || `<p class="exc-pick-empty">Todavía no llegó ningún reporte de error.</p>`
+      }
+    </div>
+  `;
+
+  resultsEl.querySelectorAll<HTMLButtonElement>(".error-toggle-read").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const report = errorReports.find((r) => r.id === btn.dataset.id);
+      if (!report) return;
+      const newRead = !report.is_read;
+      btn.disabled = true;
+      const { error } = await markErrorReportRead(report.id, newRead, newRead ? adminId : null);
+      btn.disabled = false;
+      if (error) return;
+      errorReports = await listErrorReports();
+      renderErrorReportsList(resultsEl);
+      void refreshMessagesDot();
+    });
+  });
+
+  resultsEl.querySelectorAll<HTMLButtonElement>(".error-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const report = errorReports.find((r) => r.id === btn.dataset.id);
+      if (report) openDeleteErrorReportModal(report);
+    });
+  });
+}
+
+function openDeleteErrorReportModal(report: ErrorReportWithReporter) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar "${escapeHtml(report.subject)}"?</h2>
+        <p class="subtitle">Esta acción no se puede deshacer.</p>
+        <div class="alert_message" id="errorDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="errorDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="errorDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("errorDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("errorDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("errorDeleteAlert")!;
+    const { error } = await deleteErrorReport(report.id);
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    errorReports = errorReports.filter((r) => r.id !== report.id);
+    loaderBody.innerHTML = "";
+    void renderMessagesResults();
+  });
+}
+
+function renderUserReportsList(resultsEl: HTMLElement) {
+  const unreadCount = userReports.filter((r) => !r.is_read).length;
+
+  resultsEl.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div>
+        <h3>Reportes de usuarios</h3>
+        <p class="chart-sub">${unreadCount} sin leer de ${userReports.length} en total.</p>
+      </div>
+    </div>
+    <div class="roadmap-tasks">
+      ${
+        userReports
+          .map(
+            (r) => `
+        <div class="roadmap-task roadmap-status-${r.is_read ? "done" : "pending"}" data-id="${r.id}">
+          <div class="roadmap-task-body">
+            <span class="roadmap-task-title">@${escapeHtml(r.reporterName ?? "usuario eliminado")} reportó a @${escapeHtml(r.reportedName ?? "usuario eliminado")}</span>
+            <p class="roadmap-task-desc">${escapeHtml(r.reason)}</p>
+            <p class="roadmap-task-desc"><strong>Recibido:</strong> ${formatDateTime(r.created_at)}</p>
+            ${r.is_read && r.readByName ? `<p class="roadmap-task-desc"><strong>Leído por:</strong> @${escapeHtml(r.readByName)}</p>` : ""}
+          </div>
+          <div class="roadmap-task-actions">
+            <button type="button" class="user-report-toggle-read" data-id="${r.id}">${r.is_read ? "Marcar no leído" : "Marcar leído"}</button>
+            <button type="button" class="user-report-delete" data-id="${r.id}">Eliminar</button>
+          </div>
+        </div>
+      `
+          )
+          .join("") || `<p class="exc-pick-empty">Todavía no llegó ningún reporte de usuario.</p>`
+      }
+    </div>
+  `;
+
+  resultsEl.querySelectorAll<HTMLButtonElement>(".user-report-toggle-read").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const report = userReports.find((r) => r.id === btn.dataset.id);
+      if (!report) return;
+      const newRead = !report.is_read;
+      btn.disabled = true;
+      const { error } = await markUserReportRead(report.id, newRead, newRead ? adminId : null);
+      btn.disabled = false;
+      if (error) return;
+      userReports = await listUserReports();
+      renderUserReportsList(resultsEl);
+      void refreshMessagesDot();
+    });
+  });
+
+  resultsEl.querySelectorAll<HTMLButtonElement>(".user-report-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const report = userReports.find((r) => r.id === btn.dataset.id);
+      if (report) openDeleteUserReportModal(report);
+    });
+  });
+}
+
+function openDeleteUserReportModal(report: UserReportWithNames) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Eliminar este reporte?</h2>
+        <p class="subtitle">De @${escapeHtml(report.reporterName ?? "usuario eliminado")} sobre @${escapeHtml(report.reportedName ?? "usuario eliminado")}. Esta acción no se puede deshacer.</p>
+        <div class="alert_message" id="userReportDeleteAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="userReportDeleteCancel" type="button">Cancelar</button>
+          <button class="btn btn-danger" id="userReportDeleteConfirm" type="button">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("userReportDeleteCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("userReportDeleteConfirm")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("userReportDeleteAlert")!;
+    const { error } = await deleteUserReport(report.id);
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    userReports = userReports.filter((r) => r.id !== report.id);
+    loaderBody.innerHTML = "";
+    void renderMessagesResults();
   });
 }
 

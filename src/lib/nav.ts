@@ -6,6 +6,8 @@ import { renderVerifiedBadge } from "./verifiedBadge";
 import { escapeHtml } from "./dom";
 import { getPendingFollowRequestCount } from "../services/follow.service";
 import { getUnreadContactMessageCount } from "../services/contact.service";
+import { getUnreadErrorReportCount } from "../services/errorReport.service";
+import { getUnreadUserReportCount } from "../services/userReport.service";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -73,13 +75,17 @@ async function populateUserMenuTrigger(): Promise<void> {
   void refreshFollowRequestsBadge(userId);
 }
 
-/** Punto naranja junto a "Administrar" si hay mensajes de contacto sin leer. Solo se llama para staff. */
+/** Punto naranja junto a "Administrar" si hay mensajes/reportes sin leer (contacto, errores o usuarios). Solo se llama para staff. */
 async function refreshAdminMessagesDot(): Promise<void> {
   const dot = document.getElementById("adminLinkDot");
   if (!dot) return;
   try {
-    const unread = await getUnreadContactMessageCount();
-    dot.hidden = unread <= 0;
+    const [contactUnread, errorUnread, userUnread] = await Promise.all([
+      getUnreadContactMessageCount(),
+      getUnreadErrorReportCount(),
+      getUnreadUserReportCount(),
+    ]);
+    dot.hidden = contactUnread + errorUnread + userUnread <= 0;
   } catch {
     // silencioso: el punto simplemente no se actualiza en este ciclo
   }
