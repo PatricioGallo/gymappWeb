@@ -777,6 +777,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_type"]
       }
+      get_block_status: { Args: { p_target_id: string }; Returns: string }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_follow_counts: {
         Args: { p_user_id: string }

@@ -19,12 +19,14 @@ import {
   type WeightLogEntry,
 } from "../services/profile.service";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
+import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 
 declare const Chart: any;
 
 setupNavToggle();
 setupRevealObserver();
+setupProfileMenuToggle();
 
 const { data: sessionData } = await supabase.auth.getSession();
 const myId = sessionData.session?.user.id ?? null;
@@ -136,8 +138,8 @@ function initAvatar(profile: Profile) {
 
 // ---------- Compartir perfil ----------
 
-function initShare(username: string) {
-  const shareBtn = document.getElementById("shareBtn");
+function initShare(username: string, buttonId = "shareBtn") {
+  const shareBtn = document.getElementById(buttonId);
   if (!shareBtn) return;
   const originalHTML = shareBtn.innerHTML;
   shareBtn.addEventListener("click", async () => {
@@ -273,9 +275,11 @@ function initFollowButton(targetId: string, initialStatus: FollowStatus) {
   });
 }
 
-async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean): Promise<FollowStatus> {
+async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus): Promise<FollowStatus> {
   const actions = document.getElementById("profileActions");
-  const showFollowBtn = !ownerView && viewerLoggedIn;
+  // Si hay un bloqueo de por medio (en cualquier direccion) no tiene sentido mostrar
+  // "+ Seguir": el trigger de la base lo rechaza igual, pero evitamos el error confuso.
+  const showFollowBtn = !ownerView && viewerLoggedIn && blockStatus === "none";
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
   if (!actions) return followStatus;
 
@@ -287,9 +291,113 @@ async function renderProfileActions(targetId: string, username: string, ownerVie
     </button>
     ${showFollowBtn ? `<button class="btn ${followStatus === "none" ? "btn-primary" : "btn-outline"}" id="followBtn" type="button">${followButtonLabel(followStatus)}</button>` : ""}
   `;
-  initShare(username);
+  initShare(username, "shareBtn");
   if (showFollowBtn) initFollowButton(targetId, followStatus);
   return followStatus;
+}
+
+// ---------- Menu de tres puntos (compartir / bloquear / configuracion) ----------
+
+function profileMenuIcon(path: string): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+}
+
+const SHARE_ICON = profileMenuIcon(`<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/>`);
+const SETTINGS_ICON = profileMenuIcon(`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>`);
+const BLOCK_ICON = profileMenuIcon(`<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>`);
+
+function renderProfileMenu(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus) {
+  const wrap = document.getElementById("profileMenuWrap");
+  const panel = document.getElementById("profileMenuPanel");
+  if (!wrap || !panel) return;
+
+  const shareItem = `<button class="profile-menu-item" id="menuShareBtn" type="button">${SHARE_ICON}Compartir perfil</button>`;
+
+  if (ownerView) {
+    panel.innerHTML = `${shareItem}<a class="profile-menu-item" href="/pages/settings.html">${SETTINGS_ICON}Configuración</a>`;
+  } else if (viewerLoggedIn) {
+    const blockLabel = blockStatus === "blocked_by_me" ? "Desbloquear usuario" : "Bloquear usuario";
+    panel.innerHTML = `${shareItem}<button class="profile-menu-item profile-menu-item-danger" id="menuBlockBtn" type="button">${BLOCK_ICON}${blockLabel}</button>`;
+  } else {
+    panel.innerHTML = shareItem;
+  }
+
+  wrap.hidden = false;
+  initShare(username, "menuShareBtn");
+
+  document.getElementById("menuBlockBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    if (blockStatus === "blocked_by_me") {
+      void handleUnblock(targetId);
+    } else {
+      confirmBlockModal(targetId, username);
+    }
+  });
+
+  panel.querySelectorAll<HTMLAnchorElement>("a.profile-menu-item").forEach((a) => {
+    a.addEventListener("click", () => {
+      panel.hidden = true;
+    });
+  });
+}
+
+function setupProfileMenuToggle() {
+  const btn = document.getElementById("profileMenuBtn");
+  const panel = document.getElementById("profileMenuPanel");
+  if (!btn || !panel) return;
+
+  btn.addEventListener("click", () => {
+    const willOpen = panel.hidden;
+    panel.hidden = !willOpen;
+    btn.classList.toggle("open", willOpen);
+    btn.setAttribute("aria-expanded", String(willOpen));
+  });
+
+  document.addEventListener("click", (e) => {
+    if (panel.hidden) return;
+    const target = e.target as Node;
+    if (panel.contains(target) || btn.contains(target)) return;
+    panel.hidden = true;
+    btn.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+  });
+}
+
+async function handleUnblock(targetId: string) {
+  if (!myId) return;
+  const { error } = await unblockUser(myId, targetId);
+  if (error) {
+    alert(error);
+    return;
+  }
+  window.location.reload();
+}
+
+function confirmBlockModal(targetId: string, username: string) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody || !myId) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Bloquear a @${escapeHtml(username)}</h2>
+        <p class="subtitle">Va a dejar de seguirte automáticamente y no van a poder encontrarse en el buscador. Podés desbloquearlo después desde Configuración.</p>
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="confirmBlock">Bloquear</button>
+          <button class="btn btn-outline" id="cancelBlock">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("cancelBlock")?.addEventListener("click", closeOverlay);
+  document.getElementById("confirmBlock")?.addEventListener("click", async () => {
+    const { error } = await blockUser(myId!, targetId);
+    if (error) {
+      alert(error);
+      closeOverlay();
+      return;
+    }
+    window.location.reload();
+  });
 }
 
 // ---------- Perfil privado (visitante sin acceso completo) ----------
@@ -675,7 +783,9 @@ async function main() {
   if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
   if (isOwner && profile) initAvatar(profile);
 
-  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null);
+  const blockStatus: BlockStatus = !isOwner && myId ? await getBlockStatus(displayProfile.id!).catch(() => "none" as BlockStatus) : "none";
+  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
+  renderProfileMenu(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
 
   // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
   // que ya usan las RLS de rutinas/pesos via is_profile_public en la base).

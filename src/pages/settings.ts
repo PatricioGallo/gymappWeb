@@ -399,7 +399,7 @@ function renderBlockedTab(blocked: BlockedUserRow[]) {
   blockedTab.innerHTML = `
     <div class="chart-card reveal">
       <h3>Usuarios bloqueados</h3>
-      <p class="chart-sub">Por ahora todavía no se puede bloquear desde el perfil de otro usuario (llega junto con el resto de la red social), pero acá vas a poder gestionar tus bloqueos.</p>
+      <p class="chart-sub">Bloqueá usuarios desde el menú de tres puntos en su perfil. Acá podés ver y gestionar tus bloqueos.</p>
       ${
         blocked.length
           ? blocked
@@ -410,7 +410,7 @@ function renderBlockedTab(blocked: BlockedUserRow[]) {
             <strong>${escapeHtml(b.nombre)} ${escapeHtml(b.apellido)}</strong>
             <small>@${escapeHtml(b.username)}</small>
           </span>
-          <button class="btn btn-outline btn-sm unblock-btn" data-id="${b.id}" type="button">Desbloquear</button>
+          <button class="btn btn-outline btn-sm unblock-btn" data-id="${b.blockedId}" type="button">Desbloquear</button>
         </div>
       `
               )
@@ -423,7 +423,7 @@ function renderBlockedTab(blocked: BlockedUserRow[]) {
   blockedTab.querySelectorAll<HTMLButtonElement>(".unblock-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      const { error } = await unblockUser(btn.dataset.id!);
+      const { error } = await unblockUser(userId, btn.dataset.id!);
       if (error) {
         btn.disabled = false;
         return;

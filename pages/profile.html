@@ -72,7 +72,15 @@
           </label>
         </div>
         <div class="profile-info">
-          <h1 class="profile-username" id="profileUsername">@usuario</h1>
+          <div class="profile-username-row">
+            <h1 class="profile-username" id="profileUsername">@usuario</h1>
+            <div class="profile-menu-wrap" id="profileMenuWrap" hidden>
+              <button class="profile-menu-btn" id="profileMenuBtn" type="button" aria-label="Más opciones" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+              </button>
+              <div class="profile-menu-panel" id="profileMenuPanel" hidden></div>
+            </div>
+          </div>
           <p class="profile-fullname" id="profileFullname"></p>
           <p class="profile-role" id="profileRole"></p>
           <div class="profile-stats" id="profileStats"></div>
