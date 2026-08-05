@@ -87,6 +87,7 @@ export async function followUser(followerId: string, targetId: string): Promise<
     .single();
   if (error) {
     if (error.code === "23505") return { error: "Ya le enviaste una solicitud a este usuario." };
+    if (error.message?.includes("blocked")) return { error: "No podés seguir a este usuario." };
     return { error: "No se pudo completar la acción. Probá de nuevo." };
   }
   return { status: data.status as FollowStatus };

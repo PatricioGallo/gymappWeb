@@ -40,13 +40,22 @@
       <div class="profile-top" id="profileTop">
         <div class="avatar-wrap">
           <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
+          <div class="avatar-uploading" id="avatarUploading" hidden><div class="modern-spinner"></div></div>
           <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
             <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
           </label>
         </div>
         <div class="profile-info">
-          <h1 class="profile-username" id="profileUsername">@usuario</h1>
+          <div class="profile-username-row">
+            <h1 class="profile-username" id="profileUsername">@usuario</h1>
+            <div class="profile-menu-wrap" id="profileMenuWrap" hidden>
+              <button class="profile-menu-btn" id="profileMenuBtn" type="button" aria-label="Más opciones" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+              </button>
+              <div class="profile-menu-panel" id="profileMenuPanel" hidden></div>
+            </div>
+          </div>
           <p class="profile-fullname" id="profileFullname"></p>
           <p class="profile-role" id="profileRole"></p>
           <div class="profile-stats" id="profileStats"></div>
