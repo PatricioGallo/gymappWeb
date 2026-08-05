@@ -2,7 +2,15 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
-import { insertWeightLogs, getLatestWeights, getExerciseHistory, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
+import {
+  insertWeightLogs,
+  deleteTodayWeightLog,
+  getLatestWeights,
+  getExerciseHistory,
+  type LatestWeightsMap,
+  type LatestWeightEntry,
+  type WeightUnit,
+} from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 
@@ -13,6 +21,65 @@ function unitOptionsMarkup(selected: WeightUnit): string {
   return (Object.keys(UNIT_LABELS) as WeightUnit[])
     .map((u) => `<option value="${u}" ${u === selected ? "selected" : ""}>${UNIT_LABELS[u]}</option>`)
     .join("");
+}
+
+// ---------- Menu de tres puntos por ejercicio (borrar carga de hoy) ----------
+
+const WEIGHT_MENU_KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
+const WEIGHT_MENU_TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+
+function setupWeightMenuOutsideClick() {
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".weight-menu-wrap")) return;
+    document.querySelectorAll<HTMLElement>(".weight-menu-panel").forEach((p) => (p.hidden = true));
+    document.querySelectorAll<HTMLButtonElement>(".weight-menu-btn").forEach((b) => {
+      b.classList.remove("open");
+      b.setAttribute("aria-expanded", "false");
+    });
+  });
+}
+
+function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, weekIndex: number, diaIndex: number) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Borrar carga de hoy</h2>
+        <p class="subtitle">Se va a borrar la carga de hoy que cargaste para "${escapeHtml(exc.nombre_snapshot)}". Los registros de días anteriores no se modifican.</p>
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="confirmDeleteWeight" type="button">Borrar</button>
+          <button class="btn btn-outline" id="cancelDeleteWeight" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("cancelDeleteWeight")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("confirmDeleteWeight")?.addEventListener("click", async () => {
+    loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Borrando carga...</p></div>`;
+    try {
+      await deleteTodayWeightLog(userId, exc.id, TODAY);
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+          <p>Carga borrada con éxito.</p>
+        </div>
+      `;
+      [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
+      setTimeout(() => {
+        loaderBody.innerHTML = "";
+        openDay(weekIndex, diaIndex);
+      }, 1200);
+    } catch {
+      loaderBody.innerHTML = "";
+      alert("No se pudo borrar la carga. Intentá de nuevo.");
+    }
+  });
 }
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -45,6 +112,7 @@ function exerciseDefaultUnit(bySerie: Map<number, LatestWeightEntry[]> | undefin
 
 setupNavToggle();
 setupRevealObserver();
+setupWeightMenuOutsideClick();
 const userId = await requireAuth();
 
 const params = new URLSearchParams(window.location.search);
@@ -245,6 +313,8 @@ function openDay(weekIndex: number, diaIndex: number) {
             ? [{ setIndex: 1, subLabel: "Anterior" }]
             : Array.from({ length: exc.serie }, (_, i) => ({ setIndex: i + 1, subLabel: `Serie ${i + 1} · anterior` }));
 
+          const hasTodayLoad = rows.some(({ setIndex }) => todayEntry(last?.get(setIndex)) !== null);
+
           const rowsMarkup = rows
             .map(({ setIndex, subLabel }) => {
               const today = todayEntry(last?.get(setIndex));
@@ -267,6 +337,12 @@ function openDay(weekIndex: number, diaIndex: number) {
           <div class="weight-field-group-head">
             <button type="button" class="weight-field-label exc-info-btn" data-exc-idx="${idx}">${escapeHtml(exc.nombre_snapshot)}</button>
             <select class="mini-input weightUnitSelect">${unitOptionsMarkup(unit)}</select>
+            <div class="weight-menu-wrap">
+              <button type="button" class="profile-menu-btn weight-menu-btn" data-exc-idx="${idx}" aria-label="Más opciones" aria-expanded="false">${WEIGHT_MENU_KEBAB_ICON}</button>
+              <div class="profile-menu-panel weight-menu-panel" hidden>
+                <button type="button" class="profile-menu-item profile-menu-item-danger weight-menu-delete" data-exc-idx="${idx}" ${hasTodayLoad ? "" : "disabled"}>${WEIGHT_MENU_TRASH_ICON}Borrar carga actual</button>
+              </div>
+            </div>
           </div>
           <div class="weight-field-sub weight-field-group-sub">${exc.serie} series x ${formatRepe(exc.repe, exc.repe_max)} repeticiones</div>
           ${rowsMarkup}
@@ -292,6 +368,30 @@ function openDay(weekIndex: number, diaIndex: number) {
         .closest(".weight-field-group")
         ?.querySelectorAll<HTMLInputElement>(".weightInput")
         .forEach((input) => (input.placeholder = placeholder));
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".weight-menu-btn").forEach((btn) => {
+    const panel = btn.nextElementSibling as HTMLElement | null;
+    if (!panel) return;
+    btn.addEventListener("click", () => {
+      const willOpen = panel.hidden;
+      weekContent.querySelectorAll<HTMLElement>(".weight-menu-panel").forEach((p) => (p.hidden = true));
+      weekContent.querySelectorAll<HTMLButtonElement>(".weight-menu-btn").forEach((b) => {
+        b.classList.remove("open");
+        b.setAttribute("aria-expanded", "false");
+      });
+      panel.hidden = !willOpen;
+      btn.classList.toggle("open", willOpen);
+      btn.setAttribute("aria-expanded", String(willOpen));
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".weight-menu-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const exc = trackable[Number(btn.dataset.excIdx)];
+      btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+      confirmDeleteWeightModal(exc, weekIndex, diaIndex);
     });
   });
 
