@@ -146,6 +146,7 @@ function setupTabs() {
   tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
     btn.addEventListener("click", async () => {
       tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b === btn));
+      btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       const tab = btn.dataset.tab;
       statsTab.hidden = tab !== "stats";
       usersTab.hidden = tab !== "users";
