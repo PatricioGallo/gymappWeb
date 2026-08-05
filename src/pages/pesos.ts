@@ -13,6 +13,7 @@ import {
 } from "../services/weightLog.service";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
+import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
 const UNIT_PLACEHOLDERS: Record<WeightUnit, string> = { kg: "kg", lb: "lb", bloques: "bl" };
@@ -27,6 +28,73 @@ function unitOptionsMarkup(selected: WeightUnit): string {
 
 const WEIGHT_MENU_KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
 const WEIGHT_MENU_TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+const WEIGHT_MENU_REPORT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>`;
+
+function openReportErrorModal(excName?: string) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>Reportar un error</h2>
+        <p class="subtitle">Contanos qué encontraste, lo revisamos desde el panel de administración.</p>
+
+        <div class="field"><label for="reportSubject">Asunto</label><input type="text" id="reportSubject" placeholder="Ej: El botón de guardar no responde" value="${excName ? escapeHtml(`Problema con "${excName}"`) : ""}"></div>
+        <div class="field"><label for="reportMessage">Mensaje</label><textarea id="reportMessage" rows="5" placeholder="Contanos qué pasó y qué esperabas que pasara"></textarea></div>
+
+        <div class="alert_message" id="reportAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="reportSubmit" type="button">Enviar</button>
+          <button class="btn btn-outline" id="reportCancel" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("reportCancel")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("reportSubmit")?.addEventListener("click", async () => {
+    const alertBox = document.getElementById("reportAlert")!;
+    alertBox.innerHTML = "";
+
+    const subject = (document.getElementById("reportSubject") as HTMLInputElement).value;
+    const message = (document.getElementById("reportMessage") as HTMLTextAreaElement).value;
+
+    const validationError = validateErrorReport(subject, message);
+    if (validationError) {
+      alertBox.innerHTML = `<p>${validationError === "subject_short" ? "Ingresá un asunto." : validationError === "subject_long" ? "El asunto es muy largo." : "El mensaje es muy largo."}</p>`;
+      return;
+    }
+
+    const submitBtn = document.getElementById("reportSubmit") as HTMLButtonElement;
+    submitBtn.disabled = true;
+    const { error } = await submitErrorReport(userId, subject, message, window.location.pathname + window.location.search);
+    submitBtn.disabled = false;
+
+    if (error) {
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Gracias! Recibimos tu reporte.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      loaderBody.innerHTML = "";
+    }, 1800);
+  });
+}
 
 function setupWeightMenuOutsideClick() {
   document.addEventListener("click", (e) => {
@@ -341,6 +409,7 @@ function openDay(weekIndex: number, diaIndex: number) {
               <button type="button" class="profile-menu-btn weight-menu-btn" data-exc-idx="${idx}" aria-label="Más opciones" aria-expanded="false">${WEIGHT_MENU_KEBAB_ICON}</button>
               <div class="profile-menu-panel weight-menu-panel" hidden>
                 <button type="button" class="profile-menu-item profile-menu-item-danger weight-menu-delete" data-exc-idx="${idx}" ${hasTodayLoad ? "" : "disabled"}>${WEIGHT_MENU_TRASH_ICON}Borrar carga actual</button>
+                <button type="button" class="profile-menu-item weight-menu-report" data-exc-idx="${idx}">${WEIGHT_MENU_REPORT_ICON}Reportar un error</button>
               </div>
             </div>
           </div>
@@ -392,6 +461,14 @@ function openDay(weekIndex: number, diaIndex: number) {
       const exc = trackable[Number(btn.dataset.excIdx)];
       btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
       confirmDeleteWeightModal(exc, weekIndex, diaIndex);
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".weight-menu-report").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const exc = trackable[Number(btn.dataset.excIdx)];
+      btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+      openReportErrorModal(exc.nombre_snapshot);
     });
   });
 

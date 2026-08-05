@@ -100,6 +100,16 @@ export async function unfollowOrCancel(followerId: string, targetId: string): Pr
   return {};
 }
 
+export async function getPendingFollowRequestCount(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("follows")
+    .select("id", { count: "exact", head: true })
+    .eq("followed_id", userId)
+    .eq("status", "pending");
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function listFollowRequests(userId: string): Promise<FollowRequestRow[]> {
   const { data: rows, error } = await supabase
     .from("follows")

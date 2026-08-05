@@ -17,6 +17,12 @@ function renderSummary() {
     requests.length === 0
       ? "No tenés solicitudes de seguimiento pendientes."
       : `${requests.length} solicitud${requests.length === 1 ? "" : "es"} pendiente${requests.length === 1 ? "" : "s"}.`;
+
+  const badge = document.getElementById("followReqBadge");
+  if (badge) {
+    badge.hidden = requests.length <= 0;
+    badge.textContent = requests.length > 9 ? "9+" : String(requests.length);
+  }
 }
 
 function renderList() {
