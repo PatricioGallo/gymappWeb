@@ -2207,6 +2207,40 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   margin-bottom: 14px;
 }
 
+/* ---------- Tus alumnos ---------- */
+
+.student-card-head { margin-bottom: 14px; }
+
+.student-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.student-comments-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.student-comment-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.student-comment-item p { margin: 0; font-size: 13.5px; }
+
+.student-comment-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
 /* ---------- Routine card ---------- */
 
 .routine-card {

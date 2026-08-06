@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Gym Social - Tus alumnos</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="language" content="es">
+<link rel="icon" href="/images/fevicon.png" type="image/png" />
+<link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="profile.html">
+        <img src="/images/logo.png" alt="Gym Social">
+      </a>
+      <nav class="site-nav account-nav" id="siteNav">
+        <a href="profile.html" id="navPerfil">Mi perfil</a>
+        <a href="admin.html" id="adminLink">Administrar<span class="nav-dot" id="adminLinkDot" hidden></span></a>
+        <a href="followRequests.html" id="navFollowRequests">Solicitudes de seguimiento<span class="nav-badge" id="followReqBadge" hidden>0</span></a>
+        <a href="subscriptionRequests.html" id="navSubscriptionRequests">Solicitudes de suscripción<span class="nav-badge" id="subReqBadge" hidden>0</span></a>
+        <a href="settings.html">Configuración</a>
+        <a href="exit.html" id="navSalir">Salir</a>
+      </nav>
+      <div class="header-actions">
+        <div class="header-search" id="headerSearchWrap">
+          <button class="header-search-btn" id="headerSearchBtn" type="button" aria-label="Buscar usuarios">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <div class="header-search-panel" id="headerSearchPanel" hidden>
+            <input type="search" id="headerSearchInput" class="header-search-input" placeholder="Buscar usuarios, entrenadores o gimnasios..." autocomplete="off">
+            <div id="headerSearchResults"></div>
+            <a href="search.html" class="notif-view-all" id="headerSearchViewAll" hidden>Ver todos los resultados</a>
+          </div>
+        </div>
+        <div class="notif-bell-wrap">
+          <button class="notif-bell-btn" id="notifBellBtn" type="button" aria-label="Notificaciones" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span class="notif-badge" id="notifBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <h4>Notificaciones</h4>
+              <button type="button" class="notif-mark-all" id="notifMarkAllBtn">Marcar todas como leídas</button>
+            </div>
+            <div class="notif-list" id="notifList"></div>
+            <a href="notifications.html" class="notif-view-all">Ver todas las notificaciones</a>
+          </div>
+        </div>
+
+        <button class="user-menu-toggle" id="navToggle" type="button" aria-label="Abrir menú de cuenta" aria-expanded="false">
+          <img src="/images/avatars/default.svg" alt="" id="navMenuAvatar">
+          <span id="navMenuUsername"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="loaderBody"></div>
+
+  <section class="page-hero">
+    <div class="container">
+      <a href="profile.html" class="back-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
+      <span class="eyebrow">Entrenador</span>
+      <h1>Tus alumnos</h1>
+      <p>Rutina activa, progreso y comentarios de cada suscriptor aceptado.</p>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <form class="search-page-form" id="alumnosSearchForm">
+        <input type="search" id="alumnosSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
+      </form>
+      <p class="chart-sub" id="alumnosSummary">Cargando...</p>
+      <div class="search-page-list" id="alumnosList"></div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="profile.html">
+            <img src="/images/logo.png" alt="Gym Social">
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+        </div>
+        <nav class="footer-links">
+          <a href="profile.html">Perfil</a>
+          <a href="contact.html">Contactanos</a>
+          <a href="exit.html">Salir</a>
+        </nav>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 Gym Social. Todos los derechos reservados.</span>
+        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/pages/alumnos.ts"></script>
+</body>
+</html>

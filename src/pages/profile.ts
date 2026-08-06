@@ -633,7 +633,7 @@ function renderPrivateNotice(nombre: string) {
 
 // Solo se llama para el dueño del perfil: para un visitante estos accesos
 // directos (rutinas propias, progreso completo) no aplican.
-function renderQuickActions(userId: string) {
+function renderQuickActions(userId: string, userType: Profile["user_type"]) {
   const quickActions = document.getElementById("quickActions");
   if (!quickActions) return;
 
@@ -650,6 +650,14 @@ function renderQuickActions(userId: string) {
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
       <div><h3>Nueva rutina</h3><p>Armá una rutina desde cero</p></div>
     </a>
+    ${
+      userType === "entrenador"
+        ? `<a class="quick-card reveal" href="/pages/alumnos.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div><h3>Tus alumnos</h3><p>Rutinas, progreso y comentarios de tus suscriptores</p></div>
+    </a>`
+        : ""
+    }
   `;
 }
 
@@ -1029,7 +1037,9 @@ async function openAssignModal(routineId: string, nombre: string) {
       <div class="modal-card modal-card-lg">
         <h2>Activar y asignar "${escapeHtml(nombre)}"</h2>
         <p class="subtitle">Elegí a quién se la asignás: un suscriptor tuyo, o vos mismo. Se crea una rutina nueva; esta plantilla queda igual acá.</p>
-        <div id="assignModalBody">${selfAssignRowMarkup()}<p class="chart-sub">Cargando tus suscriptores...</p></div>
+        <div id="assignSelfRow">${selfAssignRowMarkup()}</div>
+        <input type="search" id="assignSearchInput" class="header-search-input" placeholder="Buscar suscriptor por nombre o usuario..." hidden>
+        <div id="assignModalBody"><p class="chart-sub">Cargando tus suscriptores...</p></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-outline" id="assignCancel">Cancelar</button>
         </div>
@@ -1037,23 +1047,36 @@ async function openAssignModal(routineId: string, nombre: string) {
     </div>
   `;
   document.getElementById("assignCancel")?.addEventListener("click", closeOverlay);
-  wireAssignButtons(routineId);
+  wireAssignButtons(routineId, document.getElementById("assignSelfRow")!);
 
-  const subscribers = await listSubscribers(myId).catch(() => []);
   const bodyEl = document.getElementById("assignModalBody");
+  const searchInput = document.getElementById("assignSearchInput") as HTMLInputElement | null;
   if (!bodyEl) return;
 
-  const subscribersMarkup =
-    subscribers.length === 0
-      ? `<p class="chart-sub">Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá también.</p>`
-      : subscribers.map(subscriberRowMarkup).join("");
+  async function runSubscriberSearch(query: string) {
+    const subscribers = await listSubscribers(myId!, query).catch(() => []);
+    bodyEl!.innerHTML =
+      subscribers.length === 0
+        ? `<p class="chart-sub">${query ? `Sin resultados para "${escapeHtml(query)}".` : "Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá también."}</p>`
+        : subscribers.map(subscriberRowMarkup).join("");
+    wireAssignButtons(routineId, bodyEl!);
+  }
 
-  bodyEl.innerHTML = selfAssignRowMarkup() + subscribersMarkup;
-  wireAssignButtons(routineId);
+  const allSubscribers = await listSubscribers(myId).catch(() => []);
+  if (allSubscribers.length > 0) searchInput?.removeAttribute("hidden");
+
+  bodyEl.innerHTML = allSubscribers.length === 0 ? `<p class="chart-sub">Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá también.</p>` : allSubscribers.map(subscriberRowMarkup).join("");
+  wireAssignButtons(routineId, bodyEl);
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  searchInput?.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => void runSubscriberSearch(searchInput.value.trim()), 250);
+  });
 }
 
-function wireAssignButtons(routineId: string) {
-  document.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
+function wireAssignButtons(routineId: string, container: HTMLElement) {
+  container.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
     btn.addEventListener("click", () => {
       window.location.href = `rutinsView.html?uid=${encodeURIComponent(btn.dataset.id!)}&cloneFrom=${encodeURIComponent(routineId)}`;
     });
@@ -1231,7 +1254,7 @@ async function main() {
   }
 
   if (isOwner) {
-    renderQuickActions(displayProfile.id!);
+    renderQuickActions(displayProfile.id!, targetUserType);
   } else {
     document.getElementById("quickActionsSection")?.remove();
   }

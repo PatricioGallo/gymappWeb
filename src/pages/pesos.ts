@@ -2,6 +2,7 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
+import { getProfileBasicById } from "../services/profile.service";
 import {
   insertWeightLogs,
   deleteTodayWeightLog,
@@ -11,6 +12,7 @@ import {
   type LatestWeightEntry,
   type WeightUnit,
 } from "../services/weightLog.service";
+import { getTodayComments, upsertExerciseComment, deleteExerciseComment, MAX_COMMENT_LENGTH, type ExerciseComment } from "../services/comment.service";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
@@ -29,6 +31,7 @@ function unitOptionsMarkup(selected: WeightUnit): string {
 const WEIGHT_MENU_KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
 const WEIGHT_MENU_TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 const WEIGHT_MENU_REPORT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>`;
+const WEIGHT_MENU_COMMENT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
 
 function openReportErrorModal(excName?: string) {
   const loaderBody = document.getElementById("loaderBody");
@@ -71,7 +74,7 @@ function openReportErrorModal(excName?: string) {
 
     const submitBtn = document.getElementById("reportSubmit") as HTMLButtonElement;
     submitBtn.disabled = true;
-    const { error } = await submitErrorReport(userId, subject, message, window.location.pathname + window.location.search);
+    const { error } = await submitErrorReport(myId, subject, message, window.location.pathname + window.location.search);
     submitBtn.disabled = false;
 
     if (error) {
@@ -131,7 +134,7 @@ function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, 
   document.getElementById("confirmDeleteWeight")?.addEventListener("click", async () => {
     loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Borrando carga...</p></div>`;
     try {
-      await deleteTodayWeightLog(userId, exc.id, TODAY);
+      await deleteTodayWeightLog(targetUserId, exc.id, TODAY);
       loaderBody.innerHTML = `
         <div class="success-check-container">
           <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
@@ -151,6 +154,67 @@ function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, 
 }
 
 const TODAY = new Date().toISOString().slice(0, 10);
+
+function openCommentModal(exc: { id: string; nombre_snapshot: string }, weekIndex: number, diaIndex: number) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  const existing = todayComments.get(exc.id);
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Comentario de hoy</h2>
+        <p class="subtitle">"${escapeHtml(exc.nombre_snapshot)}"${isTrainingForOther && targetName ? ` · ${escapeHtml(targetName)}` : ""}</p>
+        <div class="field">
+          <label for="commentInput">¿Cómo te fue con este ejercicio hoy?</label>
+          <textarea id="commentInput" rows="4" maxlength="${MAX_COMMENT_LENGTH}">${escapeHtml(existing?.comment ?? "")}</textarea>
+        </div>
+        <div class="alert_message" id="commentAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="saveComment" type="button">Guardar</button>
+          ${existing ? `<button class="btn btn-danger" id="deleteComment" type="button">Borrar</button>` : ""}
+          <button class="btn btn-outline" id="cancelComment" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("cancelComment")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  document.getElementById("saveComment")?.addEventListener("click", async () => {
+    const alertEl = document.getElementById("commentAlert")!;
+    const text = (document.getElementById("commentInput") as HTMLTextAreaElement).value.trim();
+    if (text.length === 0) {
+      alertEl.innerHTML = "<p>Escribí algo antes de guardar.</p>";
+      return;
+    }
+    const saveBtn = document.getElementById("saveComment") as HTMLButtonElement;
+    saveBtn.disabled = true;
+    const { error } = await upsertExerciseComment(targetUserId, exc.id, TODAY, text);
+    saveBtn.disabled = false;
+    if (error) {
+      alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    todayComments = await getTodayComments(allExerciseIds, TODAY);
+    loaderBody.innerHTML = "";
+    openDay(weekIndex, diaIndex);
+  });
+
+  document.getElementById("deleteComment")?.addEventListener("click", async () => {
+    if (!existing) return;
+    const { error } = await deleteExerciseComment(existing.id);
+    if (error) {
+      alert(error);
+      return;
+    }
+    todayComments = await getTodayComments(allExerciseIds, TODAY);
+    loaderBody.innerHTML = "";
+    openDay(weekIndex, diaIndex);
+  });
+}
 
 // Muestra el ultimo valor guardado por unidad, sin importar la fecha: puede ser de
 // otra semana de la rutina o de hoy mismo (si ya se cargo en otra ocurrencia del ejercicio).
@@ -181,14 +245,20 @@ function exerciseDefaultUnit(bySerie: Map<number, LatestWeightEntry[]> | undefin
 setupNavToggle();
 setupRevealObserver();
 setupWeightMenuOutsideClick();
-const userId = await requireAuth();
+const myId = await requireAuth();
 
 const params = new URLSearchParams(window.location.search);
 const routineId = params.get("rid");
+// Un entrenador puede entrenar "por" un alumno (suscriptor aceptado): carga pesos y
+// comentarios a nombre de esa persona, como si estuvieran juntos en el gimnasio.
+const targetUserId = params.get("uid") ?? myId;
+const isTrainingForOther = targetUserId !== myId;
+let targetName: string | null = null;
 
 let routine: RoutineDetail | null = null;
 let latestWeights: LatestWeightsMap = new Map();
 let exerciseHistory: LatestWeightsMap = new Map();
+let todayComments: Map<string, ExerciseComment> = new Map();
 let allExerciseIds: string[] = [];
 let allCatalogExerciseIds: string[] = [];
 
@@ -408,6 +478,7 @@ function openDay(weekIndex: number, diaIndex: number) {
             <div class="weight-menu-wrap">
               <button type="button" class="profile-menu-btn weight-menu-btn" data-exc-idx="${idx}" aria-label="Más opciones" aria-expanded="false">${WEIGHT_MENU_KEBAB_ICON}</button>
               <div class="profile-menu-panel weight-menu-panel" hidden>
+                <button type="button" class="profile-menu-item weight-menu-comment" data-exc-idx="${idx}">${WEIGHT_MENU_COMMENT_ICON}${todayComments.has(exc.id) ? "Editar comentario" : "Agregar comentario"}</button>
                 <button type="button" class="profile-menu-item profile-menu-item-danger weight-menu-delete" data-exc-idx="${idx}" ${hasTodayLoad ? "" : "disabled"}>${WEIGHT_MENU_TRASH_ICON}Borrar carga actual</button>
                 <button type="button" class="profile-menu-item weight-menu-report" data-exc-idx="${idx}">${WEIGHT_MENU_REPORT_ICON}Reportar un error</button>
               </div>
@@ -472,6 +543,14 @@ function openDay(weekIndex: number, diaIndex: number) {
     });
   });
 
+  weekContent.querySelectorAll<HTMLButtonElement>(".weight-menu-comment").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const exc = trackable[Number(btn.dataset.excIdx)];
+      btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+      openCommentModal(exc, weekIndex, diaIndex);
+    });
+  });
+
   document.getElementById("weightsHelpBtn")?.addEventListener("click", openWeightsHelp);
 
   document.getElementById("backToWeek")?.addEventListener("click", (e) => {
@@ -526,7 +605,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
   loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Guardando pesos...</p></div>`;
 
   try {
-    await insertWeightLogs(userId, entries);
+    await insertWeightLogs(targetUserId, entries);
     loaderBody.innerHTML = `
       <div class="success-check-container">
         <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
@@ -557,12 +636,24 @@ async function init() {
 
   allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
   allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
-  [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
+  [latestWeights, exerciseHistory, todayComments] = await Promise.all([
+    getLatestWeights(allExerciseIds),
+    getExerciseHistory(allCatalogExerciseIds),
+    getTodayComments(allExerciseIds, TODAY),
+  ]);
+  if (isTrainingForOther) {
+    const target = await getProfileBasicById(targetUserId).catch(() => null);
+    targetName = target?.nombre ?? null;
+  }
 
   const title = document.getElementById("routineTitle");
   const subtitle = document.getElementById("routineSubtitle");
   if (title) title.textContent = routine.nombre;
-  if (subtitle) subtitle.textContent = "Elegí la semana y el día para cargar el peso de hoy.";
+  if (subtitle) {
+    subtitle.textContent = isTrainingForOther
+      ? `Estás cargando pesos para ${targetName ?? "tu alumno"}. Elegí la semana y el día.`
+      : "Elegí la semana y el día para cargar el peso de hoy.";
+  }
 
   const startWeek = currentWeekIndex();
   const weekSelect = document.getElementById("weekSelect") as HTMLSelectElement;

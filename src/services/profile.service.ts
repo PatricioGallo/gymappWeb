@@ -198,3 +198,11 @@ export async function listWeightLogsWithContext(userId: string): Promise<WeightL
     diaSemana: row.routine_exercises?.routine_days?.dia_semana ?? null,
   }));
 }
+
+/** Fecha del ultimo entreno registrado (o null si nunca cargo pesos). Liviana: se usa
+ * en listados (ej. "Tus alumnos") donde traer todo el historial via listWeightLogsWithContext seria excesivo. */
+export async function getLastTrainedDate(userId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("weight_logs").select("fecha").eq("user_id", userId).order("fecha", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data?.fecha ?? null;
+}

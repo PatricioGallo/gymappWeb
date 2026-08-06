@@ -121,6 +121,58 @@ export type Database = {
           },
         ]
       }
+      exercise_comments: {
+        Row: {
+          comment: string
+          created_at: string
+          fecha: string
+          id: string
+          routine_exercise_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comment: string
+          created_at?: string
+          fecha: string
+          id?: string
+          routine_exercise_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string
+          fecha?: string
+          id?: string
+          routine_exercise_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_comments_routine_exercise_id_fkey"
+            columns: ["routine_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "routine_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           author_id: string | null
