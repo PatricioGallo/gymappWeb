@@ -687,7 +687,7 @@ function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerV
       <div class="stat-card reveal"><div class="label">Último entrenamiento</div><div class="value">${escapeHtml(lastTrainingLabel(logs))}</div></div>
       <div class="stat-card reveal"><div class="label">Ejercicio más entrenado</div><div class="value">${escapeHtml(top?.name ?? "—")}</div></div>
       <div class="stat-card reveal"><div class="label">Entrenamientos registrados</div><div class="value">${trainingDaysCount(logs)}</div></div>
-      <div class="stat-card reveal"><div class="label">Rutinas activas</div><div class="value">${activeRoutinesCount}</div></div>
+      <div class="stat-card reveal"><div class="label">Rutinas activas</div><div class="value" id="activeRoutinesStatValue">${activeRoutinesCount}</div></div>
     </div>
     <div class="chart-card reveal">
       <h3>Frecuencia de entrenamiento</h3>
@@ -765,6 +765,19 @@ function renderProgressChart(entries: WeightLogEntry[]) {
 // ---------- Rutinas ----------
 
 let activeRoutineTab: "active" | "historic" | "saved" = "active";
+
+// Contexto guardado tras el primer render para poder refrescar la lista de
+// rutinas y el conteo de "Rutinas activas" in-place (sin recargar la pagina)
+// despues de finalizar/reactivar una rutina.
+let routinesCtx: { userId: string; ownerView: boolean; logs: WeightLogEntry[]; userType: Profile["user_type"] } | null = null;
+
+async function refreshRoutinesAndStats() {
+  if (!routinesCtx) return;
+  activeRoutineTab = "active";
+  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType);
+  const statValue = document.getElementById("activeRoutinesStatValue");
+  if (statValue && count !== undefined) statValue.textContent = String(count);
+}
 
 function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) {
   const routineLogs = logs.filter((l) => l.routineId === routine.id);
@@ -988,6 +1001,24 @@ function subscriberRowMarkup(s: SubscriberListRow): string {
   `;
 }
 
+function selfAssignRowMarkup(): string {
+  const avatarSrc = (document.getElementById("avatarImg") as HTMLImageElement | null)?.src || "/images/avatars/default.svg";
+  return `
+    <div class="follow-request-item" data-id="self">
+      <span class="follow-request-user">
+        <img src="${escapeHtml(avatarSrc)}" alt="" class="search-result-avatar">
+        <span class="search-result-body">
+          <span class="search-result-name">Vos mismo</span>
+          <span class="search-result-username">Para entrenar ocasionalmente con tu propia rutina</span>
+        </span>
+      </span>
+      <div class="follow-request-actions">
+        <button class="btn btn-outline btn-sm assignToSubscriber" data-id="${myId}" type="button">Asignar</button>
+      </div>
+    </div>
+  `;
+}
+
 async function openAssignModal(routineId: string, nombre: string) {
   if (!myId) return;
   const loaderBody = document.getElementById("loaderBody");
@@ -997,8 +1028,8 @@ async function openAssignModal(routineId: string, nombre: string) {
     <div class="success-check-container">
       <div class="modal-card modal-card-lg">
         <h2>Activar y asignar "${escapeHtml(nombre)}"</h2>
-        <p class="subtitle">Elegí a qué suscriptor se la asignás. Se crea una rutina nueva para esa persona; esta plantilla queda igual acá.</p>
-        <div id="assignModalBody"><p class="chart-sub">Cargando tus suscriptores...</p></div>
+        <p class="subtitle">Elegí a quién se la asignás: un suscriptor tuyo, o vos mismo. Se crea una rutina nueva; esta plantilla queda igual acá.</p>
+        <div id="assignModalBody">${selfAssignRowMarkup()}<p class="chart-sub">Cargando tus suscriptores...</p></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-outline" id="assignCancel">Cancelar</button>
         </div>
@@ -1006,18 +1037,23 @@ async function openAssignModal(routineId: string, nombre: string) {
     </div>
   `;
   document.getElementById("assignCancel")?.addEventListener("click", closeOverlay);
+  wireAssignButtons(routineId);
 
   const subscribers = await listSubscribers(myId).catch(() => []);
   const bodyEl = document.getElementById("assignModalBody");
   if (!bodyEl) return;
 
-  if (subscribers.length === 0) {
-    bodyEl.innerHTML = `<p class="chart-sub">Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá.</p>`;
-    return;
-  }
+  const subscribersMarkup =
+    subscribers.length === 0
+      ? `<p class="chart-sub">Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá también.</p>`
+      : subscribers.map(subscriberRowMarkup).join("");
 
-  bodyEl.innerHTML = subscribers.map(subscriberRowMarkup).join("");
-  bodyEl.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
+  bodyEl.innerHTML = selfAssignRowMarkup() + subscribersMarkup;
+  wireAssignButtons(routineId);
+}
+
+function wireAssignButtons(routineId: string) {
+  document.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
     btn.addEventListener("click", () => {
       window.location.href = `rutinsView.html?uid=${encodeURIComponent(btn.dataset.id!)}&cloneFrom=${encodeURIComponent(routineId)}`;
     });
@@ -1046,9 +1082,32 @@ function confirmFinishRoutine(routineId: string, routine: RoutineWithCounts) {
   `;
   document.getElementById("cancelFinish")?.addEventListener("click", closeOverlay);
   document.getElementById("confirmFinish")?.addEventListener("click", async () => {
-    await finishRoutine(routineId);
-    activeRoutineTab = "active";
-    window.location.reload();
+    const confirmBtn = document.getElementById("confirmFinish") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+    document.getElementById("cancelFinish")?.setAttribute("disabled", "true");
+    try {
+      await finishRoutine(routineId);
+    } catch {
+      alert("No se pudo finalizar la rutina. Probá de nuevo.");
+      confirmBtn.disabled = false;
+      document.getElementById("cancelFinish")?.removeAttribute("disabled");
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina finalizada! Pasó a Históricas.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void refreshRoutinesAndStats();
+    }, 1600);
   });
 }
 
@@ -1069,9 +1128,32 @@ function openReactivateModal(routineId: string) {
   `;
   document.getElementById("cancelReactivate")?.addEventListener("click", closeOverlay);
   document.getElementById("confirmReactivate")?.addEventListener("click", async () => {
-    await reactivateRoutine(routineId);
-    activeRoutineTab = "active";
-    window.location.reload();
+    const confirmBtn = document.getElementById("confirmReactivate") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+    document.getElementById("cancelReactivate")?.setAttribute("disabled", "true");
+    try {
+      await reactivateRoutine(routineId);
+    } catch {
+      alert("No se pudo reactivar la rutina. Probá de nuevo.");
+      confirmBtn.disabled = false;
+      document.getElementById("cancelReactivate")?.removeAttribute("disabled");
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina reactivada! Volvió a Activas.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void refreshRoutinesAndStats();
+    }, 1600);
   });
 }
 
@@ -1155,6 +1237,7 @@ async function main() {
   }
 
   const logs = await listWeightLogsWithContext(displayProfile.id!);
+  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType };
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType);
   renderStats(logs, activeCount ?? 0, isOwner);
 }
