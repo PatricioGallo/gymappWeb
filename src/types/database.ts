@@ -105,16 +105,54 @@ export type Database = {
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      exercise_comments: {
+        Row: {
+          comment: string
+          created_at: string
+          fecha: string
+          id: string
+          routine_exercise_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comment: string
+          created_at?: string
+          fecha: string
+          id?: string
+          routine_exercise_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string
+          fecha?: string
+          id?: string
+          routine_exercise_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "error_reports_read_by_fkey"
-            columns: ["read_by"]
+            foreignKeyName: "exercise_comments_routine_exercise_id_fkey"
+            columns: ["routine_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "routine_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_comments_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "error_reports_read_by_fkey"
-            columns: ["read_by"]
+            foreignKeyName: "exercise_comments_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
@@ -562,6 +600,7 @@ export type Database = {
           id: string
           is_public: boolean
           is_shareable: boolean
+          is_template: boolean
           nombre: string
           share_token: string
           updated_at: string
@@ -575,6 +614,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           is_shareable?: boolean
+          is_template?: boolean
           nombre: string
           share_token?: string
           updated_at?: string
@@ -588,6 +628,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           is_shareable?: boolean
+          is_template?: boolean
           nombre?: string
           share_token?: string
           updated_at?: string
@@ -654,6 +695,65 @@ export type Database = {
           {
             foreignKeyName: "site_visits_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          responded_at: string | null
+          status: string
+          subscriber_id: string
+          trainer_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          responded_at?: string | null
+          status?: string
+          subscriber_id: string
+          trainer_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          responded_at?: string | null
+          status?: string
+          subscriber_id?: string
+          trainer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_trainer_id_fkey"
+            columns: ["trainer_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
@@ -777,6 +877,77 @@ export type Database = {
           {
             foreignKeyName: "user_reports_reporter_id_fkey"
             columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      verification_requests: {
+        Row: {
+          admin_note: string | null
+          applicant_type: string
+          created_at: string
+          credentials: Json
+          documents: Json
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          applicant_type: string
+          created_at?: string
+          credentials?: Json
+          documents?: Json
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          applicant_type?: string
+          created_at?: string
+          credentials?: Json
+          documents?: Json
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_requests_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
@@ -943,10 +1114,15 @@ export type Database = {
       can_view_day: { Args: { did: string }; Returns: boolean }
       can_view_routine: { Args: { rid: string }; Returns: boolean }
       can_view_week: { Args: { wid: string }; Returns: boolean }
+      cancel_subscription: {
+        Args: { p_subscriber_id: string; p_trainer_id: string }
+        Returns: undefined
+      }
       create_routine: {
         Args: {
           p_fecha_inicio: string
           p_is_public?: boolean
+          p_is_template?: boolean
           p_nombre: string
           p_user_id: string
           p_weeks: Json
@@ -968,6 +1144,11 @@ export type Database = {
       }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
+      get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
+      get_subscription_status: {
+        Args: { p_target_id: string }
+        Returns: string
+      }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
@@ -1007,6 +1188,61 @@ export type Database = {
           username: string
         }[]
       }
+      list_historic_subscribers: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_user_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          ended_at: string
+          id: string
+          is_verified: boolean
+          nombre: string
+          subscribed_at: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      list_subscribers: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_user_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          id: string
+          is_verified: boolean
+          nombre: string
+          subscribed_at: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      request_subscription: {
+        Args: { p_trainer_id: string }
+        Returns: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          responded_at: string | null
+          status: string
+          subscriber_id: string
+          trainer_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subscriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       search_profiles: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
@@ -1020,6 +1256,10 @@ export type Database = {
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
         }[]
+      }
+      set_routine_finished: {
+        Args: { p_finished: boolean; p_routine_id: string }
+        Returns: undefined
       }
     }
     Enums: {

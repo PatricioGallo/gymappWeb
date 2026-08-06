@@ -62,6 +62,17 @@ import {
 } from "../services/issue.service";
 import { adminSendNotification } from "../services/notification.service";
 import {
+  listVerificationRequestsAdmin,
+  reviewVerificationRequest,
+  getVerificationDocumentUrl,
+  getPendingVerificationRequestCount,
+  CREDENTIAL_TYPE_LABELS,
+  CREDENTIAL_SPECIALTY_LABELS,
+  CREDENTIAL_COMPLETION_STATUS_LABELS,
+  type AdminVerificationRequestRow,
+  type ApplicantType,
+} from "../services/verification.service";
+import {
   listContactMessages,
   markContactMessageRead,
   deleteContactMessage,
@@ -121,6 +132,11 @@ let messagesSubTab: "contact" | "errors" | "users" = "contact";
 let messagesTabInitialized = false;
 let messagesSearchTerm = "";
 
+let verificationRequests: Record<ApplicantType, AdminVerificationRequestRow[]> = { entrenador: [], gimnasio: [] };
+let verificationLoadedFor: Record<ApplicantType, boolean> = { entrenador: false, gimnasio: false };
+let validationSubTab: ApplicantType = "entrenador";
+let validationTabInitialized = false;
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -141,6 +157,7 @@ function setupTabs() {
   const roadmapTab = document.getElementById("roadmapTab")!;
   const issuesTab = document.getElementById("issuesTab")!;
   const messagesTab = document.getElementById("messagesTab")!;
+  const validationTab = document.getElementById("validationTab")!;
   const notifsTab = document.getElementById("notifsTab")!;
   if (!tabsWrap) return;
 
@@ -155,6 +172,7 @@ function setupTabs() {
       roadmapTab.hidden = tab !== "roadmap";
       issuesTab.hidden = tab !== "issues";
       messagesTab.hidden = tab !== "messages";
+      validationTab.hidden = tab !== "validation";
       notifsTab.hidden = tab !== "notifs";
       if (tab === "stats" && !statsLoaded) {
         statsLoaded = true;
@@ -179,6 +197,10 @@ function setupTabs() {
       if (tab === "messages" && !messagesTabInitialized) {
         messagesTabInitialized = true;
         await renderMessagesTab();
+      }
+      if (tab === "validation" && !validationTabInitialized) {
+        validationTabInitialized = true;
+        await renderValidationTab();
       }
       if (tab === "notifs") {
         if (!usersLoaded) {
@@ -385,7 +407,11 @@ function openEditUserModal(userId: string) {
       return;
     }
     const label =
-      userType === "entrenador" ? "Tilde verde: presentó la papelería que certifica su actividad." : "Tilde azul: cuenta reconocida/famosa.";
+      userType === "entrenador"
+        ? "Tilde verde: presentó la papelería que certifica su actividad."
+        : userType === "gimnasio"
+          ? "Tilde verde: se validó la documentación del gimnasio."
+          : "Tilde azul: cuenta reconocida/famosa.";
     field.innerHTML = `
       <div class="field-check">
         <input type="checkbox" id="editVerified" ${checked ? "checked" : ""}>
@@ -1221,13 +1247,29 @@ function openDeleteIssueModal(issue: IssueReport) {
 function setMessagesDot(hasUnread: boolean) {
   const tabDot = document.getElementById("messagesTabDot");
   if (tabDot) tabDot.hidden = !hasUnread;
-  const navDot = document.getElementById("adminLinkDot");
-  if (navDot) navDot.hidden = !hasUnread;
+  void refreshAdminLinkDot();
 }
 
 function setChipDot(id: string, hasUnread: boolean) {
   const dot = document.getElementById(id);
   if (dot) dot.hidden = !hasUnread;
+}
+
+/** Punto naranja junto a "Administrar" en el nav: es la union de mensajes sin leer y validaciones pendientes, asi que no lo puede pisar un solo refresh parcial. */
+async function refreshAdminLinkDot() {
+  const navDot = document.getElementById("adminLinkDot");
+  if (!navDot) return;
+  try {
+    const [contactUnread, errorUnread, userUnread, pendingVerifications] = await Promise.all([
+      getUnreadContactMessageCount(),
+      getUnreadErrorReportCount(),
+      getUnreadUserReportCount(),
+      getPendingVerificationRequestCount(),
+    ]);
+    navDot.hidden = contactUnread + errorUnread + userUnread + pendingVerifications <= 0;
+  } catch {
+    // silencioso: el punto simplemente no se actualiza en este ciclo
+  }
 }
 
 async function refreshMessagesDot() {
@@ -1599,6 +1641,199 @@ function openDeleteUserReportModal(report: UserReportWithNames) {
   });
 }
 
+// ---------- Validación (entrenadores / gimnasios) ----------
+
+const VALIDATION_APPLICANT_LABELS: Record<ApplicantType, string> = { entrenador: "Entrenadores", gimnasio: "Gimnasios" };
+const VALIDATION_STATUS_LABELS: Record<string, string> = { pending: "Pendiente", approved: "Aprobada", rejected: "Rechazada" };
+
+function formatCredentialLabel(c: AdminVerificationRequestRow["credentials"][number]): string {
+  const typeLabel = c.type === "otro" ? c.otherTypeText || "Otro" : CREDENTIAL_TYPE_LABELS[c.type];
+  const specialtyLabel = c.specialty === "otro" ? c.otherSpecialtyText || "Otro" : CREDENTIAL_SPECIALTY_LABELS[c.specialty];
+  const statusLabel = CREDENTIAL_COMPLETION_STATUS_LABELS[c.completionStatus];
+  const parts = [specialtyLabel, typeLabel, c.institution, statusLabel].filter(Boolean);
+  return parts.join(" · ");
+}
+
+async function refreshValidationDot() {
+  try {
+    const [entrenadorRows, gimnasioRows] = await Promise.all([
+      verificationLoadedFor.entrenador ? verificationRequests.entrenador : listVerificationRequestsAdmin("entrenador"),
+      verificationLoadedFor.gimnasio ? verificationRequests.gimnasio : listVerificationRequestsAdmin("gimnasio"),
+    ]);
+    const hasPending = [...entrenadorRows, ...gimnasioRows].some((r) => r.status === "pending");
+    const tabDot = document.getElementById("validationTabDot");
+    if (tabDot) tabDot.hidden = !hasPending;
+  } catch {
+    // silencioso: el punto simplemente no se actualiza en este ciclo
+  }
+  void refreshAdminLinkDot();
+}
+
+async function renderValidationTab() {
+  const validationTab = document.getElementById("validationTab")!;
+
+  validationTab.innerHTML = `
+    <div class="exc-pick-chips" id="validationSubTabs">
+      ${(["entrenador", "gimnasio"] as ApplicantType[])
+        .map((t) => `<button type="button" class="exc-pick-chip ${validationSubTab === t ? "active" : ""}" data-sub="${t}">${VALIDATION_APPLICANT_LABELS[t]}</button>`)
+        .join("")}
+    </div>
+    <div id="validationResults"></div>
+  `;
+
+  document.getElementById("validationSubTabs")?.addEventListener("click", (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
+    if (!btn) return;
+    validationSubTab = btn.dataset.sub as ApplicantType;
+    void renderValidationTab();
+  });
+
+  await renderValidationResults();
+}
+
+async function renderValidationResults() {
+  const resultsEl = document.getElementById("validationResults");
+  if (!resultsEl) return;
+
+  if (!verificationLoadedFor[validationSubTab]) {
+    resultsEl.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando solicitudes...</p></div>`;
+    verificationRequests[validationSubTab] = await listVerificationRequestsAdmin(validationSubTab);
+    verificationLoadedFor[validationSubTab] = true;
+  }
+
+  const rows = verificationRequests[validationSubTab];
+  const pendingCount = rows.filter((r) => r.status === "pending").length;
+
+  resultsEl.innerHTML = `
+    <div class="exc-admin-toolbar">
+      <div>
+        <h3>Solicitudes de ${VALIDATION_APPLICANT_LABELS[validationSubTab].toLowerCase()}</h3>
+        <p class="chart-sub">${pendingCount} pendiente${pendingCount === 1 ? "" : "s"} de ${rows.length} en total.</p>
+      </div>
+    </div>
+    <div class="roadmap-tasks">
+      ${
+        rows
+          .map(
+            (r) => `
+        <div class="roadmap-task roadmap-status-${r.status === "approved" ? "done" : r.status === "pending" ? "pending" : "in_progress"}" data-id="${r.id}">
+          <div class="roadmap-task-body">
+            <span class="roadmap-task-title">${escapeHtml(r.applicantName)} <small>@${escapeHtml(r.applicantUsername)}</small></span>
+            ${
+              r.credentials.length
+                ? `<p class="roadmap-task-desc"><strong>Títulos:</strong> ${r.credentials.map((c) => escapeHtml(formatCredentialLabel(c))).join(" · ")}</p>`
+                : ""
+            }
+            <p class="roadmap-task-desc"><strong>Fotos:</strong> ${(r.documents as string[]).length}</p>
+            <p class="roadmap-task-desc"><strong>Estado:</strong> ${VALIDATION_STATUS_LABELS[r.status] ?? r.status}</p>
+            <p class="roadmap-task-desc"><strong>Enviada:</strong> ${formatDateTime(r.created_at)}</p>
+          </div>
+          <div class="roadmap-task-actions">
+            <button type="button" class="validation-review" data-id="${r.id}">Revisar</button>
+          </div>
+        </div>
+      `
+          )
+          .join("") || `<p class="exc-pick-empty">Todavía no hay solicitudes de ${VALIDATION_APPLICANT_LABELS[validationSubTab].toLowerCase()}.</p>`
+      }
+    </div>
+  `;
+
+  resultsEl.querySelectorAll<HTMLButtonElement>(".validation-review").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = rows.find((r) => r.id === btn.dataset.id);
+      if (row) void openValidationReviewModal(row);
+    });
+  });
+
+  void refreshValidationDot();
+}
+
+async function openValidationReviewModal(row: AdminVerificationRequestRow) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>${escapeHtml(row.applicantName)}</h2>
+        <p class="subtitle">@${escapeHtml(row.applicantUsername)} · ${escapeHtml(row.applicantEmail)}</p>
+        ${
+          row.credentials.length
+            ? `<div class="help-list">${row.credentials.map((c) => `<div class="help-item"><strong>${escapeHtml(formatCredentialLabel(c))}</strong></div>`).join("")}</div>`
+            : `<p class="chart-sub">No cargó ningún título.</p>`
+        }
+        <div class="verify-doc-grid" id="validationReviewDocs"><div class="inline-loader"><div class="modern-spinner"></div></div></div>
+
+        <div class="field"><label for="validationAdminNote">Nota para el usuario (opcional, se ve solo si rechazás)</label><textarea id="validationAdminNote" rows="3">${escapeHtml(row.admin_note ?? "")}</textarea></div>
+
+        <div class="alert_message" id="validationReviewAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="validationRejectBtn" type="button">Rechazar</button>
+          <button class="btn btn-primary" id="validationApproveBtn" type="button">Aprobar (tick verde)</button>
+          <button class="btn btn-outline" id="validationReviewClose" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const docsEl = document.getElementById("validationReviewDocs")!;
+  const paths = (row.documents as string[]) ?? [];
+  if (paths.length === 0) {
+    docsEl.innerHTML = `<p class="exc-pick-empty">No subió ninguna foto.</p>`;
+  } else {
+    const urls = await Promise.all(paths.map((p) => getVerificationDocumentUrl(p)));
+    docsEl.innerHTML = urls
+      .map((url) => (url ? `<a class="verify-doc-item" href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt=""></a>` : ""))
+      .join("");
+  }
+
+  document.getElementById("validationReviewClose")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+
+  async function review(status: "approved" | "rejected") {
+    const alertBox = document.getElementById("validationReviewAlert")!;
+    alertBox.innerHTML = "";
+    const note = (document.getElementById("validationAdminNote") as HTMLTextAreaElement).value;
+
+    const approveBtn = document.getElementById("validationApproveBtn") as HTMLButtonElement | null;
+    const rejectBtn = document.getElementById("validationRejectBtn") as HTMLButtonElement | null;
+    if (approveBtn) approveBtn.disabled = true;
+    if (rejectBtn) rejectBtn.disabled = true;
+
+    const { error } = await reviewVerificationRequest(row.id, status, note);
+    if (error) {
+      if (approveBtn) approveBtn.disabled = false;
+      if (rejectBtn) rejectBtn.disabled = false;
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+
+    verificationLoadedFor[validationSubTab] = false;
+
+    loaderBody!.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>${status === "approved" ? `Solicitud aprobada. @${escapeHtml(row.applicantUsername)} ya tiene el tick verde.` : `Solicitud rechazada.`}</p>
+      </div>
+    `;
+
+    setTimeout(async () => {
+      loaderBody!.innerHTML = "";
+      await renderValidationResults();
+    }, 1800);
+  }
+
+  document.getElementById("validationApproveBtn")?.addEventListener("click", () => void review("approved"));
+  document.getElementById("validationRejectBtn")?.addEventListener("click", () => void review("rejected"));
+}
+
 // ---------- Notificaciones ----------
 
 function renderNotifsTab() {
@@ -1669,3 +1904,4 @@ setupTabs();
 statsLoaded = true;
 await renderStatsTab();
 void refreshMessagesDot();
+void refreshValidationDot();

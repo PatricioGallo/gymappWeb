@@ -1,7 +1,7 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { listExercises, type Exercise } from "../services/exercise.service";
 import { createRoutine, getRoutineDetail, type NewDayInput } from "../services/routine.service";
-import { listRoutines, type RoutineWithCounts } from "../services/profile.service";
+import { listRoutines, getProfileBasicById, type RoutineWithCounts } from "../services/profile.service";
 import { escapeHtml } from "../lib/dom";
 import { DIA_LABELS, diaLabel, formatFechaCorta } from "../lib/dias";
 import { openExercisePicker } from "../lib/exercisePicker";
@@ -14,9 +14,25 @@ const myId = await requireAuth();
 
 const params = new URLSearchParams(window.location.search);
 const targetUserId = params.get("uid") ?? myId;
+// Un entrenador arma una plantilla propia (mode=template) o clona una guardada
+// directo hacia un alumno (cloneFrom, siempre junto con ?uid=<alumno>).
+const isTemplateMode = params.get("mode") === "template";
+const cloneFromId = params.get("cloneFrom");
+const isAssigningToOther = targetUserId !== myId;
+
+// Nadie elige explicitamente "plantilla vs rutina" en el flujo normal: toda
+// rutina que se arma de cero (fuera de activar una guardada, o del mode=template
+// explicito del entrenador para armar una plantilla a proposito) se guarda como
+// plantilla y se pregunta si se quiere activar ya (ver createAndFinish). Aplica
+// a entrenador, usuario y admin por igual; gimnasio/colaborador no pasan por
+// este flujo de creacion de rutinas propias.
+const myProfile = await getProfileBasicById(myId).catch(() => null);
+const autoSaveAsTemplate =
+  myProfile?.user_type === "usuario" || myProfile?.user_type === "admin" || myProfile?.user_type === "entrenador";
 
 const container = document.getElementById("container") as HTMLElement;
 let excCatalog: Exercise[] = [];
+let assignTargetName: string | null = null;
 
 const BACK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`;
 
@@ -40,9 +56,13 @@ function readVisibilityField(id: string): boolean {
 function renderChooser() {
   container.innerHTML = `
     <div class="section-head reveal">
-      <span class="eyebrow">Nueva rutina</span>
+      <span class="eyebrow">${isTemplateMode ? "Nueva plantilla" : "Nueva rutina"}</span>
       <h1>¿Cómo querés armarla?</h1>
-      <p>Podés empezar de cero o elegir una rutina ya armada como base.</p>
+      <p>${
+        isTemplateMode
+          ? "Queda guardada en tu perfil para asignarla a tus alumnos cuando quieras."
+          : "Podés empezar de cero o elegir una rutina ya armada como base."
+      }</p>
     </div>
     <div class="quick-grid quick-grid-2 reveal">
       <button type="button" class="quick-card" id="chooseScratch">
@@ -133,7 +153,7 @@ async function renderBrowseContent() {
   }
 
   content.innerHTML = `<p class="subtitle">Cargando tus rutinas...</p>`;
-  const [active, historic] = await Promise.all([listRoutines(targetUserId, true), listRoutines(targetUserId, false)]);
+  const [active, historic] = await Promise.all([listRoutines(targetUserId, "active"), listRoutines(targetUserId, "historic")]);
   const mine = [...active, ...historic];
 
   if (mine.length === 0) {
@@ -150,8 +170,7 @@ async function renderBrowseContent() {
   content.innerHTML = `<div class="routine-grid">${mine.map(ownRoutineCardMarkup).join("")}</div>`;
   content.querySelectorAll<HTMLButtonElement>(".useOwnBtn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const routine = mine.find((r) => r.id === btn.dataset.id);
-      if (routine) openClonePreview(routine);
+      if (btn.dataset.id) openClonePreview(btn.dataset.id);
     });
   });
 }
@@ -291,23 +310,26 @@ function openTemplatePreview(t: RoutineTemplate) {
   });
 }
 
-async function openClonePreview(r: RoutineWithCounts) {
+async function openClonePreview(routineId: string, isActivating = false) {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Cargando rutina...</p></div>`;
 
-  const detail = await getRoutineDetail(r.id);
+  const detail = await getRoutineDetail(routineId);
   if (!detail || detail.semanas.length === 0) {
     loaderBody.innerHTML = "";
     return;
   }
 
   const baseWeek = detail.semanas[0];
+  const subtitle = isAssigningToOther
+    ? `Se va a crear una rutina nueva con los mismos ejercicios${assignTargetName ? ` para ${escapeHtml(assignTargetName)}` : ""}. Tu plantilla original queda guardada tal cual.`
+    : "Se va a crear una rutina nueva con los mismos ejercicios, para que empieces de cero.";
 
   loaderBody.innerHTML = `
     <div class="success-check-container">
       <div class="modal-card modal-card-lg">
         <h2>${escapeHtml(detail.nombre)}</h2>
-        <p class="subtitle">Se va a crear una rutina nueva con los mismos ejercicios, para que empieces de cero.</p>
+        <p class="subtitle">${subtitle}</p>
         ${tplDaysPreviewMarkup(baseWeek.dias.map((d) => ({ dia_semana: d.dia_semana, titulo: d.nombre ?? undefined, items: d.ejercicios.map((e) => ({ nombre: e.nombre_snapshot, serie: e.serie, repe: e.repe, repeMax: e.repe_max })) })))}
         <form id="cloneForm" novalidate>
           <div class="field"><label for="cloneName">Nombre de la rutina</label><input type="text" id="cloneName" value="${escapeHtml(detail.nombre)}"></div>
@@ -358,7 +380,7 @@ async function openClonePreview(r: RoutineWithCounts) {
     }));
 
     const isPublic = readVisibilityField("cloneVisibility");
-    const error = await createAndFinish(name, weeks, dias, isPublic);
+    const error = await createAndFinish(name, weeks, dias, isPublic, isActivating);
     if (error) alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
   });
 }
@@ -659,36 +681,95 @@ async function submitRoutine(name: string, weeks: number, isPublic: boolean) {
 
 // ---------- Compartido: creación final + redirección ----------
 
-async function createAndFinish(name: string, weeks: number, dias: NewDayInput[], isPublic: boolean): Promise<string | null> {
+// Asignarle una rutina a otra persona siempre se entra desde "Tus alumnos" (o
+// desde el modal de asignar de Guardadas, que apunta al mismo lugar): al
+// terminar tiene mas sentido volver ahi que al propio perfil.
+function renderSuccessAndRedirect(message: string): void {
+  const loaderBody = document.getElementById("loaderBody")!;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+      <p>${message}</p>
+    </div>
+  `;
+  setTimeout(() => {
+    window.location.href = isAssigningToOther ? "alumnos.html" : "profile.html";
+  }, 2000);
+}
+
+async function createAndFinish(name: string, weeks: number, dias: NewDayInput[], isPublic: boolean, isActivating = false): Promise<string | null> {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `
     <div class="loader-container"><div class="modern-spinner"></div><p>Creando rutina...</p></div>
   `;
 
-  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic);
+  // isActivating (venís de una guardada via cloneFrom) siempre crea activa de una.
+  // Si no, crear de cero (para uno mismo) cae siempre en guardada+pregunta,
+  // sea cual sea el tipo de cuenta; mode=template explicito del entrenador
+  // sigue siendo guardado silencioso (sin la pregunta), y asignarle una rutina
+  // a otra persona directamente (sin pasar por Guardadas) tampoco pregunta.
+  const isTemplate = isActivating ? false : isTemplateMode || (autoSaveAsTemplate && !isAssigningToOther);
+  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, isTemplate);
 
   if (createError) {
     loaderBody.innerHTML = "";
     return createError;
   }
 
-  loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-      <p>¡Rutina creada con éxito! Espere, será redirigido.</p>
-    </div>
-  `;
-  setTimeout(() => {
-    window.location.href = "profile.html";
-  }, 2000);
+  // Guardada "silenciosa" (mode=template, entrenador armando una plantilla a
+  // propósito): sin pregunta, va derecho al mensaje de éxito de siempre.
+  if (isTemplate && !isTemplateMode) {
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="modal-card">
+          <h2>¡Rutina guardada!</h2>
+          <p class="subtitle">Quedó en Guardadas. ¿Querés activarla ahora para empezar a entrenar?</p>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-primary" id="activateNowBtn">Activar ahora</button>
+            <button type="button" class="btn btn-outline" id="skipActivateBtn">Ahora no</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById("skipActivateBtn")?.addEventListener("click", () => {
+      renderSuccessAndRedirect("¡Rutina guardada con éxito! Espere, será redirigido.");
+    });
+    document.getElementById("activateNowBtn")?.addEventListener("click", async () => {
+      loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Activando rutina...</p></div>`;
+      const { error: activateError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, false);
+      if (activateError) {
+        renderSuccessAndRedirect("La rutina quedó guardada, pero no se pudo activar. Podés activarla luego desde Guardadas.");
+        return;
+      }
+      renderSuccessAndRedirect("¡Rutina activada con éxito! Espere, será redirigido.");
+    });
+    return null;
+  }
 
+  const successMessage = isAssigningToOther
+    ? `¡Rutina asignada${assignTargetName ? ` a ${escapeHtml(assignTargetName)}` : ""} con éxito! Espere, será redirigido.`
+    : isActivating
+      ? "¡Rutina activada con éxito! Espere, será redirigido."
+      : "¡Rutina creada con éxito! Espere, será redirigido.";
+  renderSuccessAndRedirect(successMessage);
   return null;
 }
 
 async function init() {
   excCatalog = await listExercises();
   excCatalog.sort((a, b) => a.name.localeCompare(b.name));
+
+  if (isAssigningToOther) {
+    const target = await getProfileBasicById(targetUserId).catch(() => null);
+    assignTargetName = target?.nombre ?? null;
+  }
+
   renderChooser();
+
+  // Entrar con cloneFrom (siempre junto a ?uid=<alumno>) abre directo la
+  // previsualizacion de clonado sobre el selector, sin que el alumno tenga que
+  // elegir "cero vs. ver rutinas" para algo que ya viene decidido.
+  if (cloneFromId) openClonePreview(cloneFromId, true);
 }
 
 init();

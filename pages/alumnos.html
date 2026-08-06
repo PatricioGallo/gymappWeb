@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Gym Social - Seguidores y seguidos</title>
+<title>Gym Social - Tus alumnos</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
@@ -19,7 +19,7 @@
       <nav class="site-nav account-nav" id="siteNav">
         <a href="profile.html" id="navPerfil">Mi perfil</a>
         <a href="admin.html" id="adminLink">Administrar<span class="nav-dot" id="adminLinkDot" hidden></span></a>
-        <a href="followRequests.html">Solicitudes de seguimiento<span class="nav-badge" id="followReqBadge" hidden>0</span></a>
+        <a href="followRequests.html" id="navFollowRequests">Solicitudes de seguimiento<span class="nav-badge" id="followReqBadge" hidden>0</span></a>
         <a href="subscriptionRequests.html" id="navSubscriptionRequests">Solicitudes de suscripción<span class="nav-badge" id="subReqBadge" hidden>0</span></a>
         <a href="settings.html">Configuración</a>
         <a href="exit.html" id="navSalir">Salir</a>
@@ -62,25 +62,24 @@
 
   <section class="page-hero">
     <div class="container">
-      <a href="#" class="back-link" id="backLink"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
-      <span class="eyebrow">Comunidad</span>
-      <h1 id="followListTitle">Seguidores</h1>
-      <p id="followListSubtitle"></p>
+      <a href="profile.html" class="back-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
+      <span class="eyebrow">Entrenador</span>
+      <h1>Tus alumnos</h1>
+      <p>Rutina activa, progreso y comentarios de cada suscriptor aceptado.</p>
     </div>
   </section>
 
   <section class="features">
-    <div class="container" id="followListBody">
-      <div class="routine-tabs" id="followListTabs">
-        <button class="routine-tab active" data-tab="followers" type="button">Seguidores</button>
-        <button class="routine-tab" data-tab="following" type="button">Seguidos</button>
-        <button class="routine-tab" data-tab="subscribers" type="button" id="subscribersTabBtn" hidden>Suscriptores</button>
+    <div class="container">
+      <div class="routine-tabs" id="alumnosTabs">
+        <button class="routine-tab active" data-tab="current" type="button">Actuales</button>
+        <button class="routine-tab" data-tab="historic" type="button">Históricas</button>
       </div>
-      <form class="search-page-form" id="followListSearchForm">
-        <input type="search" id="followListSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
+      <form class="search-page-form" id="alumnosSearchForm">
+        <input type="search" id="alumnosSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
       </form>
-      <p class="chart-sub" id="followListSummary">Cargando...</p>
-      <div class="search-page-list" id="followListResults"></div>
+      <p class="chart-sub" id="alumnosSummary">Cargando...</p>
+      <div class="search-page-list" id="alumnosList"></div>
     </div>
   </section>
 
@@ -111,6 +110,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/followers.ts"></script>
+  <script type="module" src="/src/pages/alumnos.ts"></script>
 </body>
 </html>

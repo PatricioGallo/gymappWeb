@@ -26,7 +26,8 @@ export async function createRoutine(
   nombre: string,
   semanas: number,
   dias: NewDayInput[],
-  isPublic: boolean
+  isPublic: boolean,
+  isTemplate = false
 ): Promise<{ id?: string; error?: string }> {
   const weeksPayload = Array.from({ length: semanas }, (_, i) => ({
     numero: i + 1,
@@ -41,9 +42,13 @@ export async function createRoutine(
     p_fecha_inicio: today,
     p_weeks: weeksPayload as unknown as Json,
     p_is_public: isPublic,
+    p_is_template: isTemplate,
   });
 
-  if (error) return { error: "No se pudo crear la rutina. Probá de nuevo." };
+  if (error) {
+    if (error.message?.includes("not a subscriber")) return { error: "Solo podés asignar rutinas a alumnos que te tengan como entrenador aceptado." };
+    return { error: "No se pudo crear la rutina. Probá de nuevo." };
+  }
   return { id: data as unknown as string };
 }
 
@@ -119,6 +124,11 @@ export async function getSharedRoutine(shareToken: string): Promise<any> {
   const { data, error } = await supabase.rpc("get_shared_routine", { p_token: shareToken });
   if (error) throw error;
   return data;
+}
+
+export async function setRoutinePublic(routineId: string, isPublic: boolean): Promise<void> {
+  const { error } = await supabase.from("routines").update({ is_public: isPublic }).eq("id", routineId);
+  if (error) throw error;
 }
 
 export async function setRoutineShareable(routineId: string, shareable: boolean): Promise<string | null> {

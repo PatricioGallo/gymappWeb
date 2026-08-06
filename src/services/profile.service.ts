@@ -39,6 +39,21 @@ export async function getProfileBasicByUsername(username: string): Promise<Profi
   return data;
 }
 
+export async function getProfileBasicById(userId: string): Promise<ProfileBasic | null> {
+  const { data, error } = await supabase.from("profiles_public").select("*").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** Trae varios perfiles basicos de una vez (ej. dueño + quien asigno una rutina), indexados por id. */
+export async function getProfilesBasicByIds(ids: (string | null | undefined)[]): Promise<Map<string, ProfileBasic>> {
+  const uniqueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (uniqueIds.length === 0) return new Map();
+  const { data, error } = await supabase.from("profiles_public").select("*").in("id", uniqueIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((p) => [p.id!, p]));
+}
+
 export async function updateProfileFields(
   userId: string,
   fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled">>
@@ -92,17 +107,25 @@ export interface RoutineWithCounts extends Routine {
   totalRoutineExerciseIds: string[];
 }
 
-export async function listRoutines(userId: string, active: boolean): Promise<RoutineWithCounts[]> {
+export type RoutineListMode = "active" | "historic" | "saved";
+
+export async function listRoutines(userId: string, mode: RoutineListMode): Promise<RoutineWithCounts[]> {
   let query = supabase
     .from("routines")
     .select(
-      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_shareable, share_token, created_at, updated_at,
+      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, is_template, created_at, updated_at,
        routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( id ) ) )`
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
-  query = active ? query.is("finalizada_at", null) : query.not("finalizada_at", "is", null);
+  // Guardadas (plantillas) nunca aparecen en Activas/Historicas: is_template las saca de ambas.
+  if (mode === "saved") {
+    query = query.eq("is_template", true);
+  } else {
+    query = query.eq("is_template", false);
+    query = mode === "active" ? query.is("finalizada_at", null) : query.not("finalizada_at", "is", null);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
@@ -126,14 +149,20 @@ export async function listRoutines(userId: string, active: boolean): Promise<Rou
   });
 }
 
+// RPC (no un update() directo): el update() plano no tira error si RLS filtra la
+// fila (0 filas afectadas = "exito" silencioso). Finalizar/reactivar es control
+// del dueño de la CUENTA sobre su propio progreso -- lo puede hacer siempre,
+// aunque la rutina se la haya asignado un entrenador y sea privada (a diferencia
+// de modificar/renombrar/eliminar, que si quedan exclusivos de quien la asigno).
+// El entrenador tambien puede finalizar la rutina activa de cualquiera de sus
+// alumnos aceptados, sea o no una que el mismo asigno (ver "Tus alumnos").
 export async function finishRoutine(routineId: string): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const { error } = await supabase.from("routines").update({ finalizada_at: today }).eq("id", routineId);
+  const { error } = await supabase.rpc("set_routine_finished", { p_routine_id: routineId, p_finished: true });
   if (error) throw error;
 }
 
 export async function reactivateRoutine(routineId: string): Promise<void> {
-  const { error } = await supabase.from("routines").update({ finalizada_at: null }).eq("id", routineId);
+  const { error } = await supabase.rpc("set_routine_finished", { p_routine_id: routineId, p_finished: false });
   if (error) throw error;
 }
 
@@ -183,4 +212,33 @@ export async function listWeightLogsWithContext(userId: string): Promise<WeightL
     weekNumero: row.routine_exercises?.routine_days?.routine_weeks?.numero ?? null,
     diaSemana: row.routine_exercises?.routine_days?.dia_semana ?? null,
   }));
+}
+
+/** Fecha del ultimo entreno registrado (o null si nunca cargo pesos). Liviana: se usa
+ * en listados (ej. "Tus alumnos") donde traer todo el historial via listWeightLogsWithContext seria excesivo. */
+export async function getLastTrainedDate(userId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("weight_logs").select("fecha").eq("user_id", userId).order("fecha", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data?.fecha ?? null;
+}
+
+/** % de ejercicios de una rutina con al menos una carga registrada. Misma cuenta que
+ * routineStatsMarkup en profile.ts, pero liviana (sin traer todo listWeightLogsWithContext) para listados como "Tus alumnos". */
+export async function getRoutineProgressPct(userId: string, routineExerciseIds: string[]): Promise<number> {
+  if (routineExerciseIds.length === 0) return 0;
+  const { data, error } = await supabase.from("weight_logs").select("routine_exercise_id").eq("user_id", userId).in("routine_exercise_id", routineExerciseIds);
+  if (error) throw error;
+  const trainedIds = new Set((data ?? []).map((r) => r.routine_exercise_id));
+  return Math.round((trainedIds.size / routineExerciseIds.length) * 100);
+}
+
+/** Cantidad total de rutinas (activas + historicas) que un entrenador le asigno a un alumno puntual. */
+export async function countAssignedRoutines(trainerId: string, studentId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("routines")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", studentId)
+    .eq("assigned_by", trainerId);
+  if (error) throw error;
+  return count ?? 0;
 }

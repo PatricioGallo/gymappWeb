@@ -6,6 +6,7 @@ import {
   getProfile,
   getProfileByUsername,
   getProfileBasicByUsername,
+  getProfilesBasicByIds,
   uploadAvatar,
   listRoutines,
   finishRoutine,
@@ -18,7 +19,18 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
+import { setRoutinePublic } from "../services/routine.service";
+import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
+import {
+  getSubscriptionStatus,
+  getSubscriberCount,
+  subscribeToTrainer,
+  unsubscribeOrCancel,
+  listSubscribers,
+  type SubscriptionStatus,
+  type SubscriberListRow,
+} from "../services/subscription.service";
 import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
@@ -29,6 +41,7 @@ declare const Chart: any;
 setupNavToggle();
 setupRevealObserver();
 setupProfileMenuToggle();
+setupRoutineMenuOutsideClick();
 
 const { data: sessionData } = await supabase.auth.getSession();
 const myId = sessionData.session?.user.id ?? null;
@@ -186,15 +199,17 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   }
 }
 
-async function renderProfileStats(userId: string, username: string, canViewLists: boolean) {
+async function renderProfileStats(userId: string, username: string, canViewLists: boolean, userType: Profile["user_type"]) {
   const stats = document.getElementById("profileStats");
   if (!stats) return;
   // Publicaciones todavia no existe (llega con el feed de la red social): se
   // muestra en 0 hasta que se sume ese sistema. Seguidores/seguidos si son reales.
   const counts = await getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 }));
+  // Suscriptores solo aplica a entrenadores (gimnasio tendra su propio sistema mas adelante).
+  const subscriberCount = userType === "entrenador" ? await getSubscriberCount(userId).catch(() => 0) : null;
   const u = encodeURIComponent(username);
 
-  function stat(count: number, label: string, tab: "followers" | "following"): string {
+  function stat(count: number, label: string, tab: "followers" | "following" | "subscribers"): string {
     const inner = `<strong>${count}</strong> ${label}`;
     return canViewLists ? `<a class="profile-stat" href="followers.html?u=${u}&tab=${tab}">${inner}</a>` : `<span class="profile-stat">${inner}</span>`;
   }
@@ -203,6 +218,7 @@ async function renderProfileStats(userId: string, username: string, canViewLists
     <span class="profile-stat"><strong>0</strong> publicaciones</span>
     ${stat(counts.followers, "seguidores", "followers")}
     ${stat(counts.following, "seguidos", "following")}
+    ${subscriberCount !== null ? stat(subscriberCount, "suscriptores", "subscribers") : ""}
   `;
 }
 
@@ -283,12 +299,69 @@ function initFollowButton(targetId: string, initialStatus: FollowStatus) {
   });
 }
 
-async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus): Promise<FollowStatus> {
+function subscribeButtonLabel(status: SubscriptionStatus): string {
+  if (status === "pending") return "Solicitud enviada";
+  if (status === "accepted") return "Suscripto";
+  return "Suscribirse";
+}
+
+function initSubscribeButton(targetId: string, initialStatus: SubscriptionStatus) {
+  const btn = document.getElementById("subscribeBtn") as HTMLButtonElement | null;
+  if (!btn || !myId) return;
+  let status: SubscriptionStatus = initialStatus;
+
+  function paint() {
+    btn!.textContent = subscribeButtonLabel(status);
+    btn!.classList.toggle("btn-primary", status === "none");
+    btn!.classList.toggle("btn-outline", status !== "none");
+  }
+  paint();
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      if (status === "none") {
+        const { status: newStatus, error } = await subscribeToTrainer(targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = newStatus ?? "pending";
+      } else {
+        // "Solicitud enviada" -> cancela; "Suscripto" -> se desuscribe. Misma operación.
+        const { error } = await unsubscribeOrCancel(myId!, targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = "none";
+      }
+      paint();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+async function renderProfileActions(
+  targetId: string,
+  username: string,
+  ownerView: boolean,
+  viewerLoggedIn: boolean,
+  blockStatus: BlockStatus,
+  targetUserType: Profile["user_type"]
+): Promise<FollowStatus> {
   const actions = document.getElementById("profileActions");
   // Si hay un bloqueo de por medio (en cualquier direccion) no tiene sentido mostrar
   // "+ Seguir": el trigger de la base lo rechaza igual, pero evitamos el error confuso.
   const showFollowBtn = !ownerView && viewerLoggedIn && blockStatus === "none";
+  // Suscripcion solo tiene sentido contra un entrenador (gimnasio tendra su propio flujo mas adelante).
+  const showSubscribeBtn = showFollowBtn && targetUserType === "entrenador";
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
+  // "ended" (fue alumno, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
+  // suscribirse, y la RPC de suscripcion reactiva ese mismo vinculo historico si corresponde.
+  const rawSubscriptionStatus: SubscriptionStatus = showSubscribeBtn ? await getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : "none";
+  const subscriptionStatus: SubscriptionStatus = rawSubscriptionStatus === "ended" ? "none" : rawSubscriptionStatus;
   if (!actions) return followStatus;
 
   actions.innerHTML = `
@@ -298,9 +371,11 @@ async function renderProfileActions(targetId: string, username: string, ownerVie
       Compartir perfil
     </button>
     ${showFollowBtn ? `<button class="btn ${followStatus === "none" ? "btn-primary" : "btn-outline"}" id="followBtn" type="button">${followButtonLabel(followStatus)}</button>` : ""}
+    ${showSubscribeBtn ? `<button class="btn ${subscriptionStatus === "none" ? "btn-primary" : "btn-outline"}" id="subscribeBtn" type="button">${subscribeButtonLabel(subscriptionStatus)}</button>` : ""}
   `;
   initShare(username, "shareBtn");
   if (showFollowBtn) initFollowButton(targetId, followStatus);
+  if (showSubscribeBtn) initSubscribeButton(targetId, subscriptionStatus);
   return followStatus;
 }
 
@@ -507,6 +582,40 @@ function setupProfileMenuToggle() {
   });
 }
 
+// ---------- Menu de tuerca por rutina (Mostrar / Modificar / Eliminar) ----------
+
+const ROUTINE_MENU_GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
+
+function setupRoutineMenuOutsideClick() {
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".routine-menu-wrap")) return;
+    document.querySelectorAll<HTMLElement>(".routine-menu-panel").forEach((p) => (p.hidden = true));
+    document.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((b) => {
+      b.classList.remove("open");
+      b.setAttribute("aria-expanded", "false");
+    });
+  });
+}
+
+function wireRoutineMenus(container: HTMLElement) {
+  container.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((btn) => {
+    const panel = btn.nextElementSibling as HTMLElement | null;
+    if (!panel) return;
+    btn.addEventListener("click", () => {
+      const willOpen = panel.hidden;
+      container.querySelectorAll<HTMLElement>(".routine-menu-panel").forEach((p) => (p.hidden = true));
+      container.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((b) => {
+        b.classList.remove("open");
+        b.setAttribute("aria-expanded", "false");
+      });
+      panel.hidden = !willOpen;
+      btn.classList.toggle("open", willOpen);
+      btn.setAttribute("aria-expanded", String(willOpen));
+    });
+  });
+}
+
 async function handleUnblock(targetId: string) {
   if (!myId) return;
   const { error } = await unblockUser(myId, targetId);
@@ -565,7 +674,7 @@ function renderPrivateNotice(nombre: string) {
 
 // Solo se llama para el dueño del perfil: para un visitante estos accesos
 // directos (rutinas propias, progreso completo) no aplican.
-function renderQuickActions(userId: string) {
+function renderQuickActions(userId: string, userType: Profile["user_type"]) {
   const quickActions = document.getElementById("quickActions");
   if (!quickActions) return;
 
@@ -582,6 +691,14 @@ function renderQuickActions(userId: string) {
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
       <div><h3>Nueva rutina</h3><p>Armá una rutina desde cero</p></div>
     </a>
+    ${
+      userType === "entrenador"
+        ? `<a class="quick-card reveal" href="/pages/alumnos.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div><h3>Tus alumnos</h3><p>Rutinas, progreso y comentarios de tus suscriptores</p></div>
+    </a>`
+        : ""
+    }
   `;
 }
 
@@ -619,7 +736,7 @@ function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerV
       <div class="stat-card reveal"><div class="label">Último entrenamiento</div><div class="value">${escapeHtml(lastTrainingLabel(logs))}</div></div>
       <div class="stat-card reveal"><div class="label">Ejercicio más entrenado</div><div class="value">${escapeHtml(top?.name ?? "—")}</div></div>
       <div class="stat-card reveal"><div class="label">Entrenamientos registrados</div><div class="value">${trainingDaysCount(logs)}</div></div>
-      <div class="stat-card reveal"><div class="label">Rutinas activas</div><div class="value">${activeRoutinesCount}</div></div>
+      <div class="stat-card reveal"><div class="label">Rutinas activas</div><div class="value" id="activeRoutinesStatValue">${activeRoutinesCount}</div></div>
     </div>
     <div class="chart-card reveal">
       <h3>Frecuencia de entrenamiento</h3>
@@ -696,7 +813,28 @@ function renderProgressChart(entries: WeightLogEntry[]) {
 
 // ---------- Rutinas ----------
 
-let activeRoutineTab: "active" | "historic" = "active";
+let activeRoutineTab: "active" | "historic" | "saved" = "active";
+
+// Contexto guardado tras el primer render para poder refrescar la lista de
+// rutinas y el conteo de "Rutinas activas" in-place (sin recargar la pagina)
+// despues de finalizar/reactivar una rutina.
+let routinesCtx: { userId: string; ownerView: boolean; logs: WeightLogEntry[]; userType: Profile["user_type"]; ownerBasic: BasicNamedProfile } | null = null;
+
+async function refreshRoutinesAndStats() {
+  if (!routinesCtx) return;
+  activeRoutineTab = "active";
+  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType, routinesCtx.ownerBasic);
+  const statValue = document.getElementById("activeRoutinesStatValue");
+  if (statValue && count !== undefined) statValue.textContent = String(count);
+}
+
+// Una rutina asignada y privada es del que la asigno, no de quien la recibe: el
+// receptor solo puede entrenarla (cargar pesos) y mirarla, nada mas. Si el
+// entrenador la hizo publica, o si nunca fue asignada (rutina propia), el dueño
+// (user_id) tiene control total. Ver migracion student_routine_permission_lockdown.
+function isFullyOwnedByViewer(r: RoutineWithCounts): boolean {
+  return !r.assigned_by || r.assigned_by === myId;
+}
 
 function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) {
   const routineLogs = logs.filter((l) => l.routineId === routine.id);
@@ -721,13 +859,21 @@ function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) 
   `;
 }
 
-async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[]) {
+async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[], targetUserType: Profile["user_type"], ownerBasic: BasicNamedProfile) {
   const routinesContent = document.getElementById("routinesContent");
   const routinesTitle = document.getElementById("routinesTitle");
   const tabsWrap = document.getElementById("routineTabs");
+  const savedTabBtn = document.getElementById("savedTabBtn") as HTMLButtonElement | null;
   if (!routinesContent) return;
 
-  // Las historicas son algo personal: un visitante solo ve las activas, sin
+  // Guardadas es un espacio de trabajo personal (plantillas propias, o para
+  // asignar a alumnos si sos entrenador): no tiene sentido para un visitante
+  // ni para gimnasio/colaborador (gimnasio tiene su propio sistema aparte).
+  const canUseSaved = ownerView && (targetUserType === "entrenador" || targetUserType === "usuario" || targetUserType === "admin");
+  if (canUseSaved) savedTabBtn?.removeAttribute("hidden");
+  if (!canUseSaved && activeRoutineTab === "saved") activeRoutineTab = "active";
+
+  // Las historicas/guardadas son algo personal: un visitante solo ve las activas, sin
   // pestaña para cambiar.
   if (!ownerView) {
     activeRoutineTab = "active";
@@ -736,24 +882,43 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
     tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === activeRoutineTab);
       btn.onclick = () => {
-        activeRoutineTab = btn.dataset.tab as "active" | "historic";
-        renderRoutines(userId, ownerView, logs);
+        activeRoutineTab = btn.dataset.tab as "active" | "historic" | "saved";
+        renderRoutines(userId, ownerView, logs, targetUserType, ownerBasic);
       };
     });
   }
-  if (routinesTitle) routinesTitle.textContent = activeRoutineTab === "active" ? "Rutinas activas" : "Rutinas históricas";
+  if (routinesTitle) {
+    routinesTitle.textContent = activeRoutineTab === "active" ? "Rutinas activas" : activeRoutineTab === "historic" ? "Rutinas históricas" : "Rutinas guardadas";
+  }
 
-  const routines = await listRoutines(userId, activeRoutineTab === "active");
+  const routines = await listRoutines(userId, activeRoutineTab);
+
+  if (activeRoutineTab === "saved") {
+    renderSavedRoutines(routines, routinesContent, targetUserType);
+    return routines.length;
+  }
+
+  // Todas comparten el mismo dueño (esta pagina), pero cada una puede haber sido
+  // asignada por un entrenador distinto: se resuelven en un solo batch.
+  const assignedByIds = [...new Set(routines.map((r) => r.assigned_by))];
+  const assignedByProfiles = await getProfilesBasicByIds(assignedByIds);
 
   if (activeRoutineTab === "active") {
-    renderActiveRoutines(routines, ownerView, routinesContent, logs);
+    renderActiveRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
   } else {
-    renderHistoricRoutines(routines, ownerView, routinesContent, logs);
+    renderHistoricRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
   }
   return routines.length;
 }
 
-function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean, container: HTMLElement, logs: WeightLogEntry[]) {
+function renderActiveRoutines(
+  routines: RoutineWithCounts[],
+  ownerView: boolean,
+  container: HTMLElement,
+  logs: WeightLogEntry[],
+  ownerBasic: BasicNamedProfile,
+  assignedByProfiles: Map<string, ProfileBasic>
+) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
       ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas activas</h3><p>Creá tu primera rutina para empezar a entrenar con Gym Social.</p><a href="/pages/rutinsView.html" class="btn btn-primary btn-sm">Crear nueva rutina</a></div>`
@@ -763,18 +928,37 @@ function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean,
 
   container.innerHTML = routines
     .map((r) => {
+      const fullyOwned = isFullyOwnedByViewer(r);
+      const menu = ownerView
+        ? `<div class="profile-menu-wrap routine-menu-wrap">
+             <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+             <div class="profile-menu-panel routine-menu-panel" hidden>
+               <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
+               ${
+                 fullyOwned
+                   ? `<a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+               <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
+               <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>`
+                   : ""
+               }
+             </div>
+           </div>`
+        : "";
+      // Finalizar (a diferencia de Modificar/Eliminar/visibilidad) es control del
+      // dueño de la cuenta sobre su propio progreso: se puede aunque la rutina
+      // sea asignada y privada, no requiere fullyOwned.
       const actions = ownerView
         ? `<button class="btn btn-primary btn-sm addPeso" data-id="${r.id}">Entrenar hoy</button>
-           <button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>
-           <button class="btn btn-outline btn-sm modExc" data-id="${r.id}">Modificar</button>
-           <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>
-           <button class="btn btn-danger btn-sm button_red" data-id="${r.id}">Eliminar</button>`
+           <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>`
         : `<button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>`;
 
       return `
-        <div class="routine-card reveal">
+        <div class="routine-card reveal${ownerView ? " routine-card-has-menu" : ""}">
+          ${menu}
           <span class="routine-started-tag">Iniciada el ${escapeHtml(formatFechaCorta(r.fecha_inicio))}</span>
+          <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
           <h3>${escapeHtml(r.nombre)}</h3>
+          ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
           ${routineStatsMarkup(r, logs)}
           <div class="routine-actions">${actions}</div>
         </div>
@@ -787,21 +971,38 @@ function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean,
   });
   if (!ownerView) return;
 
-  container.querySelectorAll<HTMLButtonElement>(".modExc").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `excView.html?rid=${btn.dataset.id}`));
-  });
+  wireRoutineMenus(container);
   container.querySelectorAll<HTMLButtonElement>(".addPeso").forEach((btn) => {
     btn.addEventListener("click", () => (window.location.href = `pesos.html?rid=${btn.dataset.id}`));
-  });
-  container.querySelectorAll<HTMLButtonElement>(".button_red").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `deleteRutins.html?rid=${btn.dataset.id}`));
   });
   container.querySelectorAll<HTMLButtonElement>(".finishRoutine").forEach((btn) => {
     btn.addEventListener("click", () => confirmFinishRoutine(btn.dataset.id!, routines.find((r) => r.id === btn.dataset.id)!));
   });
+  container.querySelectorAll<HTMLButtonElement>(".togglePublicRoutine").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (!routine) return;
+      btn.disabled = true;
+      try {
+        await setRoutinePublic(routine.id, !routine.is_public);
+        routine.is_public = !routine.is_public;
+        renderActiveRoutines(routines, ownerView, container, logs, ownerBasic, assignedByProfiles);
+      } catch {
+        btn.disabled = false;
+        alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
+      }
+    });
+  });
 }
 
-function renderHistoricRoutines(routines: RoutineWithCounts[], ownerView: boolean, container: HTMLElement, logs: WeightLogEntry[]) {
+function renderHistoricRoutines(
+  routines: RoutineWithCounts[],
+  ownerView: boolean,
+  container: HTMLElement,
+  logs: WeightLogEntry[],
+  ownerBasic: BasicNamedProfile,
+  assignedByProfiles: Map<string, ProfileBasic>
+) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
       ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas históricas</h3><p>Cuando finalices una rutina activa, va a aparecer acá.</p></div>`
@@ -811,15 +1012,27 @@ function renderHistoricRoutines(routines: RoutineWithCounts[], ownerView: boolea
 
   container.innerHTML = routines
     .map((r) => {
+      const menu = ownerView
+        ? `<div class="profile-menu-wrap routine-menu-wrap">
+             <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+             <div class="profile-menu-panel routine-menu-panel" hidden>
+               <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
+               ${isFullyOwnedByViewer(r) ? `<a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>` : ""}
+             </div>
+           </div>`
+        : "";
+      // Reactivar, igual que Finalizar: control del dueño de la cuenta sobre su
+      // propio progreso, no requiere fullyOwned.
       const actions = ownerView
-        ? `<button class="btn btn-outline btn-sm showExcHist" data-id="${r.id}">Mostrar</button>
-           <button class="btn btn-primary btn-sm reactivateRoutine" data-id="${r.id}">Reactivar</button>`
+        ? `<button class="btn btn-primary btn-sm reactivateRoutine" data-id="${r.id}">Reactivar</button>`
         : `<button class="btn btn-outline btn-sm showExcHist" data-id="${r.id}">Mostrar</button>`;
 
       return `
-        <div class="routine-card is-historic reveal">
+        <div class="routine-card is-historic reveal${ownerView ? " routine-card-has-menu" : ""}">
+          ${menu}
           ${r.finalizada_at ? `<span class="routine-finished-tag">Finalizada el ${escapeHtml(formatFechaCorta(r.finalizada_at))}</span>` : ""}
           <h3>${escapeHtml(r.nombre)}</h3>
+          ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
           ${routineStatsMarkup(r, logs)}
           <div class="routine-actions">${actions}</div>
         </div>
@@ -832,8 +1045,187 @@ function renderHistoricRoutines(routines: RoutineWithCounts[], ownerView: boolea
   });
   if (!ownerView) return;
 
+  wireRoutineMenus(container);
+
   container.querySelectorAll<HTMLButtonElement>(".reactivateRoutine").forEach((btn) => {
     btn.addEventListener("click", () => openReactivateModal(btn.dataset.id!));
+  });
+}
+
+// Guardadas siempre se ve solo el dueño: no hay caso "visitante" que gatear aca.
+// Un entrenador puede activar y asignarsela a un alumno (o a si mismo); un
+// usuario comun solo puede activarla para si mismo, sin modal de por medio.
+function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLElement, targetUserType: Profile["user_type"]) {
+  const isTrainer = targetUserType === "entrenador";
+
+  if (routines.length === 0) {
+    container.innerHTML = isTrainer
+      ? `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></div>
+        <h3>Todavía no tenés rutinas guardadas</h3>
+        <p>Armá una plantilla y despues asignásela a cualquiera de tus suscriptores aceptados.</p>
+        <a href="/pages/rutinsView.html?mode=template" class="btn btn-primary btn-sm">Crear plantilla</a>
+      </div>
+    `
+      : `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></div>
+        <h3>Todavía no tenés rutinas guardadas</h3>
+        <p>Cuando creás una rutina nueva, te preguntamos si la querés activar ya. Si elegís que no, queda acá para que la actives cuando quieras.</p>
+        <a href="/pages/rutinsView.html" class="btn btn-primary btn-sm">Crear rutina</a>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    ${isTrainer ? `<div class="routines-header-actions"><a href="/pages/rutinsView.html?mode=template" class="btn btn-outline btn-sm">+ Nueva plantilla</a></div>` : ""}
+    ${routines
+      .map(
+        (r) => `
+      <div class="routine-card reveal routine-card-has-menu">
+        <div class="profile-menu-wrap routine-menu-wrap">
+          <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+          <div class="profile-menu-panel routine-menu-panel" hidden>
+            <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
+            <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+            <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
+            <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>
+          </div>
+        </div>
+        <span class="routine-started-tag">Plantilla</span>
+        <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
+        <h3>${escapeHtml(r.nombre)}</h3>
+        <div class="routine-stats">
+          <div><span>Semanas</span><strong>${r.semanasCount}</strong></div>
+          <div><span>Días por semana</span><strong>${r.diasPorSemana}</strong></div>
+          <div><span>Ejercicios</span><strong>${r.ejerciciosCount}</strong></div>
+        </div>
+        <div class="routine-actions">
+          ${
+            isTrainer
+              ? `<button class="btn btn-primary btn-sm assignRoutine" data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">Activar o asignar</button>`
+              : `<a href="rutinsView.html?uid=${encodeURIComponent(myId!)}&cloneFrom=${encodeURIComponent(r.id)}" class="btn btn-primary btn-sm">Activar</a>`
+          }
+        </div>
+      </div>
+    `
+      )
+      .join("")}
+  `;
+
+  wireRoutineMenus(container);
+  if (isTrainer) {
+    container.querySelectorAll<HTMLButtonElement>(".assignRoutine").forEach((btn) => {
+      btn.addEventListener("click", () => openAssignModal(btn.dataset.id!, btn.dataset.nombre!));
+    });
+  }
+  container.querySelectorAll<HTMLButtonElement>(".togglePublicRoutine").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (!routine) return;
+      btn.disabled = true;
+      try {
+        await setRoutinePublic(routine.id, !routine.is_public);
+        routine.is_public = !routine.is_public;
+        renderSavedRoutines(routines, container, targetUserType);
+      } catch {
+        btn.disabled = false;
+        alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
+      }
+    });
+  });
+}
+
+function subscriberRowMarkup(s: SubscriberListRow): string {
+  return `
+    <div class="follow-request-item" data-id="${s.id}">
+      <span class="follow-request-user">
+        <img src="${escapeHtml(s.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+        <span class="search-result-body">
+          <span class="search-result-name">${escapeHtml(`${s.nombre} ${s.apellido}`.trim())}</span>
+          <span class="search-result-username">@${escapeHtml(s.username)}</span>
+        </span>
+      </span>
+      <div class="follow-request-actions">
+        <button class="btn btn-primary btn-sm assignToSubscriber" data-id="${s.id}" type="button">Asignar</button>
+      </div>
+    </div>
+  `;
+}
+
+function selfAssignRowMarkup(): string {
+  const avatarSrc = (document.getElementById("avatarImg") as HTMLImageElement | null)?.src || "/images/avatars/default.svg";
+  return `
+    <div class="follow-request-item" data-id="self">
+      <span class="follow-request-user">
+        <img src="${escapeHtml(avatarSrc)}" alt="" class="search-result-avatar">
+        <span class="search-result-body">
+          <span class="search-result-name">Vos mismo</span>
+          <span class="search-result-username">Para entrenar ocasionalmente con tu propia rutina</span>
+        </span>
+      </span>
+      <div class="follow-request-actions">
+        <button class="btn btn-outline btn-sm assignToSubscriber" data-id="${myId}" type="button">Asignar</button>
+      </div>
+    </div>
+  `;
+}
+
+async function openAssignModal(routineId: string, nombre: string) {
+  if (!myId) return;
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>Activar y asignar "${escapeHtml(nombre)}"</h2>
+        <p class="subtitle">Elegí a quién se la asignás: un suscriptor tuyo, o vos mismo. Se crea una rutina nueva; esta plantilla queda igual acá.</p>
+        <div id="assignSelfRow">${selfAssignRowMarkup()}</div>
+        <input type="search" id="assignSearchInput" class="header-search-input" placeholder="Buscar suscriptor por nombre o usuario..." hidden>
+        <div id="assignModalBody"><p class="chart-sub">Cargando tus suscriptores...</p></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="assignCancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("assignCancel")?.addEventListener("click", closeOverlay);
+  wireAssignButtons(routineId, document.getElementById("assignSelfRow")!);
+
+  const bodyEl = document.getElementById("assignModalBody");
+  const searchInput = document.getElementById("assignSearchInput") as HTMLInputElement | null;
+  if (!bodyEl) return;
+
+  async function runSubscriberSearch(query: string) {
+    const subscribers = await listSubscribers(myId!, query).catch(() => []);
+    bodyEl!.innerHTML =
+      subscribers.length === 0
+        ? `<p class="chart-sub">${query ? `Sin resultados para "${escapeHtml(query)}".` : "Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá también."}</p>`
+        : subscribers.map(subscriberRowMarkup).join("");
+    wireAssignButtons(routineId, bodyEl!);
+  }
+
+  const allSubscribers = await listSubscribers(myId).catch(() => []);
+  if (allSubscribers.length > 0) searchInput?.removeAttribute("hidden");
+
+  bodyEl.innerHTML = allSubscribers.length === 0 ? `<p class="chart-sub">Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá también.</p>` : allSubscribers.map(subscriberRowMarkup).join("");
+  wireAssignButtons(routineId, bodyEl);
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  searchInput?.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => void runSubscriberSearch(searchInput.value.trim()), 250);
+  });
+}
+
+function wireAssignButtons(routineId: string, container: HTMLElement) {
+  container.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      window.location.href = `rutinsView.html?uid=${encodeURIComponent(btn.dataset.id!)}&cloneFrom=${encodeURIComponent(routineId)}`;
+    });
   });
 }
 
@@ -859,9 +1251,32 @@ function confirmFinishRoutine(routineId: string, routine: RoutineWithCounts) {
   `;
   document.getElementById("cancelFinish")?.addEventListener("click", closeOverlay);
   document.getElementById("confirmFinish")?.addEventListener("click", async () => {
-    await finishRoutine(routineId);
-    activeRoutineTab = "active";
-    window.location.reload();
+    const confirmBtn = document.getElementById("confirmFinish") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+    document.getElementById("cancelFinish")?.setAttribute("disabled", "true");
+    try {
+      await finishRoutine(routineId);
+    } catch {
+      alert("No se pudo finalizar la rutina. Probá de nuevo.");
+      confirmBtn.disabled = false;
+      document.getElementById("cancelFinish")?.removeAttribute("disabled");
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina finalizada! Pasó a Históricas.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void refreshRoutinesAndStats();
+    }, 1600);
   });
 }
 
@@ -882,9 +1297,32 @@ function openReactivateModal(routineId: string) {
   `;
   document.getElementById("cancelReactivate")?.addEventListener("click", closeOverlay);
   document.getElementById("confirmReactivate")?.addEventListener("click", async () => {
-    await reactivateRoutine(routineId);
-    activeRoutineTab = "active";
-    window.location.reload();
+    const confirmBtn = document.getElementById("confirmReactivate") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+    document.getElementById("cancelReactivate")?.setAttribute("disabled", "true");
+    try {
+      await reactivateRoutine(routineId);
+    } catch {
+      alert("No se pudo reactivar la rutina. Probá de nuevo.");
+      confirmBtn.disabled = false;
+      document.getElementById("cancelReactivate")?.removeAttribute("disabled");
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina reactivada! Volvió a Activas.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void refreshRoutinesAndStats();
+    }, 1600);
   });
 }
 
@@ -927,8 +1365,9 @@ async function main() {
   if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
   if (isOwner && profile) initAvatar(profile);
 
+  const targetUserType = displayProfile.user_type ?? "usuario";
   const blockStatus: BlockStatus = !isOwner && myId ? await getBlockStatus(displayProfile.id!).catch(() => "none" as BlockStatus) : "none";
-  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
+  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, targetUserType);
   renderProfileMenu(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
 
   // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
@@ -938,7 +1377,7 @@ async function main() {
   // El link a seguidores/seguidos usa la misma regla: si el perfil es privado
   // para este visitante, ni siquiera se muestra clickeable (la RPC tambien lo
   // bloquea server-side, pero evitamos el link muerto).
-  void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer);
+  void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer, targetUserType);
 
   if (isPrivateForViewer) {
     renderProfileBio(displayProfile.bio ?? null);
@@ -961,13 +1400,14 @@ async function main() {
   }
 
   if (isOwner) {
-    renderQuickActions(displayProfile.id!);
+    renderQuickActions(displayProfile.id!, targetUserType);
   } else {
     document.getElementById("quickActionsSection")?.remove();
   }
 
   const logs = await listWeightLogsWithContext(displayProfile.id!);
-  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs);
+  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
+  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile);
   renderStats(logs, activeCount ?? 0, isOwner);
 }
 

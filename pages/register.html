@@ -36,7 +36,7 @@
       <div class="auth-card reveal">
         <span class="eyebrow">Registro</span>
         <h1>Sumate a Gym Social</h1>
-        <p class="subtitle">Completá tus datos y empezá a armar tu rutina hoy mismo.</p>
+        <p class="subtitle">Completá tus datos y empezá a armar tu rutina hoy mismo. <button type="button" class="help-link help-link-subtle" id="accountTypeHelpBtn">¿Qué significa cada cuenta?</button></p>
 
         <div id="loaderBody"></div>
 
@@ -55,6 +55,7 @@
           <div class="field">
             <label for="username">Nombre de usuario</label>
             <input type="text" id="username" name="username" placeholder="Cómo te van a ver en Gym Social" autocomplete="username">
+            <p class="field-hint" id="usernameSuggestion" hidden></p>
           </div>
 
           <div class="field">
@@ -83,6 +84,18 @@
               <input type="password" id="pass2" name="pass2" placeholder="Repetí tu contraseña" autocomplete="new-password">
             </div>
           </div>
+
+          <div class="field role-select-field">
+            <label>¿Cómo te querés registrar?</label>
+            <div class="exc-pick-chips" id="roleChips">
+              <button type="button" class="exc-pick-chip active" data-role="usuario">Usuario</button>
+              <button type="button" class="exc-pick-chip" data-role="entrenador">Entrenador</button>
+            </div>
+          </div>
+
+          <p class="field-hint trainer-fields-hint" id="trainerFields" hidden>
+            Vas a tener todos los beneficios de entrenador apenas te registres. Si querés el tick verde de "entrenador certificado", una vez que confirmes tu cuenta vas a poder subir tu documentación desde Configuración → Verificación.
+          </p>
 
           <div class="field-check">
             <input type="checkbox" id="terms" name="terms">

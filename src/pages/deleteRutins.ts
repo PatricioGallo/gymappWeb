@@ -1,10 +1,11 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { getRoutineDetail, deleteRoutine } from "../services/routine.service";
+import { getProfileBasicById } from "../services/profile.service";
 
 setupNavToggle();
 setupRevealObserver();
-await requireAuth();
+const myId = await requireAuth();
 
 const params = new URLSearchParams(window.location.search);
 const routineId = params.get("rid");
@@ -18,6 +19,23 @@ async function init() {
       <div class="auth-card reveal">
         <span class="eyebrow">Eliminar rutina</span>
         <h1>No se encontró esta rutina</h1>
+        <a href="profile.html" class="btn btn-outline btn-block">Volver al perfil</a>
+      </div>
+    `;
+    return;
+  }
+
+  // Una rutina asignada y privada es del que la asigno: quien la recibe no la
+  // puede eliminar (ver migracion student_routine_permission_lockdown).
+  const isOwner = routine.user_id === myId;
+  const isAssigner = routine.assigned_by === myId;
+  const canDelete = isAssigner || (isOwner && (!routine.assigned_by || routine.is_public)) || (await getProfileBasicById(myId).catch(() => null))?.user_type === "admin";
+  if (!canDelete) {
+    container.innerHTML = `
+      <div class="auth-card reveal">
+        <span class="eyebrow">Eliminar rutina</span>
+        <h1>No podés eliminar "${escapeHtml(routine.nombre)}"</h1>
+        <p class="subtitle">Esta rutina te la asignó tu entrenador y es privada: solo el o ella puede eliminarla.</p>
         <a href="profile.html" class="btn btn-outline btn-block">Volver al perfil</a>
       </div>
     `;
