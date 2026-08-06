@@ -1299,6 +1299,67 @@ a { color: inherit; text-decoration: none; }
 
 .dropzone-remove:hover { color: var(--accent-2); border-color: var(--accent-2); }
 
+.verify-doc-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+
+.verify-doc-item {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.verify-doc-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.verify-doc-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.verify-doc-add-tile {
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.verify-doc-add-tile:hover { border-color: var(--accent-2); background: var(--accent-soft); }
+.verify-doc-add-tile svg { width: 22px; height: 22px; stroke: currentColor; }
+
+.trainer-fields-hint { margin-bottom: 14px; }
+
+.role-select-field { text-align: center; margin: 30px 0 32px; }
+.role-select-field .exc-pick-chips { justify-content: center; }
+
+.username-suggestion-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -2992,6 +3053,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   text-decoration: underline;
   cursor: pointer;
 }
+
+.help-link-subtle { font-size: 11px; font-weight: 500; }
 
 .help-list { display: flex; flex-direction: column; gap: 14px; margin: 18px 0; text-align: left; }
 .help-item strong { display: block; font-size: 14px; margin-bottom: 3px; }

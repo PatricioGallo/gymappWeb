@@ -9,6 +9,7 @@ export interface SignUpFields {
   username: string;
   fechaNacimiento: string;
   nacionalidad: string;
+  userType?: "usuario" | "entrenador";
 }
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
@@ -28,6 +29,27 @@ export async function isUsernameAvailable(username: string): Promise<boolean> {
     .eq("username", username);
   if (error) throw error;
   return (count ?? 0) === 0;
+}
+
+function slugifyNamePart(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Sugiere un @usuario libre a partir de nombre+apellido (probando sufijos numéricos). Null si no se pudo armar uno válido. */
+export async function suggestUsername(nombre: string, apellido: string): Promise<string | null> {
+  const base = `${slugifyNamePart(nombre)}${slugifyNamePart(apellido)}`.slice(0, 25);
+  if (base.length < 3) return null;
+
+  for (let i = 0; i < 15; i++) {
+    const candidate = i === 0 ? base : `${base}${i}`;
+    if (!isValidUsername(candidate) || isReservedUsername(candidate)) continue;
+    if (await isUsernameAvailable(candidate)) return candidate;
+  }
+  return null;
 }
 
 export async function signUp(fields: SignUpFields): Promise<{ error?: string }> {
@@ -50,6 +72,7 @@ export async function signUp(fields: SignUpFields): Promise<{ error?: string }> 
         username,
         fecha_nacimiento: fields.fechaNacimiento,
         nacionalidad: fields.nacionalidad,
+        user_type: fields.userType ?? "usuario",
       },
     },
   });

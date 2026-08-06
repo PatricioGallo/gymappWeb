@@ -32,7 +32,7 @@ export interface AdminUserRow {
 }
 
 /** Roles donde la tilde es una eleccion del admin (papeleria / cuenta famosa); en los demas roles es obligatoria u obligatoriamente ausente. */
-export const CONFIGURABLE_VERIFIED_TYPES: UserType[] = ["entrenador", "usuario"];
+export const CONFIGURABLE_VERIFIED_TYPES: UserType[] = ["entrenador", "gimnasio", "usuario"];
 
 export interface AdminSiteStats {
   total_users: number;

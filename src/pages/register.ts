@@ -1,10 +1,12 @@
 import { setupNavToggle, setupRevealObserver, redirectIfAuthenticated } from "../lib/nav";
-import { signUp, isUsernameAvailable, isValidUsername, normalizeUsername } from "../services/auth.service";
+import { signUp, isUsernameAvailable, isValidUsername, normalizeUsername, suggestUsername } from "../services/auth.service";
 import { isReservedUsername } from "../lib/reservedUsernames";
 import { escapeHtml } from "../lib/dom";
 import { supabase } from "../lib/supabaseClient";
 import { calcularEdad } from "../lib/age";
 import { COUNTRIES } from "../lib/countries";
+import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
+import { uploadVerificationDocument, submitVerificationRequest, MAX_VERIFICATION_DOCUMENTS, type CredentialType } from "../services/verification.service";
 
 setupNavToggle();
 setupRevealObserver();
@@ -21,9 +23,105 @@ if (nationalitySelect) {
     COUNTRIES.map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join("");
 }
 
+let selectedRole: "usuario" | "entrenador" = "usuario";
+const roleChips = document.getElementById("roleChips");
+const trainerFields = document.getElementById("trainerFields") as HTMLElement | null;
+
+const trainerDocsMount = document.getElementById("trainerDocsUploader");
+let trainerUploader: MultiImageUploader | null = null;
+if (trainerDocsMount) {
+  trainerDocsMount.innerHTML = renderMultiImageUploader("trainerDocsUploader", MAX_VERIFICATION_DOCUMENTS);
+  trainerUploader = new MultiImageUploader("trainerDocsUploader", MAX_VERIFICATION_DOCUMENTS);
+}
+
+roleChips?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
+  if (!btn) return;
+  selectedRole = btn.dataset.role as "usuario" | "entrenador";
+  roleChips.querySelectorAll<HTMLButtonElement>(".exc-pick-chip").forEach((b) => b.classList.toggle("active", b === btn));
+  if (trainerFields) trainerFields.hidden = selectedRole !== "entrenador";
+});
+
+function openAccountTypeHelp(): void {
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>¿Qué significa cada cuenta?</h2>
+        <p class="subtitle">Así funciona cada tipo de perfil en Gym Social.</p>
+        <div class="help-list">
+          <div class="help-item">
+            <strong>Gymbro (usuario)</strong>
+            <p>Creá rutinas personalizadas o usá las predefinidas de Gym Social o de un entrenador, seguí tu progreso, seguí a otras personas y dejá que te sigan. Registro libre, gratuito y sin validación.</p>
+          </div>
+          <div class="help-item">
+            <strong>Entrenador</strong>
+            <p>Todos los beneficios de Gymbro, más la posibilidad de tener alumnos/suscriptores: vas a poder hacer seguimiento de su progreso, ver sus rutinas y modificarlas.</p>
+          </div>
+          <div class="help-item">
+            <strong>Gimnasio</strong>
+            <p>Es la más completa: tiene entrenadores y miembros propios, los entrenadores hacen seguimiento de los miembros, y los miembros acceden a las rutinas del gimnasio, se anotan a clases, ven la ocupación en vivo, qué máquinas se usan más y la reputación de los entrenadores. Por ahora este rol lo asigna un admin — escribinos desde <a href="contact.html" target="_blank" rel="noopener">Contacto</a> si tenés un gimnasio.</p>
+          </div>
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" id="closeAccountTypeHelp">Entendido</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById("closeAccountTypeHelp")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+}
+
+document.getElementById("accountTypeHelpBtn")?.addEventListener("click", openAccountTypeHelp);
+
 function showError(message: string): void {
   if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(message)}</p>`;
 }
+
+// ---------- Sugerencia de nombre de usuario ----------
+
+const nameInput = document.getElementById("name") as HTMLInputElement | null;
+const surnInput = document.getElementById("surn") as HTMLInputElement | null;
+const usernameInput = document.getElementById("username") as HTMLInputElement | null;
+const usernameSuggestion = document.getElementById("usernameSuggestion") as HTMLElement | null;
+
+let usernameTouched = false;
+let suggestionTimer: ReturnType<typeof setTimeout> | null = null;
+let suggestionRequestId = 0;
+
+usernameInput?.addEventListener("input", () => {
+  usernameTouched = true;
+  if (usernameSuggestion) usernameSuggestion.hidden = true;
+});
+
+function scheduleUsernameSuggestion(): void {
+  if (usernameTouched || !usernameSuggestion) return;
+  if (suggestionTimer) clearTimeout(suggestionTimer);
+  suggestionTimer = setTimeout(async () => {
+    const nombre = nameInput?.value.trim() ?? "";
+    const apellido = surnInput?.value.trim() ?? "";
+    if (nombre.length < 2 || apellido.length < 2) {
+      usernameSuggestion.hidden = true;
+      return;
+    }
+    const requestId = ++suggestionRequestId;
+    const candidate = await suggestUsername(nombre, apellido);
+    if (requestId !== suggestionRequestId || usernameTouched) return;
+    if (!candidate) {
+      usernameSuggestion.hidden = true;
+      return;
+    }
+    usernameSuggestion.hidden = false;
+    usernameSuggestion.innerHTML = `Sugerencia: <button type="button" class="username-suggestion-btn" id="applyUsernameSuggestion">@${escapeHtml(candidate)}</button>`;
+    document.getElementById("applyUsernameSuggestion")?.addEventListener("click", () => {
+      if (usernameInput) usernameInput.value = candidate;
+      usernameSuggestion.hidden = true;
+    });
+  }, 600);
+}
+
+nameInput?.addEventListener("input", scheduleUsernameSuggestion);
+surnInput?.addEventListener("input", scheduleUsernameSuggestion);
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -84,7 +182,7 @@ form?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const { error } = await signUp({ email: mail, password: pass, nombre, apellido, username, fechaNacimiento, nacionalidad });
+  const { error } = await signUp({ email: mail, password: pass, nombre, apellido, username, fechaNacimiento, nacionalidad, userType: selectedRole });
 
   if (error) {
     if (loaderBody) loaderBody.innerHTML = "";
@@ -93,6 +191,21 @@ form?.addEventListener("submit", async (event) => {
   }
 
   const { data: sessionData } = await supabase.auth.getSession();
+
+  if (sessionData.session && selectedRole === "entrenador" && trainerUploader) {
+    const credentialType = ((document.getElementById("credentialType") as HTMLSelectElement | null)?.value || null) as CredentialType | null;
+    const files = trainerUploader.getNewFiles();
+    if (credentialType || files.length > 0) {
+      const userId = sessionData.session.user.id;
+      const paths: string[] = [];
+      for (const file of files) {
+        const { path } = await uploadVerificationDocument(userId, file);
+        if (path) paths.push(path);
+      }
+      await submitVerificationRequest(userId, credentialType, paths);
+    }
+  }
+
   const successMessage = sessionData.session
     ? "¡Usuario registrado con éxito! Espera, serás redirigido."
     : "¡Cuenta creada! Revisá tu mail para confirmar la cuenta antes de ingresar.";

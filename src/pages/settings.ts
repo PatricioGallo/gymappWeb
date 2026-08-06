@@ -14,6 +14,19 @@ import {
   type ProfileLink,
 } from "../services/profile.service";
 import { listBlockedUsers, unblockUser, type BlockedUserRow } from "../services/block.service";
+import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
+import {
+  getMyVerificationRequest,
+  getVerificationDocumentUrl,
+  uploadVerificationDocument,
+  submitVerificationRequest,
+  resubmitVerificationRequest,
+  CREDENTIAL_TYPE_OPTIONS,
+  CREDENTIAL_TYPE_LABELS,
+  MAX_VERIFICATION_DOCUMENTS,
+  type VerificationRequest,
+  type CredentialType,
+} from "../services/verification.service";
 
 setupNavToggle();
 setupRevealObserver();
@@ -29,6 +42,7 @@ if (!profile) {
 // ---------- Tabs ----------
 
 let blockedLoaded = false;
+let verificationLoaded = false;
 
 function setupTabs() {
   const tabsWrap = document.getElementById("settingsTabs");
@@ -37,7 +51,13 @@ function setupTabs() {
   const notificationsTab = document.getElementById("notificationsTab")!;
   const personalizationTab = document.getElementById("personalizationTab")!;
   const blockedTab = document.getElementById("blockedTab")!;
+  const verificationTab = document.getElementById("verificationTab")!;
+  const verificationTabBtn = document.getElementById("verificationTabBtn") as HTMLButtonElement | null;
   if (!tabsWrap) return;
+
+  if (verificationTabBtn && (profile!.user_type === "entrenador" || profile!.user_type === "gimnasio")) {
+    verificationTabBtn.hidden = false;
+  }
 
   tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -48,9 +68,14 @@ function setupTabs() {
       notificationsTab.hidden = tab !== "notifications";
       personalizationTab.hidden = tab !== "personalization";
       blockedTab.hidden = tab !== "blocked";
+      verificationTab.hidden = tab !== "verification";
       if (tab === "blocked" && !blockedLoaded) {
         blockedLoaded = true;
         await loadBlocked();
+      }
+      if (tab === "verification" && !verificationLoaded) {
+        verificationLoaded = true;
+        await loadVerificationTab();
       }
     });
   });
@@ -431,6 +456,119 @@ function renderBlockedTab(blocked: BlockedUserRow[]) {
       await loadBlocked();
     });
   });
+}
+
+// ---------- Verificación ----------
+
+const VERIFICATION_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendiente de revisión",
+  approved: "Aprobada",
+  rejected: "Rechazada",
+};
+
+async function loadVerificationTab() {
+  const verificationTab = document.getElementById("verificationTab")!;
+  verificationTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando...</p></div>`;
+  const request = await getMyVerificationRequest(userId);
+  await renderVerificationTab(request);
+}
+
+async function renderVerificationTab(request: VerificationRequest | null) {
+  const verificationTab = document.getElementById("verificationTab")!;
+  const isGimnasio = profile!.user_type === "gimnasio";
+  const canEdit = !request || request.status === "pending" || request.status === "rejected";
+
+  const documentUrls = request
+    ? await Promise.all(((request.documents as string[]) ?? []).map(async (path) => ({ path, url: await getVerificationDocumentUrl(path) })))
+    : [];
+
+  verificationTab.innerHTML = `
+    <div class="chart-card reveal">
+      <h3>Validación y tick verde</h3>
+      <p class="chart-sub">
+        ${
+          isGimnasio
+            ? "Subí documentación que demuestre la existencia y actividad de tu gimnasio (habilitación, fotos del local, etc.) para pedir el tick verde."
+            : "Contanos de dónde sale tu título o certificado y subí fotos como respaldo para pedir el tick verde de entrenador certificado. Todo es opcional: seguís teniendo todos los beneficios de entrenador aunque no completes nada, solo no vas a tener el tick hasta que lo hagamos."
+        }
+      </p>
+
+      ${
+        request
+          ? `<p class="profile-badge">Estado: ${escapeHtml(VERIFICATION_STATUS_LABELS[request.status] ?? request.status)}</p>
+             ${request.status === "rejected" && request.admin_note ? `<p class="chart-sub"><strong>Motivo:</strong> ${escapeHtml(request.admin_note)}</p>` : ""}`
+          : ""
+      }
+
+      ${
+        canEdit
+          ? `
+        ${
+          !isGimnasio
+            ? `
+        <div class="field">
+          <label for="verifCredentialType">¿De dónde sale tu título? (opcional)</label>
+          <select id="verifCredentialType">
+            <option value="">Preferí no aclarar</option>
+            ${CREDENTIAL_TYPE_OPTIONS.map((c) => `<option value="${c}" ${request?.credential_type === c ? "selected" : ""}>${escapeHtml(CREDENTIAL_TYPE_LABELS[c])}</option>`).join("")}
+          </select>
+        </div>`
+            : ""
+        }
+        <div class="field">
+          <label>Fotos (opcional, necesario para el tick verde)</label>
+          <div id="verifDocsUploader"></div>
+        </div>
+        <div class="alert_message" id="verifAlert"></div>
+        <div class="settings-actions"><button class="btn btn-primary btn-sm" id="verifSaveBtn" type="button">${request ? "Reenviar solicitud" : "Enviar solicitud"}</button></div>
+      `
+          : `<p class="chart-sub">Tu solicitud ya fue aprobada, ¡felicitaciones! Si necesitás actualizar tu documentación escribinos por Contacto.</p>
+             <div class="verify-doc-grid">${documentUrls.map((d) => (d.url ? `<div class="verify-doc-item"><img src="${escapeHtml(d.url)}" alt=""></div>` : "")).join("")}</div>`
+      }
+    </div>
+  `;
+
+  if (canEdit) {
+    const mount = document.getElementById("verifDocsUploader")!;
+    mount.innerHTML = renderMultiImageUploader("verifDocsUploader", MAX_VERIFICATION_DOCUMENTS);
+    const uploader = new MultiImageUploader("verifDocsUploader", MAX_VERIFICATION_DOCUMENTS);
+    uploader.seedExisting(documentUrls.filter((d): d is { path: string; url: string } => Boolean(d.url)));
+
+    document.getElementById("verifSaveBtn")?.addEventListener("click", async () => {
+      const alertBox = document.getElementById("verifAlert")!;
+      alertBox.innerHTML = "";
+      const credentialType = isGimnasio
+        ? null
+        : ((document.getElementById("verifCredentialType") as HTMLSelectElement | null)?.value || null) as CredentialType | null;
+
+      const saveBtn = document.getElementById("verifSaveBtn") as HTMLButtonElement;
+      saveBtn.disabled = true;
+
+      const newFiles = uploader.getNewFiles();
+      const paths = [...uploader.getExistingPaths()];
+      for (const file of newFiles) {
+        const { path, error } = await uploadVerificationDocument(userId, file);
+        if (error) {
+          saveBtn.disabled = false;
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        if (path) paths.push(path);
+      }
+
+      const { error } = request
+        ? await resubmitVerificationRequest(request.id, credentialType, paths)
+        : await submitVerificationRequest(userId, credentialType, paths);
+
+      saveBtn.disabled = false;
+      if (error) {
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        return;
+      }
+
+      await loadVerificationTab();
+    });
+  }
 }
 
 // ---------- Init ----------

@@ -6,13 +6,13 @@ export type BadgeColor = "blue" | "green";
 /**
  * Reglas de la tilde de verificacion:
  * - admin/colaborador: azul, obligatoria (no configurable).
- * - gimnasio: verde, obligatoria (autenticidad certificada por Gym Social).
- * - entrenador: verde, solo si is_verified (papeleria presentada, configurable por admin).
+ * - gimnasio: verde, solo si is_verified (documentacion validada, ver verification_requests).
+ * - entrenador: verde, solo si is_verified (papeleria presentada, ver verification_requests).
  * - usuario: azul, solo si is_verified (cuenta famosa/reconocida, configurable por admin).
  */
 export function getVerifiedBadgeColor(userType: UserType, isVerified: boolean): BadgeColor | null {
   if (userType === "admin" || userType === "colaborador") return "blue";
-  if (userType === "gimnasio") return "green";
+  if (userType === "gimnasio") return isVerified ? "green" : null;
   if (userType === "entrenador") return isVerified ? "green" : null;
   if (userType === "usuario") return isVerified ? "blue" : null;
   return null;
@@ -20,14 +20,13 @@ export function getVerifiedBadgeColor(userType: UserType, isVerified: boolean): 
 
 /**
  * Etiqueta minimalista de rol para debajo del nombre en el perfil.
- * admin/colaborador: rol tal cual. gimnasio: "Gimnasio verificado".
- * entrenador: "Entrenador verificado" solo con tilde verde, sino "Entrenador".
+ * admin/colaborador: rol tal cual. gimnasio/entrenador: "... verificado" solo con tilde verde.
  * usuario: nada, salvo "Cuenta oficial" si tiene tilde azul.
  */
 export function getUserTypeLabel(userType: UserType, isVerified: boolean): string | null {
   if (userType === "admin") return "Administrador";
   if (userType === "colaborador") return "Colaborador";
-  if (userType === "gimnasio") return "Gimnasio verificado";
+  if (userType === "gimnasio") return isVerified ? "Gimnasio verificado" : "Gimnasio";
   if (userType === "entrenador") return isVerified ? "Entrenador verificado" : "Entrenador";
   if (userType === "usuario") return isVerified ? "Cuenta oficial" : null;
   return null;
