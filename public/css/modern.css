@@ -2201,6 +2201,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .routine-tab { padding: 9px 16px; font-size: 12.5px; }
 }
 
+.routines-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
 /* ---------- Routine card ---------- */
 
 .routine-card {

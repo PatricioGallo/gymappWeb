@@ -19,7 +19,15 @@ import {
   type WeightLogEntry,
 } from "../services/profile.service";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
-import { getSubscriptionStatus, getSubscriberCount, subscribeToTrainer, unsubscribeOrCancel, type SubscriptionStatus } from "../services/subscription.service";
+import {
+  getSubscriptionStatus,
+  getSubscriberCount,
+  subscribeToTrainer,
+  unsubscribeOrCancel,
+  listSubscribers,
+  type SubscriptionStatus,
+  type SubscriberListRow,
+} from "../services/subscription.service";
 import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
@@ -756,7 +764,7 @@ function renderProgressChart(entries: WeightLogEntry[]) {
 
 // ---------- Rutinas ----------
 
-let activeRoutineTab: "active" | "historic" = "active";
+let activeRoutineTab: "active" | "historic" | "saved" = "active";
 
 function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) {
   const routineLogs = logs.filter((l) => l.routineId === routine.id);
@@ -781,13 +789,20 @@ function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) 
   `;
 }
 
-async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[]) {
+async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[], targetUserType: Profile["user_type"]) {
   const routinesContent = document.getElementById("routinesContent");
   const routinesTitle = document.getElementById("routinesTitle");
   const tabsWrap = document.getElementById("routineTabs");
+  const savedTabBtn = document.getElementById("savedTabBtn") as HTMLButtonElement | null;
   if (!routinesContent) return;
 
-  // Las historicas son algo personal: un visitante solo ve las activas, sin
+  // Guardadas es un espacio de trabajo del entrenador (plantillas para asignar
+  // a alumnos): no tiene sentido para un visitante ni para otros tipos de cuenta.
+  const canUseSaved = ownerView && targetUserType === "entrenador";
+  if (canUseSaved) savedTabBtn?.removeAttribute("hidden");
+  if (!canUseSaved && activeRoutineTab === "saved") activeRoutineTab = "active";
+
+  // Las historicas/guardadas son algo personal: un visitante solo ve las activas, sin
   // pestaña para cambiar.
   if (!ownerView) {
     activeRoutineTab = "active";
@@ -796,19 +811,23 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
     tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === activeRoutineTab);
       btn.onclick = () => {
-        activeRoutineTab = btn.dataset.tab as "active" | "historic";
-        renderRoutines(userId, ownerView, logs);
+        activeRoutineTab = btn.dataset.tab as "active" | "historic" | "saved";
+        renderRoutines(userId, ownerView, logs, targetUserType);
       };
     });
   }
-  if (routinesTitle) routinesTitle.textContent = activeRoutineTab === "active" ? "Rutinas activas" : "Rutinas históricas";
+  if (routinesTitle) {
+    routinesTitle.textContent = activeRoutineTab === "active" ? "Rutinas activas" : activeRoutineTab === "historic" ? "Rutinas históricas" : "Rutinas guardadas";
+  }
 
-  const routines = await listRoutines(userId, activeRoutineTab === "active");
+  const routines = await listRoutines(userId, activeRoutineTab);
 
   if (activeRoutineTab === "active") {
     renderActiveRoutines(routines, ownerView, routinesContent, logs);
-  } else {
+  } else if (activeRoutineTab === "historic") {
     renderHistoricRoutines(routines, ownerView, routinesContent, logs);
+  } else {
+    renderSavedRoutines(routines, routinesContent);
   }
   return routines.length;
 }
@@ -894,6 +913,114 @@ function renderHistoricRoutines(routines: RoutineWithCounts[], ownerView: boolea
 
   container.querySelectorAll<HTMLButtonElement>(".reactivateRoutine").forEach((btn) => {
     btn.addEventListener("click", () => openReactivateModal(btn.dataset.id!));
+  });
+}
+
+// Guardadas siempre se ve solo el dueño (entrenador): no hay caso "visitante" que gatear aca.
+function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLElement) {
+  if (routines.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></div>
+        <h3>Todavía no tenés rutinas guardadas</h3>
+        <p>Armá una plantilla y despues asignásela a cualquiera de tus suscriptores aceptados.</p>
+        <a href="/pages/rutinsView.html?mode=template" class="btn btn-primary btn-sm">Crear plantilla</a>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="routines-header-actions">
+      <a href="/pages/rutinsView.html?mode=template" class="btn btn-outline btn-sm">+ Nueva plantilla</a>
+    </div>
+    ${routines
+      .map(
+        (r) => `
+      <div class="routine-card reveal">
+        <span class="routine-started-tag">Plantilla</span>
+        <h3>${escapeHtml(r.nombre)}</h3>
+        <div class="routine-stats">
+          <div><span>Semanas</span><strong>${r.semanasCount}</strong></div>
+          <div><span>Días por semana</span><strong>${r.diasPorSemana}</strong></div>
+          <div><span>Ejercicios</span><strong>${r.ejerciciosCount}</strong></div>
+        </div>
+        <div class="routine-actions">
+          <button class="btn btn-primary btn-sm assignRoutine" data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">Activar y asignar</button>
+          <button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>
+          <button class="btn btn-outline btn-sm modExc" data-id="${r.id}">Modificar</button>
+          <button class="btn btn-danger btn-sm button_red" data-id="${r.id}">Eliminar</button>
+        </div>
+      </div>
+    `
+      )
+      .join("")}
+  `;
+
+  container.querySelectorAll<HTMLButtonElement>(".showExc").forEach((btn) => {
+    btn.addEventListener("click", () => (window.location.href = `showExc.html?rid=${btn.dataset.id}`));
+  });
+  container.querySelectorAll<HTMLButtonElement>(".modExc").forEach((btn) => {
+    btn.addEventListener("click", () => (window.location.href = `excView.html?rid=${btn.dataset.id}`));
+  });
+  container.querySelectorAll<HTMLButtonElement>(".button_red").forEach((btn) => {
+    btn.addEventListener("click", () => (window.location.href = `deleteRutins.html?rid=${btn.dataset.id}`));
+  });
+  container.querySelectorAll<HTMLButtonElement>(".assignRoutine").forEach((btn) => {
+    btn.addEventListener("click", () => openAssignModal(btn.dataset.id!, btn.dataset.nombre!));
+  });
+}
+
+function subscriberRowMarkup(s: SubscriberListRow): string {
+  return `
+    <div class="follow-request-item" data-id="${s.id}">
+      <span class="follow-request-user">
+        <img src="${escapeHtml(s.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+        <span class="search-result-body">
+          <span class="search-result-name">${escapeHtml(`${s.nombre} ${s.apellido}`.trim())}</span>
+          <span class="search-result-username">@${escapeHtml(s.username)}</span>
+        </span>
+      </span>
+      <div class="follow-request-actions">
+        <button class="btn btn-primary btn-sm assignToSubscriber" data-id="${s.id}" type="button">Asignar</button>
+      </div>
+    </div>
+  `;
+}
+
+async function openAssignModal(routineId: string, nombre: string) {
+  if (!myId) return;
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card modal-card-lg">
+        <h2>Activar y asignar "${escapeHtml(nombre)}"</h2>
+        <p class="subtitle">Elegí a qué suscriptor se la asignás. Se crea una rutina nueva para esa persona; esta plantilla queda igual acá.</p>
+        <div id="assignModalBody"><p class="chart-sub">Cargando tus suscriptores...</p></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="assignCancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("assignCancel")?.addEventListener("click", closeOverlay);
+
+  const subscribers = await listSubscribers(myId).catch(() => []);
+  const bodyEl = document.getElementById("assignModalBody");
+  if (!bodyEl) return;
+
+  if (subscribers.length === 0) {
+    bodyEl.innerHTML = `<p class="chart-sub">Todavía no tenés suscriptores aceptados. Cuando alguien se suscriba y lo aceptes, vas a poder asignarle rutinas acá.</p>`;
+    return;
+  }
+
+  bodyEl.innerHTML = subscribers.map(subscriberRowMarkup).join("");
+  bodyEl.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      window.location.href = `rutinsView.html?uid=${encodeURIComponent(btn.dataset.id!)}&cloneFrom=${encodeURIComponent(routineId)}`;
+    });
   });
 }
 
@@ -1028,7 +1155,7 @@ async function main() {
   }
 
   const logs = await listWeightLogsWithContext(displayProfile.id!);
-  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs);
+  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType);
   renderStats(logs, activeCount ?? 0, isOwner);
 }
 

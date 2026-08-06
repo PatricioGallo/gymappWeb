@@ -562,6 +562,7 @@ export type Database = {
           id: string
           is_public: boolean
           is_shareable: boolean
+          is_template: boolean
           nombre: string
           share_token: string
           updated_at: string
@@ -575,6 +576,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           is_shareable?: boolean
+          is_template?: boolean
           nombre: string
           share_token?: string
           updated_at?: string
@@ -588,6 +590,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           is_shareable?: boolean
+          is_template?: boolean
           nombre?: string
           share_token?: string
           updated_at?: string
@@ -1074,6 +1077,7 @@ export type Database = {
         Args: {
           p_fecha_inicio: string
           p_is_public?: boolean
+          p_is_template?: boolean
           p_nombre: string
           p_user_id: string
           p_weeks: Json

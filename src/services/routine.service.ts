@@ -26,7 +26,8 @@ export async function createRoutine(
   nombre: string,
   semanas: number,
   dias: NewDayInput[],
-  isPublic: boolean
+  isPublic: boolean,
+  isTemplate = false
 ): Promise<{ id?: string; error?: string }> {
   const weeksPayload = Array.from({ length: semanas }, (_, i) => ({
     numero: i + 1,
@@ -41,9 +42,13 @@ export async function createRoutine(
     p_fecha_inicio: today,
     p_weeks: weeksPayload as unknown as Json,
     p_is_public: isPublic,
+    p_is_template: isTemplate,
   });
 
-  if (error) return { error: "No se pudo crear la rutina. Probá de nuevo." };
+  if (error) {
+    if (error.message?.includes("not a subscriber")) return { error: "Solo podés asignar rutinas a alumnos que te tengan como entrenador aceptado." };
+    return { error: "No se pudo crear la rutina. Probá de nuevo." };
+  }
   return { id: data as unknown as string };
 }
 

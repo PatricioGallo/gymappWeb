@@ -39,6 +39,12 @@ export async function getProfileBasicByUsername(username: string): Promise<Profi
   return data;
 }
 
+export async function getProfileBasicById(userId: string): Promise<ProfileBasic | null> {
+  const { data, error } = await supabase.from("profiles_public").select("*").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function updateProfileFields(
   userId: string,
   fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled">>
@@ -92,17 +98,25 @@ export interface RoutineWithCounts extends Routine {
   totalRoutineExerciseIds: string[];
 }
 
-export async function listRoutines(userId: string, active: boolean): Promise<RoutineWithCounts[]> {
+export type RoutineListMode = "active" | "historic" | "saved";
+
+export async function listRoutines(userId: string, mode: RoutineListMode): Promise<RoutineWithCounts[]> {
   let query = supabase
     .from("routines")
     .select(
-      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_shareable, share_token, created_at, updated_at,
+      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_shareable, share_token, is_template, created_at, updated_at,
        routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( id ) ) )`
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
-  query = active ? query.is("finalizada_at", null) : query.not("finalizada_at", "is", null);
+  // Guardadas (plantillas) nunca aparecen en Activas/Historicas: is_template las saca de ambas.
+  if (mode === "saved") {
+    query = query.eq("is_template", true);
+  } else {
+    query = query.eq("is_template", false);
+    query = mode === "active" ? query.is("finalizada_at", null) : query.not("finalizada_at", "is", null);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
