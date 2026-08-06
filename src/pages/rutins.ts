@@ -20,6 +20,14 @@ const isTemplateMode = params.get("mode") === "template";
 const cloneFromId = params.get("cloneFrom");
 const isAssigningToOther = targetUserId !== myId;
 
+// Un usuario comun (o admin) no elige explicitamente "plantilla vs rutina":
+// toda rutina que arma de cero (fuera de activar una guardada) se guarda como
+// plantilla y se le pregunta si la quiere activar ya (ver createAndFinish).
+// Entrenador y el resto de los tipos de cuenta no cambian: siguen creando
+// activa de una.
+const myProfile = await getProfileBasicById(myId).catch(() => null);
+const isRegularUser = myProfile?.user_type === "usuario" || myProfile?.user_type === "admin";
+
 const container = document.getElementById("container") as HTMLElement;
 let excCatalog: Exercise[] = [];
 let assignTargetName: string | null = null;
@@ -300,7 +308,7 @@ function openTemplatePreview(t: RoutineTemplate) {
   });
 }
 
-async function openClonePreview(routineId: string) {
+async function openClonePreview(routineId: string, isActivating = false) {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Cargando rutina...</p></div>`;
 
@@ -370,7 +378,7 @@ async function openClonePreview(routineId: string) {
     }));
 
     const isPublic = readVisibilityField("cloneVisibility");
-    const error = await createAndFinish(name, weeks, dias, isPublic);
+    const error = await createAndFinish(name, weeks, dias, isPublic, isActivating);
     if (error) alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
   });
 }
@@ -671,33 +679,72 @@ async function submitRoutine(name: string, weeks: number, isPublic: boolean) {
 
 // ---------- Compartido: creación final + redirección ----------
 
-async function createAndFinish(name: string, weeks: number, dias: NewDayInput[], isPublic: boolean): Promise<string | null> {
+function renderSuccessAndRedirect(message: string): void {
+  const loaderBody = document.getElementById("loaderBody")!;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+      <p>${message}</p>
+    </div>
+  `;
+  setTimeout(() => {
+    window.location.href = "profile.html";
+  }, 2000);
+}
+
+async function createAndFinish(name: string, weeks: number, dias: NewDayInput[], isPublic: boolean, isActivating = false): Promise<string | null> {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `
     <div class="loader-container"><div class="modern-spinner"></div><p>Creando rutina...</p></div>
   `;
 
-  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, isTemplateMode);
+  // isActivating (venís de una guardada via cloneFrom) siempre crea activa de una.
+  // Si no, un usuario comun creando de cero cae siempre en guardada+pregunta;
+  // el resto (entrenador normal, o mode=template explicito) sigue como antes.
+  const isTemplate = isActivating ? false : isTemplateMode || (isRegularUser && !isAssigningToOther);
+  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, isTemplate);
 
   if (createError) {
     loaderBody.innerHTML = "";
     return createError;
   }
 
+  // Guardada "silenciosa" (mode=template, entrenador armando una plantilla a
+  // propósito): sin pregunta, va derecho al mensaje de éxito de siempre.
+  if (isTemplate && !isTemplateMode) {
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="modal-card">
+          <h2>¡Rutina guardada!</h2>
+          <p class="subtitle">Quedó en Guardadas. ¿Querés activarla ahora para empezar a entrenar?</p>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-primary" id="activateNowBtn">Activar ahora</button>
+            <button type="button" class="btn btn-outline" id="skipActivateBtn">Ahora no</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById("skipActivateBtn")?.addEventListener("click", () => {
+      renderSuccessAndRedirect("¡Rutina guardada con éxito! Espere, será redirigido.");
+    });
+    document.getElementById("activateNowBtn")?.addEventListener("click", async () => {
+      loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Activando rutina...</p></div>`;
+      const { error: activateError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, false);
+      if (activateError) {
+        renderSuccessAndRedirect("La rutina quedó guardada, pero no se pudo activar. Podés activarla luego desde Guardadas.");
+        return;
+      }
+      renderSuccessAndRedirect("¡Rutina activada con éxito! Espere, será redirigido.");
+    });
+    return null;
+  }
+
   const successMessage = isAssigningToOther
     ? `¡Rutina asignada${assignTargetName ? ` a ${escapeHtml(assignTargetName)}` : ""} con éxito! Espere, será redirigido.`
-    : "¡Rutina creada con éxito! Espere, será redirigido.";
-
-  loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-      <p>${successMessage}</p>
-    </div>
-  `;
-  setTimeout(() => {
-    window.location.href = "profile.html";
-  }, 2000);
-
+    : isActivating
+      ? "¡Rutina activada con éxito! Espere, será redirigido."
+      : "¡Rutina creada con éxito! Espere, será redirigido.";
+  renderSuccessAndRedirect(successMessage);
   return null;
 }
 
@@ -715,7 +762,7 @@ async function init() {
   // Entrar con cloneFrom (siempre junto a ?uid=<alumno>) abre directo la
   // previsualizacion de clonado sobre el selector, sin que el alumno tenga que
   // elegir "cero vs. ver rutinas" para algo que ya viene decidido.
-  if (cloneFromId) openClonePreview(cloneFromId);
+  if (cloneFromId) openClonePreview(cloneFromId, true);
 }
 
 init();

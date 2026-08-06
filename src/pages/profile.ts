@@ -855,9 +855,10 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
   const savedTabBtn = document.getElementById("savedTabBtn") as HTMLButtonElement | null;
   if (!routinesContent) return;
 
-  // Guardadas es un espacio de trabajo del entrenador (plantillas para asignar
-  // a alumnos): no tiene sentido para un visitante ni para otros tipos de cuenta.
-  const canUseSaved = ownerView && targetUserType === "entrenador";
+  // Guardadas es un espacio de trabajo personal (plantillas propias, o para
+  // asignar a alumnos si sos entrenador): no tiene sentido para un visitante
+  // ni para gimnasio/colaborador (gimnasio tiene su propio sistema aparte).
+  const canUseSaved = ownerView && (targetUserType === "entrenador" || targetUserType === "usuario" || targetUserType === "admin");
   if (canUseSaved) savedTabBtn?.removeAttribute("hidden");
   if (!canUseSaved && activeRoutineTab === "saved") activeRoutineTab = "active";
 
@@ -882,7 +883,7 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
   const routines = await listRoutines(userId, activeRoutineTab);
 
   if (activeRoutineTab === "saved") {
-    renderSavedRoutines(routines, routinesContent);
+    renderSavedRoutines(routines, routinesContent, targetUserType);
     return routines.length;
   }
 
@@ -1019,24 +1020,35 @@ function renderHistoricRoutines(
   });
 }
 
-// Guardadas siempre se ve solo el dueño (entrenador): no hay caso "visitante" que gatear aca.
-function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLElement) {
+// Guardadas siempre se ve solo el dueño: no hay caso "visitante" que gatear aca.
+// Un entrenador puede activar y asignarsela a un alumno (o a si mismo); un
+// usuario comun solo puede activarla para si mismo, sin modal de por medio.
+function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLElement, targetUserType: Profile["user_type"]) {
+  const isTrainer = targetUserType === "entrenador";
+
   if (routines.length === 0) {
-    container.innerHTML = `
+    container.innerHTML = isTrainer
+      ? `
       <div class="empty-state reveal">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></div>
         <h3>Todavía no tenés rutinas guardadas</h3>
         <p>Armá una plantilla y despues asignásela a cualquiera de tus suscriptores aceptados.</p>
         <a href="/pages/rutinsView.html?mode=template" class="btn btn-primary btn-sm">Crear plantilla</a>
       </div>
+    `
+      : `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></div>
+        <h3>Todavía no tenés rutinas guardadas</h3>
+        <p>Cuando creás una rutina nueva, te preguntamos si la querés activar ya. Si elegís que no, queda acá para que la actives cuando quieras.</p>
+        <a href="/pages/rutinsView.html" class="btn btn-primary btn-sm">Crear rutina</a>
+      </div>
     `;
     return;
   }
 
   container.innerHTML = `
-    <div class="routines-header-actions">
-      <a href="/pages/rutinsView.html?mode=template" class="btn btn-outline btn-sm">+ Nueva plantilla</a>
-    </div>
+    ${isTrainer ? `<div class="routines-header-actions"><a href="/pages/rutinsView.html?mode=template" class="btn btn-outline btn-sm">+ Nueva plantilla</a></div>` : ""}
     ${routines
       .map(
         (r) => `
@@ -1059,7 +1071,11 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
           <div><span>Ejercicios</span><strong>${r.ejerciciosCount}</strong></div>
         </div>
         <div class="routine-actions">
-          <button class="btn btn-primary btn-sm assignRoutine" data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">Activar o asignar</button>
+          ${
+            isTrainer
+              ? `<button class="btn btn-primary btn-sm assignRoutine" data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">Activar o asignar</button>`
+              : `<a href="rutinsView.html?uid=${encodeURIComponent(myId!)}&cloneFrom=${encodeURIComponent(r.id)}" class="btn btn-primary btn-sm">Activar</a>`
+          }
         </div>
       </div>
     `
@@ -1068,9 +1084,11 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
   `;
 
   wireRoutineMenus(container);
-  container.querySelectorAll<HTMLButtonElement>(".assignRoutine").forEach((btn) => {
-    btn.addEventListener("click", () => openAssignModal(btn.dataset.id!, btn.dataset.nombre!));
-  });
+  if (isTrainer) {
+    container.querySelectorAll<HTMLButtonElement>(".assignRoutine").forEach((btn) => {
+      btn.addEventListener("click", () => openAssignModal(btn.dataset.id!, btn.dataset.nombre!));
+    });
+  }
   container.querySelectorAll<HTMLButtonElement>(".togglePublicRoutine").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const routine = routines.find((r) => r.id === btn.dataset.id);
@@ -1079,7 +1097,7 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
       try {
         await setRoutinePublic(routine.id, !routine.is_public);
         routine.is_public = !routine.is_public;
-        renderSavedRoutines(routines, container);
+        renderSavedRoutines(routines, container, targetUserType);
       } catch {
         btn.disabled = false;
         alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
