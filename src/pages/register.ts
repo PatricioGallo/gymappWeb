@@ -5,8 +5,6 @@ import { escapeHtml } from "../lib/dom";
 import { supabase } from "../lib/supabaseClient";
 import { calcularEdad } from "../lib/age";
 import { COUNTRIES } from "../lib/countries";
-import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
-import { uploadVerificationDocument, submitVerificationRequest, MAX_VERIFICATION_DOCUMENTS, type CredentialType } from "../services/verification.service";
 
 setupNavToggle();
 setupRevealObserver();
@@ -26,13 +24,6 @@ if (nationalitySelect) {
 let selectedRole: "usuario" | "entrenador" = "usuario";
 const roleChips = document.getElementById("roleChips");
 const trainerFields = document.getElementById("trainerFields") as HTMLElement | null;
-
-const trainerDocsMount = document.getElementById("trainerDocsUploader");
-let trainerUploader: MultiImageUploader | null = null;
-if (trainerDocsMount) {
-  trainerDocsMount.innerHTML = renderMultiImageUploader("trainerDocsUploader", MAX_VERIFICATION_DOCUMENTS);
-  trainerUploader = new MultiImageUploader("trainerDocsUploader", MAX_VERIFICATION_DOCUMENTS);
-}
 
 roleChips?.addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
@@ -192,23 +183,11 @@ form?.addEventListener("submit", async (event) => {
 
   const { data: sessionData } = await supabase.auth.getSession();
 
-  if (sessionData.session && selectedRole === "entrenador" && trainerUploader) {
-    const credentialType = ((document.getElementById("credentialType") as HTMLSelectElement | null)?.value || null) as CredentialType | null;
-    const files = trainerUploader.getNewFiles();
-    if (credentialType || files.length > 0) {
-      const userId = sessionData.session.user.id;
-      const paths: string[] = [];
-      for (const file of files) {
-        const { path } = await uploadVerificationDocument(userId, file);
-        if (path) paths.push(path);
-      }
-      await submitVerificationRequest(userId, credentialType, paths);
-    }
-  }
-
   const successMessage = sessionData.session
     ? "¡Usuario registrado con éxito! Espera, serás redirigido."
-    : "¡Cuenta creada! Revisá tu mail para confirmar la cuenta antes de ingresar.";
+    : selectedRole === "entrenador"
+      ? "¡Cuenta creada! Revisá tu mail para confirmar la cuenta. Una vez que ingreses, subí tu documentación desde Configuración > Verificación para tener el tick verde."
+      : "¡Cuenta creada! Revisá tu mail para confirmar la cuenta antes de ingresar.";
 
   if (loaderBody) {
     loaderBody.innerHTML = `
@@ -226,5 +205,5 @@ form?.addEventListener("submit", async (event) => {
 
   setTimeout(() => {
     window.location.href = sessionData.session ? "profile.html" : "login.html";
-  }, 2500);
+  }, sessionData.session ? 2500 : 4000);
 });

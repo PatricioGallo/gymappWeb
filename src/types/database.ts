@@ -788,7 +788,7 @@ export type Database = {
           admin_note: string | null
           applicant_type: string
           created_at: string
-          credential_type: string | null
+          credentials: Json
           documents: Json
           id: string
           reviewed_at: string | null
@@ -801,7 +801,7 @@ export type Database = {
           admin_note?: string | null
           applicant_type: string
           created_at?: string
-          credential_type?: string | null
+          credentials?: Json
           documents?: Json
           id?: string
           reviewed_at?: string | null
@@ -814,7 +814,7 @@ export type Database = {
           admin_note?: string | null
           applicant_type?: string
           created_at?: string
-          credential_type?: string | null
+          credentials?: Json
           documents?: Json
           id?: string
           reviewed_at?: string | null

@@ -14,7 +14,7 @@ export function renderMultiImageUploader(containerId: string, maxFiles: number):
     <div class="verify-doc-uploader" id="${containerId}">
       <input type="file" id="${containerId}Input" class="verify-doc-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
       <div class="verify-doc-grid" id="${containerId}Grid"></div>
-      <p class="field-hint">JPG, PNG o WEBP · hasta 5MB cada una · máximo ${maxFiles} fotos</p>
+      <p class="field-hint">JPG, PNG o WEBP · hasta 50MB cada una · máximo ${maxFiles} fotos</p>
     </div>
   `;
 }

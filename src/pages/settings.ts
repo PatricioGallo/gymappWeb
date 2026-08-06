@@ -15,6 +15,7 @@ import {
 } from "../services/profile.service";
 import { listBlockedUsers, unblockUser, type BlockedUserRow } from "../services/block.service";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
+import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
 import {
   getMyVerificationRequest,
   getVerificationDocumentUrl,
@@ -23,9 +24,17 @@ import {
   resubmitVerificationRequest,
   CREDENTIAL_TYPE_OPTIONS,
   CREDENTIAL_TYPE_LABELS,
+  CREDENTIAL_SPECIALTY_OPTIONS,
+  CREDENTIAL_SPECIALTY_LABELS,
+  CREDENTIAL_COMPLETION_STATUS_OPTIONS,
+  CREDENTIAL_COMPLETION_STATUS_LABELS,
   MAX_VERIFICATION_DOCUMENTS,
+  MAX_CREDENTIALS,
   type VerificationRequest,
   type CredentialType,
+  type CredentialSpecialty,
+  type CredentialCompletionStatus,
+  type Credential,
 } from "../services/verification.service";
 
 setupNavToggle();
@@ -473,10 +482,84 @@ async function loadVerificationTab() {
   await renderVerificationTab(request);
 }
 
+function emptyCredential(): Credential {
+  return { type: CREDENTIAL_TYPE_OPTIONS[0], institution: "", specialty: CREDENTIAL_SPECIALTY_OPTIONS[0], completionStatus: "recibido" };
+}
+
+function renderCredentialCard(cred: Credential, index: number): string {
+  const isUniversidad = cred.type === "universitario";
+  const isCustomInstitution = cred.institution === "__otro__" || (cred.institution !== "" && !ARGENTINE_UNIVERSITIES.includes(cred.institution));
+  const selectValue = isUniversidad ? (isCustomInstitution ? "__otro__" : cred.institution) : "";
+  const showInstitutionText = !isUniversidad || isCustomInstitution;
+  const institutionTextValue = cred.institution === "__otro__" ? "" : cred.institution;
+
+  return `
+    <div class="credential-card" data-index="${index}">
+      <button type="button" class="credential-remove" data-index="${index}" aria-label="Quitar título">×</button>
+      <div class="field-row">
+        <div class="field">
+          <label>Tipo de título</label>
+          <select class="cred-type" data-index="${index}">
+            ${CREDENTIAL_TYPE_OPTIONS.map((t) => `<option value="${t}" ${cred.type === t ? "selected" : ""}>${escapeHtml(CREDENTIAL_TYPE_LABELS[t])}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>¿De qué es el título?</label>
+          <select class="cred-specialty" data-index="${index}">
+            ${CREDENTIAL_SPECIALTY_OPTIONS.map((s) => `<option value="${s}" ${cred.specialty === s ? "selected" : ""}>${escapeHtml(CREDENTIAL_SPECIALTY_LABELS[s])}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      ${
+        cred.type === "otro"
+          ? `<div class="field">
+               <label>¿Qué tipo de título es?</label>
+               <input type="text" class="cred-other-type" data-index="${index}" value="${escapeHtml(cred.otherTypeText ?? "")}" placeholder="Ej: certificación internacional">
+             </div>`
+          : ""
+      }
+      ${
+        cred.specialty === "otro"
+          ? `<div class="field">
+               <label>¿De qué es específicamente?</label>
+               <input type="text" class="cred-other-specialty" data-index="${index}" value="${escapeHtml(cred.otherSpecialtyText ?? "")}" placeholder="Ej: instructor de crossfit">
+             </div>`
+          : ""
+      }
+      ${
+        isUniversidad
+          ? `<div class="field">
+               <label>Universidad</label>
+               <select class="cred-institution-select" data-index="${index}">
+                 <option value="">Elegí una universidad</option>
+                 ${ARGENTINE_UNIVERSITIES.map((u) => `<option value="${escapeHtml(u)}" ${selectValue === u ? "selected" : ""}>${escapeHtml(u)}</option>`).join("")}
+                 <option value="__otro__" ${selectValue === "__otro__" ? "selected" : ""}>Otro / no está en la lista</option>
+               </select>
+               ${
+                 showInstitutionText
+                   ? `<input type="text" class="cred-institution-text credential-institution-other" data-index="${index}" value="${escapeHtml(institutionTextValue)}" placeholder="Nombre de la universidad">`
+                   : ""
+               }
+             </div>`
+          : `<div class="field">
+               <label>Institución / entidad que lo emitió</label>
+               <input type="text" class="cred-institution-text" data-index="${index}" value="${escapeHtml(institutionTextValue)}" placeholder="Ej: nombre del instituto o entidad">
+             </div>`
+      }
+      <div class="field">
+        <label>¿Recibido o estudiante?</label>
+        <select class="cred-completion-status" data-index="${index}">
+          ${CREDENTIAL_COMPLETION_STATUS_OPTIONS.map((s) => `<option value="${s}" ${cred.completionStatus === s ? "selected" : ""}>${escapeHtml(CREDENTIAL_COMPLETION_STATUS_LABELS[s])}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+  `;
+}
+
 async function renderVerificationTab(request: VerificationRequest | null) {
   const verificationTab = document.getElementById("verificationTab")!;
   const isGimnasio = profile!.user_type === "gimnasio";
-  const canEdit = !request || request.status === "pending" || request.status === "rejected";
+  const canEdit = !request || request.status === "rejected";
 
   const documentUrls = request
     ? await Promise.all(((request.documents as string[]) ?? []).map(async (path) => ({ path, url: await getVerificationDocumentUrl(path) })))
@@ -489,7 +572,7 @@ async function renderVerificationTab(request: VerificationRequest | null) {
         ${
           isGimnasio
             ? "Subí documentación que demuestre la existencia y actividad de tu gimnasio (habilitación, fotos del local, etc.) para pedir el tick verde."
-            : "Contanos de dónde sale tu título o certificado y subí fotos como respaldo para pedir el tick verde de entrenador certificado. Todo es opcional: seguís teniendo todos los beneficios de entrenador aunque no completes nada, solo no vas a tener el tick hasta que lo hagamos."
+            : "Contanos de dónde sale tu título (obligatorio) y subí fotos como respaldo (opcional, pero necesario para el tick verde) para pedir el tick de entrenador certificado. Seguís teniendo todos los beneficios de entrenador aunque no lo hagas, solo no vas a tener el tick hasta que lo hagamos."
         }
       </p>
 
@@ -507,11 +590,9 @@ async function renderVerificationTab(request: VerificationRequest | null) {
           !isGimnasio
             ? `
         <div class="field">
-          <label for="verifCredentialType">¿De dónde sale tu título? (opcional)</label>
-          <select id="verifCredentialType">
-            <option value="">Preferí no aclarar</option>
-            ${CREDENTIAL_TYPE_OPTIONS.map((c) => `<option value="${c}" ${request?.credential_type === c ? "selected" : ""}>${escapeHtml(CREDENTIAL_TYPE_LABELS[c])}</option>`).join("")}
-          </select>
+          <label>Tus títulos (obligatorio)</label>
+          <div id="credentialsEditor"></div>
+          <button type="button" class="btn btn-outline btn-sm" id="addCredentialBtn">+ Agregar título</button>
         </div>`
             : ""
         }
@@ -522,13 +603,89 @@ async function renderVerificationTab(request: VerificationRequest | null) {
         <div class="alert_message" id="verifAlert"></div>
         <div class="settings-actions"><button class="btn btn-primary btn-sm" id="verifSaveBtn" type="button">${request ? "Reenviar solicitud" : "Enviar solicitud"}</button></div>
       `
-          : `<p class="chart-sub">Tu solicitud ya fue aprobada, ¡felicitaciones! Si necesitás actualizar tu documentación escribinos por Contacto.</p>
+          : `<p class="chart-sub">${
+              request!.status === "approved"
+                ? "Tu solicitud ya fue aprobada, ¡felicitaciones! Si necesitás actualizar tu documentación escribinos por Contacto."
+                : "Tu solicitud está en revisión. Vas a poder volver a enviarla si te la rechazan; mientras tanto no se puede editar."
+            }</p>
              <div class="verify-doc-grid">${documentUrls.map((d) => (d.url ? `<div class="verify-doc-item"><img src="${escapeHtml(d.url)}" alt=""></div>` : "")).join("")}</div>`
       }
     </div>
   `;
 
   if (canEdit) {
+    const currentCredentials: Credential[] = isGimnasio
+      ? []
+      : request?.credentials?.length
+        ? request.credentials.map((c) => ({ ...c }))
+        : [emptyCredential()];
+
+    function renderCredentialsEditor() {
+      const editor = document.getElementById("credentialsEditor");
+      if (!editor) return;
+      editor.innerHTML = currentCredentials.map((c, i) => renderCredentialCard(c, i)).join("");
+
+      editor.querySelectorAll<HTMLSelectElement>(".cred-type").forEach((sel) => {
+        sel.addEventListener("change", () => {
+          const i = Number(sel.dataset.index);
+          currentCredentials[i] = { ...currentCredentials[i], type: sel.value as CredentialType, otherTypeText: null };
+          renderCredentialsEditor();
+        });
+      });
+      editor.querySelectorAll<HTMLInputElement>(".cred-other-type").forEach((input) => {
+        input.addEventListener("input", () => {
+          currentCredentials[Number(input.dataset.index)].otherTypeText = input.value;
+        });
+      });
+      editor.querySelectorAll<HTMLSelectElement>(".cred-specialty").forEach((sel) => {
+        sel.addEventListener("change", () => {
+          const i = Number(sel.dataset.index);
+          currentCredentials[i] = { ...currentCredentials[i], specialty: sel.value as CredentialSpecialty, otherSpecialtyText: null };
+          renderCredentialsEditor();
+        });
+      });
+      editor.querySelectorAll<HTMLInputElement>(".cred-other-specialty").forEach((input) => {
+        input.addEventListener("input", () => {
+          currentCredentials[Number(input.dataset.index)].otherSpecialtyText = input.value;
+        });
+      });
+      editor.querySelectorAll<HTMLSelectElement>(".cred-completion-status").forEach((sel) => {
+        sel.addEventListener("change", () => {
+          currentCredentials[Number(sel.dataset.index)].completionStatus = sel.value as CredentialCompletionStatus;
+        });
+      });
+      editor.querySelectorAll<HTMLSelectElement>(".cred-institution-select").forEach((sel) => {
+        sel.addEventListener("change", () => {
+          const i = Number(sel.dataset.index);
+          currentCredentials[i].institution = sel.value;
+          renderCredentialsEditor();
+        });
+      });
+      editor.querySelectorAll<HTMLInputElement>(".cred-institution-text").forEach((input) => {
+        input.addEventListener("input", () => {
+          currentCredentials[Number(input.dataset.index)].institution = input.value;
+        });
+      });
+      editor.querySelectorAll<HTMLButtonElement>(".credential-remove").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentCredentials.splice(Number(btn.dataset.index), 1);
+          renderCredentialsEditor();
+        });
+      });
+
+      const addBtn = document.getElementById("addCredentialBtn") as HTMLButtonElement | null;
+      if (addBtn) addBtn.disabled = currentCredentials.length >= MAX_CREDENTIALS;
+    }
+
+    if (!isGimnasio) {
+      renderCredentialsEditor();
+      document.getElementById("addCredentialBtn")?.addEventListener("click", () => {
+        if (currentCredentials.length >= MAX_CREDENTIALS) return;
+        currentCredentials.push(emptyCredential());
+        renderCredentialsEditor();
+      });
+    }
+
     const mount = document.getElementById("verifDocsUploader")!;
     mount.innerHTML = renderMultiImageUploader("verifDocsUploader", MAX_VERIFICATION_DOCUMENTS);
     const uploader = new MultiImageUploader("verifDocsUploader", MAX_VERIFICATION_DOCUMENTS);
@@ -537,18 +694,64 @@ async function renderVerificationTab(request: VerificationRequest | null) {
     document.getElementById("verifSaveBtn")?.addEventListener("click", async () => {
       const alertBox = document.getElementById("verifAlert")!;
       alertBox.innerHTML = "";
-      const credentialType = isGimnasio
-        ? null
-        : ((document.getElementById("verifCredentialType") as HTMLSelectElement | null)?.value || null) as CredentialType | null;
+
+      const credentials = currentCredentials
+        .map((c) => ({
+          type: c.type,
+          institution: c.institution === "__otro__" ? "" : c.institution.trim(),
+          otherTypeText: c.type === "otro" ? (c.otherTypeText ?? "").trim() : null,
+          specialty: c.specialty,
+          otherSpecialtyText: c.specialty === "otro" ? (c.otherSpecialtyText ?? "").trim() : null,
+          completionStatus: c.completionStatus,
+        }))
+        .filter((c) => c.institution || c.otherTypeText);
+
+      if (!isGimnasio) {
+        if (credentials.length === 0) {
+          alertBox.innerHTML = "<p>Agregá al menos un título: es obligatorio para pedir la validación.</p>";
+          return;
+        }
+        const missingInstitution = credentials.some((c) => !c.institution);
+        if (missingInstitution) {
+          alertBox.innerHTML = "<p>Completá la institución de cada título que agregaste.</p>";
+          return;
+        }
+        const missingOtherType = credentials.some((c) => c.type === "otro" && !c.otherTypeText);
+        if (missingOtherType) {
+          alertBox.innerHTML = "<p>Contanos qué tipo de título es en los que elegiste \"Otro\".</p>";
+          return;
+        }
+        const missingOtherSpecialty = credentials.some((c) => c.specialty === "otro" && !c.otherSpecialtyText);
+        if (missingOtherSpecialty) {
+          alertBox.innerHTML = "<p>Contanos de qué es el título en los que elegiste \"Otro\".</p>";
+          return;
+        }
+        const missingCompletionStatus = credentials.some((c) => !c.completionStatus);
+        if (missingCompletionStatus) {
+          alertBox.innerHTML = "<p>Indicá si estás recibido o sos estudiante en cada título.</p>";
+          return;
+        }
+      }
 
       const saveBtn = document.getElementById("verifSaveBtn") as HTMLButtonElement;
       saveBtn.disabled = true;
+
+      const loaderBody = document.getElementById("loaderBody");
+      if (loaderBody) {
+        loaderBody.innerHTML = `
+          <div class="loader-container">
+            <div class="modern-spinner"></div>
+            <p>Subiendo documentación...</p>
+          </div>
+        `;
+      }
 
       const newFiles = uploader.getNewFiles();
       const paths = [...uploader.getExistingPaths()];
       for (const file of newFiles) {
         const { path, error } = await uploadVerificationDocument(userId, file);
         if (error) {
+          if (loaderBody) loaderBody.innerHTML = "";
           saveBtn.disabled = false;
           alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
           return;
@@ -557,16 +760,34 @@ async function renderVerificationTab(request: VerificationRequest | null) {
       }
 
       const { error } = request
-        ? await resubmitVerificationRequest(request.id, credentialType, paths)
-        : await submitVerificationRequest(userId, credentialType, paths);
+        ? await resubmitVerificationRequest(request.id, credentials, paths)
+        : await submitVerificationRequest(userId, credentials, paths);
 
       saveBtn.disabled = false;
       if (error) {
+        if (loaderBody) loaderBody.innerHTML = "";
         alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
         return;
       }
 
-      await loadVerificationTab();
+      if (loaderBody) {
+        loaderBody.innerHTML = `
+          <div class="success-check-container">
+            <div class="success-icon">
+              <svg viewBox="0 0 52 52" class="success-svg">
+                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+              </svg>
+            </div>
+            <p>¡Gracias por cargar tus datos! Tu solicitud quedó pendiente de revisión.</p>
+          </div>
+        `;
+      }
+
+      setTimeout(async () => {
+        if (loaderBody) loaderBody.innerHTML = "";
+        await loadVerificationTab();
+      }, 2200);
     });
   }
 }

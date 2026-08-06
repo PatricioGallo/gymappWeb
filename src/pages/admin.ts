@@ -65,7 +65,10 @@ import {
   listVerificationRequestsAdmin,
   reviewVerificationRequest,
   getVerificationDocumentUrl,
+  getPendingVerificationRequestCount,
   CREDENTIAL_TYPE_LABELS,
+  CREDENTIAL_SPECIALTY_LABELS,
+  CREDENTIAL_COMPLETION_STATUS_LABELS,
   type AdminVerificationRequestRow,
   type ApplicantType,
 } from "../services/verification.service";
@@ -1244,13 +1247,29 @@ function openDeleteIssueModal(issue: IssueReport) {
 function setMessagesDot(hasUnread: boolean) {
   const tabDot = document.getElementById("messagesTabDot");
   if (tabDot) tabDot.hidden = !hasUnread;
-  const navDot = document.getElementById("adminLinkDot");
-  if (navDot) navDot.hidden = !hasUnread;
+  void refreshAdminLinkDot();
 }
 
 function setChipDot(id: string, hasUnread: boolean) {
   const dot = document.getElementById(id);
   if (dot) dot.hidden = !hasUnread;
+}
+
+/** Punto naranja junto a "Administrar" en el nav: es la union de mensajes sin leer y validaciones pendientes, asi que no lo puede pisar un solo refresh parcial. */
+async function refreshAdminLinkDot() {
+  const navDot = document.getElementById("adminLinkDot");
+  if (!navDot) return;
+  try {
+    const [contactUnread, errorUnread, userUnread, pendingVerifications] = await Promise.all([
+      getUnreadContactMessageCount(),
+      getUnreadErrorReportCount(),
+      getUnreadUserReportCount(),
+      getPendingVerificationRequestCount(),
+    ]);
+    navDot.hidden = contactUnread + errorUnread + userUnread + pendingVerifications <= 0;
+  } catch {
+    // silencioso: el punto simplemente no se actualiza en este ciclo
+  }
 }
 
 async function refreshMessagesDot() {
@@ -1627,6 +1646,14 @@ function openDeleteUserReportModal(report: UserReportWithNames) {
 const VALIDATION_APPLICANT_LABELS: Record<ApplicantType, string> = { entrenador: "Entrenadores", gimnasio: "Gimnasios" };
 const VALIDATION_STATUS_LABELS: Record<string, string> = { pending: "Pendiente", approved: "Aprobada", rejected: "Rechazada" };
 
+function formatCredentialLabel(c: AdminVerificationRequestRow["credentials"][number]): string {
+  const typeLabel = c.type === "otro" ? c.otherTypeText || "Otro" : CREDENTIAL_TYPE_LABELS[c.type];
+  const specialtyLabel = c.specialty === "otro" ? c.otherSpecialtyText || "Otro" : CREDENTIAL_SPECIALTY_LABELS[c.specialty];
+  const statusLabel = CREDENTIAL_COMPLETION_STATUS_LABELS[c.completionStatus];
+  const parts = [specialtyLabel, typeLabel, c.institution, statusLabel].filter(Boolean);
+  return parts.join(" · ");
+}
+
 async function refreshValidationDot() {
   try {
     const [entrenadorRows, gimnasioRows] = await Promise.all([
@@ -1639,6 +1666,7 @@ async function refreshValidationDot() {
   } catch {
     // silencioso: el punto simplemente no se actualiza en este ciclo
   }
+  void refreshAdminLinkDot();
 }
 
 async function renderValidationTab() {
@@ -1691,7 +1719,11 @@ async function renderValidationResults() {
         <div class="roadmap-task roadmap-status-${r.status === "approved" ? "done" : r.status === "pending" ? "pending" : "in_progress"}" data-id="${r.id}">
           <div class="roadmap-task-body">
             <span class="roadmap-task-title">${escapeHtml(r.applicantName)} <small>@${escapeHtml(r.applicantUsername)}</small></span>
-            ${r.credential_type ? `<p class="roadmap-task-desc"><strong>Título:</strong> ${escapeHtml(CREDENTIAL_TYPE_LABELS[r.credential_type as keyof typeof CREDENTIAL_TYPE_LABELS] ?? r.credential_type)}</p>` : ""}
+            ${
+              r.credentials.length
+                ? `<p class="roadmap-task-desc"><strong>Títulos:</strong> ${r.credentials.map((c) => escapeHtml(formatCredentialLabel(c))).join(" · ")}</p>`
+                : ""
+            }
             <p class="roadmap-task-desc"><strong>Fotos:</strong> ${(r.documents as string[]).length}</p>
             <p class="roadmap-task-desc"><strong>Estado:</strong> ${VALIDATION_STATUS_LABELS[r.status] ?? r.status}</p>
             <p class="roadmap-task-desc"><strong>Enviada:</strong> ${formatDateTime(r.created_at)}</p>
@@ -1726,7 +1758,11 @@ async function openValidationReviewModal(row: AdminVerificationRequestRow) {
       <div class="modal-card modal-card-lg">
         <h2>${escapeHtml(row.applicantName)}</h2>
         <p class="subtitle">@${escapeHtml(row.applicantUsername)} · ${escapeHtml(row.applicantEmail)}</p>
-        ${row.credential_type ? `<p class="chart-sub"><strong>Título:</strong> ${escapeHtml(CREDENTIAL_TYPE_LABELS[row.credential_type as keyof typeof CREDENTIAL_TYPE_LABELS] ?? row.credential_type)}</p>` : `<p class="chart-sub">No aclaró de dónde sale su título.</p>`}
+        ${
+          row.credentials.length
+            ? `<div class="help-list">${row.credentials.map((c) => `<div class="help-item"><strong>${escapeHtml(formatCredentialLabel(c))}</strong></div>`).join("")}</div>`
+            : `<p class="chart-sub">No cargó ningún título.</p>`
+        }
         <div class="verify-doc-grid" id="validationReviewDocs"><div class="inline-loader"><div class="modern-spinner"></div></div></div>
 
         <div class="field"><label for="validationAdminNote">Nota para el usuario (opcional, se ve solo si rechazás)</label><textarea id="validationAdminNote" rows="3">${escapeHtml(row.admin_note ?? "")}</textarea></div>
@@ -1761,15 +1797,37 @@ async function openValidationReviewModal(row: AdminVerificationRequestRow) {
     alertBox.innerHTML = "";
     const note = (document.getElementById("validationAdminNote") as HTMLTextAreaElement).value;
 
+    const approveBtn = document.getElementById("validationApproveBtn") as HTMLButtonElement | null;
+    const rejectBtn = document.getElementById("validationRejectBtn") as HTMLButtonElement | null;
+    if (approveBtn) approveBtn.disabled = true;
+    if (rejectBtn) rejectBtn.disabled = true;
+
     const { error } = await reviewVerificationRequest(row.id, status, note);
     if (error) {
+      if (approveBtn) approveBtn.disabled = false;
+      if (rejectBtn) rejectBtn.disabled = false;
       alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
       return;
     }
 
     verificationLoadedFor[validationSubTab] = false;
-    loaderBody!.innerHTML = "";
-    await renderValidationResults();
+
+    loaderBody!.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>${status === "approved" ? `Solicitud aprobada. @${escapeHtml(row.applicantUsername)} ya tiene el tick verde.` : `Solicitud rechazada.`}</p>
+      </div>
+    `;
+
+    setTimeout(async () => {
+      loaderBody!.innerHTML = "";
+      await renderValidationResults();
+    }, 1800);
   }
 
   document.getElementById("validationApproveBtn")?.addEventListener("click", () => void review("approved"));
