@@ -2028,6 +2028,11 @@ a.profile-stat:hover { color: var(--accent-2); }
 .profile-actions .btn { flex: 1; padding: 11px 20px; font-size: 13.5px; }
 .profile-actions .btn-outline { background: var(--surface-2); }
 
+/* showExc.html solo tiene un boton (Compartir): sin esto, flex:1 lo estira a
+   todo el ancho como si compartiera la fila con otros botones que no existen. */
+#routineActions { justify-content: center; }
+#routineActions .btn { flex: none; }
+
 @media (max-width: 639px) {
   .avatar-wrap { min-height: 76px; max-height: 130px; }
   .profile-top { gap: 16px; }
@@ -2207,6 +2212,30 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   margin-bottom: 14px;
 }
 
+/* ---------- Dueño de la rutina ---------- */
+
+.routine-owner-line {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 4px 0 14px;
+}
+
+.routine-owner-line a { color: var(--accent-2); font-weight: 600; }
+
+.routine-visibility-badge {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin-left: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.routine-visibility-badge.is-public { color: var(--accent-2); border-color: var(--accent-2); }
+
 /* ---------- Tus alumnos ---------- */
 
 .student-card-head { margin-bottom: 14px; }
@@ -2244,11 +2273,16 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 /* ---------- Routine card ---------- */
 
 .routine-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
 }
+
+.routine-card-has-menu h3 { padding-right: 40px; }
+
+.routine-menu-wrap { position: absolute; top: 20px; right: 20px; }
 
 .routine-card.is-historic { opacity: 0.9; }
 
@@ -2276,6 +2310,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .routine-card + .routine-card { margin-top: 14px; }
 .routine-card h3 { margin: 0 0 14px; font-size: 17px; }
+
 
 .routine-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .routine-grid .routine-card + .routine-card { margin-top: 0; }

@@ -3,6 +3,8 @@ import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, getSharedRoutine, setRoutineShareable, type RoutineDetail } from "../services/routine.service";
+import { getProfilesBasicByIds } from "../services/profile.service";
+import { routineOwnerLineMarkup } from "../lib/routineOwner";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 
@@ -15,7 +17,6 @@ const shareToken = params.get("token");
 
 const { data: sessionData } = await supabase.auth.getSession();
 const isLoggedIn = Boolean(sessionData.session);
-const myId = sessionData.session?.user.id ?? null;
 
 function renderNav() {
   const nav = document.getElementById("siteNav");
@@ -71,9 +72,12 @@ async function renderAuthenticated(id: string) {
   }
 
   const title = document.getElementById("routineTitle");
-  const subtitle = document.getElementById("routineSubtitle");
+  const ownerBanner = document.getElementById("routineOwnerBanner");
   if (title) title.textContent = routine.nombre;
-  if (subtitle) subtitle.textContent = myId === routine.user_id ? "Tu rutina" : "Rutina de un usuario que entrenás";
+  if (ownerBanner) {
+    const profiles = await getProfilesBasicByIds([routine.user_id, routine.assigned_by]);
+    ownerBanner.innerHTML = routineOwnerLineMarkup(profiles.get(routine.user_id), routine.assigned_by ? profiles.get(routine.assigned_by) : null);
+  }
 
   renderWeekStatus(routine.semanas.length);
 
@@ -156,10 +160,10 @@ async function renderShared(token: string) {
   }
 
   const title = document.getElementById("routineTitle");
-  const subtitle = document.getElementById("routineSubtitle");
+  const ownerBanner = document.getElementById("routineOwnerBanner");
   const ownerName = routine.owner ? `${routine.owner.nombre} ${routine.owner.apellido}` : "un usuario";
   if (title) title.textContent = routine.nombre;
-  if (subtitle) subtitle.textContent = `Rutina de ${ownerName}`;
+  if (ownerBanner) ownerBanner.innerHTML = routine.owner ? routineOwnerLineMarkup(routine.owner) : "";
 
   renderWeekStatus(routine.semanas.length);
 

@@ -45,6 +45,15 @@ export async function getProfileBasicById(userId: string): Promise<ProfileBasic 
   return data;
 }
 
+/** Trae varios perfiles basicos de una vez (ej. dueño + quien asigno una rutina), indexados por id. */
+export async function getProfilesBasicByIds(ids: (string | null | undefined)[]): Promise<Map<string, ProfileBasic>> {
+  const uniqueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (uniqueIds.length === 0) return new Map();
+  const { data, error } = await supabase.from("profiles_public").select("*").in("id", uniqueIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((p) => [p.id!, p]));
+}
+
 export async function updateProfileFields(
   userId: string,
   fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled">>
@@ -104,7 +113,7 @@ export async function listRoutines(userId: string, mode: RoutineListMode): Promi
   let query = supabase
     .from("routines")
     .select(
-      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_shareable, share_token, is_template, created_at, updated_at,
+      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, is_template, created_at, updated_at,
        routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( id ) ) )`
     )
     .eq("user_id", userId)

@@ -126,6 +126,11 @@ export async function getSharedRoutine(shareToken: string): Promise<any> {
   return data;
 }
 
+export async function setRoutinePublic(routineId: string, isPublic: boolean): Promise<void> {
+  const { error } = await supabase.from("routines").update({ is_public: isPublic }).eq("id", routineId);
+  if (error) throw error;
+}
+
 export async function setRoutineShareable(routineId: string, shareable: boolean): Promise<string | null> {
   const { data, error } = await supabase
     .from("routines")

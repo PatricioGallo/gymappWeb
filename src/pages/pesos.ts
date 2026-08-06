@@ -2,7 +2,8 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
-import { getProfileBasicById } from "../services/profile.service";
+import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
+import { routineOwnerLineMarkup } from "../lib/routineOwner";
 import {
   insertWeightLogs,
   deleteTodayWeightLog,
@@ -648,11 +649,16 @@ async function init() {
 
   const title = document.getElementById("routineTitle");
   const subtitle = document.getElementById("routineSubtitle");
+  const ownerBanner = document.getElementById("routineOwnerBanner");
   if (title) title.textContent = routine.nombre;
   if (subtitle) {
     subtitle.textContent = isTrainingForOther
       ? `Estás cargando pesos para ${targetName ?? "tu alumno"}. Elegí la semana y el día.`
       : "Elegí la semana y el día para cargar el peso de hoy.";
+  }
+  if (ownerBanner) {
+    const profiles = await getProfilesBasicByIds([routine.user_id, routine.assigned_by]);
+    ownerBanner.innerHTML = routineOwnerLineMarkup(profiles.get(routine.user_id), routine.assigned_by ? profiles.get(routine.assigned_by) : null);
   }
 
   const startWeek = currentWeekIndex();

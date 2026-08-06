@@ -11,6 +11,8 @@ import {
   type RoutineDetail,
   type RoutineExerciseWithAuthor,
 } from "../services/routine.service";
+import { getProfilesBasicByIds } from "../services/profile.service";
+import { routineOwnerLineMarkup } from "../lib/routineOwner";
 
 setupNavToggle();
 setupRevealObserver();
@@ -229,8 +231,13 @@ async function init() {
 
   const title = document.getElementById("routineTitle");
   const subtitle = document.getElementById("routineSubtitle");
+  const ownerBanner = document.getElementById("routineOwnerBanner");
   if (title) title.textContent = routine.nombre;
   if (subtitle) subtitle.textContent = "Elegí la semana, agregá o quitá ejercicios y editá series, repeticiones o notas de cada día.";
+  if (ownerBanner) {
+    const profiles = await getProfilesBasicByIds([routine.user_id, routine.assigned_by]);
+    ownerBanner.innerHTML = routineOwnerLineMarkup(profiles.get(routine.user_id), routine.assigned_by ? profiles.get(routine.assigned_by) : null);
+  }
 
   const weekSelect = document.getElementById("weekSelect") as HTMLSelectElement;
   weekSelect.innerHTML = routine.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join("");

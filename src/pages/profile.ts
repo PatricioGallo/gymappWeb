@@ -6,6 +6,7 @@ import {
   getProfile,
   getProfileByUsername,
   getProfileBasicByUsername,
+  getProfilesBasicByIds,
   uploadAvatar,
   listRoutines,
   finishRoutine,
@@ -18,6 +19,8 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
+import { setRoutinePublic } from "../services/routine.service";
+import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
 import {
   getSubscriptionStatus,
@@ -38,6 +41,7 @@ declare const Chart: any;
 setupNavToggle();
 setupRevealObserver();
 setupProfileMenuToggle();
+setupRoutineMenuOutsideClick();
 
 const { data: sessionData } = await supabase.auth.getSession();
 const myId = sessionData.session?.user.id ?? null;
@@ -575,6 +579,40 @@ function setupProfileMenuToggle() {
   });
 }
 
+// ---------- Menu de tuerca por rutina (Mostrar / Modificar / Eliminar) ----------
+
+const ROUTINE_MENU_GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
+
+function setupRoutineMenuOutsideClick() {
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".routine-menu-wrap")) return;
+    document.querySelectorAll<HTMLElement>(".routine-menu-panel").forEach((p) => (p.hidden = true));
+    document.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((b) => {
+      b.classList.remove("open");
+      b.setAttribute("aria-expanded", "false");
+    });
+  });
+}
+
+function wireRoutineMenus(container: HTMLElement) {
+  container.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((btn) => {
+    const panel = btn.nextElementSibling as HTMLElement | null;
+    if (!panel) return;
+    btn.addEventListener("click", () => {
+      const willOpen = panel.hidden;
+      container.querySelectorAll<HTMLElement>(".routine-menu-panel").forEach((p) => (p.hidden = true));
+      container.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((b) => {
+        b.classList.remove("open");
+        b.setAttribute("aria-expanded", "false");
+      });
+      panel.hidden = !willOpen;
+      btn.classList.toggle("open", willOpen);
+      btn.setAttribute("aria-expanded", String(willOpen));
+    });
+  });
+}
+
 async function handleUnblock(targetId: string) {
   if (!myId) return;
   const { error } = await unblockUser(myId, targetId);
@@ -777,12 +815,12 @@ let activeRoutineTab: "active" | "historic" | "saved" = "active";
 // Contexto guardado tras el primer render para poder refrescar la lista de
 // rutinas y el conteo de "Rutinas activas" in-place (sin recargar la pagina)
 // despues de finalizar/reactivar una rutina.
-let routinesCtx: { userId: string; ownerView: boolean; logs: WeightLogEntry[]; userType: Profile["user_type"] } | null = null;
+let routinesCtx: { userId: string; ownerView: boolean; logs: WeightLogEntry[]; userType: Profile["user_type"]; ownerBasic: BasicNamedProfile } | null = null;
 
 async function refreshRoutinesAndStats() {
   if (!routinesCtx) return;
   activeRoutineTab = "active";
-  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType);
+  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType, routinesCtx.ownerBasic);
   const statValue = document.getElementById("activeRoutinesStatValue");
   if (statValue && count !== undefined) statValue.textContent = String(count);
 }
@@ -810,7 +848,7 @@ function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) 
   `;
 }
 
-async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[], targetUserType: Profile["user_type"]) {
+async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[], targetUserType: Profile["user_type"], ownerBasic: BasicNamedProfile) {
   const routinesContent = document.getElementById("routinesContent");
   const routinesTitle = document.getElementById("routinesTitle");
   const tabsWrap = document.getElementById("routineTabs");
@@ -833,7 +871,7 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
       btn.classList.toggle("active", btn.dataset.tab === activeRoutineTab);
       btn.onclick = () => {
         activeRoutineTab = btn.dataset.tab as "active" | "historic" | "saved";
-        renderRoutines(userId, ownerView, logs, targetUserType);
+        renderRoutines(userId, ownerView, logs, targetUserType, ownerBasic);
       };
     });
   }
@@ -843,17 +881,32 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
 
   const routines = await listRoutines(userId, activeRoutineTab);
 
-  if (activeRoutineTab === "active") {
-    renderActiveRoutines(routines, ownerView, routinesContent, logs);
-  } else if (activeRoutineTab === "historic") {
-    renderHistoricRoutines(routines, ownerView, routinesContent, logs);
-  } else {
+  if (activeRoutineTab === "saved") {
     renderSavedRoutines(routines, routinesContent);
+    return routines.length;
+  }
+
+  // Todas comparten el mismo dueño (esta pagina), pero cada una puede haber sido
+  // asignada por un entrenador distinto: se resuelven en un solo batch.
+  const assignedByIds = [...new Set(routines.map((r) => r.assigned_by))];
+  const assignedByProfiles = await getProfilesBasicByIds(assignedByIds);
+
+  if (activeRoutineTab === "active") {
+    renderActiveRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
+  } else {
+    renderHistoricRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
   }
   return routines.length;
 }
 
-function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean, container: HTMLElement, logs: WeightLogEntry[]) {
+function renderActiveRoutines(
+  routines: RoutineWithCounts[],
+  ownerView: boolean,
+  container: HTMLElement,
+  logs: WeightLogEntry[],
+  ownerBasic: BasicNamedProfile,
+  assignedByProfiles: Map<string, ProfileBasic>
+) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
       ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas activas</h3><p>Creá tu primera rutina para empezar a entrenar con Gym Social.</p><a href="/pages/rutinsView.html" class="btn btn-primary btn-sm">Crear nueva rutina</a></div>`
@@ -863,18 +916,29 @@ function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean,
 
   container.innerHTML = routines
     .map((r) => {
+      const menu = ownerView
+        ? `<div class="profile-menu-wrap routine-menu-wrap">
+             <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+             <div class="profile-menu-panel routine-menu-panel" hidden>
+               <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
+               <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+               <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
+               <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>
+             </div>
+           </div>`
+        : "";
       const actions = ownerView
         ? `<button class="btn btn-primary btn-sm addPeso" data-id="${r.id}">Entrenar hoy</button>
-           <button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>
-           <button class="btn btn-outline btn-sm modExc" data-id="${r.id}">Modificar</button>
-           <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>
-           <button class="btn btn-danger btn-sm button_red" data-id="${r.id}">Eliminar</button>`
+           <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>`
         : `<button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>`;
 
       return `
-        <div class="routine-card reveal">
+        <div class="routine-card reveal${ownerView ? " routine-card-has-menu" : ""}">
+          ${menu}
           <span class="routine-started-tag">Iniciada el ${escapeHtml(formatFechaCorta(r.fecha_inicio))}</span>
+          <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
           <h3>${escapeHtml(r.nombre)}</h3>
+          ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
           ${routineStatsMarkup(r, logs)}
           <div class="routine-actions">${actions}</div>
         </div>
@@ -887,21 +951,38 @@ function renderActiveRoutines(routines: RoutineWithCounts[], ownerView: boolean,
   });
   if (!ownerView) return;
 
-  container.querySelectorAll<HTMLButtonElement>(".modExc").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `excView.html?rid=${btn.dataset.id}`));
-  });
+  wireRoutineMenus(container);
   container.querySelectorAll<HTMLButtonElement>(".addPeso").forEach((btn) => {
     btn.addEventListener("click", () => (window.location.href = `pesos.html?rid=${btn.dataset.id}`));
-  });
-  container.querySelectorAll<HTMLButtonElement>(".button_red").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `deleteRutins.html?rid=${btn.dataset.id}`));
   });
   container.querySelectorAll<HTMLButtonElement>(".finishRoutine").forEach((btn) => {
     btn.addEventListener("click", () => confirmFinishRoutine(btn.dataset.id!, routines.find((r) => r.id === btn.dataset.id)!));
   });
+  container.querySelectorAll<HTMLButtonElement>(".togglePublicRoutine").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (!routine) return;
+      btn.disabled = true;
+      try {
+        await setRoutinePublic(routine.id, !routine.is_public);
+        routine.is_public = !routine.is_public;
+        renderActiveRoutines(routines, ownerView, container, logs, ownerBasic, assignedByProfiles);
+      } catch {
+        btn.disabled = false;
+        alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
+      }
+    });
+  });
 }
 
-function renderHistoricRoutines(routines: RoutineWithCounts[], ownerView: boolean, container: HTMLElement, logs: WeightLogEntry[]) {
+function renderHistoricRoutines(
+  routines: RoutineWithCounts[],
+  ownerView: boolean,
+  container: HTMLElement,
+  logs: WeightLogEntry[],
+  ownerBasic: BasicNamedProfile,
+  assignedByProfiles: Map<string, ProfileBasic>
+) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
       ? `<div class="empty-state reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div><h3>Todavía no tenés rutinas históricas</h3><p>Cuando finalices una rutina activa, va a aparecer acá.</p></div>`
@@ -920,6 +1001,7 @@ function renderHistoricRoutines(routines: RoutineWithCounts[], ownerView: boolea
         <div class="routine-card is-historic reveal">
           ${r.finalizada_at ? `<span class="routine-finished-tag">Finalizada el ${escapeHtml(formatFechaCorta(r.finalizada_at))}</span>` : ""}
           <h3>${escapeHtml(r.nombre)}</h3>
+          ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
           ${routineStatsMarkup(r, logs)}
           <div class="routine-actions">${actions}</div>
         </div>
@@ -958,8 +1040,18 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
     ${routines
       .map(
         (r) => `
-      <div class="routine-card reveal">
+      <div class="routine-card reveal routine-card-has-menu">
+        <div class="profile-menu-wrap routine-menu-wrap">
+          <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+          <div class="profile-menu-panel routine-menu-panel" hidden>
+            <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
+            <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+            <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
+            <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>
+          </div>
+        </div>
         <span class="routine-started-tag">Plantilla</span>
+        <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
         <h3>${escapeHtml(r.nombre)}</h3>
         <div class="routine-stats">
           <div><span>Semanas</span><strong>${r.semanasCount}</strong></div>
@@ -967,10 +1059,7 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
           <div><span>Ejercicios</span><strong>${r.ejerciciosCount}</strong></div>
         </div>
         <div class="routine-actions">
-          <button class="btn btn-primary btn-sm assignRoutine" data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">Activar y asignar</button>
-          <button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>
-          <button class="btn btn-outline btn-sm modExc" data-id="${r.id}">Modificar</button>
-          <button class="btn btn-danger btn-sm button_red" data-id="${r.id}">Eliminar</button>
+          <button class="btn btn-primary btn-sm assignRoutine" data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">Activar o asignar</button>
         </div>
       </div>
     `
@@ -978,17 +1067,24 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
       .join("")}
   `;
 
-  container.querySelectorAll<HTMLButtonElement>(".showExc").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `showExc.html?rid=${btn.dataset.id}`));
-  });
-  container.querySelectorAll<HTMLButtonElement>(".modExc").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `excView.html?rid=${btn.dataset.id}`));
-  });
-  container.querySelectorAll<HTMLButtonElement>(".button_red").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `deleteRutins.html?rid=${btn.dataset.id}`));
-  });
+  wireRoutineMenus(container);
   container.querySelectorAll<HTMLButtonElement>(".assignRoutine").forEach((btn) => {
     btn.addEventListener("click", () => openAssignModal(btn.dataset.id!, btn.dataset.nombre!));
+  });
+  container.querySelectorAll<HTMLButtonElement>(".togglePublicRoutine").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (!routine) return;
+      btn.disabled = true;
+      try {
+        await setRoutinePublic(routine.id, !routine.is_public);
+        routine.is_public = !routine.is_public;
+        renderSavedRoutines(routines, container);
+      } catch {
+        btn.disabled = false;
+        alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
+      }
+    });
   });
 }
 
@@ -1260,8 +1356,8 @@ async function main() {
   }
 
   const logs = await listWeightLogsWithContext(displayProfile.id!);
-  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType };
-  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType);
+  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
+  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile);
   renderStats(logs, activeCount ?? 0, isOwner);
 }
 

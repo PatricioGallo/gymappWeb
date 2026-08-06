@@ -66,7 +66,7 @@ function studentCardMarkup(s: StudentRow): string {
         </a>
       </div>
       <div class="routine-stats">
-        <div><span>Rutina activa</span><strong>${s.activeRoutine ? escapeHtml(s.activeRoutine.nombre) : "Sin rutina activa"}</strong></div>
+        <div><span>Rutina activa</span><strong>${s.activeRoutine ? `<a href="showExc.html?rid=${s.activeRoutine.id}">${escapeHtml(s.activeRoutine.nombre)}</a>` : "Sin rutina activa"}</strong></div>
         <div><span>Último entreno</span><strong>${s.lastTrained ? escapeHtml(formatFechaCorta(s.lastTrained)) : "Nunca entrenó"}</strong></div>
       </div>
       ${commentsMarkup}
