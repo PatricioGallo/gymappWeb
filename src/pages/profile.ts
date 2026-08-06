@@ -19,6 +19,7 @@ import {
   type WeightLogEntry,
 } from "../services/profile.service";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
+import { getSubscriptionStatus, getSubscriberCount, subscribeToTrainer, unsubscribeOrCancel, type SubscriptionStatus } from "../services/subscription.service";
 import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
@@ -186,15 +187,17 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   }
 }
 
-async function renderProfileStats(userId: string, username: string, canViewLists: boolean) {
+async function renderProfileStats(userId: string, username: string, canViewLists: boolean, userType: Profile["user_type"]) {
   const stats = document.getElementById("profileStats");
   if (!stats) return;
   // Publicaciones todavia no existe (llega con el feed de la red social): se
   // muestra en 0 hasta que se sume ese sistema. Seguidores/seguidos si son reales.
   const counts = await getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 }));
+  // Suscriptores solo aplica a entrenadores (gimnasio tendra su propio sistema mas adelante).
+  const subscriberCount = userType === "entrenador" ? await getSubscriberCount(userId).catch(() => 0) : null;
   const u = encodeURIComponent(username);
 
-  function stat(count: number, label: string, tab: "followers" | "following"): string {
+  function stat(count: number, label: string, tab: "followers" | "following" | "subscribers"): string {
     const inner = `<strong>${count}</strong> ${label}`;
     return canViewLists ? `<a class="profile-stat" href="followers.html?u=${u}&tab=${tab}">${inner}</a>` : `<span class="profile-stat">${inner}</span>`;
   }
@@ -203,6 +206,7 @@ async function renderProfileStats(userId: string, username: string, canViewLists
     <span class="profile-stat"><strong>0</strong> publicaciones</span>
     ${stat(counts.followers, "seguidores", "followers")}
     ${stat(counts.following, "seguidos", "following")}
+    ${subscriberCount !== null ? stat(subscriberCount, "suscriptores", "subscribers") : ""}
   `;
 }
 
@@ -283,12 +287,66 @@ function initFollowButton(targetId: string, initialStatus: FollowStatus) {
   });
 }
 
-async function renderProfileActions(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus): Promise<FollowStatus> {
+function subscribeButtonLabel(status: SubscriptionStatus): string {
+  if (status === "pending") return "Solicitud enviada";
+  if (status === "accepted") return "Suscripto";
+  return "Suscribirse";
+}
+
+function initSubscribeButton(targetId: string, initialStatus: SubscriptionStatus) {
+  const btn = document.getElementById("subscribeBtn") as HTMLButtonElement | null;
+  if (!btn || !myId) return;
+  let status: SubscriptionStatus = initialStatus;
+
+  function paint() {
+    btn!.textContent = subscribeButtonLabel(status);
+    btn!.classList.toggle("btn-primary", status === "none");
+    btn!.classList.toggle("btn-outline", status !== "none");
+  }
+  paint();
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      if (status === "none") {
+        const { status: newStatus, error } = await subscribeToTrainer(myId!, targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = newStatus ?? "pending";
+      } else {
+        // "Solicitud enviada" -> cancela; "Suscripto" -> se desuscribe. Misma operación.
+        const { error } = await unsubscribeOrCancel(myId!, targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = "none";
+      }
+      paint();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+async function renderProfileActions(
+  targetId: string,
+  username: string,
+  ownerView: boolean,
+  viewerLoggedIn: boolean,
+  blockStatus: BlockStatus,
+  targetUserType: Profile["user_type"]
+): Promise<FollowStatus> {
   const actions = document.getElementById("profileActions");
   // Si hay un bloqueo de por medio (en cualquier direccion) no tiene sentido mostrar
   // "+ Seguir": el trigger de la base lo rechaza igual, pero evitamos el error confuso.
   const showFollowBtn = !ownerView && viewerLoggedIn && blockStatus === "none";
+  // Suscripcion solo tiene sentido contra un entrenador (gimnasio tendra su propio flujo mas adelante).
+  const showSubscribeBtn = showFollowBtn && targetUserType === "entrenador";
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
+  const subscriptionStatus: SubscriptionStatus = showSubscribeBtn ? await getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : "none";
   if (!actions) return followStatus;
 
   actions.innerHTML = `
@@ -298,9 +356,11 @@ async function renderProfileActions(targetId: string, username: string, ownerVie
       Compartir perfil
     </button>
     ${showFollowBtn ? `<button class="btn ${followStatus === "none" ? "btn-primary" : "btn-outline"}" id="followBtn" type="button">${followButtonLabel(followStatus)}</button>` : ""}
+    ${showSubscribeBtn ? `<button class="btn ${subscriptionStatus === "none" ? "btn-primary" : "btn-outline"}" id="subscribeBtn" type="button">${subscribeButtonLabel(subscriptionStatus)}</button>` : ""}
   `;
   initShare(username, "shareBtn");
   if (showFollowBtn) initFollowButton(targetId, followStatus);
+  if (showSubscribeBtn) initSubscribeButton(targetId, subscriptionStatus);
   return followStatus;
 }
 
@@ -927,8 +987,9 @@ async function main() {
   if (avatarImg && displayProfile.avatar_url) avatarImg.src = displayProfile.avatar_url;
   if (isOwner && profile) initAvatar(profile);
 
+  const targetUserType = displayProfile.user_type ?? "usuario";
   const blockStatus: BlockStatus = !isOwner && myId ? await getBlockStatus(displayProfile.id!).catch(() => "none" as BlockStatus) : "none";
-  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
+  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, targetUserType);
   renderProfileMenu(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
 
   // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
@@ -938,7 +999,7 @@ async function main() {
   // El link a seguidores/seguidos usa la misma regla: si el perfil es privado
   // para este visitante, ni siquiera se muestra clickeable (la RPC tambien lo
   // bloquea server-side, pero evitamos el link muerto).
-  void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer);
+  void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer, targetUserType);
 
   if (isPrivateForViewer) {
     renderProfileBio(displayProfile.bio ?? null);

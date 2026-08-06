@@ -335,7 +335,7 @@ function renderNotificationsTab() {
   const items: { key: keyof NotificationPrefs; label: string }[] = [
     { key: "likes", label: "Me gusta en tus publicaciones" },
     { key: "comments", label: "Comentarios en tus publicaciones" },
-    { key: "follows", label: "Nuevos seguidores" },
+    { key: "follows", label: "Nuevos seguidores y suscripciones" },
     { key: "mentions", label: "Menciones" },
   ];
 

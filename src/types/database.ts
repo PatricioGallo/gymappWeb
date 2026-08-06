@@ -660,6 +660,62 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          responded_at: string | null
+          status: string
+          subscriber_id: string
+          trainer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+          subscriber_id: string
+          trainer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+          subscriber_id?: string
+          trainer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_blocks: {
         Row: {
           blocked_id: string
@@ -1039,6 +1095,11 @@ export type Database = {
       }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
+      get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
+      get_subscription_status: {
+        Args: { p_target_id: string }
+        Returns: string
+      }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
@@ -1074,6 +1135,24 @@ export type Database = {
           id: string
           is_verified: boolean
           nombre: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      list_subscribers: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_user_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          id: string
+          is_verified: boolean
+          nombre: string
+          subscribed_at: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
         }[]

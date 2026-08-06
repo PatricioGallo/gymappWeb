@@ -5,6 +5,7 @@ import { setupHeaderSearch } from "./search";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { escapeHtml } from "./dom";
 import { getPendingFollowRequestCount } from "../services/follow.service";
+import { getPendingSubscriptionRequestCount } from "../services/subscription.service";
 import { getUnreadContactMessageCount } from "../services/contact.service";
 import { getUnreadErrorReportCount } from "../services/errorReport.service";
 import { getUnreadUserReportCount } from "../services/userReport.service";
@@ -71,6 +72,14 @@ async function populateUserMenuTrigger(): Promise<void> {
     void refreshAdminMessagesDot();
   }
 
+  // Las solicitudes de suscripcion solo le importan a un entrenador (los que
+  // pueden tener suscriptores); gimnasio tendra su propio sistema mas adelante.
+  if (data.user_type !== "entrenador") {
+    document.getElementById("navSubscriptionRequests")?.remove();
+  } else {
+    void refreshSubscriptionRequestsBadge(userId);
+  }
+
   setupNotificationBell();
   void applyZoomPreference(userId);
   void refreshFollowRequestsBadge(userId);
@@ -99,6 +108,19 @@ async function refreshFollowRequestsBadge(userId: string): Promise<void> {
   if (!badge) return;
   try {
     const count = await getPendingFollowRequestCount(userId);
+    badge.hidden = count <= 0;
+    badge.textContent = count > 9 ? "9+" : String(count);
+  } catch {
+    // silencioso: el badge simplemente no se actualiza en este ciclo
+  }
+}
+
+/** Numero de solicitudes de suscripcion pendientes junto al link del nav. No-op si el link no esta en esta pagina. */
+async function refreshSubscriptionRequestsBadge(userId: string): Promise<void> {
+  const badge = document.getElementById("subReqBadge");
+  if (!badge) return;
+  try {
+    const count = await getPendingSubscriptionRequestCount(userId);
     badge.hidden = count <= 0;
     badge.textContent = count > 9 ? "9+" : String(count);
   } catch {
