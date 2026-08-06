@@ -2,7 +2,7 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { getProfile, getProfileByUsername, getProfileBasicByUsername, type Profile, type ProfileBasic } from "../services/profile.service";
 import { getFollowStatus, listFollowers, listFollowing, type FollowListRow, type FollowStatus } from "../services/follow.service";
-import { listSubscribers, type SubscriberListRow } from "../services/subscription.service";
+import { listSubscribers, removeSubscriber, type SubscriberListRow } from "../services/subscription.service";
 import { USER_TYPE_BADGE } from "../lib/search";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
@@ -106,20 +106,67 @@ async function main() {
 
   function renderList(rows: ListRow[], query: string) {
     summaryEl.textContent = rows.length === 0 ? emptyMessage(query) : `${rows.length} resultado${rows.length === 1 ? "" : "s"}.`;
+
+    // Se recalcula en cada render (no como const arriba): activeTab cambia al
+    // clickear las pestañas, despues de que esta funcion ya fue definida.
+    const canRemoveSubscribers = isOwner && activeTab === "subscribers";
+    if (!canRemoveSubscribers) {
+      listEl.innerHTML = rows
+        .map(
+          (r) => `
+        <a class="search-page-item" href="profile.html?u=${encodeURIComponent(r.username)}">
+          <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-page-avatar">
+          <span class="search-page-body">
+            <p class="search-page-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}${renderVerifiedBadge(r.userType, r.isVerified)}</p>
+            <p class="search-page-meta">@${escapeHtml(r.username)}</p>
+          </span>
+          <span class="search-page-badge">${escapeHtml(USER_TYPE_BADGE[r.userType] ?? r.userType)}</span>
+        </a>
+      `
+        )
+        .join("");
+      return;
+    }
+
+    // El entrenador puede cancelar la suscripcion de cualquiera de sus
+    // suscriptores en cualquier momento: la fila deja de ser un unico <a>
+    // (misma estructura que .follow-request-item, que ya separa el link del
+    // usuario de los botones de accion).
     listEl.innerHTML = rows
       .map(
         (r) => `
-      <a class="search-page-item" href="profile.html?u=${encodeURIComponent(r.username)}">
-        <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-page-avatar">
-        <span class="search-page-body">
-          <p class="search-page-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}${renderVerifiedBadge(r.userType, r.isVerified)}</p>
-          <p class="search-page-meta">@${escapeHtml(r.username)}</p>
-        </span>
-        <span class="search-page-badge">${escapeHtml(USER_TYPE_BADGE[r.userType] ?? r.userType)}</span>
-      </a>
+      <div class="follow-request-item" data-id="${r.id}">
+        <a class="follow-request-user" href="profile.html?u=${encodeURIComponent(r.username)}">
+          <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+          <span class="search-result-body">
+            <span class="search-result-name">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
+            <span class="search-result-username">@${escapeHtml(r.username)}</span>
+          </span>
+        </a>
+        <div class="follow-request-actions">
+          <button class="btn btn-outline btn-sm remove-subscriber-btn" data-id="${r.id}" type="button">Cancelar suscripción</button>
+        </div>
+      </div>
     `
       )
       .join("");
+
+    listEl.querySelectorAll<HTMLButtonElement>(".remove-subscriber-btn").forEach((btn) => {
+      btn.addEventListener("click", () => void handleRemoveSubscriber(btn.dataset.id!));
+    });
+  }
+
+  async function handleRemoveSubscriber(subscriberId: string) {
+    const row = listEl.querySelector<HTMLElement>(`.follow-request-item[data-id="${subscriberId}"]`);
+    row?.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.disabled = true));
+
+    const { error } = await removeSubscriber(targetId, subscriberId);
+    if (error) {
+      alert(error);
+      row?.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.disabled = false));
+      return;
+    }
+    void runList();
   }
 
   async function runList() {

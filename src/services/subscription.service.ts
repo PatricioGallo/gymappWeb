@@ -80,6 +80,13 @@ export async function unsubscribeOrCancel(subscriberId: string, trainerId: strin
   return {};
 }
 
+/** El entrenador puede cancelar la suscripcion de cualquiera de sus suscriptores (pending o accepted) en cualquier momento. */
+export async function removeSubscriber(trainerId: string, subscriberId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("subscriptions").delete().eq("trainer_id", trainerId).eq("subscriber_id", subscriberId);
+  if (error) return { error: "No se pudo cancelar la suscripción. Probá de nuevo." };
+  return {};
+}
+
 export async function getPendingSubscriptionRequestCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from("subscriptions")
