@@ -12,6 +12,11 @@ const myId = await requireAuth();
 const params = new URLSearchParams(window.location.search);
 const targetUserId = params.get("uid") ?? myId;
 
+// El unico flujo que trae ?uid= de otro usuario es "Tus alumnos" (entrenador viendo el
+// progreso de un suscriptor aceptado); la propia tarjeta "Progreso completo" del perfil
+// nunca pasa el uid de otra persona.
+if (targetUserId !== myId) document.getElementById("backToAlumnos")?.removeAttribute("hidden");
+
 const RECENT_WINDOW = 5;
 const PROJECTION_DAYS = 28;
 

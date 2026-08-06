@@ -321,7 +321,7 @@ function initSubscribeButton(targetId: string, initialStatus: SubscriptionStatus
     btn.disabled = true;
     try {
       if (status === "none") {
-        const { status: newStatus, error } = await subscribeToTrainer(myId!, targetId);
+        const { status: newStatus, error } = await subscribeToTrainer(targetId);
         if (error) {
           alert(error);
           return;
@@ -358,7 +358,10 @@ async function renderProfileActions(
   // Suscripcion solo tiene sentido contra un entrenador (gimnasio tendra su propio flujo mas adelante).
   const showSubscribeBtn = showFollowBtn && targetUserType === "entrenador";
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
-  const subscriptionStatus: SubscriptionStatus = showSubscribeBtn ? await getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : "none";
+  // "ended" (fue alumno, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
+  // suscribirse, y la RPC de suscripcion reactiva ese mismo vinculo historico si corresponde.
+  const rawSubscriptionStatus: SubscriptionStatus = showSubscribeBtn ? await getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : "none";
+  const subscriptionStatus: SubscriptionStatus = rawSubscriptionStatus === "ended" ? "none" : rawSubscriptionStatus;
   if (!actions) return followStatus;
 
   actions.innerHTML = `

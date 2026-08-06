@@ -215,3 +215,24 @@ export async function getLastTrainedDate(userId: string): Promise<string | null>
   if (error) throw error;
   return data?.fecha ?? null;
 }
+
+/** % de ejercicios de una rutina con al menos una carga registrada. Misma cuenta que
+ * routineStatsMarkup en profile.ts, pero liviana (sin traer todo listWeightLogsWithContext) para listados como "Tus alumnos". */
+export async function getRoutineProgressPct(userId: string, routineExerciseIds: string[]): Promise<number> {
+  if (routineExerciseIds.length === 0) return 0;
+  const { data, error } = await supabase.from("weight_logs").select("routine_exercise_id").eq("user_id", userId).in("routine_exercise_id", routineExerciseIds);
+  if (error) throw error;
+  const trainedIds = new Set((data ?? []).map((r) => r.routine_exercise_id));
+  return Math.round((trainedIds.size / routineExerciseIds.length) * 100);
+}
+
+/** Cantidad total de rutinas (activas + historicas) que un entrenador le asigno a un alumno puntual. */
+export async function countAssignedRoutines(trainerId: string, studentId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("routines")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", studentId)
+    .eq("assigned_by", trainerId);
+  if (error) throw error;
+  return count ?? 0;
+}

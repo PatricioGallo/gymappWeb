@@ -256,6 +256,8 @@ const targetUserId = params.get("uid") ?? myId;
 const isTrainingForOther = targetUserId !== myId;
 let targetName: string | null = null;
 
+if (isTrainingForOther) document.getElementById("backToAlumnos")?.removeAttribute("hidden");
+
 let routine: RoutineDetail | null = null;
 let latestWeights: LatestWeightsMap = new Map();
 let exerciseHistory: LatestWeightsMap = new Map();

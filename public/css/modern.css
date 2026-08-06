@@ -2281,6 +2281,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .routine-card-has-menu h3 { padding-right: 40px; }
+.routine-card-has-menu .student-card-head { padding-right: 40px; }
 
 .routine-menu-wrap { position: absolute; top: 20px; right: 20px; }
 
@@ -2333,6 +2334,24 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .routine-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+/* Version compacta del progreso, para listados con muchas tarjetas (ej. Tus alumnos):
+   una barrita chica en linea con el %, en vez del bloque ancho de .routine-progress. */
+.mini-progress-value { display: flex; align-items: center; gap: 8px; }
+.mini-progress-track {
+  width: 44px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  flex: none;
+}
+.mini-progress-fill {
   display: block;
   height: 100%;
   border-radius: 999px;

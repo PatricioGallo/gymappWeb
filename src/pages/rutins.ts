@@ -20,13 +20,15 @@ const isTemplateMode = params.get("mode") === "template";
 const cloneFromId = params.get("cloneFrom");
 const isAssigningToOther = targetUserId !== myId;
 
-// Un usuario comun (o admin) no elige explicitamente "plantilla vs rutina":
-// toda rutina que arma de cero (fuera de activar una guardada) se guarda como
-// plantilla y se le pregunta si la quiere activar ya (ver createAndFinish).
-// Entrenador y el resto de los tipos de cuenta no cambian: siguen creando
-// activa de una.
+// Nadie elige explicitamente "plantilla vs rutina" en el flujo normal: toda
+// rutina que se arma de cero (fuera de activar una guardada, o del mode=template
+// explicito del entrenador para armar una plantilla a proposito) se guarda como
+// plantilla y se pregunta si se quiere activar ya (ver createAndFinish). Aplica
+// a entrenador, usuario y admin por igual; gimnasio/colaborador no pasan por
+// este flujo de creacion de rutinas propias.
 const myProfile = await getProfileBasicById(myId).catch(() => null);
-const isRegularUser = myProfile?.user_type === "usuario" || myProfile?.user_type === "admin";
+const autoSaveAsTemplate =
+  myProfile?.user_type === "usuario" || myProfile?.user_type === "admin" || myProfile?.user_type === "entrenador";
 
 const container = document.getElementById("container") as HTMLElement;
 let excCatalog: Exercise[] = [];
@@ -699,9 +701,11 @@ async function createAndFinish(name: string, weeks: number, dias: NewDayInput[],
   `;
 
   // isActivating (venís de una guardada via cloneFrom) siempre crea activa de una.
-  // Si no, un usuario comun creando de cero cae siempre en guardada+pregunta;
-  // el resto (entrenador normal, o mode=template explicito) sigue como antes.
-  const isTemplate = isActivating ? false : isTemplateMode || (isRegularUser && !isAssigningToOther);
+  // Si no, crear de cero (para uno mismo) cae siempre en guardada+pregunta,
+  // sea cual sea el tipo de cuenta; mode=template explicito del entrenador
+  // sigue siendo guardado silencioso (sin la pregunta), y asignarle una rutina
+  // a otra persona directamente (sin pasar por Guardadas) tampoco pregunta.
+  const isTemplate = isActivating ? false : isTemplateMode || (autoSaveAsTemplate && !isAssigningToOther);
   const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, isTemplate);
 
   if (createError) {

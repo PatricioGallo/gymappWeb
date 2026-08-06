@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../types/database";
 
 export type Subscription = Tables<"subscriptions">;
-export type SubscriptionStatus = "none" | "pending" | "accepted" | "self";
+export type SubscriptionStatus = "none" | "pending" | "accepted" | "ended" | "self";
 
 export interface SubscriptionRequestRow {
   id: string;
@@ -25,6 +25,18 @@ export interface SubscriberListRow {
   userType: Tables<"profiles">["user_type"];
   isVerified: boolean;
   subscribedAt: string;
+}
+
+export interface HistoricSubscriberRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
+  subscribedAt: string;
+  endedAt: string;
 }
 
 export async function getSubscriptionStatus(targetId: string): Promise<SubscriptionStatus> {
@@ -57,33 +69,58 @@ export async function listSubscribers(userId: string, search = ""): Promise<Subs
   }));
 }
 
-/** Inserta la fila de suscripcion; siempre queda 'pending' hasta que el entrenador la acepte. */
-export async function subscribeToTrainer(subscriberId: string, trainerId: string): Promise<{ status?: SubscriptionStatus; error?: string }> {
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .insert({ subscriber_id: subscriberId, trainer_id: trainerId })
-    .select("status")
-    .single();
+/** Crea la solicitud (siempre 'pending' hasta que el entrenador la acepte). Si ya habia sido
+ * alumno antes y el entrenador no lo elimino del historico, reactiva esa misma fila 'ended'
+ * en vez de duplicarla, para que "alumno desde" seteo la fecha original de alta. */
+export async function subscribeToTrainer(trainerId: string): Promise<{ status?: SubscriptionStatus; error?: string }> {
+  const { data, error } = await supabase.rpc("request_subscription", { p_trainer_id: trainerId });
   if (error) {
-    if (error.code === "23505") return { error: "Ya le enviaste una solicitud de suscripción a este entrenador." };
+    if (error.message?.includes("already subscribed")) return { error: "Ya le enviaste una solicitud de suscripción a este entrenador." };
     if (error.message?.includes("blocked")) return { error: "No podés suscribirte a este entrenador." };
     if (error.message?.includes("not a trainer")) return { error: "Este usuario no es un entrenador." };
     return { error: "No se pudo completar la acción. Probá de nuevo." };
   }
-  return { status: data.status as SubscriptionStatus };
+  return { status: data?.status as SubscriptionStatus };
 }
 
-/** Sirve tanto para desuscribirse (accepted) como para cancelar una solicitud propia (pending). */
-export async function unsubscribeOrCancel(subscriberId: string, trainerId: string): Promise<{ error?: string }> {
-  const { error } = await supabase.from("subscriptions").delete().eq("subscriber_id", subscriberId).eq("trainer_id", trainerId);
+/** Sirve para desuscribirse (accepted -> pasa a historico 'ended'), cancelar una solicitud
+ * propia (pending -> se borra, nunca llego a ser alumno) o, del lado del entrenador, cancelar
+ * la suscripcion de cualquiera de sus alumnos en cualquier momento. */
+async function cancelSubscription(subscriberId: string, trainerId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("cancel_subscription", { p_subscriber_id: subscriberId, p_trainer_id: trainerId });
   if (error) return { error: "No se pudo completar la acción. Probá de nuevo." };
   return {};
 }
 
-/** El entrenador puede cancelar la suscripcion de cualquiera de sus suscriptores (pending o accepted) en cualquier momento. */
+export async function unsubscribeOrCancel(subscriberId: string, trainerId: string): Promise<{ error?: string }> {
+  return cancelSubscription(subscriberId, trainerId);
+}
+
 export async function removeSubscriber(trainerId: string, subscriberId: string): Promise<{ error?: string }> {
-  const { error } = await supabase.from("subscriptions").delete().eq("trainer_id", trainerId).eq("subscriber_id", subscriberId);
-  if (error) return { error: "No se pudo cancelar la suscripción. Probá de nuevo." };
+  return cancelSubscription(subscriberId, trainerId);
+}
+
+// La RPC (SECURITY DEFINER) hace el mismo chequeo de privacidad que list_subscribers.
+export async function listHistoricSubscribers(userId: string, search = ""): Promise<HistoricSubscriberRow[]> {
+  const { data, error } = await supabase.rpc("list_historic_subscribers", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    userType: r.user_type,
+    isVerified: r.is_verified,
+    subscribedAt: r.subscribed_at,
+    endedAt: r.ended_at,
+  }));
+}
+
+/** Borra definitivamente un registro historico (status='ended'). No afecta suscripciones activas. */
+export async function deleteHistoricSubscription(trainerId: string, subscriberId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("subscriptions").delete().eq("trainer_id", trainerId).eq("subscriber_id", subscriberId).eq("status", "ended");
+  if (error) return { error: "No se pudo eliminar el registro. Probá de nuevo." };
   return {};
 }
 

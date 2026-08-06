@@ -105,20 +105,6 @@ export type Database = {
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "error_reports_read_by_fkey"
-            columns: ["read_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "error_reports_read_by_fkey"
-            columns: ["read_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
-            referencedColumns: ["id"]
-          },
         ]
       }
       exercise_comments: {
@@ -718,6 +704,7 @@ export type Database = {
       subscriptions: {
         Row: {
           created_at: string
+          ended_at: string | null
           id: string
           responded_at: string | null
           status: string
@@ -726,6 +713,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          ended_at?: string | null
           id?: string
           responded_at?: string | null
           status?: string
@@ -734,6 +722,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          ended_at?: string | null
           id?: string
           responded_at?: string | null
           status?: string
@@ -1125,6 +1114,10 @@ export type Database = {
       can_view_day: { Args: { did: string }; Returns: boolean }
       can_view_routine: { Args: { rid: string }; Returns: boolean }
       can_view_week: { Args: { wid: string }; Returns: boolean }
+      cancel_subscription: {
+        Args: { p_subscriber_id: string; p_trainer_id: string }
+        Returns: undefined
+      }
       create_routine: {
         Args: {
           p_fecha_inicio: string
@@ -1195,6 +1188,25 @@ export type Database = {
           username: string
         }[]
       }
+      list_historic_subscribers: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_user_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          ended_at: string
+          id: string
+          is_verified: boolean
+          nombre: string
+          subscribed_at: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
       list_subscribers: {
         Args: {
           p_limit?: number
@@ -1212,6 +1224,24 @@ export type Database = {
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
         }[]
+      }
+      request_subscription: {
+        Args: { p_trainer_id: string }
+        Returns: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          responded_at: string | null
+          status: string
+          subscriber_id: string
+          trainer_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subscriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       search_profiles: {
         Args: { p_limit?: number; p_query: string }
