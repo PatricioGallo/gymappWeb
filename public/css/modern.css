@@ -685,36 +685,47 @@ a { color: inherit; text-decoration: none; }
   color: var(--accent-2);
 }
 
+/* Dropdown chico anclado al toggle: usado en las paginas publicas donde el
+   menu solo tiene Ingresar/Registrate. El menu de cuenta (mas items, ver
+   .account-nav mas abajo) pisa estas reglas para volver a ser panel
+   pantalla completa, que tiene mas sentido con esa cantidad de links. */
 .site-nav {
   position: fixed;
-  inset: var(--header-h) 0 0 0;
+  top: calc(var(--header-h) + 8px);
+  right: 20px;
+  left: auto;
+  bottom: auto;
   z-index: 95;
-  background: var(--bg);
+  width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  padding: 24px 20px;
-  gap: 4px;
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
+  padding: 8px;
+  gap: 2px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  opacity: 0;
   visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
 }
 
-.site-nav.open { visibility: visible; }
-
-.site-nav.open { transform: translateX(0); }
+.site-nav.open { opacity: 1; visibility: visible; transform: translateY(0); }
 
 .site-nav a {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px;
-  padding: 16px 8px;
-  font-size: 18px;
+  padding: 12px;
+  font-size: 15px;
   font-weight: 600;
-  border-bottom: 1px solid var(--border);
+  border-radius: 8px;
   color: var(--text);
 }
 
+.site-nav a:hover { background: var(--surface-2); }
 .site-nav a.accent { color: var(--accent-2); }
 
 .nav-badge {
@@ -744,9 +755,41 @@ a { color: inherit; text-decoration: none; }
 }
 
 .nav-dot[hidden] { display: none; }
-.site-nav a.active { color: var(--text); position: relative; }
+.site-nav a.active { color: var(--text); background: var(--surface-2); }
 
-.site-nav .nav-cta { margin-top: 18px; padding: 14px 26px; color: #fff; }
+.site-nav .nav-cta { margin-top: 4px; padding: 12px; color: #fff; }
+
+/* Menu de cuenta (Mi perfil, Administrar, Solicitudes, etc.): son varios
+   items, asi que en mobile va como panel a pantalla completa en vez de
+   dropdown chico. */
+.site-nav.account-nav {
+  top: var(--header-h);
+  right: 0;
+  left: 0;
+  bottom: 0;
+  width: auto;
+  background: var(--bg);
+  border: none;
+  border-radius: 0;
+  padding: 24px 20px;
+  gap: 4px;
+  box-shadow: none;
+  transform: translateX(100%);
+  transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s;
+}
+
+.site-nav.account-nav.open { transform: translateX(0); }
+
+.site-nav.account-nav a {
+  justify-content: space-between;
+  padding: 16px 8px;
+  font-size: 18px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.site-nav.account-nav a:hover { background: none; }
+.site-nav.account-nav a.active { background: none; position: relative; }
 
 /* ---------- Hero ---------- */
 
@@ -3420,6 +3463,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
     background: none;
     padding: 0;
     transform: none;
+    opacity: 1;
     visibility: visible;
     gap: 28px;
   }
