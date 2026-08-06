@@ -155,7 +155,7 @@ function studentCardMarkup(s: StudentRow): string {
         ${
           s.activeRoutine
             ? `<button class="btn btn-primary btn-sm logWeightsBtn" data-rid="${s.activeRoutine.id}" data-uid="${s.id}" type="button">Cargar pesos</button>`
-            : `<button class="btn btn-primary btn-sm" type="button" disabled title="Este alumno todavía no tiene una rutina activa">Cargar pesos</button>`
+            : `<button class="btn btn-primary btn-sm assignRoutineBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}" type="button">Asignar rutina</button>`
         }
       </div>
     </div>
@@ -215,14 +215,29 @@ function confirmCancelSubscription(studentId: string, nombre: string) {
   `;
   document.getElementById("cancelCancelSub")?.addEventListener("click", closeOverlay);
   document.getElementById("confirmCancelSub")?.addEventListener("click", async () => {
+    const confirmBtn = document.getElementById("confirmCancelSub") as HTMLButtonElement;
+    confirmBtn.disabled = true;
     const { error } = await removeSubscriber(myId, studentId);
     if (error) {
       alert(error);
       closeOverlay();
       return;
     }
-    closeOverlay();
-    void runSearch(searchInput.value.trim());
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>Suscripción cancelada. Pasó a Históricas.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void runSearch(searchInput.value.trim());
+    }, 1600);
   });
 }
 
@@ -252,8 +267,21 @@ function confirmFinishActiveRoutine(routineId: string, routineNombre: string) {
       closeOverlay();
       return;
     }
-    closeOverlay();
-    void runSearch(searchInput.value.trim());
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina finalizada! Pasó a Históricas.</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void runSearch(searchInput.value.trim());
+    }, 1600);
   });
 }
 

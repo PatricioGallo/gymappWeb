@@ -681,6 +681,9 @@ async function submitRoutine(name: string, weeks: number, isPublic: boolean) {
 
 // ---------- Compartido: creación final + redirección ----------
 
+// Asignarle una rutina a otra persona siempre se entra desde "Tus alumnos" (o
+// desde el modal de asignar de Guardadas, que apunta al mismo lugar): al
+// terminar tiene mas sentido volver ahi que al propio perfil.
 function renderSuccessAndRedirect(message: string): void {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `
@@ -690,7 +693,7 @@ function renderSuccessAndRedirect(message: string): void {
     </div>
   `;
   setTimeout(() => {
-    window.location.href = "profile.html";
+    window.location.href = isAssigningToOther ? "alumnos.html" : "profile.html";
   }, 2000);
 }
 

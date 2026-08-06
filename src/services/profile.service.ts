@@ -149,14 +149,20 @@ export async function listRoutines(userId: string, mode: RoutineListMode): Promi
   });
 }
 
+// RPC (no un update() directo): el update() plano no tira error si RLS filtra la
+// fila (0 filas afectadas = "exito" silencioso). Finalizar/reactivar es control
+// del dueño de la CUENTA sobre su propio progreso -- lo puede hacer siempre,
+// aunque la rutina se la haya asignado un entrenador y sea privada (a diferencia
+// de modificar/renombrar/eliminar, que si quedan exclusivos de quien la asigno).
+// El entrenador tambien puede finalizar la rutina activa de cualquiera de sus
+// alumnos aceptados, sea o no una que el mismo asigno (ver "Tus alumnos").
 export async function finishRoutine(routineId: string): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const { error } = await supabase.from("routines").update({ finalizada_at: today }).eq("id", routineId);
+  const { error } = await supabase.rpc("set_routine_finished", { p_routine_id: routineId, p_finished: true });
   if (error) throw error;
 }
 
 export async function reactivateRoutine(routineId: string): Promise<void> {
-  const { error } = await supabase.from("routines").update({ finalizada_at: null }).eq("id", routineId);
+  const { error } = await supabase.rpc("set_routine_finished", { p_routine_id: routineId, p_finished: false });
   if (error) throw error;
 }
 

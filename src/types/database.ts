@@ -1257,6 +1257,10 @@ export type Database = {
           username: string
         }[]
       }
+      set_routine_finished: {
+        Args: { p_finished: boolean; p_routine_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       exercise_category:

@@ -828,6 +828,14 @@ async function refreshRoutinesAndStats() {
   if (statValue && count !== undefined) statValue.textContent = String(count);
 }
 
+// Una rutina asignada y privada es del que la asigno, no de quien la recibe: el
+// receptor solo puede entrenarla (cargar pesos) y mirarla, nada mas. Si el
+// entrenador la hizo publica, o si nunca fue asignada (rutina propia), el dueño
+// (user_id) tiene control total. Ver migracion student_routine_permission_lockdown.
+function isFullyOwnedByViewer(r: RoutineWithCounts): boolean {
+  return !r.assigned_by || r.assigned_by === myId;
+}
+
 function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) {
   const routineLogs = logs.filter((l) => l.routineId === routine.id);
   const trainedIds = new Set(routineLogs.map((l) => l.routineExerciseId));
@@ -920,17 +928,25 @@ function renderActiveRoutines(
 
   container.innerHTML = routines
     .map((r) => {
+      const fullyOwned = isFullyOwnedByViewer(r);
       const menu = ownerView
         ? `<div class="profile-menu-wrap routine-menu-wrap">
              <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
              <div class="profile-menu-panel routine-menu-panel" hidden>
                <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
-               <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+               ${
+                 fullyOwned
+                   ? `<a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
                <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
-               <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>
+               <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>`
+                   : ""
+               }
              </div>
            </div>`
         : "";
+      // Finalizar (a diferencia de Modificar/Eliminar/visibilidad) es control del
+      // dueño de la cuenta sobre su propio progreso: se puede aunque la rutina
+      // sea asignada y privada, no requiere fullyOwned.
       const actions = ownerView
         ? `<button class="btn btn-primary btn-sm addPeso" data-id="${r.id}">Entrenar hoy</button>
            <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>`
@@ -996,13 +1012,24 @@ function renderHistoricRoutines(
 
   container.innerHTML = routines
     .map((r) => {
+      const menu = ownerView
+        ? `<div class="profile-menu-wrap routine-menu-wrap">
+             <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+             <div class="profile-menu-panel routine-menu-panel" hidden>
+               <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
+               ${isFullyOwnedByViewer(r) ? `<a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>` : ""}
+             </div>
+           </div>`
+        : "";
+      // Reactivar, igual que Finalizar: control del dueño de la cuenta sobre su
+      // propio progreso, no requiere fullyOwned.
       const actions = ownerView
-        ? `<button class="btn btn-outline btn-sm showExcHist" data-id="${r.id}">Mostrar</button>
-           <button class="btn btn-primary btn-sm reactivateRoutine" data-id="${r.id}">Reactivar</button>`
+        ? `<button class="btn btn-primary btn-sm reactivateRoutine" data-id="${r.id}">Reactivar</button>`
         : `<button class="btn btn-outline btn-sm showExcHist" data-id="${r.id}">Mostrar</button>`;
 
       return `
-        <div class="routine-card is-historic reveal">
+        <div class="routine-card is-historic reveal${ownerView ? " routine-card-has-menu" : ""}">
+          ${menu}
           ${r.finalizada_at ? `<span class="routine-finished-tag">Finalizada el ${escapeHtml(formatFechaCorta(r.finalizada_at))}</span>` : ""}
           <h3>${escapeHtml(r.nombre)}</h3>
           ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
@@ -1017,6 +1044,8 @@ function renderHistoricRoutines(
     btn.addEventListener("click", () => (window.location.href = `showExc.html?rid=${btn.dataset.id}`));
   });
   if (!ownerView) return;
+
+  wireRoutineMenus(container);
 
   container.querySelectorAll<HTMLButtonElement>(".reactivateRoutine").forEach((btn) => {
     btn.addEventListener("click", () => openReactivateModal(btn.dataset.id!));

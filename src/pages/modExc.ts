@@ -11,12 +11,12 @@ import {
   type RoutineDetail,
   type RoutineExerciseWithAuthor,
 } from "../services/routine.service";
-import { getProfilesBasicByIds } from "../services/profile.service";
+import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
 
 setupNavToggle();
 setupRevealObserver();
-await requireAuth();
+const myId = await requireAuth();
 
 const params = new URLSearchParams(window.location.search);
 const routineId = params.get("rid");
@@ -226,6 +226,24 @@ async function init() {
     if (title) title.textContent = "No se encontró esta rutina.";
     document.getElementById("weekPicker")?.remove();
     document.getElementById("saveWrap")?.remove();
+    return;
+  }
+
+  // Una rutina asignada y privada es del que la asigno: quien la recibe no la
+  // puede modificar (ver migracion student_routine_permission_lockdown). Se
+  // corta aca con un mensaje claro en vez de dejar completar el formulario y
+  // que despues falle en silencio contra la RLS al guardar.
+  const isOwner = routine.user_id === myId;
+  const isAssigner = routine.assigned_by === myId;
+  const canEdit = isAssigner || (isOwner && (!routine.assigned_by || routine.is_public)) || (await getProfileBasicById(myId).catch(() => null))?.user_type === "admin";
+  if (!canEdit) {
+    const title = document.getElementById("routineTitle");
+    const subtitle = document.getElementById("routineSubtitle");
+    if (title) title.textContent = routine.nombre;
+    if (subtitle) subtitle.textContent = "Esta rutina te la asignó tu entrenador y es privada: no la podés modificar, solo entrenarla y mirarla.";
+    document.getElementById("weekPicker")?.remove();
+    document.getElementById("saveWrap")?.remove();
+    document.getElementById("weekContent")?.remove();
     return;
   }
 

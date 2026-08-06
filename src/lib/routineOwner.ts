@@ -9,14 +9,17 @@ export interface BasicNamedProfile {
   apellido: string | null;
 }
 
-/** Linea "Rutina de X" (+ "Asignada por Y" si corresponde), con link al perfil de cada uno. */
+/** Linea "Rutina de X", donde X es el dueño real: quien la asigno si es una rutina
+ * asignada (el dueño conceptual es el entrenador, aunque `user_id` en la tabla sea
+ * el alumno que la recibe), o el propio dueño si es una rutina propia. No distingue
+ * quien se la asigno a quien -- solo importa de quien es. */
 export function routineOwnerLineMarkup(owner: BasicNamedProfile | undefined | null, assignedBy?: BasicNamedProfile | undefined | null): string {
-  if (!owner) return "";
+  const realOwner = assignedBy ?? owner;
+  if (!realOwner) return "";
   const fullName = (p: BasicNamedProfile) => escapeHtml(`${p.nombre ?? ""} ${p.apellido ?? ""}`.trim());
   const link = (p: BasicNamedProfile) => `<a href="profile.html?u=${encodeURIComponent(p.username ?? "")}">${fullName(p)}</a>`;
-  const assignedPart = assignedBy ? ` · Asignada por ${link(assignedBy)}` : "";
   // div, no p: esto se inyecta via innerHTML dentro de otros contenedores (algunos
   // ya son <p>, como #routineOwnerBanner) y un <p> no puede contener otro <p> ni
   // matchear .page-hero p (que le ganaria en especificidad al 13px de esta clase).
-  return `<div class="routine-owner-line">Rutina de ${link(owner)}${assignedPart}</div>`;
+  return `<div class="routine-owner-line">Rutina de ${link(realOwner)}</div>`;
 }

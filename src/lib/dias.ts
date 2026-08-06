@@ -9,6 +9,11 @@ export function dayDisplayLabel(diaSemana: number, nombre?: string | null): stri
 }
 
 export function formatFechaCorta(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
+  // Sirve tanto para fechas puras (routines.fecha_inicio, "YYYY-MM-DD") como para
+  // timestamps completos (subscriptions.created_at/ended_at, timestamptz): sin
+  // esto, el "T17:39:05..." que sigue al dia en un timestamp rompia el Number()
+  // del dia y quedaba en NaN.
+  const datePart = iso.split(/[T ]/)[0];
+  const [y, m, d] = datePart.split("-").map(Number);
   return `${d}/${m}/${y}`;
 }
