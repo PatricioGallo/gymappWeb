@@ -2560,6 +2560,23 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .exc-table-head { font-size: 10.5px; letter-spacing: 0.05em; }
 }
 
+/* ---------- Rutina activa (progress.html) ---------- */
+
+.week-days { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+
+.active-exc-item { padding: 12px 0; border-top: 1px solid var(--border); }
+.active-exc-item:first-of-type { border-top: none; padding-top: 0; }
+
+.active-exc-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.active-exc-item-sub { margin: 4px 0 0; }
+.active-exc-note { margin-top: 8px; }
+
 /* ---------- Panel de administracion ---------- */
 
 .inline-loader {
@@ -3114,6 +3131,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .back-link:hover { color: var(--accent-2); }
 .back-link svg { width: 15px; height: 15px; }
+.back-link[hidden] { display: none; }
 
 /* ---------- Constructor de rutina (rutinsView) ---------- */
 
