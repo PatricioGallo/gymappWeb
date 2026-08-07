@@ -3131,6 +3131,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .back-link:hover { color: var(--accent-2); }
 .back-link svg { width: 15px; height: 15px; }
+.back-link[hidden] { display: none; }
 
 /* ---------- Constructor de rutina (rutinsView) ---------- */
 

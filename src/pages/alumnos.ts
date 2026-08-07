@@ -131,7 +131,7 @@ function studentCardMarkup(s: StudentRow): string {
               ? `<button type="button" class="profile-menu-item finishActiveBtn" data-rid="${s.activeRoutine.id}" data-nombre="${escapeHtml(s.activeRoutine.nombre)}">Finalizar su rutina actual</button>`
               : ""
           }
-          <button type="button" class="profile-menu-item historicRoutinesBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Rutinas históricas</button>
+          <button type="button" class="profile-menu-item historicRoutinesBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Rutinas históricas asignadas</button>
           <button type="button" class="profile-menu-item profile-menu-item-danger cancelSubBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Cancelar suscripción</button>
         </div>
       </div>

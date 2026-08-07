@@ -21,8 +21,12 @@ const targetUserId = params.get("uid") ?? myId;
 
 // El unico flujo que trae ?uid= de otro usuario es "Tus alumnos" (entrenador viendo el
 // progreso de un suscriptor aceptado); la propia tarjeta "Progreso completo" del perfil
-// nunca pasa el uid de otra persona.
-if (targetUserId !== myId) document.getElementById("backToAlumnos")?.removeAttribute("hidden");
+// nunca pasa el uid de otra persona. Viendo el progreso propio (o el "?uid=" de uno
+// mismo) el link vuelve al perfil en vez de a la lista de alumnos.
+if (targetUserId !== myId) {
+  document.getElementById("backToAlumnos")?.removeAttribute("hidden");
+  document.getElementById("backToProfile")?.setAttribute("hidden", "");
+}
 
 const RECENT_WINDOW = 5;
 const PROJECTION_DAYS = 28;
