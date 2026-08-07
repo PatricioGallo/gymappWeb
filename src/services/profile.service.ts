@@ -109,15 +109,27 @@ export interface RoutineWithCounts extends Routine {
 
 export type RoutineListMode = "active" | "historic" | "saved";
 
+const ROUTINE_SELECT = `id, user_id, assigned_by, copied_from_user_id, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, is_template, created_at, updated_at,
+       routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( id ) ) )`;
+
+function toRoutineWithCounts(r: any): RoutineWithCounts {
+  const weeks = [...(r.routine_weeks ?? [])].sort((a, b) => a.numero - b.numero);
+  const firstWeekDays = weeks[0]?.routine_days ?? [];
+  const allExerciseIds: string[] = weeks.flatMap((w: any) =>
+    (w.routine_days ?? []).flatMap((d: any) => (d.routine_exercises ?? []).map((e: any) => e.id))
+  );
+  const { routine_weeks, ...routine } = r;
+  return {
+    ...(routine as Routine),
+    semanasCount: weeks.length,
+    diasPorSemana: firstWeekDays.length,
+    ejerciciosCount: new Set(firstWeekDays.flatMap((d: any) => (d.routine_exercises ?? []).map((e: any) => e.id))).size,
+    totalRoutineExerciseIds: allExerciseIds,
+  };
+}
+
 export async function listRoutines(userId: string, mode: RoutineListMode): Promise<RoutineWithCounts[]> {
-  let query = supabase
-    .from("routines")
-    .select(
-      `id, user_id, assigned_by, copied_from_user_id, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, is_template, created_at, updated_at,
-       routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( id ) ) )`
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  let query = supabase.from("routines").select(ROUTINE_SELECT).eq("user_id", userId).order("created_at", { ascending: false });
 
   // Guardadas (plantillas) nunca aparecen en Activas/Historicas: is_template las saca de ambas.
   if (mode === "saved") {
@@ -130,23 +142,24 @@ export async function listRoutines(userId: string, mode: RoutineListMode): Promi
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? []).map((r: any) => {
-    const weeks = [...(r.routine_weeks ?? [])].sort((a, b) => a.numero - b.numero);
-    const firstWeekDays = weeks[0]?.routine_days ?? [];
-    const allExerciseIds: string[] = weeks.flatMap((w: any) =>
-      (w.routine_days ?? []).flatMap((d: any) => (d.routine_exercises ?? []).map((e: any) => e.id))
-    );
-    const { routine_weeks, ...routine } = r;
-    return {
-      ...(routine as Routine),
-      semanasCount: weeks.length,
-      diasPorSemana: firstWeekDays.length,
-      ejerciciosCount: new Set(
-        firstWeekDays.flatMap((d: any) => (d.routine_exercises ?? []).map((e: any) => e.id))
-      ).size,
-      totalRoutineExerciseIds: allExerciseIds,
-    };
-  });
+  return (data ?? []).map(toRoutineWithCounts);
+}
+
+/** Rutinas activas y publicas de un conjunto de usuarios (gente que se sigue / entrenador
+ * suscripto), para la pestaña "Seguidos y gimnasio" al armar una rutina nueva. */
+export async function listPublicRoutinesForUsers(userIds: string[]): Promise<RoutineWithCounts[]> {
+  if (userIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("routines")
+    .select(ROUTINE_SELECT)
+    .in("user_id", userIds)
+    .eq("is_public", true)
+    .eq("is_template", false)
+    .is("finalizada_at", null)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  return (data ?? []).map(toRoutineWithCounts);
 }
 
 // RPC (no un update() directo): el update() plano no tira error si RLS filtra la

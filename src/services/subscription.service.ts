@@ -124,6 +124,45 @@ export async function deleteHistoricSubscription(trainerId: string, subscriberId
   return {};
 }
 
+/** Entrenador(es) al que un usuario esta suscripto (status accepted), para mostrar
+ * sus rutinas publicas en "Ver rutinas" > "Seguidos y gimnasio". */
+export async function listMyTrainers(subscriberId: string): Promise<SubscriberListRow[]> {
+  const { data: rows, error } = await supabase
+    .from("subscriptions")
+    .select("trainer_id, created_at")
+    .eq("subscriber_id", subscriberId)
+    .eq("status", "accepted");
+  if (error) throw error;
+  if (!rows || rows.length === 0) return [];
+
+  const trainerIds = [...new Set(rows.map((r) => r.trainer_id))];
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles_public")
+    .select("id, username, nombre, apellido, avatar_url, user_type, is_verified")
+    .in("id", trainerIds);
+  if (profilesError) throw profilesError;
+
+  const createdAtByTrainer = new Map(rows.map((r) => [r.trainer_id, r.created_at]));
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  return trainerIds
+    .map((id) => {
+      const p = profileById.get(id);
+      if (!p || !p.user_type) return null;
+      return {
+        id,
+        username: p.username ?? "",
+        nombre: p.nombre ?? "",
+        apellido: p.apellido ?? "",
+        avatarUrl: p.avatar_url,
+        userType: p.user_type,
+        isVerified: p.is_verified ?? false,
+        subscribedAt: createdAtByTrainer.get(id) ?? "",
+      };
+    })
+    .filter((r): r is SubscriberListRow => r !== null);
+}
+
 export async function getPendingSubscriptionRequestCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from("subscriptions")
