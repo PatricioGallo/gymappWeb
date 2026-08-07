@@ -1,7 +1,9 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { listExercises, type Exercise } from "../services/exercise.service";
 import { createRoutine, getRoutineDetail, type NewDayInput } from "../services/routine.service";
-import { listRoutines, getProfileBasicById, type RoutineWithCounts } from "../services/profile.service";
+import { listRoutines, listPublicRoutinesForUsers, getProfileBasicById, type RoutineWithCounts } from "../services/profile.service";
+import { listFollowing } from "../services/follow.service";
+import { listMyTrainers } from "../services/subscription.service";
 import { escapeHtml } from "../lib/dom";
 import { DIA_LABELS, diaLabel, formatFechaCorta } from "../lib/dias";
 import { openExercisePicker } from "../lib/exercisePicker";
@@ -146,13 +148,49 @@ async function renderBrowseContent() {
   }
 
   if (browseTab === "friends") {
-    content.innerHTML = `
-      <div class="empty-state reveal">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <h3>Próximamente</h3>
-        <p>Vas a poder ver acá las rutinas de la gente que seguís y de tu gimnasio.</p>
-      </div>
-    `;
+    content.innerHTML = `<p class="subtitle">Buscando rutinas públicas de tus seguidos...</p>`;
+
+    const [following, trainers] = await Promise.all([
+      listFollowing(targetUserId).catch(() => []),
+      listMyTrainers(targetUserId).catch(() => []),
+    ]);
+
+    const ownerById = new Map<string, string>();
+    following.forEach((f) => ownerById.set(f.id, `${f.nombre} ${f.apellido}`.trim()));
+    trainers.forEach((t) => ownerById.set(t.id, `${t.nombre} ${t.apellido}`.trim()));
+
+    const networkIds = [...ownerById.keys()];
+
+    if (networkIds.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state reveal">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <h3>Todavía no seguís a nadie</h3>
+          <p>Cuando sigas a alguien o te suscribas a un entrenador, sus rutinas públicas van a aparecer acá.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const publicRoutines = await listPublicRoutinesForUsers(networkIds).catch(() => []);
+
+    if (publicRoutines.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state reveal">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <h3>Nada por acá todavía</h3>
+          <p>Tus seguidos y tu entrenador no tienen rutinas públicas activas por el momento.</p>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = `<div class="routine-grid">${publicRoutines.map((r) => networkRoutineCardMarkup(r, ownerById.get(r.user_id) ?? "")).join("")}</div>`;
+    content.querySelectorAll<HTMLButtonElement>(".useNetworkBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.dataset.id) openClonePreview(btn.dataset.id, false, btn.dataset.owner);
+      });
+    });
     return;
   }
 
@@ -212,6 +250,24 @@ function ownRoutineCardMarkup(r: RoutineWithCounts): string {
       </div>
       <div class="routine-actions">
         <button type="button" class="btn btn-outline btn-sm useOwnBtn" data-id="${r.id}">Usar como base</button>
+      </div>
+    </div>
+  `;
+}
+
+function networkRoutineCardMarkup(r: RoutineWithCounts, ownerName: string): string {
+  return `
+    <div class="routine-card reveal">
+      <span class="routine-started-tag">Iniciada el ${escapeHtml(formatFechaCorta(r.fecha_inicio))}</span>
+      <h3>${escapeHtml(r.nombre)}</h3>
+      ${ownerName ? `<p class="subtitle">De ${escapeHtml(ownerName)}</p>` : ""}
+      <div class="routine-stats">
+        <div><span>Semanas</span><strong>${r.semanasCount}</strong></div>
+        <div><span>Días por semana</span><strong>${r.diasPorSemana}</strong></div>
+        <div><span>Ejercicios</span><strong>${r.ejerciciosCount}</strong></div>
+      </div>
+      <div class="routine-actions">
+        <button type="button" class="btn btn-outline btn-sm useNetworkBtn" data-id="${r.id}" data-owner="${r.user_id}">Usar como base</button>
       </div>
     </div>
   `;
@@ -314,7 +370,7 @@ function openTemplatePreview(t: RoutineTemplate) {
   });
 }
 
-async function openClonePreview(routineId: string, isActivating = false) {
+async function openClonePreview(routineId: string, isActivating = false, explicitProvenanceUserId?: string) {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Cargando rutina...</p></div>`;
 
@@ -327,9 +383,10 @@ async function openClonePreview(routineId: string, isActivating = false) {
   // Si la rutina de origen ya tenia procedencia (era ella misma una copia, o
   // una clonada-de-una-copia), esa autoria original se arrastra tal cual. Si
   // no, y esto vino de copyFrom (copiando la rutina activa publica de otro
-  // perfil), el dueño de la rutina de origen pasa a ser la procedencia. Un
-  // cloneFrom de una rutina propia sin copia detras no lleva procedencia.
-  const provenanceUserId = detail.copied_from_user_id ?? (copyFromId ? detail.user_id : undefined);
+  // perfil) o del tab "Seguidos y gimnasio" (explicitProvenanceUserId), el
+  // dueño de la rutina de origen pasa a ser la procedencia. Un cloneFrom de
+  // una rutina propia sin copia detras no lleva procedencia.
+  const provenanceUserId = detail.copied_from_user_id ?? explicitProvenanceUserId ?? (copyFromId ? detail.user_id : undefined);
 
   const baseWeek = detail.semanas[0];
   const subtitle = isAssigningToOther
