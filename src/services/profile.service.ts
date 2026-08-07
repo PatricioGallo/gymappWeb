@@ -113,7 +113,7 @@ export async function listRoutines(userId: string, mode: RoutineListMode): Promi
   let query = supabase
     .from("routines")
     .select(
-      `id, user_id, assigned_by, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, is_template, created_at, updated_at,
+      `id, user_id, assigned_by, copied_from_user_id, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, is_template, created_at, updated_at,
        routine_weeks ( id, numero, routine_days ( id, dia_semana, routine_exercises ( id ) ) )`
     )
     .eq("user_id", userId)
