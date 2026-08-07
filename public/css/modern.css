@@ -3333,6 +3333,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .modal-actions .btn { flex: 1; }
 
+@media (max-width: 639px) {
+  .modal-actions { flex-direction: column; }
+  .modal-actions .btn { width: 100%; }
+}
+
 /* ---------- Selector de ejercicio (buscador con imagenes) ---------- */
 
 .exc-picker-btn {
