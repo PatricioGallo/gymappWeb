@@ -105,6 +105,20 @@ export type Database = {
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "error_reports_read_by_fkey"
+            columns: ["read_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "error_reports_read_by_fkey"
+            columns: ["read_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       exercise_comments: {
@@ -594,6 +608,7 @@ export type Database = {
       routines: {
         Row: {
           assigned_by: string | null
+          copied_from_user_id: string | null
           created_at: string
           fecha_inicio: string
           finalizada_at: string | null
@@ -608,6 +623,7 @@ export type Database = {
         }
         Insert: {
           assigned_by?: string | null
+          copied_from_user_id?: string | null
           created_at?: string
           fecha_inicio?: string
           finalizada_at?: string | null
@@ -622,6 +638,7 @@ export type Database = {
         }
         Update: {
           assigned_by?: string | null
+          copied_from_user_id?: string | null
           created_at?: string
           fecha_inicio?: string
           finalizada_at?: string | null
@@ -645,6 +662,20 @@ export type Database = {
           {
             foreignKeyName: "routines_assigned_by_fkey"
             columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routines_copied_from_user_id_fkey"
+            columns: ["copied_from_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routines_copied_from_user_id_fkey"
+            columns: ["copied_from_user_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
@@ -1120,6 +1151,7 @@ export type Database = {
       }
       create_routine: {
         Args: {
+          p_copied_from_user_id?: string
           p_fecha_inicio: string
           p_is_public?: boolean
           p_is_template?: boolean

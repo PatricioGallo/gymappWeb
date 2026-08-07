@@ -6,6 +6,7 @@ import {
   getProfile,
   getProfileByUsername,
   getProfileBasicByUsername,
+  getProfileBasicById,
   getProfilesBasicByIds,
   uploadAvatar,
   listRoutines,
@@ -836,6 +837,15 @@ function isFullyOwnedByViewer(r: RoutineWithCounts): boolean {
   return !r.assigned_by || r.assigned_by === myId;
 }
 
+// Quien aparece en "Rutina de X": el que la asigno tiene prioridad (esa
+// relacion ya implica que la rutina "es de" esa persona), y si no hay
+// asignacion, quien la creo originalmente si esta rutina viene de un "Copiar
+// a mis guardadas" del perfil de otra persona. Si ninguna aplica, no hay linea.
+function provenanceOf(r: RoutineWithCounts, profiles: Map<string, ProfileBasic>): ProfileBasic | null {
+  const id = r.assigned_by ?? r.copied_from_user_id;
+  return id ? (profiles.get(id) ?? null) : null;
+}
+
 function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) {
   const routineLogs = logs.filter((l) => l.routineId === routine.id);
   const trainedIds = new Set(routineLogs.map((l) => l.routineExerciseId));
@@ -859,7 +869,14 @@ function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) 
   `;
 }
 
-async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[], targetUserType: Profile["user_type"], ownerBasic: BasicNamedProfile) {
+async function renderRoutines(
+  userId: string,
+  ownerView: boolean,
+  logs: WeightLogEntry[],
+  targetUserType: Profile["user_type"],
+  ownerBasic: BasicNamedProfile,
+  viewerCanCopyToSaved = false
+) {
   const routinesContent = document.getElementById("routinesContent");
   const routinesTitle = document.getElementById("routinesTitle");
   const tabsWrap = document.getElementById("routineTabs");
@@ -893,20 +910,22 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
 
   const routines = await listRoutines(userId, activeRoutineTab);
 
+  // Todas comparten el mismo dueño (esta pagina), pero cada una puede haber
+  // sido asignada por un entrenador distinto, o copiada del perfil de otra
+  // persona (ver "Copiar a mis guardadas"): se resuelven en un solo batch,
+  // compartido entre ambas procedencias.
+  const provenanceIds = [...new Set(routines.flatMap((r) => [r.assigned_by, r.copied_from_user_id]))];
+  const provenanceProfiles = await getProfilesBasicByIds(provenanceIds);
+
   if (activeRoutineTab === "saved") {
-    renderSavedRoutines(routines, routinesContent, targetUserType);
+    renderSavedRoutines(routines, routinesContent, targetUserType, provenanceProfiles);
     return routines.length;
   }
 
-  // Todas comparten el mismo dueño (esta pagina), pero cada una puede haber sido
-  // asignada por un entrenador distinto: se resuelven en un solo batch.
-  const assignedByIds = [...new Set(routines.map((r) => r.assigned_by))];
-  const assignedByProfiles = await getProfilesBasicByIds(assignedByIds);
-
   if (activeRoutineTab === "active") {
-    renderActiveRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
+    renderActiveRoutines(routines, ownerView, routinesContent, logs, ownerBasic, provenanceProfiles, viewerCanCopyToSaved);
   } else {
-    renderHistoricRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
+    renderHistoricRoutines(routines, ownerView, routinesContent, logs, ownerBasic, provenanceProfiles);
   }
   return routines.length;
 }
@@ -917,7 +936,8 @@ function renderActiveRoutines(
   container: HTMLElement,
   logs: WeightLogEntry[],
   ownerBasic: BasicNamedProfile,
-  assignedByProfiles: Map<string, ProfileBasic>
+  provenanceProfiles: Map<string, ProfileBasic>,
+  viewerCanCopyToSaved = false
 ) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
@@ -929,6 +949,9 @@ function renderActiveRoutines(
   container.innerHTML = routines
     .map((r) => {
       const fullyOwned = isFullyOwnedByViewer(r);
+      // Un visitante tambien tiene ruedita: "Ver" siempre, y "Copiar a guardadas"
+      // solo si la rutina es publica y el visitante tiene donde guardarla (mismo
+      // gate que canUseSaved, pero aplicado a quien mira en vez de al dueño).
       const menu = ownerView
         ? `<div class="profile-menu-wrap routine-menu-wrap">
              <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
@@ -943,22 +966,32 @@ function renderActiveRoutines(
                }
              </div>
            </div>`
-        : "";
+        : `<div class="profile-menu-wrap routine-menu-wrap">
+             <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+             <div class="profile-menu-panel routine-menu-panel" hidden>
+               <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Ver</a>
+               ${
+                 r.is_public && viewerCanCopyToSaved
+                   ? `<a class="profile-menu-item" href="rutinsView.html?copyFrom=${r.id}">Copiar a mis guardadas</a>`
+                   : ""
+               }
+             </div>
+           </div>`;
       // Finalizar (a diferencia de Modificar/Eliminar/visibilidad) es control del
       // dueño de la cuenta sobre su propio progreso: se puede aunque la rutina
       // sea asignada y privada, no requiere fullyOwned.
       const actions = ownerView
         ? `<button class="btn btn-primary btn-sm addPeso" data-id="${r.id}">Entrenar hoy</button>
            <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>`
-        : `<button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>`;
+        : "";
 
       return `
-        <div class="routine-card reveal${ownerView ? " routine-card-has-menu" : ""}">
+        <div class="routine-card reveal routine-card-has-menu">
           ${menu}
           <span class="routine-started-tag">Iniciada el ${escapeHtml(formatFechaCorta(r.fecha_inicio))}</span>
           <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
           <h3>${escapeHtml(r.nombre)}</h3>
-          ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
+          ${routineOwnerLineMarkup(ownerBasic, provenanceOf(r, provenanceProfiles))}
           ${routineStatsMarkup(r, logs)}
           <div class="routine-actions">${actions}</div>
         </div>
@@ -966,12 +999,9 @@ function renderActiveRoutines(
     })
     .join("");
 
-  container.querySelectorAll<HTMLButtonElement>(".showExc").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `showExc.html?rid=${btn.dataset.id}`));
-  });
+  wireRoutineMenus(container);
   if (!ownerView) return;
 
-  wireRoutineMenus(container);
   container.querySelectorAll<HTMLButtonElement>(".addPeso").forEach((btn) => {
     btn.addEventListener("click", () => (window.location.href = `pesos.html?rid=${btn.dataset.id}`));
   });
@@ -986,7 +1016,7 @@ function renderActiveRoutines(
       try {
         await setRoutinePublic(routine.id, !routine.is_public);
         routine.is_public = !routine.is_public;
-        renderActiveRoutines(routines, ownerView, container, logs, ownerBasic, assignedByProfiles);
+        renderActiveRoutines(routines, ownerView, container, logs, ownerBasic, provenanceProfiles);
       } catch {
         btn.disabled = false;
         alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
@@ -1001,7 +1031,7 @@ function renderHistoricRoutines(
   container: HTMLElement,
   logs: WeightLogEntry[],
   ownerBasic: BasicNamedProfile,
-  assignedByProfiles: Map<string, ProfileBasic>
+  provenanceProfiles: Map<string, ProfileBasic>
 ) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
@@ -1032,7 +1062,7 @@ function renderHistoricRoutines(
           ${menu}
           ${r.finalizada_at ? `<span class="routine-finished-tag">Finalizada el ${escapeHtml(formatFechaCorta(r.finalizada_at))}</span>` : ""}
           <h3>${escapeHtml(r.nombre)}</h3>
-          ${routineOwnerLineMarkup(ownerBasic, r.assigned_by ? assignedByProfiles.get(r.assigned_by) : null)}
+          ${routineOwnerLineMarkup(ownerBasic, provenanceOf(r, provenanceProfiles))}
           ${routineStatsMarkup(r, logs)}
           <div class="routine-actions">${actions}</div>
         </div>
@@ -1055,7 +1085,12 @@ function renderHistoricRoutines(
 // Guardadas siempre se ve solo el dueño: no hay caso "visitante" que gatear aca.
 // Un entrenador puede activar y asignarsela a un alumno (o a si mismo); un
 // usuario comun solo puede activarla para si mismo, sin modal de por medio.
-function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLElement, targetUserType: Profile["user_type"]) {
+function renderSavedRoutines(
+  routines: RoutineWithCounts[],
+  container: HTMLElement,
+  targetUserType: Profile["user_type"],
+  provenanceProfiles: Map<string, ProfileBasic>
+) {
   const isTrainer = targetUserType === "entrenador";
 
   if (routines.length === 0) {
@@ -1097,6 +1132,7 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
         <span class="routine-started-tag">Plantilla</span>
         <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
         <h3>${escapeHtml(r.nombre)}</h3>
+        ${routineOwnerLineMarkup(null, provenanceOf(r, provenanceProfiles))}
         <div class="routine-stats">
           <div><span>Semanas</span><strong>${r.semanasCount}</strong></div>
           <div><span>Días por semana</span><strong>${r.diasPorSemana}</strong></div>
@@ -1129,7 +1165,7 @@ function renderSavedRoutines(routines: RoutineWithCounts[], container: HTMLEleme
       try {
         await setRoutinePublic(routine.id, !routine.is_public);
         routine.is_public = !routine.is_public;
-        renderSavedRoutines(routines, container, targetUserType);
+        renderSavedRoutines(routines, container, targetUserType, provenanceProfiles);
       } catch {
         btn.disabled = false;
         alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
@@ -1405,9 +1441,16 @@ async function main() {
     document.getElementById("quickActionsSection")?.remove();
   }
 
+  // "Copiar" en el menu de una rutina activa ajena solo tiene sentido si el
+  // visitante tiene donde guardarla: mismo gate que canUseSaved, pero sobre el
+  // *visitante*, no sobre el dueño del perfil que se esta mirando.
+  const viewerBasic = !isOwner && myId ? await getProfileBasicById(myId).catch(() => null) : null;
+  const viewerCanCopyToSaved =
+    viewerBasic?.user_type === "entrenador" || viewerBasic?.user_type === "usuario" || viewerBasic?.user_type === "admin";
+
   const logs = await listWeightLogsWithContext(displayProfile.id!);
   routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
-  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile);
+  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
   renderStats(logs, activeCount ?? 0, isOwner);
 }
 

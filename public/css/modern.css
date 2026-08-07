@@ -19,7 +19,7 @@
   --header-h: 64px;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html {
   scroll-behavior: smooth;
@@ -40,6 +40,19 @@ body {
 img { max-width: 100%; display: block; }
 
 a { color: inherit; text-decoration: none; }
+
+/* Sin esto, el foco por click/tap en links y botones deja el anillo gris por
+   defecto del navegador "trabado" hasta que se toca otra cosa. focus-visible
+   lo sigue mostrando con teclado (accesibilidad), solo se saca en click/tap. */
+a:focus,
+button:focus {
+  outline: none;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 3px;
+}
 
 .container {
   width: 100%;
@@ -734,6 +747,7 @@ a { color: inherit; text-decoration: none; }
    mobile y no incluye botones. */
 @media (max-width: 859px) {
   .site-nav a:not(.btn):hover { background: var(--surface-2); }
+  .site-nav a.active { background: var(--surface-2); }
 }
 
 .nav-badge {
@@ -763,7 +777,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .nav-dot[hidden] { display: none; }
-.site-nav a.active { color: var(--text); background: var(--surface-2); }
+.site-nav a.active { color: var(--text); }
 
 .site-nav .nav-cta { margin-top: 4px; padding: 12px; color: #fff; }
 

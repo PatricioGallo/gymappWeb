@@ -18,6 +18,10 @@ const targetUserId = params.get("uid") ?? myId;
 // directo hacia un alumno (cloneFrom, siempre junto con ?uid=<alumno>).
 const isTemplateMode = params.get("mode") === "template";
 const cloneFromId = params.get("cloneFrom");
+// Copiar la rutina activa (publica) de otro perfil: siempre para uno mismo,
+// nunca junto a ?uid=, y siempre cae en Guardadas (nunca se activa de una) via
+// isActivating=false en openClonePreview.
+const copyFromId = params.get("copyFrom");
 const isAssigningToOther = targetUserId !== myId;
 
 // Nadie elige explicitamente "plantilla vs rutina" en el flujo normal: toda
@@ -320,10 +324,19 @@ async function openClonePreview(routineId: string, isActivating = false) {
     return;
   }
 
+  // Si la rutina de origen ya tenia procedencia (era ella misma una copia, o
+  // una clonada-de-una-copia), esa autoria original se arrastra tal cual. Si
+  // no, y esto vino de copyFrom (copiando la rutina activa publica de otro
+  // perfil), el dueño de la rutina de origen pasa a ser la procedencia. Un
+  // cloneFrom de una rutina propia sin copia detras no lleva procedencia.
+  const provenanceUserId = detail.copied_from_user_id ?? (copyFromId ? detail.user_id : undefined);
+
   const baseWeek = detail.semanas[0];
   const subtitle = isAssigningToOther
     ? `Se va a crear una rutina nueva con los mismos ejercicios${assignTargetName ? ` para ${escapeHtml(assignTargetName)}` : ""}. Tu plantilla original queda guardada tal cual.`
-    : "Se va a crear una rutina nueva con los mismos ejercicios, para que empieces de cero.";
+    : copyFromId
+      ? "Se va a guardar una copia en tus rutinas guardadas, con los mismos ejercicios."
+      : "Se va a crear una rutina nueva con los mismos ejercicios, para que empieces de cero.";
 
   loaderBody.innerHTML = `
     <div class="success-check-container">
@@ -338,7 +351,7 @@ async function openClonePreview(routineId: string, isActivating = false) {
           <div class="alert_message" id="cloneAlert"></div>
           <div class="modal-actions">
             <button type="button" class="btn btn-outline" id="cloneCancel">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Crear rutina</button>
+            <button type="submit" class="btn btn-primary">${copyFromId ? "Guardar copia" : "Crear rutina"}</button>
           </div>
         </form>
       </div>
@@ -380,7 +393,7 @@ async function openClonePreview(routineId: string, isActivating = false) {
     }));
 
     const isPublic = readVisibilityField("cloneVisibility");
-    const error = await createAndFinish(name, weeks, dias, isPublic, isActivating);
+    const error = await createAndFinish(name, weeks, dias, isPublic, isActivating, provenanceUserId);
     if (error) alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
   });
 }
@@ -697,7 +710,14 @@ function renderSuccessAndRedirect(message: string): void {
   }, 2000);
 }
 
-async function createAndFinish(name: string, weeks: number, dias: NewDayInput[], isPublic: boolean, isActivating = false): Promise<string | null> {
+async function createAndFinish(
+  name: string,
+  weeks: number,
+  dias: NewDayInput[],
+  isPublic: boolean,
+  isActivating = false,
+  copiedFromUserId?: string
+): Promise<string | null> {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `
     <div class="loader-container"><div class="modern-spinner"></div><p>Creando rutina...</p></div>
@@ -709,7 +729,7 @@ async function createAndFinish(name: string, weeks: number, dias: NewDayInput[],
   // sigue siendo guardado silencioso (sin la pregunta), y asignarle una rutina
   // a otra persona directamente (sin pasar por Guardadas) tampoco pregunta.
   const isTemplate = isActivating ? false : isTemplateMode || (autoSaveAsTemplate && !isAssigningToOther);
-  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, isTemplate);
+  const { error: createError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, isTemplate, copiedFromUserId);
 
   if (createError) {
     loaderBody.innerHTML = "";
@@ -736,7 +756,7 @@ async function createAndFinish(name: string, weeks: number, dias: NewDayInput[],
     });
     document.getElementById("activateNowBtn")?.addEventListener("click", async () => {
       loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Activando rutina...</p></div>`;
-      const { error: activateError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, false);
+      const { error: activateError } = await createRoutine(targetUserId, name, weeks, dias, isPublic, false, copiedFromUserId);
       if (activateError) {
         renderSuccessAndRedirect("La rutina quedó guardada, pero no se pudo activar. Podés activarla luego desde Guardadas.");
         return;
@@ -770,6 +790,10 @@ async function init() {
   // previsualizacion de clonado sobre el selector, sin que el alumno tenga que
   // elegir "cero vs. ver rutinas" para algo que ya viene decidido.
   if (cloneFromId) openClonePreview(cloneFromId, true);
+  // copyFrom (rutina activa publica de otro perfil, ver "Copiar a mis
+  // guardadas" en profile.ts): isActivating=false, cae en el mismo flujo
+  // "guardada, ¿la activás ya?" que cualquier creación propia.
+  else if (copyFromId) openClonePreview(copyFromId, false);
 }
 
 init();
