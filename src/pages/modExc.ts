@@ -28,19 +28,31 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
   const isNoWeight = exc ? !exc.es_medible : false;
   const selectedLabel = exc ? escapeHtml(exc.nombre_snapshot) : "Elegir ejercicio";
   return `
-    <div class="exc-block" data-existing-id="${exc?.id ?? ""}">
-      <div class="exc-edit-row">
+    <div class="exc-block exc-block-create" data-existing-id="${exc?.id ?? ""}">
+      <div class="exc-top-row">
         <div class="exc-reorder">
           <button type="button" class="exc-move-up" title="Subir">▲</button>
           <button type="button" class="exc-move-down" title="Bajar">▼</button>
         </div>
         <button type="button" class="exc-picker-btn">${selectedLabel}</button>
         <input type="hidden" class="excSelectInput" value="${exc?.exercise_id ?? ""}">
-        <input type="number" class="mini-input serieInput" value="${exc?.serie ?? ""}" placeholder="Series" min="1" max="10">
-        <input type="number" class="mini-input repeInput" value="${exc?.repe ?? ""}" placeholder="Repes" min="1" max="30">
-        <span class="exc-repe-sep">a</span>
-        <input type="number" class="mini-input repeMaxInput" value="${exc?.repe_max ?? ""}" placeholder="opcional" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
+      </div>
+      <div class="exc-fields-row">
+        <label class="exc-field exc-field-series">
+          <span class="exc-field-label">Series</span>
+          <input type="number" class="mini-input serieInput" value="${exc?.serie ?? ""}" placeholder="Ej: 3" min="1" max="10">
+        </label>
+        <span class="exc-field-sep" aria-hidden="true">x</span>
+        <label class="exc-field exc-field-repe">
+          <span class="exc-field-label">Repeticiones</span>
+          <input type="number" class="mini-input repeInput" value="${exc?.repe ?? ""}" placeholder="Ej: 10" min="1" max="30">
+        </label>
+        <span class="exc-field-sep" aria-hidden="true">-</span>
+        <label class="exc-field exc-field-hasta">
+          <span class="exc-field-label">Hasta <em>(opcional)</em></span>
+          <input type="number" class="mini-input repeMaxInput" value="${exc?.repe_max ?? ""}" placeholder="Rango" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
+        </label>
       </div>
       <div class="exc-extra">
         <label><input type="checkbox" class="noWeightCheck" ${isNoWeight ? "checked" : ""}> Sin peso</label>
@@ -69,7 +81,6 @@ function renderWeek(weekIndex: number) {
       (dia) => `
     <div class="day-card reveal" data-day-id="${dia.id}">
       <h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3>
-      <div class="exc-edit-header"><span class="exc-edit-header-spacer"></span><span class="exc-edit-header-name">Ejercicio</span><span>Series</span><span>Repes</span><span class="exc-repe-sep" aria-hidden="true">a</span><span>Hasta</span><span class="exc-edit-header-spacer exc-edit-header-spacer-remove"></span></div>
       <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(exc)).join("")}</div>
       <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
     </div>
