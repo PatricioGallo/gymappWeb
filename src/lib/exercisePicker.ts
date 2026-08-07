@@ -12,8 +12,8 @@ export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise
   let items = catalog;
 
   loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="modal-card modal-card-lg">
+    <div class="success-check-container exc-pick-overlay">
+      <div class="modal-card modal-card-lg exc-pick-modal-card">
         <h2>Elegir ejercicio</h2>
         <p class="subtitle">Buscá por nombre o filtrá por categoría.</p>
         <div class="exc-pick-search-row">
