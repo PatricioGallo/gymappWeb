@@ -26,6 +26,24 @@ export async function upsertExerciseComment(userId: string, routineExerciseId: s
   return {};
 }
 
+/** Ultimo comentario (cualquier fecha) por routine_exercise_id -- para mostrarle al
+ * entrenador la nota mas reciente de cada ejercicio de la rutina activa de un alumno. */
+export async function listCommentsForExercises(routineExerciseIds: string[]): Promise<Map<string, ExerciseComment>> {
+  if (routineExerciseIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("exercise_comments")
+    .select("*")
+    .in("routine_exercise_id", routineExerciseIds)
+    .order("fecha", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const map = new Map<string, ExerciseComment>();
+  (data ?? []).forEach((c) => {
+    if (!map.has(c.routine_exercise_id)) map.set(c.routine_exercise_id, c);
+  });
+  return map;
+}
+
 export async function deleteExerciseComment(commentId: string): Promise<{ error?: string }> {
   const { error } = await supabase.from("exercise_comments").delete().eq("id", commentId);
   if (error) return { error: "No se pudo borrar el comentario. Probá de nuevo." };

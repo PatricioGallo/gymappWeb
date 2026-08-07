@@ -120,6 +120,11 @@ function studentCardMarkup(s: StudentRow): string {
         <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${STUDENT_MENU_GEAR_ICON}</button>
         <div class="profile-menu-panel routine-menu-panel" hidden>
           <a class="profile-menu-item" href="progress.html?uid=${s.id}">Ver progreso</a>
+          ${
+            s.activeRoutine
+              ? `<a class="profile-menu-item" href="pesos.html?rid=${s.activeRoutine.id}&uid=${s.id}">Empezar entrenamiento</a>`
+              : ""
+          }
           <button type="button" class="profile-menu-item assignRoutineBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Asignarle una rutina</button>
           ${
             s.activeRoutine
@@ -151,13 +156,13 @@ function studentCardMarkup(s: StudentRow): string {
         <div><span>Alumno desde</span><strong>${escapeHtml(formatFechaCorta(s.subscribedAt))}</strong></div>
       </div>
       ${commentsMarkup}
-      <div class="routine-actions">
-        ${
-          s.activeRoutine
-            ? `<button class="btn btn-primary btn-sm logWeightsBtn" data-rid="${s.activeRoutine.id}" data-uid="${s.id}" type="button">Cargar pesos</button>`
-            : `<button class="btn btn-primary btn-sm assignRoutineBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}" type="button">Asignar rutina</button>`
-        }
-      </div>
+      ${
+        s.activeRoutine
+          ? ""
+          : `<div class="routine-actions">
+        <button class="btn btn-primary btn-sm assignRoutineBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}" type="button">Asignar rutina</button>
+      </div>`
+      }
     </div>
   `;
 }
@@ -174,11 +179,6 @@ function renderCurrentList(students: StudentRow[], query: string) {
 
   wireStudentMenus(listEl);
 
-  listEl.querySelectorAll<HTMLButtonElement>(".logWeightsBtn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      window.location.href = `pesos.html?rid=${encodeURIComponent(btn.dataset.rid!)}&uid=${encodeURIComponent(btn.dataset.uid!)}`;
-    });
-  });
   listEl.querySelectorAll<HTMLButtonElement>(".cancelSubBtn").forEach((btn) => {
     btn.addEventListener("click", () => confirmCancelSubscription(btn.dataset.id!, btn.dataset.nombre!));
   });

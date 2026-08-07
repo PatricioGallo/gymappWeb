@@ -1,7 +1,14 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { formatFechaCorta } from "../lib/dias";
-import { getProfile, listWeightLogsWithContext, type WeightLogEntry } from "../services/profile.service";
+import { formatFechaCorta, dayDisplayLabel } from "../lib/dias";
+import { formatRepe } from "../lib/reps";
+import { getProfile, listWeightLogsWithContext, listRoutines, type WeightLogEntry } from "../services/profile.service";
+import { getRoutineDetail, type RoutineDetail, type RoutineExerciseWithAuthor } from "../services/routine.service";
+import { getLatestWeights, type LatestWeightsMap, type LatestWeightEntry } from "../services/weightLog.service";
+import { listCommentsForExercises } from "../services/comment.service";
+import type { Tables } from "../types/database";
+
+type ExerciseComment = Tables<"exercise_comments">;
 
 declare const Chart: any;
 
@@ -106,24 +113,33 @@ function barChart(canvasId: string, labels: string[], data: number[], color: str
   });
 }
 
-function showEmpty() {
-  const subtitle = document.getElementById("pageSubtitle");
-  if (subtitle) subtitle.textContent = "Todavía no tenés entrenamientos registrados.";
-  document.getElementById("excPicker")?.remove();
-  document.getElementById("detailHead")?.remove();
-  const overview = document.getElementById("overviewContent");
-  if (overview) overview.innerHTML = "";
-  const progressContent = document.getElementById("progressContent");
-  if (progressContent) {
-    progressContent.innerHTML = `
-      <div class="empty-state reveal">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
-        <h3>Todavía no tenés estadísticas</h3>
-        <p>Cuando cargues el peso de un ejercicio en "Pesos semanales", tu progreso va a aparecer acá.</p>
-        <a href="profile.html" class="btn btn-primary btn-sm">Volver al perfil</a>
-      </div>
-    `;
+function statsEmptyMarkup(): string {
+  return `
+    <div class="empty-state reveal">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
+      <h3>Todavía no tenés estadísticas</h3>
+      <p>Cuando cargues el peso de un ejercicio en "Pesos semanales", tu progreso va a aparecer acá.</p>
+      <a href="profile.html" class="btn btn-primary btn-sm">Volver al perfil</a>
+    </div>
+  `;
+}
+
+// Caso de borde (uid invalido/perfil no encontrado): saca las pestañas, no tiene
+// sentido navegar entre secciones vacias.
+function showProfileNotFound() {
+  document.getElementById("progressTabs")?.remove();
+  document.getElementById("tabPanelOverview")?.remove();
+  document.getElementById("tabPanelDetail")?.remove();
+  const panel = document.getElementById("tabPanelActive");
+  if (panel) panel.innerHTML = statsEmptyMarkup();
+}
+
+function renderOverviewTab(groups: ExerciseGroup[]) {
+  if (groups.length === 0) {
+    document.getElementById("overviewContent")!.innerHTML = statsEmptyMarkup();
+    return;
   }
+  renderOverview(groups);
 }
 
 function renderOverview(groups: ExerciseGroup[]) {
@@ -180,6 +196,28 @@ function renderOverview(groups: ExerciseGroup[]) {
       "#2fd971"
     );
   }
+}
+
+function renderDetailTab(groups: ExerciseGroup[]) {
+  const detailHead = document.getElementById("detailHead");
+  const excPicker = document.getElementById("excPicker");
+  const progressContent = document.getElementById("progressContent")!;
+
+  if (groups.length === 0) {
+    detailHead?.remove();
+    excPicker?.remove();
+    progressContent.innerHTML = statsEmptyMarkup();
+    return;
+  }
+
+  const select = document.getElementById("excSelect") as HTMLSelectElement;
+  select.innerHTML = groups.map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join("");
+  select.addEventListener("change", () => {
+    const chosen = groups.find((g) => g.id === select.value);
+    if (chosen) renderExercise(chosen);
+  });
+
+  renderExercise(groups[0]);
 }
 
 function renderExercise(group: ExerciseGroup) {
@@ -287,34 +325,243 @@ function renderExercise(group: ExerciseGroup) {
   }
 }
 
+// ---------- Rutina activa: detalle completo semana por semana ----------
+// Misma logica de "ejercicio completo" que pesos.ts (todas las series con carga cuentan,
+// una sola serie con mismo_peso cuenta como todas) -- duplicada aca a proposito, no
+// compartida, siguiendo la convencion del resto del codebase.
+
+function isExerciseDone(e: RoutineExerciseWithAuthor, latestWeights: LatestWeightsMap): boolean {
+  const bySerie = latestWeights.get(e.id);
+  if (!bySerie) return false;
+  const requiredSeries = e.mismo_peso ? 1 : e.serie;
+  for (let i = 1; i <= requiredSeries; i++) {
+    if (!bySerie.get(i)?.length) return false;
+  }
+  return true;
+}
+
+function lastLoggedEntry(exerciseId: string, latestWeights: LatestWeightsMap): LatestWeightEntry | null {
+  const bySerie = latestWeights.get(exerciseId);
+  if (!bySerie) return null;
+  let best: LatestWeightEntry | null = null;
+  bySerie.forEach((entries) => {
+    const top = entries[0];
+    if (top && (!best || top.fecha > best.fecha)) best = top;
+  });
+  return best;
+}
+
+function progressStats(exs: RoutineExerciseWithAuthor[], latestWeights: LatestWeightsMap): { done: number; total: number; pct: number } {
+  const trackable = exs.filter((e) => e.es_medible);
+  if (trackable.length === 0) return { done: 0, total: 0, pct: 100 };
+  const done = trackable.filter((e) => isExerciseDone(e, latestWeights)).length;
+  return { done, total: trackable.length, pct: Math.round((done / trackable.length) * 100) };
+}
+
+function activeRingMarkup(pct: number): string {
+  const r = 16;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - pct / 100);
+  return `
+    <div class="day-ring">
+      <svg viewBox="0 0 40 40">
+        <circle class="ring-bg" cx="20" cy="20" r="${r}"></circle>
+        <circle class="ring-fg" cx="20" cy="20" r="${r}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"></circle>
+      </svg>
+      <span class="day-ring-pct">${pct}%</span>
+    </div>
+  `;
+}
+
+function exerciseRowMarkup(e: RoutineExerciseWithAuthor, latestWeights: LatestWeightsMap, comments: Map<string, ExerciseComment>): string {
+  const done = e.es_medible ? isExerciseDone(e, latestWeights) : null;
+  const last = lastLoggedEntry(e.id, latestWeights);
+  const comment = comments.get(e.id);
+
+  const statusMarkup =
+    done === null
+      ? `<span class="day-row-status pending">No medible</span>`
+      : `<span class="day-row-status ${done ? "done" : "pending"}">${done ? "Hecho" : "Pendiente"}</span>`;
+
+  const subtitle = `${e.serie} series x ${formatRepe(e.repe, e.repe_max)}${
+    last ? ` · Último: ${last.peso} ${last.unidad}${last.repe ? ` x ${last.repe}` : ""} (${formatFechaCorta(last.fecha)})` : e.es_medible ? " · Sin cargas registradas" : ""
+  }`;
+
+  return `
+    <div class="active-exc-item">
+      <div class="active-exc-item-head">
+        <span class="exc-name">${escapeHtml(e.nombre_snapshot)}</span>
+        ${statusMarkup}
+      </div>
+      <p class="chart-sub active-exc-item-sub">${subtitle}</p>
+      ${
+        comment
+          ? `<div class="student-comment-item active-exc-note">
+               <div class="student-comment-meta">Nota del alumno · ${escapeHtml(formatFechaCorta(comment.fecha))}</div>
+               <p>${escapeHtml(comment.comment)}</p>
+             </div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function dayMarkup(dia: RoutineDetail["semanas"][number]["dias"][number], latestWeights: LatestWeightsMap, comments: Map<string, ExerciseComment>): string {
+  const stats = progressStats(dia.ejercicios, latestWeights);
+  const subtitle = stats.total === 0 ? `${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}` : `${stats.done} de ${stats.total} ejercicios con carga`;
+
+  return `
+    <div class="day-accordion reveal">
+      <button class="day-row" type="button">
+        ${activeRingMarkup(stats.pct)}
+        <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
+        <span class="day-row-status ${stats.pct >= 100 ? "done" : "pending"}">${stats.pct}%</span>
+        <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="day-detail" hidden>
+        ${dia.ejercicios.map((e) => exerciseRowMarkup(e, latestWeights, comments)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function weekMarkup(semana: RoutineDetail["semanas"][number], latestWeights: LatestWeightsMap, comments: Map<string, ExerciseComment>): string {
+  const exs = semana.dias.flatMap((d) => d.ejercicios);
+  const stats = progressStats(exs, latestWeights);
+
+  return `
+    <div class="chart-card reveal">
+      <div class="routine-progress-head"><span>Semana ${semana.numero}</span><strong>${stats.pct}%</strong></div>
+      <div class="routine-progress-bar"><span style="width:${stats.pct}%"></span></div>
+      <div class="week-days">${semana.dias.map((d) => dayMarkup(d, latestWeights, comments)).join("")}</div>
+    </div>
+  `;
+}
+
+function activeRoutineMarkup(routine: RoutineDetail, latestWeights: LatestWeightsMap, comments: Map<string, ExerciseComment>): string {
+  const allExs = routine.semanas.flatMap((w) => w.dias.flatMap((d) => d.ejercicios));
+  const overall = progressStats(allExs, latestWeights);
+
+  return `
+    <div class="section-head reveal">
+      <span class="eyebrow">Rutina activa</span>
+      <h2>${escapeHtml(routine.nombre)}</h2>
+      <p>${routine.semanas.length} semana${routine.semanas.length === 1 ? "" : "s"}${routine.fecha_inicio ? ` · Empezada el ${formatFechaCorta(routine.fecha_inicio)}` : ""}</p>
+    </div>
+    <div class="chart-card reveal">
+      <div class="routine-progress-head"><span>Progreso general de la rutina</span><strong>${overall.pct}%</strong></div>
+      <div class="routine-progress-bar"><span style="width:${overall.pct}%"></span></div>
+      <p class="chart-sub">${overall.done} de ${overall.total} ejercicios con carga registrada.</p>
+    </div>
+    ${routine.semanas.map((s) => weekMarkup(s, latestWeights, comments)).join("")}
+  `;
+}
+
+function activeRoutineEmptyMarkup(): string {
+  return `
+    <div class="section-head reveal">
+      <span class="eyebrow">Rutina activa</span>
+      <h2>Sin rutina activa</h2>
+      <p>Todavía no hay una rutina en curso para mostrar el detalle.</p>
+    </div>
+  `;
+}
+
+function wireActiveRoutineAccordion(container: HTMLElement) {
+  container.querySelectorAll<HTMLButtonElement>(".day-row").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const accordion = btn.closest(".day-accordion");
+      const detail = accordion?.querySelector<HTMLElement>(".day-detail");
+      if (!accordion || !detail) return;
+      const isOpen = accordion.classList.toggle("open");
+      detail.hidden = !isOpen;
+    });
+  });
+}
+
+async function renderActiveRoutineSection(userId: string) {
+  const container = document.getElementById("activeRoutineContent");
+  if (!container) return;
+  try {
+    const [activeRoutine] = await listRoutines(userId, "active");
+    const routine = activeRoutine ? await getRoutineDetail(activeRoutine.id) : null;
+    if (!routine) {
+      container.innerHTML = activeRoutineEmptyMarkup();
+      return;
+    }
+
+    const exerciseIds = routine.semanas.flatMap((w) => w.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
+    const [latestWeights, comments] = await Promise.all([getLatestWeights(exerciseIds), listCommentsForExercises(exerciseIds)]);
+
+    container.innerHTML = activeRoutineMarkup(routine, latestWeights, comments);
+    wireActiveRoutineAccordion(container);
+  } catch {
+    container.innerHTML = `<p class="chart-sub">No se pudo cargar el detalle de la rutina activa.</p>`;
+  }
+}
+
+// ---------- Pestañas: Rutina activa / Resumen / Detalle por ejercicio ----------
+// Cada pestaña se carga (y sus graficos de Chart.js se instancian) recien la primera
+// vez que se abre, con el panel ya visible en el DOM -- crear un Chart sobre un canvas
+// oculto (display:none) lo deja con tamaño 0 y rompe el render.
+
+type ProgressTab = "active" | "overview" | "detail";
+const TAB_PANELS: Record<ProgressTab, string> = { active: "tabPanelActive", overview: "tabPanelOverview", detail: "tabPanelDetail" };
+
+let currentTab: ProgressTab = "active";
+const loadedTabs = new Set<ProgressTab>();
+let groupsPromise: Promise<ExerciseGroup[]> | null = null;
+
+function ensureGroups(): Promise<ExerciseGroup[]> {
+  if (!groupsPromise) groupsPromise = listWeightLogsWithContext(targetUserId).then(groupByExercise);
+  return groupsPromise;
+}
+
+async function loadTab(tab: ProgressTab) {
+  if (loadedTabs.has(tab)) return;
+  loadedTabs.add(tab);
+  if (tab === "active") {
+    await renderActiveRoutineSection(targetUserId);
+  } else {
+    const groups = await ensureGroups();
+    if (tab === "overview") renderOverviewTab(groups);
+    else renderDetailTab(groups);
+  }
+}
+
+function switchTab(tab: ProgressTab) {
+  currentTab = tab;
+  (Object.keys(TAB_PANELS) as ProgressTab[]).forEach((t) => {
+    const panel = document.getElementById(TAB_PANELS[t]);
+    if (panel) panel.hidden = t !== tab;
+  });
+  document.querySelectorAll<HTMLButtonElement>("#progressTabs .routine-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+  void loadTab(tab);
+}
+
+function wireTabs() {
+  document.querySelectorAll<HTMLButtonElement>("#progressTabs .routine-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab as ProgressTab;
+      if (tab !== currentTab) switchTab(tab);
+    });
+  });
+}
+
 async function init() {
   const profile = await getProfile(targetUserId);
   if (!profile) {
-    showEmpty();
+    showProfileNotFound();
     return;
   }
 
   const title = document.getElementById("pageTitle");
   if (title) title.textContent = `Progreso de ${escapeHtml(profile.nombre)}`;
 
-  const logs = await listWeightLogsWithContext(targetUserId);
-  const groups = groupByExercise(logs);
-
-  if (groups.length === 0) {
-    showEmpty();
-    return;
-  }
-
-  renderOverview(groups);
-
-  const select = document.getElementById("excSelect") as HTMLSelectElement;
-  select.innerHTML = groups.map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join("");
-  select.addEventListener("change", () => {
-    const chosen = groups.find((g) => g.id === select.value);
-    if (chosen) renderExercise(chosen);
-  });
-
-  renderExercise(groups[0]);
+  wireTabs();
+  void loadTab(currentTab);
 }
 
 init();

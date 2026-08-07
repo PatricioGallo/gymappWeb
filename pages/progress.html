@@ -69,20 +69,34 @@
 
   <section class="features">
     <div class="container">
-      <div id="overviewContent"></div>
-
-      <div class="section-head reveal" id="detailHead">
-        <span class="eyebrow">Detalle</span>
-        <h2>Progreso por ejercicio</h2>
-        <p>Elegí un ejercicio para ver su evolución en detalle.</p>
+      <div class="routine-tabs" id="progressTabs">
+        <button class="routine-tab active" data-tab="active" type="button">Rutina activa</button>
+        <button class="routine-tab" data-tab="overview" type="button">Resumen</button>
+        <button class="routine-tab" data-tab="detail" type="button">Detalle por ejercicio</button>
       </div>
 
-      <div class="field field-narrow" id="excPicker">
-        <label for="excSelect">Ejercicio</label>
-        <select id="excSelect"></select>
+      <div id="tabPanelActive">
+        <div id="activeRoutineContent"></div>
       </div>
 
-      <div id="progressContent"></div>
+      <div id="tabPanelOverview" hidden>
+        <div id="overviewContent"></div>
+      </div>
+
+      <div id="tabPanelDetail" hidden>
+        <div class="section-head reveal" id="detailHead">
+          <span class="eyebrow">Detalle</span>
+          <h2>Progreso por ejercicio</h2>
+          <p>Elegí un ejercicio para ver su evolución en detalle.</p>
+        </div>
+
+        <div class="field field-narrow" id="excPicker">
+          <label for="excSelect">Ejercicio</label>
+          <select id="excSelect"></select>
+        </div>
+
+        <div id="progressContent"></div>
+      </div>
     </div>
   </section>
 
