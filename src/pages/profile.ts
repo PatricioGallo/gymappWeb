@@ -6,6 +6,7 @@ import {
   getProfile,
   getProfileByUsername,
   getProfileBasicByUsername,
+  getProfileBasicById,
   getProfilesBasicByIds,
   uploadAvatar,
   listRoutines,
@@ -859,7 +860,14 @@ function routineStatsMarkup(routine: RoutineWithCounts, logs: WeightLogEntry[]) 
   `;
 }
 
-async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLogEntry[], targetUserType: Profile["user_type"], ownerBasic: BasicNamedProfile) {
+async function renderRoutines(
+  userId: string,
+  ownerView: boolean,
+  logs: WeightLogEntry[],
+  targetUserType: Profile["user_type"],
+  ownerBasic: BasicNamedProfile,
+  viewerCanCopyToSaved = false
+) {
   const routinesContent = document.getElementById("routinesContent");
   const routinesTitle = document.getElementById("routinesTitle");
   const tabsWrap = document.getElementById("routineTabs");
@@ -904,7 +912,7 @@ async function renderRoutines(userId: string, ownerView: boolean, logs: WeightLo
   const assignedByProfiles = await getProfilesBasicByIds(assignedByIds);
 
   if (activeRoutineTab === "active") {
-    renderActiveRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
+    renderActiveRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles, viewerCanCopyToSaved);
   } else {
     renderHistoricRoutines(routines, ownerView, routinesContent, logs, ownerBasic, assignedByProfiles);
   }
@@ -917,7 +925,8 @@ function renderActiveRoutines(
   container: HTMLElement,
   logs: WeightLogEntry[],
   ownerBasic: BasicNamedProfile,
-  assignedByProfiles: Map<string, ProfileBasic>
+  assignedByProfiles: Map<string, ProfileBasic>,
+  viewerCanCopyToSaved = false
 ) {
   if (routines.length === 0) {
     container.innerHTML = ownerView
@@ -929,6 +938,9 @@ function renderActiveRoutines(
   container.innerHTML = routines
     .map((r) => {
       const fullyOwned = isFullyOwnedByViewer(r);
+      // Un visitante tambien tiene ruedita: "Ver" siempre, y "Copiar a guardadas"
+      // solo si la rutina es publica y el visitante tiene donde guardarla (mismo
+      // gate que canUseSaved, pero aplicado a quien mira en vez de al dueño).
       const menu = ownerView
         ? `<div class="profile-menu-wrap routine-menu-wrap">
              <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
@@ -943,17 +955,27 @@ function renderActiveRoutines(
                }
              </div>
            </div>`
-        : "";
+        : `<div class="profile-menu-wrap routine-menu-wrap">
+             <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
+             <div class="profile-menu-panel routine-menu-panel" hidden>
+               <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Ver</a>
+               ${
+                 r.is_public && viewerCanCopyToSaved
+                   ? `<a class="profile-menu-item" href="rutinsView.html?copyFrom=${r.id}">Copiar a mis guardadas</a>`
+                   : ""
+               }
+             </div>
+           </div>`;
       // Finalizar (a diferencia de Modificar/Eliminar/visibilidad) es control del
       // dueño de la cuenta sobre su propio progreso: se puede aunque la rutina
       // sea asignada y privada, no requiere fullyOwned.
       const actions = ownerView
         ? `<button class="btn btn-primary btn-sm addPeso" data-id="${r.id}">Entrenar hoy</button>
            <button class="btn btn-success btn-sm finishRoutine" data-id="${r.id}">Finalizar</button>`
-        : `<button class="btn btn-outline btn-sm showExc" data-id="${r.id}">Mostrar</button>`;
+        : "";
 
       return `
-        <div class="routine-card reveal${ownerView ? " routine-card-has-menu" : ""}">
+        <div class="routine-card reveal routine-card-has-menu">
           ${menu}
           <span class="routine-started-tag">Iniciada el ${escapeHtml(formatFechaCorta(r.fecha_inicio))}</span>
           <span class="routine-visibility-badge ${r.is_public ? "is-public" : ""}">${r.is_public ? "Pública" : "Privada"}</span>
@@ -966,12 +988,9 @@ function renderActiveRoutines(
     })
     .join("");
 
-  container.querySelectorAll<HTMLButtonElement>(".showExc").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `showExc.html?rid=${btn.dataset.id}`));
-  });
+  wireRoutineMenus(container);
   if (!ownerView) return;
 
-  wireRoutineMenus(container);
   container.querySelectorAll<HTMLButtonElement>(".addPeso").forEach((btn) => {
     btn.addEventListener("click", () => (window.location.href = `pesos.html?rid=${btn.dataset.id}`));
   });
@@ -1405,9 +1424,16 @@ async function main() {
     document.getElementById("quickActionsSection")?.remove();
   }
 
+  // "Copiar" en el menu de una rutina activa ajena solo tiene sentido si el
+  // visitante tiene donde guardarla: mismo gate que canUseSaved, pero sobre el
+  // *visitante*, no sobre el dueño del perfil que se esta mirando.
+  const viewerBasic = !isOwner && myId ? await getProfileBasicById(myId).catch(() => null) : null;
+  const viewerCanCopyToSaved =
+    viewerBasic?.user_type === "entrenador" || viewerBasic?.user_type === "usuario" || viewerBasic?.user_type === "admin";
+
   const logs = await listWeightLogsWithContext(displayProfile.id!);
   routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
-  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile);
+  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
   renderStats(logs, activeCount ?? 0, isOwner);
 }
 
