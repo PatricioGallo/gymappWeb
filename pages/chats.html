@@ -64,33 +64,28 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
-    <div class="container">
-      <span class="eyebrow">Mensajes</span>
-      <h1>Tus conversaciones</h1>
-      <p>Hablá con otros gymbros, entrenadores y gimnasios de Gym Social.</p>
-    </div>
-  </section>
-
   <section class="features">
     <div class="container">
-      <div class="chat-list-toolbar">
-        <div class="chat-list-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="newChatBtn">+ Nuevo mensaje</button>
+      <div class="routine-tabs" id="chatTabs">
+        <button class="routine-tab active" data-tab="messages" type="button">Tus mensajes</button>
+        <button class="routine-tab" data-tab="requests" type="button">Solicitudes<span class="notif-badge" id="chatRequestsCount" hidden>0</span></button>
       </div>
 
-      <div id="chatSearchPeople" hidden></div>
+      <div id="chatMessagesPanel">
+        <div class="chat-list-toolbar">
+          <div class="chat-list-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="newChatBtn">+ Nuevo mensaje</button>
+        </div>
 
-      <button type="button" class="chat-requests-toggle" id="chatRequestsToggle" hidden>
-        <span>Solicitudes de mensaje</span>
-        <span class="notif-badge" id="chatRequestsCount">0</span>
-      </button>
+        <div id="chatSearchPeople" hidden></div>
+
+        <div class="chat-list" id="chatList"></div>
+      </div>
+
       <div class="chat-requests-list" id="chatRequestsList" hidden></div>
-
-      <div class="chat-list" id="chatList"></div>
     </div>
   </section>
 

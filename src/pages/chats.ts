@@ -38,7 +38,8 @@ let conversations: ConversationSummary[] = [];
 let searchQuery = "";
 
 const listEl = document.getElementById("chatList")!;
-const requestsToggle = document.getElementById("chatRequestsToggle") as HTMLButtonElement;
+const tabsWrap = document.getElementById("chatTabs")!;
+const messagesPanel = document.getElementById("chatMessagesPanel") as HTMLDivElement;
 const requestsCountEl = document.getElementById("chatRequestsCount")!;
 const requestsListEl = document.getElementById("chatRequestsList") as HTMLDivElement;
 const searchInput = document.getElementById("chatSearchInput") as HTMLInputElement;
@@ -57,12 +58,13 @@ function matchesQuery(c: ConversationSummary): boolean {
 
 function renderRequests() {
   const pending = conversations.filter((c) => c.status === "pending" && !c.is_initiator);
-  requestsToggle.hidden = pending.length === 0;
+  requestsCountEl.hidden = pending.length === 0;
   requestsCountEl.textContent = String(pending.length);
 
-  requestsListEl.innerHTML = pending
-    .map(
-      (c) => `
+  requestsListEl.innerHTML = pending.length
+    ? pending
+        .map(
+          (c) => `
     <div class="chat-request-row" data-id="${c.conversation_id}">
       <button type="button" class="chat-request-open" data-id="${c.conversation_id}">
         <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
@@ -77,8 +79,9 @@ function renderRequests() {
       </span>
     </div>
   `
-    )
-    .join("");
+        )
+        .join("")
+    : `<p class="notif-empty">No tenés solicitudes de mensaje pendientes.</p>`;
 
   requestsListEl.querySelectorAll<HTMLButtonElement>(".chat-request-open").forEach((btn) => {
     btn.addEventListener("click", () => openThread(btn.dataset.id!));
@@ -219,10 +222,13 @@ searchInput.addEventListener("input", () => {
 
 newChatBtn.addEventListener("click", () => searchInput.focus());
 
-requestsToggle.addEventListener("click", () => {
-  const willShow = requestsListEl.hidden;
-  requestsListEl.hidden = !willShow;
-  requestsToggle.classList.toggle("open", willShow);
+tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab;
+    tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b === btn));
+    messagesPanel.hidden = tab !== "messages";
+    requestsListEl.hidden = tab !== "requests";
+  });
 });
 
 conversations = await listConversations();
