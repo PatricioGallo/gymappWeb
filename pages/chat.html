@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Gym Social - Notificaciones</title>
+<title>Gym Social - Mensajes</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
@@ -64,40 +64,62 @@
 
   <div id="loaderBody"></div>
 
-  <section class="features">
-    <div class="container">
-      <span class="eyebrow eyebrow-standalone">Notificaciones</span>
-      <div class="notif-page-list" id="notifPageList"></div>
+  <section class="chat-thread-page">
+    <div class="container chat-thread-container">
+      <div class="chat-thread-header">
+        <a href="chats.html" class="chat-thread-back" aria-label="Volver a mensajes">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </a>
+        <a href="profile.html" id="chatThreadProfileLink" class="chat-thread-peer">
+          <img src="/images/avatars/default.svg" id="chatThreadAvatar" alt="" class="chat-avatar">
+          <span id="chatThreadName">Cargando...</span>
+        </a>
+      </div>
+
+      <div class="chat-request-banner" id="chatRequestBanner" hidden>
+        <p><strong id="chatRequestBannerName"></strong> te envió una solicitud de mensaje. Si respondés, la aceptás automáticamente.</p>
+        <div class="chat-request-banner-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="chatBannerAccept">Aceptar</button>
+          <button type="button" class="btn btn-outline btn-sm" id="chatBannerDecline">Rechazar</button>
+        </div>
+      </div>
+
+      <p class="chat-pending-note" id="chatPendingNote" hidden>Le enviaste una solicitud de mensaje. Vas a poder chatear normalmente cuando la acepte.</p>
+
+      <button type="button" class="chat-load-more" id="chatLoadMoreBtn" hidden>Cargar mensajes anteriores</button>
+
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-seen-indicator" id="chatSeenIndicator"></div>
+
+      <div class="chat-record-bar" id="chatRecordBar" hidden>
+        <span class="chat-record-dot"></span>
+        <span id="chatRecordTime">0:00</span>
+        <span class="chat-record-hint">Grabando audio...</span>
+        <button type="button" class="chat-record-cancel" id="chatRecordCancel" aria-label="Cancelar grabación">✕</button>
+      </div>
+
+      <div class="chat-preview-bar" id="chatPreviewBar" hidden>
+        <img id="chatPreviewImg" alt="" hidden>
+        <span id="chatPreviewAudioLabel" hidden>🎤 Audio listo (<span id="chatPreviewAudioDuration"></span>)</span>
+        <button type="button" class="chat-preview-cancel" id="chatPreviewCancel" aria-label="Quitar adjunto">✕</button>
+      </div>
+
+      <form class="chat-composer" id="chatComposer">
+        <label class="chat-composer-btn" title="Adjuntar foto">
+          <input type="file" id="chatImageInput" accept="image/jpeg,image/png,image/webp" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+        </label>
+        <textarea id="chatComposerInput" class="chat-composer-input" placeholder="Escribí un mensaje..." rows="1"></textarea>
+        <button type="button" class="chat-composer-btn" id="chatMicBtn" title="Grabar audio">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
+        </button>
+        <button type="submit" class="chat-composer-send" id="chatSendBtn" disabled aria-label="Enviar">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>
+        </button>
+      </form>
     </div>
   </section>
 
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-top">
-        <div class="footer-brand">
-          <a class="brand" href="profile.html">
-            <img src="/images/logo.png" alt="Gym Social">
-          </a>
-          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
-        </div>
-        <nav class="footer-links">
-          <a href="profile.html">Perfil</a>
-          <a href="contact.html">Contactanos</a>
-          <a href="exit.html">Salir</a>
-        </nav>
-        <div class="footer-social">
-          <a href="https://www.instagram.com/patoogallo" aria-label="Instagram" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
-          </a>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <span>© 2026 Gym Social. Todos los derechos reservados.</span>
-        <span>Hecho por <a href="https://www.instagram.com/patoogallo" target="_blank" rel="noopener">PG</a></span>
-      </div>
-    </div>
-  </footer>
-
-  <script type="module" src="/src/pages/notifications.ts"></script>
+  <script type="module" src="/src/pages/chat.ts"></script>
 </body>
 </html>

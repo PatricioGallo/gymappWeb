@@ -35,39 +35,72 @@ function relativeTime(iso: string): string {
 
 let notifications: AppNotification[] = [];
 
-const summaryEl = document.getElementById("notifPageSummary")!;
 const listEl = document.getElementById("notifPageList")!;
-const markAllBtn = document.getElementById("notifPageMarkAllBtn") as HTMLButtonElement;
 
-function renderSummary() {
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-  summaryEl.textContent =
-    notifications.length === 0
-      ? "No tenés notificaciones todavía."
-      : `${unreadCount} sin leer de ${notifications.length} en total.`;
-  markAllBtn.disabled = unreadCount === 0;
+const GROUP_ORDER = ["Recientes", "Últimos 7 días", "Últimos 30 días", "Más antiguas"] as const;
+const MARK_ALL_BTN_GROUP: (typeof GROUP_ORDER)[number] = "Últimos 7 días";
+
+function groupLabel(iso: string): (typeof GROUP_ORDER)[number] {
+  const diffDay = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (diffDay < 1) return "Recientes";
+  if (diffDay < 7) return "Últimos 7 días";
+  if (diffDay < 30) return "Últimos 30 días";
+  return "Más antiguas";
+}
+
+function notifItemHtml(n: AppNotification): string {
+  return `
+    <button type="button" class="notif-page-item ${n.is_read ? "" : "unread"}" data-id="${n.id}">
+      <span class="notif-page-dot"></span>
+      <span class="notif-page-body">
+        <span class="notif-page-title">${TYPE_ICON[n.type] ?? "🔔"} ${escapeHtml(n.title)}</span>
+        ${n.body ? `<p class="notif-page-text">${escapeHtml(n.body)}</p>` : ""}
+        <span class="notif-page-time">${relativeTime(n.created_at)}</span>
+      </span>
+    </button>
+  `;
+}
+
+function groupHeaderHtml(label: string, showMarkAllBtn: boolean, unreadCount: number): string {
+  const btn = showMarkAllBtn
+    ? `<button type="button" class="notif-mark-all" id="notifPageMarkAllBtn" ${unreadCount === 0 ? "disabled" : ""}>Marcar todas como leídas</button>`
+    : "";
+  return `<div class="search-recent-header"><span>${label}</span>${btn}</div>`;
 }
 
 function renderList() {
-  listEl.innerHTML =
-    notifications
-      .map(
-        (n) => `
-      <button type="button" class="notif-page-item ${n.is_read ? "" : "unread"}" data-id="${n.id}">
-        <span class="notif-page-dot"></span>
-        <span class="notif-page-body">
-          <span class="notif-page-title">${TYPE_ICON[n.type] ?? "🔔"} ${escapeHtml(n.title)}</span>
-          ${n.body ? `<p class="notif-page-text">${escapeHtml(n.body)}</p>` : ""}
-          <span class="notif-page-time">${relativeTime(n.created_at)}</span>
-        </span>
-      </button>
-    `
-      )
-      .join("") || `<p class="exc-pick-empty">No tenés notificaciones todavía.</p>`;
+  if (notifications.length === 0) {
+    listEl.innerHTML = `<p class="exc-pick-empty">No tenés notificaciones todavía.</p>`;
+    return;
+  }
+
+  const groups = new Map<string, AppNotification[]>();
+  for (const n of notifications) {
+    const label = groupLabel(n.created_at);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label)!.push(n);
+  }
+
+  const presentLabels = GROUP_ORDER.filter((label) => groups.has(label));
+  const btnGroup = presentLabels.includes(MARK_ALL_BTN_GROUP) ? MARK_ALL_BTN_GROUP : presentLabels[0];
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  listEl.innerHTML = presentLabels
+    .map(
+      (label) => `
+    ${groupHeaderHtml(label, label === btnGroup, unreadCount)}
+    ${groups
+      .get(label)!
+      .map((n) => notifItemHtml(n))
+      .join("")}
+  `
+    )
+    .join("");
 
   listEl.querySelectorAll<HTMLButtonElement>(".notif-page-item").forEach((item) => {
     item.addEventListener("click", () => void handleItemClick(item.dataset.id!));
   });
+  document.getElementById("notifPageMarkAllBtn")?.addEventListener("click", () => void handleMarkAllRead());
 }
 
 async function handleItemClick(id: string) {
@@ -75,20 +108,17 @@ async function handleItemClick(id: string) {
   if (!notif) return;
   if (!notif.is_read) {
     notif.is_read = true;
-    renderSummary();
     renderList();
     void markNotificationRead(id);
   }
   if (notif.link) window.location.href = notif.link;
 }
 
-markAllBtn.addEventListener("click", async () => {
+async function handleMarkAllRead(): Promise<void> {
   notifications = notifications.map((n) => ({ ...n, is_read: true }));
-  renderSummary();
   renderList();
   await markAllNotificationsRead();
-});
+}
 
 notifications = await listAllNotifications();
-renderSummary();
 renderList();
