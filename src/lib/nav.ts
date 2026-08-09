@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { logVisitOncePerSession } from "../services/visits.service";
 import { setupNotificationBell } from "./notifications";
+import { setupChatBadge } from "./chat";
 import { setupHeaderSearch } from "./search";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { escapeHtml } from "./dom";
@@ -81,6 +82,7 @@ async function populateUserMenuTrigger(): Promise<void> {
   }
 
   setupNotificationBell();
+  setupChatBadge(userId);
   void applyZoomPreference(userId);
   void refreshFollowRequestsBadge(userId);
 }

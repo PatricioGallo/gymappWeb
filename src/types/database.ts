@@ -59,6 +59,74 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          initiator_id: string
+          last_message_at: string
+          last_message_preview: string | null
+          last_message_sender_id: string | null
+          last_message_type: string | null
+          status: string
+          user1_id: string
+          user2_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          initiator_id: string
+          last_message_at?: string
+          last_message_preview?: string | null
+          last_message_sender_id?: string | null
+          last_message_type?: string | null
+          status?: string
+          user1_id: string
+          user2_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          initiator_id?: string
+          last_message_at?: string
+          last_message_preview?: string | null
+          last_message_sender_id?: string | null
+          last_message_type?: string | null
+          status?: string
+          user1_id?: string
+          user2_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_initiator_id_fkey"
+            columns: ["initiator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_last_message_sender_id_fkey"
+            columns: ["last_message_sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_user1_id_fkey"
+            columns: ["user1_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_user2_id_fkey"
+            columns: ["user2_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_reports: {
         Row: {
           created_at: string
@@ -327,6 +395,57 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          attachment_duration_seconds: number | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          read_at: string | null
+          sender_id: string
+        }
+        Insert: {
+          attachment_duration_seconds?: number | null
+          attachment_path?: string | null
+          attachment_type?: string | null
+          content?: string | null
+          conversation_id: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id: string
+        }
+        Update: {
+          attachment_duration_seconds?: number | null
+          attachment_path?: string | null
+          attachment_type?: string | null
+          content?: string | null
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1102,6 +1221,7 @@ export type Database = {
       }
     }
     Functions: {
+      accept_message_request: { Args: { p_conversation_id: string }; Returns: undefined }
       admin_daily_visits: {
         Args: { p_days?: number }
         Returns: {
@@ -1165,6 +1285,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_type"]
       }
+      decline_message_request: { Args: { p_conversation_id: string }; Returns: undefined }
       get_block_status: { Args: { p_target_id: string }; Returns: string }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_follow_counts: {
@@ -1175,15 +1296,38 @@ export type Database = {
         }[]
       }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
+      get_or_create_conversation: { Args: { p_other_user_id: string }; Returns: string }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
       get_subscription_status: {
         Args: { p_target_id: string }
         Returns: string
       }
+      get_unread_conversation_count: { Args: never; Returns: number }
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      list_conversations: {
+        Args: never
+        Returns: {
+          conversation_id: string
+          is_initiator: boolean
+          last_message_at: string
+          last_message_preview: string | null
+          last_message_read: boolean | null
+          last_message_sender_is_me: boolean
+          last_message_type: string | null
+          other_apellido: string | null
+          other_avatar_url: string | null
+          other_is_verified: boolean
+          other_nombre: string | null
+          other_user_id: string
+          other_user_type: Database["public"]["Enums"]["user_type"] | null
+          other_username: string | null
+          status: string
+          unread_count: number
+        }[]
+      }
       list_followers: {
         Args: {
           p_limit?: number
@@ -1257,6 +1401,7 @@ export type Database = {
           username: string
         }[]
       }
+      mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined }
       request_subscription: {
         Args: { p_trainer_id: string }
         Returns: {
@@ -1288,6 +1433,32 @@ export type Database = {
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
         }[]
+      }
+      send_message: {
+        Args: {
+          p_attachment_duration_seconds?: number
+          p_attachment_path?: string
+          p_attachment_type?: string
+          p_content?: string
+          p_conversation_id: string
+        }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          read_at: string | null
+          sender_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_routine_finished: {
         Args: { p_finished: boolean; p_routine_id: string }

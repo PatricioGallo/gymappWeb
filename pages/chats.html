@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Gym Social - Progreso</title>
+<title>Gym Social - Mensajes</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
@@ -35,7 +35,7 @@
             <a href="search.html" class="notif-view-all" id="headerSearchViewAll" hidden>Ver todos los resultados</a>
           </div>
         </div>
-        <a class="notif-bell-btn" id="chatBellBtn" href="chats.html" aria-label="Mensajes">
+        <a class="notif-bell-btn open" id="chatBellBtn" href="chats.html" aria-label="Mensajes">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           <span class="notif-badge" id="chatBadge" hidden>0</span>
         </a>
@@ -62,46 +62,35 @@
     </div>
   </header>
 
+  <div id="loaderBody"></div>
+
   <section class="page-hero">
     <div class="container">
-      <a href="profile.html" class="back-link" id="backToProfile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
-      <a href="alumnos.html" class="back-link" id="backToAlumnos" hidden><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver a tus alumnos</a>
-      <span class="eyebrow">Progreso</span>
-      <h1 id="pageTitle">Tu progreso</h1>
-      <p id="pageSubtitle">Un resumen de tus mejores marcas y el detalle de cómo evolucionó cada ejercicio.</p>
+      <span class="eyebrow">Mensajes</span>
+      <h1>Tus conversaciones</h1>
+      <p>Hablá con otros gymbros, entrenadores y gimnasios de Gym Social.</p>
     </div>
   </section>
 
   <section class="features">
     <div class="container">
-      <div class="routine-tabs" id="progressTabs">
-        <button class="routine-tab active" data-tab="active" type="button">Rutina activa</button>
-        <button class="routine-tab" data-tab="overview" type="button">Resumen</button>
-        <button class="routine-tab" data-tab="detail" type="button">Detalle por ejercicio</button>
-      </div>
-
-      <div id="tabPanelActive">
-        <div id="activeRoutineContent"></div>
-      </div>
-
-      <div id="tabPanelOverview" hidden>
-        <div id="overviewContent"></div>
-      </div>
-
-      <div id="tabPanelDetail" hidden>
-        <div class="section-head reveal" id="detailHead">
-          <span class="eyebrow">Detalle</span>
-          <h2>Progreso por ejercicio</h2>
-          <p>Elegí un ejercicio para ver su evolución en detalle.</p>
+      <div class="chat-list-toolbar">
+        <div class="chat-list-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
         </div>
-
-        <div class="field field-narrow" id="excPicker">
-          <label for="excSelect">Ejercicio</label>
-          <select id="excSelect"></select>
-        </div>
-
-        <div id="progressContent"></div>
+        <button type="button" class="btn btn-primary btn-sm" id="newChatBtn">+ Nuevo mensaje</button>
       </div>
+
+      <div id="chatSearchPeople" hidden></div>
+
+      <button type="button" class="chat-requests-toggle" id="chatRequestsToggle" hidden>
+        <span>Solicitudes de mensaje</span>
+        <span class="notif-badge" id="chatRequestsCount">0</span>
+      </button>
+      <div class="chat-requests-list" id="chatRequestsList" hidden></div>
+
+      <div class="chat-list" id="chatList"></div>
     </div>
   </section>
 
@@ -132,7 +121,6 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" src="/src/pages/progress.ts"></script>
+  <script type="module" src="/src/pages/chats.ts"></script>
 </body>
 </html>
