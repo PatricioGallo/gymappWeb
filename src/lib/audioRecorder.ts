@@ -11,6 +11,9 @@ export class AudioRecorder {
   private chunks: Blob[] = [];
   private stream: MediaStream | null = null;
   private startedAt = 0;
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private levelData: Uint8Array | null = null;
 
   get isRecording(): boolean {
     return this.recorder?.state === "recording";
@@ -28,6 +31,29 @@ export class AudioRecorder {
 
     this.startedAt = Date.now();
     this.recorder.start();
+
+    // Analizador aparte del MediaRecorder: no afecta la grabación, solo se usa
+    // para leer el nivel de volumen en vivo y dibujar la onda tipo WhatsApp.
+    this.audioContext = new AudioContext();
+    const source = this.audioContext.createMediaStreamSource(this.stream);
+    this.analyser = this.audioContext.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.analyser.smoothingTimeConstant = 0.6;
+    source.connect(this.analyser);
+    this.levelData = new Uint8Array(this.analyser.frequencyBinCount);
+  }
+
+  /** Nivel de volumen actual (0 a 1, RMS), para animar la onda mientras se graba. */
+  getLevel(): number {
+    if (!this.analyser || !this.levelData) return 0;
+    this.analyser.getByteTimeDomainData(this.levelData as Uint8Array<ArrayBuffer>);
+    let sumSquares = 0;
+    for (let i = 0; i < this.levelData.length; i++) {
+      const v = (this.levelData[i] - 128) / 128;
+      sumSquares += v * v;
+    }
+    const rms = Math.sqrt(sumSquares / this.levelData.length);
+    return Math.min(1, rms * 4);
   }
 
   stop(): Promise<RecordingResult> {
@@ -60,6 +86,10 @@ export class AudioRecorder {
   private releaseStream(): void {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
+    void this.audioContext?.close();
+    this.audioContext = null;
+    this.analyser = null;
+    this.levelData = null;
   }
 }
 

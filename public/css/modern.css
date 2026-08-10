@@ -3822,7 +3822,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .chat-thread-page {
   padding-top: 0;
   padding-bottom: 0;
+  /* 100vh en mobile no descuenta la barra de direcciones/toolbar del navegador
+     (que aparece y desaparece al scrollear), asi que el composer terminaba
+     tapado por ella. dvh se ajusta al alto realmente visible; el calc con vh
+     queda como fallback para navegadores que no soportan dvh. */
   height: calc(100vh - var(--header-h));
+  height: calc(100dvh - var(--header-h));
   overflow: hidden;
 }
 
@@ -4086,7 +4091,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   50% { opacity: 0.3; }
 }
 
-.chat-record-hint { color: var(--text-muted); flex: 1; }
+.chat-record-wave {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  display: block;
+}
 
 .chat-record-cancel,
 .chat-preview-cancel {

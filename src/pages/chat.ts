@@ -47,6 +47,7 @@ const micBtn = document.getElementById("chatMicBtn") as HTMLButtonElement;
 const sendBtn = document.getElementById("chatSendBtn") as HTMLButtonElement;
 const recordBar = document.getElementById("chatRecordBar") as HTMLDivElement;
 const recordTimeEl = document.getElementById("chatRecordTime")!;
+const recordWaveCanvas = document.getElementById("chatRecordWave") as HTMLCanvasElement;
 const recordCancelBtn = document.getElementById("chatRecordCancel") as HTMLButtonElement;
 const previewBar = document.getElementById("chatPreviewBar") as HTMLDivElement;
 const previewImg = document.getElementById("chatPreviewImg") as HTMLImageElement;
@@ -423,8 +424,64 @@ const recorder = new AudioRecorder();
 let recordTimer: ReturnType<typeof setInterval> | undefined;
 let recordSeconds = 0;
 
+// ---------------------------------------------------------------------------
+// Onda del grabador (estilo WhatsApp): barras que van apareciendo de derecha
+// a izquierda con la altura del volumen capturado en cada muestreo.
+// ---------------------------------------------------------------------------
+
+const waveLevels: number[] = [];
+let waveTimer: ReturnType<typeof setInterval> | undefined;
+
+function drawWave(): void {
+  const ctx = recordWaveCanvas.getContext("2d");
+  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const width = recordWaveCanvas.clientWidth;
+  const height = recordWaveCanvas.clientHeight;
+  if (width === 0 || height === 0) return;
+  if (recordWaveCanvas.width !== width * dpr || recordWaveCanvas.height !== height * dpr) {
+    recordWaveCanvas.width = width * dpr;
+    recordWaveCanvas.height = height * dpr;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const barWidth = 3;
+  const gap = 3;
+  const step = barWidth + gap;
+  const barsFit = Math.max(1, Math.floor(width / step));
+  const visible = waveLevels.slice(-barsFit);
+
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff4d4d";
+  const startX = width - visible.length * step;
+  visible.forEach((level, i) => {
+    const barHeight = Math.max(3, level * height);
+    const x = startX + i * step;
+    const y = (height - barHeight) / 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, barWidth, barHeight, barWidth / 2);
+    else ctx.rect(x, y, barWidth, barHeight);
+    ctx.fill();
+  });
+}
+
+function startWave(): void {
+  waveLevels.length = 0;
+  waveTimer = setInterval(() => {
+    waveLevels.push(recorder.getLevel());
+    drawWave();
+  }, 100);
+}
+
+function stopWave(): void {
+  clearInterval(waveTimer);
+  waveLevels.length = 0;
+  const ctx = recordWaveCanvas.getContext("2d");
+  ctx?.clearRect(0, 0, recordWaveCanvas.width, recordWaveCanvas.height);
+}
+
 function updateSendState(): void {
-  sendBtn.disabled = sending || (!composerInput.value.trim() && !pendingAttachment);
+  sendBtn.disabled = sending || (!composerInput.value.trim() && !pendingAttachment && !recorder.isRecording);
 }
 
 function clearPendingAttachment(): void {
@@ -474,14 +531,22 @@ imageInput.addEventListener("change", () => {
 
 previewCancelBtn.addEventListener("click", clearPendingAttachment);
 
+/** Corta la grabación en curso y devuelve el adjunto resultante (o null si duró menos de 1s). */
+async function stopRecording(): Promise<PendingAttachment | null> {
+  clearInterval(recordTimer);
+  stopWave();
+  const result = await recorder.stop();
+  recordBar.hidden = true;
+  if (result.durationSeconds < 1) return null;
+  return { kind: "audio", blob: result.blob, durationSeconds: result.durationSeconds };
+}
+
 async function handleMicClick(): Promise<void> {
   if (recorder.isRecording) {
-    clearInterval(recordTimer);
-    const result = await recorder.stop();
-    recordBar.hidden = true;
-    if (result.durationSeconds < 1) return;
+    const attachment = await stopRecording();
+    if (!attachment) return;
     clearPendingAttachment();
-    pendingAttachment = { kind: "audio", blob: result.blob, durationSeconds: result.durationSeconds };
+    pendingAttachment = attachment;
     showPreview();
     return;
   }
@@ -496,6 +561,8 @@ async function handleMicClick(): Promise<void> {
   recordSeconds = 0;
   recordTimeEl.textContent = "0:00";
   recordBar.hidden = false;
+  startWave();
+  updateSendState();
   recordTimer = setInterval(() => {
     recordSeconds += 1;
     recordTimeEl.textContent = formatDuration(recordSeconds);
@@ -507,8 +574,10 @@ micBtn.addEventListener("click", () => void handleMicClick());
 
 recordCancelBtn.addEventListener("click", () => {
   clearInterval(recordTimer);
+  stopWave();
   recorder.cancel();
   recordBar.hidden = true;
+  updateSendState();
 });
 
 composerForm.addEventListener("submit", (e) => {
@@ -517,6 +586,16 @@ composerForm.addEventListener("submit", (e) => {
 });
 
 async function handleSend(): Promise<void> {
+  // Enter o el boton de enviar mientras se graba: corta la grabacion y manda
+  // el audio directo, sin pasar por el paso intermedio de previsualizacion.
+  if (recorder.isRecording) {
+    const attachment = await stopRecording();
+    if (attachment) {
+      clearPendingAttachment();
+      pendingAttachment = attachment;
+    }
+  }
+
   const content = composerInput.value.trim();
   if (sending || (!content && !pendingAttachment)) return;
 
