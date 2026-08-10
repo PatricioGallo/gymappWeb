@@ -44,6 +44,18 @@ const requestsCountEl = document.getElementById("chatRequestsCount")!;
 const requestsListEl = document.getElementById("chatRequestsList") as HTMLDivElement;
 const searchInput = document.getElementById("chatSearchInput") as HTMLInputElement;
 const peopleEl = document.getElementById("chatSearchPeople") as HTMLDivElement;
+const threadPane = document.getElementById("chatThreadPane") as HTMLDivElement;
+const threadPlaceholder = document.getElementById("chatThreadPlaceholder") as HTMLDivElement;
+
+let activeConversationId: string | null = null;
+let threadFrame: HTMLIFrameElement | null = null;
+
+// El breakpoint desktop del proyecto (mismo que usa .site-nav para pasar de
+// menu hamburguesa a nav horizontal). Solo en ese ancho tiene sentido el
+// panel dividido estilo WhatsApp Web; en mobile se sigue navegando de pagina.
+function isDesktopChatLayout(): boolean {
+  return window.matchMedia("(min-width: 860px)").matches;
+}
 
 function matchesQuery(c: ConversationSummary): boolean {
   if (!searchQuery) return true;
@@ -127,10 +139,31 @@ function renderList() {
   listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((btn) => {
     btn.addEventListener("click", () => openThread(btn.dataset.id!));
   });
+
+  highlightActiveRow();
+}
+
+function highlightActiveRow(): void {
+  listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((row) => {
+    row.classList.toggle("active", row.dataset.id === activeConversationId);
+  });
 }
 
 function openThread(conversationId: string): void {
-  window.location.href = `chat.html?c=${conversationId}`;
+  if (!isDesktopChatLayout()) {
+    window.location.href = `chat.html?c=${conversationId}`;
+    return;
+  }
+
+  activeConversationId = conversationId;
+  threadPlaceholder.hidden = true;
+  if (!threadFrame) {
+    threadFrame = document.createElement("iframe");
+    threadFrame.className = "chat-thread-frame";
+    threadPane.appendChild(threadFrame);
+  }
+  threadFrame.src = `chat.html?c=${conversationId}&embed=1`;
+  highlightActiveRow();
 }
 
 async function handleRequestAction(id: string, action: "accept" | "decline"): Promise<void> {
@@ -147,6 +180,17 @@ async function handleRequestAction(id: string, action: "accept" | "decline"): Pr
   }
 
   if (action === "accept") {
+    // En desktop ya no navegamos a otra pagina al abrir el hilo, asi que si no
+    // actualizamos el estado local la solicitud aceptada queda mostrada como
+    // pendiente en la pestaña "Solicitudes" mientras el chat se abre a la
+    // derecha. La pasamos a la pestaña de mensajes para que quede coherente.
+    const convo = conversations.find((c) => c.conversation_id === id);
+    if (convo) convo.status = "accepted";
+    renderRequests();
+    renderList();
+    tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "messages"));
+    messagesPanel.hidden = false;
+    requestsListEl.hidden = true;
     openThread(id);
     return;
   }

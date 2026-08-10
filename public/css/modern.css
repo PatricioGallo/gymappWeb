@@ -3749,6 +3749,96 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .chat-request-body { min-width: 0; display: flex; flex-direction: column; }
 .chat-request-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
+/* Layout de dos paneles (lista + hilo) al estilo WhatsApp Web, solo desktop.
+   En mobile .chat-thread-pane queda oculto y chats.ts nunca lo puebla, asi
+   que el panel derecho no aparece: la pagina se ve exactamente igual que hoy. */
+.chat-split {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-thread-pane { display: none; }
+
+@media (min-width: 860px) {
+  /* Chats ocupa mas ancho que el resto de las paginas (que usan --max-width:
+     1140px), y a pantalla completa sin scroll de pagina — mismo truco que
+     .chat-thread-page usa en mobile: alto fijo = viewport menos el header,
+     con overflow:hidden, y solo los paneles internos (lista / hilo) scrollean. */
+  body.chats-page .features {
+    padding: 0;
+    height: calc(100vh - var(--header-h));
+    height: calc(100dvh - var(--header-h));
+    overflow: hidden;
+    display: flex;
+  }
+
+  body.chats-page .site-footer { display: none; }
+
+  .chat-page-container {
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  #chatTabs { flex-shrink: 0; margin-top: 0; }
+
+  #chatMessagesPanel,
+  #chatRequestsList {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-requests-list { overflow-y: auto; }
+
+  .chat-split {
+    flex-direction: row;
+    align-items: stretch;
+    height: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .chat-list-pane {
+    width: 360px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 14px;
+    border-right: 1px solid var(--border);
+  }
+
+  .chat-thread-pane {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chat-thread-pane iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .chat-thread-placeholder {
+    margin: auto;
+    max-width: 280px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+
+  .chat-thread-placeholder svg {
+    width: 48px;
+    height: 48px;
+    stroke: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .chat-thread-placeholder p { margin: 0; font-size: 14px; }
+}
+
 .chat-list {
   display: flex;
   flex-direction: column;
@@ -3772,6 +3862,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .chat-row:hover { background: var(--surface-2); }
 .chat-row.unread { background: var(--accent-soft); }
+.chat-row.active { background: var(--surface-2); }
 
 .chat-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 
@@ -3826,6 +3917,19 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 /* ---------- Hilo de conversación (chat.html) ---------- */
+
+/* chat.html cargado dentro del iframe del panel derecho en chats.html
+   (?embed=1): sin header propio ni flecha de volver, ocupa el 100% del
+   iframe en vez de descontar el header de la pagina completa. */
+body.chat-embedded .site-header,
+body.chat-embedded .chat-thread-back { display: none; }
+
+body.chat-embedded .chat-thread-page {
+  height: 100vh;
+  height: 100dvh;
+}
+
+body.chat-embedded .chat-thread-container { max-width: none; }
 
 /* Alto fijo = viewport menos el header: el composer queda siempre pegado
    abajo de la pantalla (haya pocos o muchos mensajes) y solo .chat-messages
@@ -3954,6 +4058,41 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   overflow-y: auto;
   padding: 4px 2px 12px;
   scroll-behavior: smooth;
+}
+
+/* Scrollbars minimalistas para las areas que scrollean dentro del chat (lista
+   de conversaciones, mensajes, solicitudes): finas y gris oscuro, en vez del
+   scrollbar grueso por defecto del navegador. */
+.chat-list-pane,
+.chat-messages,
+.chat-requests-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.chat-list-pane::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar,
+.chat-requests-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-list-pane::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track,
+.chat-requests-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-list-pane::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb,
+.chat-requests-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.chat-list-pane::-webkit-scrollbar-thumb:hover,
+.chat-messages::-webkit-scrollbar-thumb:hover,
+.chat-requests-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .chat-date-divider {
