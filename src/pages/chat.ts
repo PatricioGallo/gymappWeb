@@ -23,13 +23,21 @@ setupNavToggle();
 setupRevealObserver();
 const userId = await requireAuth();
 
-const conversationId = new URLSearchParams(window.location.search).get("c");
+const urlParams = new URLSearchParams(window.location.search);
+const conversationId = urlParams.get("c");
 if (!conversationId) {
   window.location.href = "chats.html";
   throw new Error("missing conversation id");
 }
 
+// Cargado dentro del iframe del panel derecho en chats.html (vista de escritorio):
+// oculta el header/flecha-atras propios via CSS y evita que el link al perfil
+// navegue solo el iframe angosto (target=_top rompe afuera, a toda la pestaña).
+const isEmbedded = urlParams.get("embed") === "1";
+if (isEmbedded) document.body.classList.add("chat-embedded");
+
 const profileLink = document.getElementById("chatThreadProfileLink") as HTMLAnchorElement;
+if (isEmbedded) profileLink.target = "_top";
 const avatarEl = document.getElementById("chatThreadAvatar") as HTMLImageElement;
 const nameEl = document.getElementById("chatThreadName")!;
 const statusEl = document.getElementById("chatThreadStatus")!;
