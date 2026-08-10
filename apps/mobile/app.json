@@ -33,7 +33,13 @@
           "imageWidth": 76
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Gym Social necesita acceso a tus fotos para que puedas cambiar tu foto de perfil."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

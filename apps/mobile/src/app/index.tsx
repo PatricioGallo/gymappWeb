@@ -8,9 +8,9 @@ import { AlertMessage } from "@/components/AlertMessage";
 import { AuthOverlay } from "@/components/AuthOverlay";
 import { FormField } from "@/components/FormField";
 import { Logo } from "@/components/Logo";
-import { OutlineButton } from "@/components/OutlineButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { signIn, signOut } from "@/lib/authService";
+import { ProfileScreen } from "@/components/profile/ProfileScreen";
+import { signIn } from "@/lib/authService";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/theme/colors";
 
@@ -41,30 +41,10 @@ export default function Index() {
   }
 
   if (session) {
-    return <LoggedInPanel />;
+    return <ProfileScreen userId={session.user.id} />;
   }
 
   return <LoginScreen onNavigateRegister={() => router.push("/register")} />;
-}
-
-function LoggedInPanel() {
-  const [signingOut, setSigningOut] = useState(false);
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    await signOut();
-    setSigningOut(false);
-  }
-
-  return (
-    <View style={styles.centered}>
-      <Logo height={56} />
-      <Text style={styles.loggedInText}>Sesión iniciada</Text>
-      <View style={styles.signOutWrap}>
-        <OutlineButton title={signingOut ? "Saliendo..." : "Salir"} onPress={handleSignOut} />
-      </View>
-    </View>
-  );
 }
 
 function LoginScreen({ onNavigateRegister }: { onNavigateRegister: () => void }) {
@@ -140,8 +120,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     gap: 16,
   },
-  loggedInText: { color: colors.text, fontSize: 20, fontWeight: "700", marginTop: 8 },
-  signOutWrap: { width: "100%", paddingHorizontal: 48, marginTop: 8 },
   scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 24 },
   card: {
     width: "100%",

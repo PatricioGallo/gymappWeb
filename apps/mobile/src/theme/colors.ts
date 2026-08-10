@@ -15,6 +15,14 @@ export const colors = {
   errorBorder: "rgba(255, 90, 90, 0.35)",
   errorStripe: "#ff5a5a",
   overlayBg: "rgba(10, 12, 15, 0.82)",
+  verifiedBlue: "#3897f0",
+  verifiedGreen: "#22c55e",
+  live: "#2fd971",
+  liveSoft: "rgba(47, 217, 113, 0.14)",
+  dangerText: "#ff8a8a",
+  dangerBorder: "rgba(255, 90, 90, 0.4)",
+  dangerSoft: "rgba(255, 90, 90, 0.12)",
+  menuDangerText: "#f04438",
 } as const;
 
 export const radius = {
