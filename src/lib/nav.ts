@@ -11,6 +11,7 @@ import { getUnreadContactMessageCount } from "../services/contact.service";
 import { getUnreadErrorReportCount } from "../services/errorReport.service";
 import { getUnreadUserReportCount } from "../services/userReport.service";
 import { getPendingVerificationRequestCount } from "../services/verification.service";
+import { touchLastSeen } from "../services/profile.service";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -191,5 +192,7 @@ export async function requireAuth(): Promise<string> {
     window.location.href = "login.html";
     throw new Error("not authenticated");
   }
+  // Heartbeat simple de "última conexión": una vez por carga de página autenticada.
+  void touchLastSeen();
   return userId;
 }

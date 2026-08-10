@@ -23,6 +23,7 @@ import {
 import { setRoutinePublic } from "../services/routine.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
+import { getOrCreateConversation } from "../services/chat.service";
 import {
   getSubscriptionStatus,
   getSubscriberCount,
@@ -36,6 +37,7 @@ import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../ser
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
+import { getPlatform } from "../lib/socialLinks";
 
 declare const Chart: any;
 
@@ -185,6 +187,23 @@ function initShare(username: string, buttonId = "shareBtn") {
   });
 }
 
+// ---------- Mensaje ----------
+
+function initMessageButton(targetId: string, buttonId = "messageBtn") {
+  const btn = document.getElementById(buttonId) as HTMLButtonElement | null;
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    const { id, error } = await getOrCreateConversation(targetId);
+    if (error || !id) {
+      alert(error || "No se pudo abrir la conversación.");
+      btn.disabled = false;
+      return;
+    }
+    window.location.href = `chat.html?c=${id}`;
+  });
+}
+
 // ---------- Identidad, estadisticas, bio y enlaces ----------
 
 function renderProfileIdentity(username: string, nombre: string, apellido: string, userType: Profile["user_type"], isVerified: boolean) {
@@ -231,6 +250,22 @@ function renderProfileBio(bio: string | null) {
     return;
   }
   bioEl.textContent = bio;
+
+  // El clamp a 3 renglones viene puesto en el HTML (profile-bio-clamped); acá solo
+  // medimos si realmente hace falta el toggle "Ver más" (si el texto entraba igual,
+  // no tiene sentido mostrarlo).
+  const isClamped = bioEl.scrollHeight > bioEl.clientHeight + 1;
+  if (!isClamped) return;
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "profile-bio-toggle";
+  toggleBtn.textContent = "Ver más";
+  toggleBtn.addEventListener("click", () => {
+    const expanded = bioEl.classList.toggle("profile-bio-expanded");
+    toggleBtn.textContent = expanded ? "Ver menos" : "Ver más";
+  });
+  bioEl.insertAdjacentElement("afterend", toggleBtn);
 }
 
 function renderProfileLinks(links: ProfileLink[]) {
@@ -241,13 +276,14 @@ function renderProfileLinks(links: ProfileLink[]) {
     return;
   }
   linksEl.innerHTML = links
-    .map(
-      (l) => `
-    <a class="profile-link-chip" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer nofollow">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-      ${escapeHtml(l.label)}
-    </a>`
-    )
+    .map((l) => {
+      const platform = getPlatform(l.platform);
+      return `
+    <a class="profile-link-item" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer nofollow">
+      <span class="profile-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${platform.icon}</svg></span>
+      <span class="profile-link-label">${escapeHtml(l.label)}</span>
+    </a>`;
+    })
     .join("");
 }
 
@@ -365,16 +401,28 @@ async function renderProfileActions(
   const subscriptionStatus: SubscriptionStatus = rawSubscriptionStatus === "ended" ? "none" : rawSubscriptionStatus;
   if (!actions) return followStatus;
 
-  actions.innerHTML = `
-    ${ownerView ? `<a class="btn btn-outline" href="/pages/settings.html">Editar perfil</a>` : ""}
-    <button class="btn btn-outline" id="shareBtn" type="button">
+  // En mi propio perfil, "Compartir perfil"; en el de otro con sesion iniciada,
+  // ese lugar lo ocupa "Mensaje" (abre/crea la conversacion 1 a 1). Un visitante
+  // sin sesion no puede mandar mensajes, asi que ahi se mantiene "Compartir perfil".
+  const showMessageBtn = !ownerView && viewerLoggedIn;
+  const secondaryBtn = showMessageBtn
+    ? `<button class="btn btn-outline" id="messageBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      Mensaje
+    </button>`
+    : `<button class="btn btn-outline" id="shareBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
       Compartir perfil
-    </button>
+    </button>`;
+
+  actions.innerHTML = `
+    ${ownerView ? `<a class="btn btn-outline" href="/pages/settings.html">Editar perfil</a>` : ""}
+    ${secondaryBtn}
     ${showFollowBtn ? `<button class="btn ${followStatus === "none" ? "btn-primary" : "btn-outline"}" id="followBtn" type="button">${followButtonLabel(followStatus)}</button>` : ""}
     ${showSubscribeBtn ? `<button class="btn ${subscriptionStatus === "none" ? "btn-primary" : "btn-outline"}" id="subscribeBtn" type="button">${subscribeButtonLabel(subscriptionStatus)}</button>` : ""}
   `;
-  initShare(username, "shareBtn");
+  if (showMessageBtn) initMessageButton(targetId);
+  else initShare(username, "shareBtn");
   if (showFollowBtn) initFollowButton(targetId, followStatus);
   if (showSubscribeBtn) initSubscribeButton(targetId, subscriptionStatus);
   return followStatus;

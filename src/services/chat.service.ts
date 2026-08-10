@@ -51,6 +51,22 @@ export async function markConversationRead(conversationId: string): Promise<void
   await supabase.rpc("mark_conversation_read", { p_conversation_id: conversationId });
 }
 
+export interface ConversationPeerMeta {
+  lastSeenAt: string | null;
+  readReceiptsEnabled: boolean;
+}
+
+/**
+ * Última conexión y si corresponde mostrar "visto azul" para este chat, ya resuelto
+ * server-side segun la privacidad reciproca de ambos participantes (ver
+ * get_conversation_peer_meta: lastSeenAt viene null si no hay que mostrarla).
+ */
+export async function getConversationPeerMeta(otherUserId: string): Promise<ConversationPeerMeta> {
+  const { data, error } = await supabase.rpc("get_conversation_peer_meta", { p_other_user_id: otherUserId });
+  if (error || !data?.[0]) return { lastSeenAt: null, readReceiptsEnabled: true };
+  return { lastSeenAt: data[0].last_seen_at, readReceiptsEnabled: data[0].read_receipts_enabled };
+}
+
 export interface SendMessageInput {
   content?: string;
   attachmentPath?: string;

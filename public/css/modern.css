@@ -1895,7 +1895,16 @@ button:focus-visible {
   gap: 20px;
 }
 
-.profile-top { display: flex; align-items: stretch; justify-content: center; gap: 28px; }
+/* width:100% es necesario: sin esto, .profile-top (hijo de un flex column con
+   align-items:center) se ajusta al ancho de su contenido en vez de al del
+   .container, y el flex:1 de .profile-info deja de acotar el ancho real
+   disponible. Resultado: una bio larga empuja todo el perfil de ancho en vez
+   de ajustarse a 3 renglones.
+   max-width acota la columna de texto (nombre/stats/bio/links) a un ancho de
+   lectura razonable: sin esto, en pantallas anchas esa columna ocupa cientos
+   de px de mas que el avatar no usa, y una bio de 150 caracteres entra comoda
+   en 1-2 renglones anchisimos en vez de sentirse contenida junto al resto. */
+.profile-top { display: flex; align-items: stretch; justify-content: center; gap: 28px; width: 100%; max-width: 640px; margin: 0 auto; }
 
 .avatar-wrap {
   position: relative;
@@ -2061,25 +2070,75 @@ a.profile-stat:hover { color: var(--accent-2); }
 .verified-badge-blue { color: #3897f0; }
 .verified-badge-green { color: #22c55e; }
 
-.profile-bio { margin: 22px 0 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
-
-.profile-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-
-.profile-link-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--accent-2);
-  background: var(--accent-soft);
-  border: 1px solid transparent;
-  padding: 6px 12px;
-  border-radius: 999px;
-  text-decoration: none;
+.profile-bio {
+  margin: 22px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.profile-link-chip:hover { border-color: var(--accent-2); }
+/* Clamp a 3 renglones por defecto (profile.ts agrega profile-bio-expanded si
+   el usuario toca "Ver más"). Se usa max-height en vez de -webkit-line-clamp:
+   ese truco no reflowa bien junto con white-space:pre-wrap (necesario para
+   respetar los saltos de linea que haya escrito el usuario) y el texto queda
+   en una sola linea cortada en vez de ocupar los 3 renglones completos. */
+.profile-bio-clamped:not(.profile-bio-expanded) {
+  max-height: 4.5em;
+  overflow: hidden;
+}
+
+.profile-bio-toggle {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px 16px;
+  margin-top: 12px;
+  max-width: 100%;
+}
+
+.profile-link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.profile-link-item:hover { color: var(--accent-2); }
+
+.profile-link-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+}
+
+.profile-link-icon svg { width: 15px; height: 15px; stroke: currentColor; }
+
+.profile-link-label {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 .profile-actions { display: flex; gap: 10px; }
 .profile-actions .btn { flex: 1; padding: 11px 20px; font-size: 13.5px; }
@@ -2776,6 +2835,33 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .settings-link-row input { flex: 1; }
+
+.settings-link-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.settings-link-icon svg { width: 17px; height: 17px; stroke: currentColor; }
+
+.settings-link-prefix {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.settings-link-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.settings-link-picker .exc-pick-chip svg { width: 14px; height: 14px; stroke: currentColor; }
+.settings-link-picker .exc-pick-chip:disabled { opacity: 0.4; cursor: default; }
+.settings-link-picker .exc-pick-chip:disabled:hover { border-color: var(--border); color: var(--text-muted); }
 
 .settings-link-remove {
   flex-shrink: 0;
@@ -3605,7 +3691,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 #chatSearchPeople[hidden] { display: none; }
 
-.chat-person-row { width: 100%; cursor: pointer; }
+.chat-person-row { width: 100%; cursor: pointer; background: none; border: none; text-align: left; font-family: inherit; font-size: inherit; color: inherit; }
 .chat-person-cta {
   flex-shrink: 0;
   font-size: 12px;
@@ -3730,14 +3816,32 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 /* ---------- Hilo de conversación (chat.html) ---------- */
 
-.chat-thread-page { padding-top: 24px; padding-bottom: 40px; }
-.chat-thread-container { max-width: 720px; }
+/* Alto fijo = viewport menos el header: el composer queda siempre pegado
+   abajo de la pantalla (haya pocos o muchos mensajes) y solo .chat-messages
+   scrollea cuando el contenido no entra. */
+.chat-thread-page {
+  padding-top: 0;
+  padding-bottom: 0;
+  height: calc(100vh - var(--header-h));
+  overflow: hidden;
+}
+
+.chat-thread-container {
+  max-width: 720px;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+  padding-bottom: 14px;
+}
 
 .chat-thread-header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .chat-thread-back {
@@ -3760,9 +3864,30 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   gap: 10px;
   min-width: 0;
   color: var(--text);
+}
+
+.chat-thread-peer-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.chat-thread-peer-name {
   font-size: 16px;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.chat-thread-peer-status {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.chat-thread-peer-status:empty { display: none; }
 
 .chat-request-banner,
 .chat-pending-note {
@@ -3771,6 +3896,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   margin-bottom: 14px;
+  flex-shrink: 0;
 }
 
 .chat-request-banner[hidden],
@@ -3797,6 +3923,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-weight: 700;
   font-family: inherit;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .chat-load-more[hidden] { display: none; }
@@ -3806,7 +3933,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: min(62vh, 640px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 4px 2px 12px;
   scroll-behavior: smooth;
@@ -3857,12 +3985,23 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .chat-bubble-time {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
   margin-top: 3px;
   font-size: 10.5px;
   opacity: 0.65;
   text-align: right;
 }
+
+.chat-bubble-ticks {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
+.chat-bubble-ticks.is-read { color: #4fc3f7; opacity: 1; }
 
 .chat-bubble-image {
   display: block;
@@ -3916,14 +4055,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   opacity: 0.75;
 }
 
-.chat-seen-indicator {
-  min-height: 16px;
-  text-align: right;
-  font-size: 11.5px;
-  color: var(--text-muted);
-  padding: 2px 4px 10px;
-}
-
 .chat-record-bar,
 .chat-preview-bar {
   display: flex;
@@ -3935,6 +4066,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   padding: 10px 14px;
   margin-bottom: 8px;
   font-size: 13px;
+  flex-shrink: 0;
 }
 
 .chat-record-bar[hidden],
@@ -3984,8 +4116,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  position: sticky;
-  bottom: 12px;
+  flex-shrink: 0;
+  margin-top: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -4065,7 +4197,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 @media (max-width: 639px) {
-  .chat-messages { max-height: 56vh; }
   .chat-bubble { max-width: 84%; }
   .chat-list-toolbar { flex-direction: column; align-items: stretch; }
   .chat-list-toolbar .btn { width: 100%; }

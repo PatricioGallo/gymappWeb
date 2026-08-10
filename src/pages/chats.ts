@@ -1,7 +1,7 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
-import { searchProfiles } from "../services/search.service";
+import { listFollowers, listFollowing, type FollowListRow } from "../services/follow.service";
 import {
   listConversations,
   acceptMessageRequest,
@@ -44,7 +44,6 @@ const requestsCountEl = document.getElementById("chatRequestsCount")!;
 const requestsListEl = document.getElementById("chatRequestsList") as HTMLDivElement;
 const searchInput = document.getElementById("chatSearchInput") as HTMLInputElement;
 const peopleEl = document.getElementById("chatSearchPeople") as HTMLDivElement;
-const newChatBtn = document.getElementById("newChatBtn") as HTMLButtonElement;
 
 function matchesQuery(c: ConversationSummary): boolean {
   if (!searchQuery) return true;
@@ -123,7 +122,7 @@ function renderList() {
     `;
       })
       .join("") ||
-    `<p class="notif-empty">${searchQuery ? "No encontramos conversaciones con ese nombre." : 'Todavía no tenés mensajes. Usá "+ Nuevo mensaje" para escribirle a alguien.'}</p>`;
+    `<p class="notif-empty">${searchQuery ? "No encontramos conversaciones con ese nombre." : "Todavía no tenés mensajes. Buscá a alguien arriba para escribirle."}</p>`;
 
   listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((btn) => {
     btn.addEventListener("click", () => openThread(btn.dataset.id!));
@@ -167,8 +166,16 @@ async function runPeopleSearch(query: string): Promise<void> {
   }
 
   try {
-    const results = (await searchProfiles(query, 6)).filter((r) => r.id !== userId);
+    // El buscador de "nuevo mensaje" solo debe ofrecer gente con la que ya hay
+    // relacion de seguimiento (en cualquier direccion), no cualquier perfil publico.
+    const [followers, following] = await Promise.all([listFollowers(userId, query, 8), listFollowing(userId, query, 8)]);
     if (myRequestId !== peopleRequestId) return;
+
+    const merged = new Map<string, FollowListRow>();
+    for (const r of [...followers, ...following]) {
+      if (r.id !== userId) merged.set(r.id, r);
+    }
+    const results = [...merged.values()].slice(0, 6);
 
     const existingIds = new Set(conversations.map((c) => c.other_user_id));
     peopleEl.hidden = results.length === 0;
@@ -178,9 +185,9 @@ async function runPeopleSearch(query: string): Promise<void> {
           .map(
             (r) => `
       <button type="button" class="search-result-item chat-person-row" data-id="${escapeHtml(r.id)}">
-        <img src="${escapeHtml(r.avatar_url || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+        <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
         <span class="search-result-body">
-          <span class="search-result-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.user_type, r.is_verified)}</span>
+          <span class="search-result-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
           <span class="search-result-username">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}</span>
         </span>
         <span class="chat-person-cta">${existingIds.has(r.id) ? "Ver chat" : "Mensaje"}</span>
@@ -219,8 +226,6 @@ searchInput.addEventListener("input", () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => void runPeopleSearch(searchQuery), 250);
 });
-
-newChatBtn.addEventListener("click", () => searchInput.focus());
 
 tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
   btn.addEventListener("click", () => {

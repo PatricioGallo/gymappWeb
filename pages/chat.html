@@ -72,7 +72,10 @@
         </a>
         <a href="profile.html" id="chatThreadProfileLink" class="chat-thread-peer">
           <img src="/images/avatars/default.svg" id="chatThreadAvatar" alt="" class="chat-avatar">
-          <span id="chatThreadName">Cargando...</span>
+          <span class="chat-thread-peer-info">
+            <span class="chat-thread-peer-name" id="chatThreadName">Cargando...</span>
+            <span class="chat-thread-peer-status" id="chatThreadStatus"></span>
+          </span>
         </a>
       </div>
 
@@ -89,7 +92,6 @@
       <button type="button" class="chat-load-more" id="chatLoadMoreBtn" hidden>Cargar mensajes anteriores</button>
 
       <div class="chat-messages" id="chatMessages"></div>
-      <div class="chat-seen-indicator" id="chatSeenIndicator"></div>
 
       <div class="chat-record-bar" id="chatRecordBar" hidden>
         <span class="chat-record-dot"></span>

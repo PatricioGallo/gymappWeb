@@ -13,6 +13,7 @@ import {
   uploadChatImage,
   uploadChatAudio,
   getChatAttachmentUrl,
+  getConversationPeerMeta,
   MESSAGES_PAGE_SIZE,
   AUDIO_MAX_SECONDS,
   type ChatMessage,
@@ -31,6 +32,7 @@ if (!conversationId) {
 const profileLink = document.getElementById("chatThreadProfileLink") as HTMLAnchorElement;
 const avatarEl = document.getElementById("chatThreadAvatar") as HTMLImageElement;
 const nameEl = document.getElementById("chatThreadName")!;
+const statusEl = document.getElementById("chatThreadStatus")!;
 const requestBanner = document.getElementById("chatRequestBanner") as HTMLDivElement;
 const requestBannerName = document.getElementById("chatRequestBannerName")!;
 const bannerAcceptBtn = document.getElementById("chatBannerAccept") as HTMLButtonElement;
@@ -38,7 +40,6 @@ const bannerDeclineBtn = document.getElementById("chatBannerDecline") as HTMLBut
 const pendingNote = document.getElementById("chatPendingNote") as HTMLParagraphElement;
 const loadMoreBtn = document.getElementById("chatLoadMoreBtn") as HTMLButtonElement;
 const messagesEl = document.getElementById("chatMessages") as HTMLDivElement;
-const seenIndicatorEl = document.getElementById("chatSeenIndicator")!;
 const composerForm = document.getElementById("chatComposer") as HTMLFormElement;
 const composerInput = document.getElementById("chatComposerInput") as HTMLTextAreaElement;
 const imageInput = document.getElementById("chatImageInput") as HTMLInputElement;
@@ -60,6 +61,7 @@ const audioPlayers = new Map<string, HTMLAudioElement>();
 let currentlyPlayingId: string | null = null;
 let isInitiator = false;
 let conversationStatus: "pending" | "accepted" = "pending";
+let readReceiptsEnabled = true;
 
 // ---------------------------------------------------------------------------
 // Carga inicial: encuentro la conversación en mi propia lista (ya trae el
@@ -81,6 +83,12 @@ nameEl.insertAdjacentHTML("beforeend", `${escapeHtml(conversation.other_username
 avatarEl.src = conversation.other_avatar_url || "/images/avatars/default.svg";
 profileLink.href = `profile.html?u=${encodeURIComponent(conversation.other_username ?? "")}`;
 requestBannerName.textContent = conversation.other_username ?? "";
+
+// lastSeenAt viene null si la privacidad reciproca (la mia y la del otro) no
+// permite mostrarla; readReceiptsEnabled gatea el "visto azul" de cada tick.
+const peerMeta = await getConversationPeerMeta(conversation.other_user_id);
+readReceiptsEnabled = peerMeta.readReceiptsEnabled;
+statusEl.textContent = peerMeta.lastSeenAt ? lastSeenLabel(peerMeta.lastSeenAt) : "";
 
 function renderBanners(): void {
   requestBanner.hidden = !(conversationStatus === "pending" && !isInitiator);
@@ -134,6 +142,27 @@ function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function lastSeenLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMin = Math.floor((now.getTime() - d.getTime()) / 60000);
+  if (diffMin < 1) return "Últ. vez hace un momento";
+  if (diffMin < 60) return `Últ. vez hace ${diffMin} min`;
+  const time = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return `Últ. vez hoy a las ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `Últ. vez ayer a las ${time}`;
+  return `Últ. vez el ${d.toLocaleDateString("es-AR", { day: "numeric", month: "short" })}`;
+}
+
+const CHECK_ICON_PATHS = `<path d="M1 7.5 4.5 11 11 3"/><path d="M5 7.5 8.5 11 15 3"/>`;
+
+function ticksHtml(m: ChatMessage): string {
+  const isRead = readReceiptsEnabled && Boolean(m.read_at);
+  return `<svg class="chat-bubble-ticks${isRead ? " is-read" : ""}" viewBox="0 0 16 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${CHECK_ICON_PATHS}</svg>`;
+}
+
 function bubbleHtml(m: ChatMessage, isMe: boolean): string {
   let mediaHtml = "";
   if (m.attachment_type === "image" && m.attachment_path) {
@@ -158,7 +187,7 @@ function bubbleHtml(m: ChatMessage, isMe: boolean): string {
     <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}" data-id="${m.id}">
       ${mediaHtml}
       ${textHtml}
-      <span class="chat-bubble-time">${timeLabel(m.created_at)}</span>
+      <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe ? ticksHtml(m) : ""}</span>
     </div>
   `;
 }
@@ -197,13 +226,11 @@ async function hydrateImages(): Promise<void> {
   );
 }
 
-function renderSeenIndicator(): void {
-  const last = messages[messages.length - 1];
-  if (!last || last.sender_id !== userId) {
-    seenIndicatorEl.textContent = "";
-    return;
-  }
-  seenIndicatorEl.textContent = last.read_at ? `Visto · ${timeLabel(last.created_at)}` : `Enviado · ${timeLabel(last.created_at)}`;
+function refreshBubbleTicks(m: ChatMessage): void {
+  if (m.sender_id !== userId) return;
+  const timeEl = messagesEl.querySelector<HTMLElement>(`.chat-bubble[data-id="${m.id}"] .chat-bubble-time`);
+  if (!timeEl) return;
+  timeEl.innerHTML = `${timeLabel(m.created_at)}${ticksHtml(m)}`;
 }
 
 function scrollToBottom(): void {
@@ -220,7 +247,6 @@ async function renderInitialMessages(): Promise<void> {
   loadMoreBtn.hidden = page.length < MESSAGES_PAGE_SIZE;
   await hydrateImages();
   scrollToBottom();
-  renderSeenIndicator();
 
   const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
   if (hasUnreadFromOther) void markConversationRead(conversationId!);
@@ -265,7 +291,6 @@ function appendMessage(m: ChatMessage): void {
   messagesEl.insertAdjacentHTML("beforeend", html);
   void hydrateImages();
   if (wasNearBottom) scrollToBottom();
-  renderSeenIndicator();
 }
 
 await renderInitialMessages();
@@ -291,7 +316,7 @@ supabase
     const updated = payload.new as ChatMessage;
     const idx = messages.findIndex((m) => m.id === updated.id);
     if (idx !== -1) messages[idx] = updated;
-    renderSeenIndicator();
+    refreshBubbleTicks(updated);
   })
   .subscribe();
 
@@ -429,6 +454,13 @@ composerInput.addEventListener("input", () => {
   composerInput.style.height = "auto";
   composerInput.style.height = `${Math.min(composerInput.scrollHeight, 120)}px`;
   updateSendState();
+});
+
+// Enter envía el mensaje; Shift+Enter agrega un salto de línea.
+composerInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  e.preventDefault();
+  if (!sendBtn.disabled) void handleSend();
 });
 
 imageInput.addEventListener("change", () => {
