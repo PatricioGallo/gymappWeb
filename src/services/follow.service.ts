@@ -48,8 +48,8 @@ export async function getFollowCounts(userId: string): Promise<FollowCounts> {
 // La RPC (SECURITY DEFINER) hace el chequeo de privacidad server-side via
 // is_profile_public: si el perfil es privado y el visitante no lo sigue
 // (o no es el dueno/admin), devuelve 0 filas aunque el llamado no falle.
-export async function listFollowers(userId: string, search = ""): Promise<FollowListRow[]> {
-  const { data, error } = await supabase.rpc("list_followers", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+export async function listFollowers(userId: string, search = "", limit = 100): Promise<FollowListRow[]> {
+  const { data, error } = await supabase.rpc("list_followers", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: limit });
   if (error) throw error;
   return (data ?? []).map((r) => ({
     id: r.id,
@@ -63,8 +63,8 @@ export async function listFollowers(userId: string, search = ""): Promise<Follow
   }));
 }
 
-export async function listFollowing(userId: string, search = ""): Promise<FollowListRow[]> {
-  const { data, error } = await supabase.rpc("list_following", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+export async function listFollowing(userId: string, search = "", limit = 100): Promise<FollowListRow[]> {
+  const { data, error } = await supabase.rpc("list_following", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: limit });
   if (error) throw error;
   return (data ?? []).map((r) => ({
     id: r.id,

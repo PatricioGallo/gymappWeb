@@ -16,6 +16,7 @@ import {
 import { listBlockedUsers, unblockUser, type BlockedUserRow } from "../services/block.service";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
 import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
+import { ALL_PLATFORMS, getPlatform, type SocialPlatform } from "../lib/socialLinks";
 import {
   getMyVerificationRequest,
   getVerificationDocumentUrl,
@@ -47,6 +48,27 @@ if (!profile) {
   throw new Error("profile not found");
 }
 
+
+// ---------- Animacion de guardado (mismo lenguaje visual que el resto de la app) ----------
+
+function showSavedAnimation(message = "¡Cambios guardados!", durationMs = 1600) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="success-icon">
+        <svg viewBox="0 0 52 52" class="success-svg">
+          <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+          <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+        </svg>
+      </div>
+      <p>${escapeHtml(message)}</p>
+    </div>
+  `;
+  setTimeout(() => {
+    loaderBody.innerHTML = "";
+  }, durationMs);
+}
 
 // ---------- Tabs ----------
 
@@ -117,9 +139,10 @@ function renderEditTab() {
         <p class="char-counter" id="bioCounter">${(profile!.bio ?? "").length}/${MAX_BIO_LENGTH}</p>
       </div>
       <div class="field">
-        <label>Enlaces</label>
+        <label>Redes y enlaces</label>
+        <p class="chart-sub" style="margin:0 0 10px;">Agregá tus redes para que aparezcan como iconos en tu perfil, estilo Instagram.</p>
         <div id="linksEditor"></div>
-        <button type="button" class="btn btn-outline btn-sm" id="addLinkBtn">+ Agregar enlace</button>
+        <div class="settings-link-picker" id="linkPicker"></div>
       </div>
 
       <div class="alert_message" id="editAlert"></div>
@@ -136,36 +159,85 @@ function renderEditTab() {
   const currentLinks: ProfileLink[] = [...initialLinks];
   renderLinksEditor();
 
+  function iconSvg(platform: SocialPlatform): string {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${platform.icon}</svg>`;
+  }
+
   function renderLinksEditor() {
-    const linksEditor = document.getElementById("linksEditor")!;
-    linksEditor.innerHTML = currentLinks
-      .map(
-        (l, i) => `
+    const linksEditorEl = document.getElementById("linksEditor")!;
+    linksEditorEl.innerHTML = currentLinks
+      .map((l, i) => {
+        const platform = getPlatform(l.platform);
+        const isOther = platform.key === "other";
+        return `
       <div class="settings-link-row" data-index="${i}">
-        <input type="text" class="link-label" placeholder="Instagram" value="${escapeHtml(l.label)}">
-        <input type="text" class="link-url" placeholder="https://instagram.com/tuusuario" value="${escapeHtml(l.url)}">
+        <span class="settings-link-icon">${iconSvg(platform)}</span>
+        ${
+          isOther
+            ? `<input type="text" class="link-label" placeholder="Nombre (ej: Mi web)" value="${escapeHtml(l.label)}">
+               <input type="text" class="link-url" placeholder="${escapeHtml(platform.placeholder)}" value="${escapeHtml(l.url)}">`
+            : `<span class="settings-link-prefix">${escapeHtml(platform.inputPrefix ?? "")}</span>
+               <input type="text" class="link-handle" placeholder="${escapeHtml(platform.placeholder)}" value="${escapeHtml(platform.extractHandle(l.url))}">`
+        }
         <button type="button" class="settings-link-remove" data-index="${i}" aria-label="Quitar enlace">×</button>
       </div>
-    `
-      )
+    `;
+      })
       .join("");
 
-    linksEditor.querySelectorAll<HTMLButtonElement>(".settings-link-remove").forEach((btn) => {
+    linksEditorEl.querySelectorAll<HTMLButtonElement>(".settings-link-remove").forEach((btn) => {
       btn.addEventListener("click", () => {
         currentLinks.splice(Number(btn.dataset.index), 1);
         renderLinksEditor();
       });
     });
 
-    const addBtn = document.getElementById("addLinkBtn") as HTMLButtonElement | null;
-    if (addBtn) addBtn.disabled = currentLinks.length >= MAX_PROFILE_LINKS;
+    // Sincroniza cada tecleo con currentLinks (no solo al guardar): agregar o quitar
+    // otro enlace reconstruye este innerHTML desde currentLinks, y si no estuviera
+    // sincronizado se perdería lo ya tipeado en las filas existentes.
+    linksEditorEl.querySelectorAll<HTMLDivElement>(".settings-link-row").forEach((row) => {
+      const i = Number(row.dataset.index);
+      row.querySelector<HTMLInputElement>(".link-handle")?.addEventListener("input", (e) => {
+        currentLinks[i].url = (e.target as HTMLInputElement).value;
+      });
+      row.querySelector<HTMLInputElement>(".link-label")?.addEventListener("input", (e) => {
+        currentLinks[i].label = (e.target as HTMLInputElement).value;
+      });
+      row.querySelector<HTMLInputElement>(".link-url")?.addEventListener("input", (e) => {
+        currentLinks[i].url = (e.target as HTMLInputElement).value;
+      });
+    });
+
+    renderLinkPicker();
   }
 
-  document.getElementById("addLinkBtn")?.addEventListener("click", () => {
-    if (currentLinks.length >= MAX_PROFILE_LINKS) return;
-    currentLinks.push({ label: "", url: "" });
-    renderLinksEditor();
-  });
+  function renderLinkPicker() {
+    const picker = document.getElementById("linkPicker")!;
+    const usedKeys = new Set(currentLinks.map((l) => l.platform ?? "other"));
+    const atLimit = currentLinks.length >= MAX_PROFILE_LINKS;
+    picker.innerHTML = ALL_PLATFORMS.filter((p) => p.key === "other" || !usedKeys.has(p.key))
+      .map(
+        (p) => `
+      <button type="button" class="exc-pick-chip link-add-chip" data-platform="${p.key}" ${atLimit ? "disabled" : ""}>
+        ${iconSvg(p)} ${escapeHtml(p.label)}
+      </button>
+    `
+      )
+      .join("");
+
+    picker.querySelectorAll<HTMLButtonElement>(".link-add-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (currentLinks.length >= MAX_PROFILE_LINKS) return;
+        const platform = getPlatform(btn.dataset.platform);
+        currentLinks.push({ platform: platform.key, label: platform.label, url: "" });
+        renderLinksEditor();
+        document
+          .getElementById("linksEditor")!
+          .querySelector<HTMLInputElement>(".settings-link-row:last-child .link-handle, .settings-link-row:last-child .link-label")
+          ?.focus();
+      });
+    });
+  }
 
   document.getElementById("saveEditBtn")?.addEventListener("click", async () => {
     const alertBox = document.getElementById("editAlert")!;
@@ -190,24 +262,32 @@ function renderEditTab() {
       return;
     }
 
-    const linkRows = Array.from(document.querySelectorAll<HTMLDivElement>(".settings-link-row"));
     const newLinks: ProfileLink[] = [];
-    for (const row of linkRows) {
-      const label = (row.querySelector(".link-label") as HTMLInputElement).value.trim();
-      let url = (row.querySelector(".link-url") as HTMLInputElement).value.trim();
-      if (!label && !url) continue;
-      if (!label || !url) {
-        alertBox.innerHTML = "<p>Completá el nombre y la URL de cada enlace (o quitalo con la ×).</p>";
-        return;
+    for (const l of currentLinks) {
+      const platform = getPlatform(l.platform);
+      if (platform.key === "other") {
+        const label = l.label.trim();
+        let url = l.url.trim();
+        if (!label && !url) continue;
+        if (!label || !url) {
+          alertBox.innerHTML = "<p>Completá el nombre y la URL de cada enlace (o quitalo con la ×).</p>";
+          return;
+        }
+        if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+        try {
+          new URL(url);
+        } catch {
+          alertBox.innerHTML = `<p>La URL "${escapeHtml(url)}" no es válida.</p>`;
+          return;
+        }
+        newLinks.push({ platform: "other", label, url });
+      } else {
+        const handle = l.url.trim();
+        if (!handle) continue;
+        const url = platform.buildUrl(handle);
+        if (!url) continue;
+        newLinks.push({ platform: platform.key, label: platform.label, url });
       }
-      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-      try {
-        new URL(url);
-      } catch {
-        alertBox.innerHTML = `<p>La URL "${escapeHtml(url)}" no es válida.</p>`;
-        return;
-      }
-      newLinks.push({ label, url });
     }
 
     const { error } = await updateProfileFields(userId, {
@@ -224,7 +304,7 @@ function renderEditTab() {
     }
 
     Object.assign(profile!, { nombre, apellido, fecha_nacimiento: fechaNacimiento, nacionalidad, bio: bio || null, links: newLinks });
-    alertBox.innerHTML = "<p>¡Cambios guardados!</p>";
+    showSavedAnimation();
   });
 }
 
@@ -242,6 +322,26 @@ function renderPrivacyTab() {
         </div>
         <label class="switch">
           <input type="checkbox" id="visibilityToggle" ${profile!.is_public ? "checked" : ""}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <div class="settings-toggle-row">
+        <div>
+          <span class="switch-label">Última conexión</span>
+          <p class="chart-sub" style="margin:4px 0 0;">Si lo desactivás, dejás de ver la última conexión de los demás (aunque ellos lo tengan activado).</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="lastSeenToggle" ${profile!.show_last_seen ? "checked" : ""}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <div class="settings-toggle-row">
+        <div>
+          <span class="switch-label">Confirmaciones de lectura (tick azul)</span>
+          <p class="chart-sub" style="margin:4px 0 0;">Si lo desactivás, dejás de ver cuándo leen tus mensajes (aunque el otro lo tenga activado).</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="readReceiptsToggle" ${profile!.show_read_receipts ? "checked" : ""}>
           <span class="switch-track"></span>
         </label>
       </div>
@@ -274,6 +374,38 @@ function renderPrivacyTab() {
     profile!.is_public = isPublic;
   });
 
+  document.getElementById("lastSeenToggle")?.addEventListener("change", async (e) => {
+    const alertBox = document.getElementById("privacyAlert")!;
+    alertBox.innerHTML = "";
+    const toggle = e.target as HTMLInputElement;
+    const showLastSeen = toggle.checked;
+    toggle.disabled = true;
+    const { error } = await updateProfileFields(userId, { show_last_seen: showLastSeen });
+    toggle.disabled = false;
+    if (error) {
+      toggle.checked = !showLastSeen;
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    profile!.show_last_seen = showLastSeen;
+  });
+
+  document.getElementById("readReceiptsToggle")?.addEventListener("change", async (e) => {
+    const alertBox = document.getElementById("privacyAlert")!;
+    alertBox.innerHTML = "";
+    const toggle = e.target as HTMLInputElement;
+    const showReadReceipts = toggle.checked;
+    toggle.disabled = true;
+    const { error } = await updateProfileFields(userId, { show_read_receipts: showReadReceipts });
+    toggle.disabled = false;
+    if (error) {
+      toggle.checked = !showReadReceipts;
+      alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      return;
+    }
+    profile!.show_read_receipts = showReadReceipts;
+  });
+
   document.getElementById("saveAccountBtn")?.addEventListener("click", async () => {
     const alertBox = document.getElementById("accountAlert")!;
     alertBox.innerHTML = "";
@@ -303,7 +435,7 @@ function renderPrivacyTab() {
         return;
       }
     }
-    alertBox.innerHTML = "<p>¡Guardado! Si cambiaste el mail, revisá tu casilla para confirmarlo.</p>";
+    showSavedAnimation(mail ? "¡Guardado! Si cambiaste el mail, revisá tu casilla para confirmarlo." : "¡Cambios guardados!", mail ? 2600 : 1600);
     (document.getElementById("mailField") as HTMLInputElement).value = "";
     (document.getElementById("pswd") as HTMLInputElement).value = "";
     (document.getElementById("pswd2") as HTMLInputElement).value = "";

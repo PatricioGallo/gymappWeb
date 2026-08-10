@@ -544,10 +544,13 @@ export type Database = {
           id: string
           is_public: boolean
           is_verified: boolean
+          last_seen_at: string | null
           links: Json
           nacionalidad: string | null
           nombre: string
           notification_prefs: Json
+          show_last_seen: boolean
+          show_read_receipts: boolean
           updated_at: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
@@ -563,10 +566,13 @@ export type Database = {
           id: string
           is_public?: boolean
           is_verified?: boolean
+          last_seen_at?: string | null
           links?: Json
           nacionalidad?: string | null
           nombre: string
           notification_prefs?: Json
+          show_last_seen?: boolean
+          show_read_receipts?: boolean
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username: string
@@ -582,10 +588,13 @@ export type Database = {
           id?: string
           is_public?: boolean
           is_verified?: boolean
+          last_seen_at?: string | null
           links?: Json
           nacionalidad?: string | null
           nombre?: string
           notification_prefs?: Json
+          show_last_seen?: boolean
+          show_read_receipts?: boolean
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username?: string
@@ -1328,6 +1337,13 @@ export type Database = {
         Returns: undefined
       }
       get_block_status: { Args: { p_target_id: string }; Returns: string }
+      get_conversation_peer_meta: {
+        Args: { p_other_user_id: string }
+        Returns: {
+          last_seen_at: string
+          read_receipts_enabled: boolean
+        }[]
+      }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_follow_counts: {
         Args: { p_user_id: string }
@@ -1524,6 +1540,7 @@ export type Database = {
           username: string
         }[]
       }
+      touch_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {
       exercise_category:

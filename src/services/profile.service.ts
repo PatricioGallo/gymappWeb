@@ -8,6 +8,8 @@ export type ProfileBasic = Tables<"profiles_public">;
 export interface ProfileLink {
   label: string;
   url: string;
+  /** Ausente en enlaces viejos (pre-redes-sociales): se tratan como "other" al renderizar. */
+  platform?: string;
 }
 
 export const MAX_PROFILE_LINKS = 5;
@@ -56,11 +58,21 @@ export async function getProfilesBasicByIds(ids: (string | null | undefined)[]):
 
 export async function updateProfileFields(
   userId: string,
-  fields: Partial<Pick<Profile, "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled">>
+  fields: Partial<
+    Pick<
+      Profile,
+      "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled" | "show_last_seen" | "show_read_receipts"
+    >
+  >
 ): Promise<{ error?: string }> {
   const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
   if (error) return { error: "No se pudieron guardar los cambios. Probá de nuevo." };
   return {};
+}
+
+/** Actualiza mi "última conexión" (heartbeat simple, sin presencia realtime). Falla en silencio: no es crítico. */
+export async function touchLastSeen(): Promise<void> {
+  await supabase.rpc("touch_last_seen");
 }
 
 export async function updateEmail(email: string): Promise<{ error?: string }> {
