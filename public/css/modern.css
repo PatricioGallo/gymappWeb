@@ -1561,6 +1561,17 @@ button:focus-visible {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.btn-spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, currentColor, transparent 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
 @keyframes overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }

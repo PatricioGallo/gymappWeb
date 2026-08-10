@@ -1186,9 +1186,19 @@ function openIssueFormModal(existing: IssueReport | null) {
       return;
     }
 
+    const saveBtn = document.getElementById("issueFormSave") as HTMLButtonElement;
+    const closeBtn = document.getElementById("issueFormClose") as HTMLButtonElement;
+    const originalLabel = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    closeBtn.disabled = true;
+    saveBtn.innerHTML = `<span class="btn-spinner"></span> Guardando...`;
+
     if (existing) {
       const { error } = await updateIssueReport(existing.id, { title, page: page || null, description: description || null, severity });
       if (error) {
+        saveBtn.disabled = false;
+        closeBtn.disabled = false;
+        saveBtn.innerHTML = originalLabel;
         alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
         return;
       }
@@ -1196,6 +1206,9 @@ function openIssueFormModal(existing: IssueReport | null) {
     } else {
       const { error } = await addIssueReport(adminId, title, description, page, severity);
       if (error) {
+        saveBtn.disabled = false;
+        closeBtn.disabled = false;
+        saveBtn.innerHTML = originalLabel;
         alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
         return;
       }
