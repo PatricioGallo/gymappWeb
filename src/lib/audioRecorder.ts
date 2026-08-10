@@ -5,6 +5,18 @@ export interface RecordingResult {
 
 const CANDIDATE_MIME_TYPES = ["audio/webm", "audio/mp4", "audio/ogg"];
 
+/** Nivel de volumen (0 a 1, RMS) leído de un AnalyserNode. Se usa tanto al grabar como al reproducir, para animar la onda tipo WhatsApp en los dos casos. */
+export function readLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>): number {
+  analyser.getByteTimeDomainData(buffer);
+  let sumSquares = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    const v = (buffer[i] - 128) / 128;
+    sumSquares += v * v;
+  }
+  const rms = Math.sqrt(sumSquares / buffer.length);
+  return Math.min(1, rms * 4);
+}
+
 /** Wrapper chico sobre MediaRecorder para el mic del composer del chat: start() -> stop() (o cancel()). */
 export class AudioRecorder {
   private recorder: MediaRecorder | null = null;
@@ -46,14 +58,7 @@ export class AudioRecorder {
   /** Nivel de volumen actual (0 a 1, RMS), para animar la onda mientras se graba. */
   getLevel(): number {
     if (!this.analyser || !this.levelData) return 0;
-    this.analyser.getByteTimeDomainData(this.levelData as Uint8Array<ArrayBuffer>);
-    let sumSquares = 0;
-    for (let i = 0; i < this.levelData.length; i++) {
-      const v = (this.levelData[i] - 128) / 128;
-      sumSquares += v * v;
-    }
-    const rms = Math.sqrt(sumSquares / this.levelData.length);
-    return Math.min(1, rms * 4);
+    return readLevel(this.analyser, this.levelData as Uint8Array<ArrayBuffer>);
   }
 
   stop(): Promise<RecordingResult> {

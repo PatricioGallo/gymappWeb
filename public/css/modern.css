@@ -4034,7 +4034,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 160px;
+  min-width: 200px;
   padding: 2px 0;
 }
 
@@ -4054,7 +4054,15 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .chat-audio-toggle svg { width: 16px; height: 16px; }
 
+.chat-audio-wave {
+  flex: 1;
+  min-width: 90px;
+  height: 24px;
+  display: block;
+}
+
 .chat-audio-time {
+  flex-shrink: 0;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   opacity: 0.75;

@@ -59,6 +59,10 @@ let messages: ChatMessage[] = [];
 const renderedIds = new Set<string>();
 const attachmentUrlCache = new Map<string, string>();
 const audioPlayers = new Map<string, HTMLAudioElement>();
+// Forma de onda precalculada (una vez por mensaje) a partir del audio ya grabado, para
+// mostrar las barras reales y no solo un pulso generico. Aparte del <audio> de reproduccion:
+// si el fetch falla (ej. CORS), el audio sigue sonando igual, solo sin la onda dibujada.
+const audioWaveLevels = new Map<string, number[]>();
 let currentlyPlayingId: string | null = null;
 let isInitiator = false;
 let conversationStatus: "pending" | "accepted" = "pending";
@@ -179,6 +183,7 @@ function bubbleHtml(m: ChatMessage, isMe: boolean): string {
           <svg class="chat-audio-icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           <svg class="chat-audio-icon-pause" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
         </button>
+        <canvas class="chat-audio-wave" data-id="${m.id}"></canvas>
         <span class="chat-audio-time" data-id="${m.id}">${formatDuration(m.attachment_duration_seconds ?? 0)}</span>
       </div>
     `;
@@ -336,6 +341,77 @@ function setPlayIcon(btn: HTMLButtonElement, showPlay: boolean): void {
   btn.querySelector(".chat-audio-icon-pause")?.toggleAttribute("hidden", showPlay);
 }
 
+/** Decodifica el audio ya subido para sacar la forma real de la onda (picos por bloque), una sola vez por mensaje. */
+async function loadWaveform(id: string, url: string): Promise<void> {
+  if (audioWaveLevels.has(id)) return;
+  try {
+    const arrayBuffer = await (await fetch(url)).arrayBuffer();
+    const audioCtx = new AudioContext();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    void audioCtx.close();
+
+    const channel = audioBuffer.getChannelData(0);
+    const barsCount = 40;
+    const blockSize = Math.max(1, Math.floor(channel.length / barsCount));
+    const peaks: number[] = [];
+    for (let i = 0; i < barsCount; i++) {
+      const start = i * blockSize;
+      const end = Math.min(channel.length, start + blockSize);
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += Math.abs(channel[j]);
+      peaks.push(sum / Math.max(1, end - start));
+    }
+    const max = Math.max(...peaks, 0.0001);
+    audioWaveLevels.set(
+      id,
+      peaks.map((v) => Math.max(0.12, v / max))
+    );
+    drawPlaybackWave(id, 0);
+  } catch {
+    // silencioso: sin CORS o error de red no se puede analizar el archivo, pero el
+    // audio se sigue reproduciendo normal a traves del <audio> de siempre.
+  }
+}
+
+/** Dibuja la onda de un mensaje ya reproducido/en reproduccion, resaltando lo ya escuchado (0 a 1). */
+function drawPlaybackWave(id: string, progress: number): void {
+  const levels = audioWaveLevels.get(id);
+  const canvas = messagesEl.querySelector<HTMLCanvasElement>(`.chat-audio-wave[data-id="${id}"]`);
+  if (!levels || !canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (width === 0 || height === 0) return;
+  if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const barWidth = 3;
+  const gap = 2;
+  const step = barWidth + gap;
+  const color = getComputedStyle(canvas).color;
+
+  levels.forEach((level, i) => {
+    const x = i * step;
+    if (x > width) return;
+    const barHeight = Math.max(2, level * height);
+    const y = (height - barHeight) / 2;
+    ctx.globalAlpha = i / levels.length <= progress ? 1 : 0.35;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, barWidth, barHeight, barWidth / 2);
+    else ctx.rect(x, y, barWidth, barHeight);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
 async function toggleAudioMessage(btn: HTMLButtonElement): Promise<void> {
   const id = btn.dataset.id!;
   const path = btn.dataset.path!;
@@ -349,17 +425,20 @@ async function toggleAudioMessage(btn: HTMLButtonElement): Promise<void> {
     }
     audio = new Audio(url);
     audioPlayers.set(id, audio);
+    void loadWaveform(id, url);
     const timeEl = messagesEl.querySelector<HTMLElement>(`.chat-audio-time[data-id="${id}"]`);
     const originalDuration = timeEl?.textContent ?? "0:00";
     audio.addEventListener("timeupdate", () => {
       if (!timeEl || !audio) return;
       const remaining = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
       timeEl.textContent = Number.isFinite(remaining) ? formatDuration(remaining) : originalDuration;
+      drawPlaybackWave(id, audio.duration ? audio.currentTime / audio.duration : 0);
     });
     audio.addEventListener("ended", () => {
       setPlayIcon(btn, true);
       if (timeEl) timeEl.textContent = originalDuration;
       currentlyPlayingId = null;
+      drawPlaybackWave(id, 0);
     });
   }
 
@@ -425,23 +504,21 @@ let recordTimer: ReturnType<typeof setInterval> | undefined;
 let recordSeconds = 0;
 
 // ---------------------------------------------------------------------------
-// Onda del grabador (estilo WhatsApp): barras que van apareciendo de derecha
-// a izquierda con la altura del volumen capturado en cada muestreo.
+// Onda estilo WhatsApp (barras que van apareciendo de derecha a izquierda
+// con la altura del volumen muestreado): se reutiliza tanto al grabar como
+// al escuchar un audio ya enviado.
 // ---------------------------------------------------------------------------
 
-const waveLevels: number[] = [];
-let waveTimer: ReturnType<typeof setInterval> | undefined;
-
-function drawWave(): void {
-  const ctx = recordWaveCanvas.getContext("2d");
+function drawBars(canvas: HTMLCanvasElement, levels: number[], color: string): void {
+  const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const dpr = window.devicePixelRatio || 1;
-  const width = recordWaveCanvas.clientWidth;
-  const height = recordWaveCanvas.clientHeight;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
   if (width === 0 || height === 0) return;
-  if (recordWaveCanvas.width !== width * dpr || recordWaveCanvas.height !== height * dpr) {
-    recordWaveCanvas.width = width * dpr;
-    recordWaveCanvas.height = height * dpr;
+  if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -450,9 +527,9 @@ function drawWave(): void {
   const gap = 3;
   const step = barWidth + gap;
   const barsFit = Math.max(1, Math.floor(width / step));
-  const visible = waveLevels.slice(-barsFit);
+  const visible = levels.slice(-barsFit);
 
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff4d4d";
+  ctx.fillStyle = color;
   const startX = width - visible.length * step;
   visible.forEach((level, i) => {
     const barHeight = Math.max(3, level * height);
@@ -465,11 +542,15 @@ function drawWave(): void {
   });
 }
 
+const waveLevels: number[] = [];
+let waveTimer: ReturnType<typeof setInterval> | undefined;
+const recordWaveColor = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff4d4d";
+
 function startWave(): void {
   waveLevels.length = 0;
   waveTimer = setInterval(() => {
     waveLevels.push(recorder.getLevel());
-    drawWave();
+    drawBars(recordWaveCanvas, waveLevels, recordWaveColor());
   }, 100);
 }
 
