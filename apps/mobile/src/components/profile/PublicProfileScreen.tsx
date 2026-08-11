@@ -338,16 +338,38 @@ export function PublicProfileScreen({ username }: { username: string }) {
             {roleLabel && <Text style={styles.roleLabel}>{roleLabel}</Text>}
 
             <View style={styles.statsRow}>
-              <Text style={styles.statPill}>
-                <Text style={styles.statPillNumber}>{followCounts.followers}</Text> seguidores
-              </Text>
-              <Text style={styles.statPill}>
-                <Text style={styles.statPillNumber}>{followCounts.following}</Text> seguidos
-              </Text>
+              {isPrivateForViewer ? (
+                <>
+                  <Text style={styles.statPill}>
+                    <Text style={styles.statPillNumber}>{followCounts.followers}</Text> seguidores
+                  </Text>
+                  <Text style={styles.statPill}>
+                    <Text style={styles.statPillNumber}>{followCounts.following}</Text> seguidos
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Pressable onPress={() => router.push({ pathname: "/followers/[username]", params: { username: target.username, tab: "followers" } })}>
+                    <Text style={styles.statPill}>
+                      <Text style={styles.statPillNumber}>{followCounts.followers}</Text> seguidores
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => router.push({ pathname: "/followers/[username]", params: { username: target.username, tab: "following" } })}>
+                    <Text style={styles.statPill}>
+                      <Text style={styles.statPillNumber}>{followCounts.following}</Text> seguidos
+                    </Text>
+                  </Pressable>
+                </>
+              )}
               {isEntrenador && subscriberCount !== null && (
-                <Text style={styles.statPill}>
-                  <Text style={styles.statPillNumber}>{subscriberCount}</Text> suscriptores
-                </Text>
+                <Pressable
+                  disabled={isPrivateForViewer}
+                  onPress={() => router.push({ pathname: "/followers/[username]", params: { username: target.username, tab: "subscribers" } })}
+                >
+                  <Text style={styles.statPill}>
+                    <Text style={styles.statPillNumber}>{subscriberCount}</Text> suscriptores
+                  </Text>
+                </Pressable>
               )}
             </View>
           </View>

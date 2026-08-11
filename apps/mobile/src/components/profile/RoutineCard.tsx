@@ -1,13 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ActionMenu, type ActionMenuItem } from "@/components/ActionMenu";
 import { formatFechaCorta } from "@/lib/dias";
 import { routineLastProgressLabel, routineProgressPct, type RoutineListMode, type RoutineWithCounts, type WeightLogEntry } from "@/lib/profileService";
-import { setRoutinePublic } from "@/lib/routineService";
+import { deleteRoutine, setRoutinePublic } from "@/lib/routineService";
 import { colors, radius } from "@/theme/colors";
+
+import { ConfirmModal } from "./ConfirmModal";
 
 function notImplemented() {
   Alert.alert("Próximamente", "Esta función todavía no está disponible en la app.");
@@ -20,6 +23,7 @@ export function RoutineCard({
   ownerName,
   onFinalize,
   onReactivate,
+  onDeleted,
 }: {
   routine: RoutineWithCounts;
   mode: RoutineListMode;
@@ -27,10 +31,15 @@ export function RoutineCard({
   ownerName: string | null;
   onFinalize: (routine: RoutineWithCounts) => void;
   onReactivate: (routine: RoutineWithCounts) => void;
+  onDeleted: (routine: RoutineWithCounts) => void;
 }) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isPublic, setIsPublic] = useState(routine.is_public);
   const [togglingVisibility, setTogglingVisibility] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   async function handleToggleVisibility() {
     setTogglingVisibility(true);
@@ -45,11 +54,28 @@ export function RoutineCard({
     }
   }
 
+  async function handleConfirmDelete() {
+    setDeleting(true);
+    try {
+      await deleteRoutine(routine.id);
+      setDeleting(false);
+      setDeleted(true);
+      setTimeout(() => {
+        setDeleted(false);
+        setDeleteConfirmOpen(false);
+        onDeleted(routine);
+      }, 1200);
+    } catch {
+      setDeleting(false);
+      Alert.alert("No se pudo eliminar", "Probá de nuevo en unos segundos.");
+    }
+  }
+
   const menuItems: ActionMenuItem[] = [
-    { label: mode === "active" ? "Mostrar" : "Ver", onPress: notImplemented },
-    { label: "Modificar", onPress: notImplemented },
+    { label: mode === "active" ? "Mostrar" : "Ver", onPress: () => router.push({ pathname: "/pesos/[routineId]", params: { routineId: routine.id } }) },
+    { label: "Modificar", onPress: () => router.push({ pathname: "/routine/edit/[routineId]", params: { routineId: routine.id } }) },
     { label: isPublic ? "Hacer privada" : "Hacer pública", onPress: handleToggleVisibility },
-    { label: "Eliminar", onPress: notImplemented, danger: true },
+    { label: "Eliminar", onPress: () => setDeleteConfirmOpen(true), danger: true },
   ];
 
   const pct = routineProgressPct(routine, logs);
@@ -108,7 +134,7 @@ export function RoutineCard({
       <View style={styles.actions}>
         {mode === "active" && (
           <>
-            <SmallGradientButton title="Entrenar hoy" onPress={notImplemented} />
+            <SmallGradientButton title="Entrenar hoy" onPress={() => router.push({ pathname: "/pesos/[routineId]", params: { routineId: routine.id } })} />
             <Pressable style={styles.successButton} onPress={() => onFinalize(routine)}>
               <Text style={styles.successButtonText}>Finalizar</Text>
             </Pressable>
@@ -119,6 +145,19 @@ export function RoutineCard({
       </View>
 
       <ActionMenu visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} />
+
+      <ConfirmModal
+        visible={deleteConfirmOpen}
+        title="Eliminar rutina"
+        subtitle={`Esta acción no se puede deshacer: vas a perder las semanas, días y pesos cargados en "${routine.nombre}".`}
+        confirmLabel="Eliminar"
+        loadingText="Eliminando..."
+        successText="¡Rutina eliminada con éxito!"
+        loading={deleting}
+        success={deleted}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </View>
   );
 }

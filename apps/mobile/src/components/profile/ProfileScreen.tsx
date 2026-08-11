@@ -220,7 +220,7 @@ export function ProfileScreen({ userId }: { userId: string }) {
 
   const menuItems: ActionMenuItem[] = [
     { label: "Compartir perfil", onPress: handleShare },
-    { label: "Configuración", onPress: notImplemented },
+    { label: "Configuración", onPress: () => router.push("/settings") },
     { label: "Reportar un error", onPress: () => setReportModalOpen(true) },
   ];
 
@@ -257,16 +257,22 @@ export function ProfileScreen({ userId }: { userId: string }) {
               <Text style={styles.statPill}>
                 <Text style={styles.statPillNumber}>0</Text> publicaciones
               </Text>
-              <Text style={styles.statPill}>
-                <Text style={styles.statPillNumber}>{followCounts.followers}</Text> seguidores
-              </Text>
-              <Text style={styles.statPill}>
-                <Text style={styles.statPillNumber}>{followCounts.following}</Text> seguidos
-              </Text>
-              {isEntrenador && subscriberCount !== null && (
+              <Pressable onPress={() => router.push({ pathname: "/followers/[username]", params: { username: profile.username, tab: "followers" } })}>
                 <Text style={styles.statPill}>
-                  <Text style={styles.statPillNumber}>{subscriberCount}</Text> suscriptores
+                  <Text style={styles.statPillNumber}>{followCounts.followers}</Text> seguidores
                 </Text>
+              </Pressable>
+              <Pressable onPress={() => router.push({ pathname: "/followers/[username]", params: { username: profile.username, tab: "following" } })}>
+                <Text style={styles.statPill}>
+                  <Text style={styles.statPillNumber}>{followCounts.following}</Text> seguidos
+                </Text>
+              </Pressable>
+              {isEntrenador && subscriberCount !== null && (
+                <Pressable onPress={() => router.push({ pathname: "/followers/[username]", params: { username: profile.username, tab: "subscribers" } })}>
+                  <Text style={styles.statPill}>
+                    <Text style={styles.statPillNumber}>{subscriberCount}</Text> suscriptores
+                  </Text>
+                </Pressable>
               )}
             </View>
           </View>
@@ -289,7 +295,7 @@ export function ProfileScreen({ userId }: { userId: string }) {
         )}
 
         <View style={styles.profileActions}>
-          <Pressable style={styles.outlineActionButton} onPress={notImplemented}>
+          <Pressable style={styles.outlineActionButton} onPress={() => router.push("/settings")}>
             <Text style={styles.outlineActionText}>Editar perfil</Text>
           </Pressable>
           <Pressable style={styles.outlineActionButton} onPress={handleShare}>
@@ -301,7 +307,7 @@ export function ProfileScreen({ userId }: { userId: string }) {
       <View style={styles.section}>
         <View style={styles.quickGrid}>
           <QuickCard icon="barbell" title="Tus rutinas" subtitle="Ver y gestionar tus rutinas activas" onPress={scrollToRoutines} />
-          <QuickCard icon="stats-chart" title="Progreso completo" subtitle="Gráficos detallados por ejercicio" onPress={notImplemented} />
+          <QuickCard icon="stats-chart" title="Progreso completo" subtitle="Gráficos detallados por ejercicio" onPress={() => router.push("/progress")} />
           <QuickCard icon="add-circle" title="Nueva rutina" subtitle="Armá una rutina desde cero" onPress={() => router.push("/routine/new")} />
           {isEntrenador && <QuickCard icon="people" title="Tus alumnos" subtitle="Rutinas, progreso y comentarios de tus suscriptores" onPress={notImplemented} />}
         </View>
@@ -379,6 +385,10 @@ export function ProfileScreen({ userId }: { userId: string }) {
                       ownerName={ownerName}
                       onFinalize={(r) => setConfirmAction({ kind: "finalize", routine: r })}
                       onReactivate={(r) => setConfirmAction({ kind: "reactivate", routine: r })}
+                      onDeleted={async () => {
+                        await loadRoutinesForTab(routineTab);
+                        if (routineTab === "active") setActiveRoutinesCount((await listRoutines(userId, "active")).length);
+                      }}
                     />
                   );
                 })}

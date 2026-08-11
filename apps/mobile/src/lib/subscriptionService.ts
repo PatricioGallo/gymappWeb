@@ -1,6 +1,18 @@
 import { supabase } from "./supabaseClient";
+import type { Tables } from "@/types/database";
 
 export type SubscriptionStatus = "none" | "pending" | "accepted" | "ended" | "self";
+
+export interface SubscriberListRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
+  subscribedAt: string;
+}
 
 export async function getSubscriberCount(userId: string): Promise<number> {
   const { data, error } = await supabase.rpc("get_subscriber_count", { p_user_id: userId });
@@ -31,4 +43,25 @@ export async function unsubscribeOrCancel(subscriberId: string, trainerId: strin
   const { error } = await supabase.rpc("cancel_subscription", { p_subscriber_id: subscriberId, p_trainer_id: trainerId });
   if (error) return { error: "No se pudo completar la acción. Probá de nuevo." };
   return {};
+}
+
+// La RPC (SECURITY DEFINER) hace el mismo chequeo de privacidad que list_followers.
+export async function listSubscribers(userId: string, search = ""): Promise<SubscriberListRow[]> {
+  const { data, error } = await supabase.rpc("list_subscribers", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    userType: r.user_type,
+    isVerified: r.is_verified,
+    subscribedAt: r.subscribed_at,
+  }));
+}
+
+/** Del lado del entrenador: cancela la suscripcion de cualquiera de sus alumnos en cualquier momento. */
+export async function removeSubscriber(trainerId: string, subscriberId: string): Promise<{ error?: string }> {
+  return unsubscribeOrCancel(subscriberId, trainerId);
 }

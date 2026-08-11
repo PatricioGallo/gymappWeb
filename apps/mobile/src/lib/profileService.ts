@@ -44,6 +44,39 @@ export async function getProfileBasicByUsername(username: string): Promise<Profi
   return data;
 }
 
+export async function updateProfileFields(
+  userId: string,
+  fields: Partial<
+    Pick<
+      Profile,
+      "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled" | "show_last_seen" | "show_read_receipts"
+    >
+  >
+): Promise<{ error?: string }> {
+  const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
+  if (error) return { error: "No se pudieron guardar los cambios. Probá de nuevo." };
+  return {};
+}
+
+export async function updateEmail(email: string): Promise<{ error?: string }> {
+  const { error } = await supabase.auth.updateUser({ email });
+  if (error) return { error: "No se pudo actualizar el mail." };
+  return {};
+}
+
+export async function updatePassword(password: string): Promise<{ error?: string }> {
+  if (password.length < 8) return { error: "La contraseña debe tener al menos 8 caracteres." };
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: "No se pudo actualizar la contraseña." };
+  return {};
+}
+
+export async function getProfileBasicById(userId: string): Promise<ProfileBasic | null> {
+  const { data, error } = await supabase.from("profiles_public").select("*").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 /** Trae varios perfiles básicos de una vez (ej. quién asignó/copió una rutina), indexados por id. */
 export async function getProfilesBasicByIds(ids: (string | null | undefined)[]): Promise<Map<string, ProfileBasic>> {
   const uniqueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
