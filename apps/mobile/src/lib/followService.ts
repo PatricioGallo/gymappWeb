@@ -19,6 +19,18 @@ export interface FollowListRow {
 
 export type FollowStatus = "none" | "pending" | "accepted" | "self";
 
+export interface FollowRequestRow {
+  id: string;
+  followerId: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
+  createdAt: string;
+}
+
 export async function getFollowCounts(userId: string): Promise<FollowCounts> {
   const { data, error } = await supabase.rpc("get_follow_counts", { p_user_id: userId });
   if (error) throw error;
@@ -80,5 +92,61 @@ export async function followUser(followerId: string, targetId: string): Promise<
 export async function unfollowOrCancel(followerId: string, targetId: string): Promise<{ error?: string }> {
   const { error } = await supabase.from("follows").delete().eq("follower_id", followerId).eq("followed_id", targetId);
   if (error) return { error: "No se pudo completar la acción. Probá de nuevo." };
+  return {};
+}
+
+export async function getPendingFollowRequestCount(userId: string): Promise<number> {
+  const { count, error } = await supabase.from("follows").select("id", { count: "exact", head: true }).eq("followed_id", userId).eq("status", "pending");
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function listFollowRequests(userId: string): Promise<FollowRequestRow[]> {
+  const { data: rows, error } = await supabase
+    .from("follows")
+    .select("id, created_at, follower_id")
+    .eq("followed_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  if (!rows || rows.length === 0) return [];
+
+  const followerIds = [...new Set(rows.map((r) => r.follower_id))];
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles_public")
+    .select("id, username, nombre, apellido, avatar_url, user_type, is_verified")
+    .in("id", followerIds);
+  if (profilesError) throw profilesError;
+
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  return rows
+    .map((r) => {
+      const p = profileById.get(r.follower_id);
+      if (!p || !p.user_type) return null;
+      return {
+        id: r.id,
+        followerId: r.follower_id,
+        username: p.username ?? "",
+        nombre: p.nombre ?? "",
+        apellido: p.apellido ?? "",
+        avatarUrl: p.avatar_url,
+        userType: p.user_type,
+        isVerified: p.is_verified ?? false,
+        createdAt: r.created_at,
+      };
+    })
+    .filter((r): r is FollowRequestRow => r !== null);
+}
+
+export async function acceptFollowRequest(followId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("follows").update({ status: "accepted" }).eq("id", followId);
+  if (error) return { error: "No se pudo aceptar la solicitud. Probá de nuevo." };
+  return {};
+}
+
+export async function rejectFollowRequest(followId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("follows").delete().eq("id", followId);
+  if (error) return { error: "No se pudo rechazar la solicitud. Probá de nuevo." };
   return {};
 }

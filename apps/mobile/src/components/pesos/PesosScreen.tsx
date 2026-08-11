@@ -7,6 +7,7 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ActionMenu";
 import { AuthOverlay } from "@/components/AuthOverlay";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { OutlineButton } from "@/components/OutlineButton";
+import { ReportErrorModal } from "@/components/profile/ReportErrorModal";
 import { RingProgress } from "@/components/RingProgress";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { deleteExerciseComment, getTodayComments, upsertExerciseComment, MAX_COMMENT_LENGTH, type ExerciseComment } from "@/lib/commentService";
@@ -137,6 +138,7 @@ function buildDayInputs(dia: RoutineDetailDay, latestWeights: LatestWeightsMap, 
 export function PesosScreen({ routineId, uid }: { routineId: string; uid?: string }) {
   const router = useRouter();
   const [viewerAvatarUrl, setViewerAvatarUrl] = useState<string | null>(null);
+  const [viewerId, setViewerId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [routine, setRoutine] = useState<RoutineDetail | null>(null);
   const [targetUserId, setTargetUserId] = useState<string>("");
@@ -158,6 +160,7 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
   const [commentSaving, setCommentSaving] = useState(false);
   const [deleteConfirmFor, setDeleteConfirmFor] = useState<RoutineExerciseWithAuthor | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const isTrainingForOther = Boolean(uid);
 
@@ -167,6 +170,7 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
     } = await supabase.auth.getSession();
     const myId = session?.user.id ?? "";
     const target = uid ?? myId;
+    setViewerId(myId);
     setTargetUserId(target);
     getProfile(myId).then((p) => setViewerAvatarUrl(p?.avatar_url ?? null));
     if (uid) {
@@ -337,6 +341,12 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
     setCommentFor(null);
   }
 
+  function goToStudents() {
+    // La ruta /students la esta armando otro agente en paralelo; el push queda
+    // listo y funcionara apenas ese archivo de ruta exista.
+    router.push("/students" as never);
+  }
+
   if (loading) {
     return (
       <View style={styles.flex}>
@@ -366,18 +376,58 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
         ...(latestWeights.get(menuFor.id)?.get(1)?.some((e) => e.fecha === TODAY) || (!menuFor.mismo_peso && latestWeights.get(menuFor.id))
           ? [{ label: "Borrar carga actual", onPress: () => setDeleteConfirmFor(menuFor), danger: true }]
           : []),
+        { label: "Reportar un error", onPress: () => setReportModalOpen(true) },
       ]
     : [];
+
+  const weekPct = weekProgress(semana, latestWeights);
+  const routinePct = routineProgress(routine, latestWeights);
 
   return (
     <View style={styles.flex}>
       <ScreenHeader title={routine.nombre} onBack={() => (openDay !== null ? handleBackToWeek() : router.back())} avatarUrl={viewerAvatarUrl} />
 
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
-        {isTrainingForOther && targetName && <Text style={styles.trainerBanner}>Estás cargando pesos para {targetName}.</Text>}
+        {isTrainingForOther && (
+          <Pressable style={styles.studentsBackLink} onPress={goToStudents} hitSlop={6}>
+            <Ionicons name="chevron-back" size={15} color={colors.accent2} />
+            <Text style={styles.studentsBackLinkText}>Volver a tus alumnos</Text>
+          </Pressable>
+        )}
+
+        {isTrainingForOther && targetName && (
+          <View style={styles.trainerBanner}>
+            <Ionicons name="person-circle-outline" size={16} color={colors.accent2} />
+            <Text style={styles.trainerBannerText}>Estás cargando pesos para {targetName}.</Text>
+          </View>
+        )}
 
         {openDay === null ? (
           <>
+            <View style={styles.heroCard}>
+              <View style={styles.heroTop}>
+                <RingProgress pct={routinePct} size={64} />
+                <View style={styles.heroInfo}>
+                  <Text style={styles.heroEyebrow}>Progreso de la rutina</Text>
+                  <Text style={styles.heroTitle} numberOfLines={2}>
+                    {routine.nombre}
+                  </Text>
+                  <Text style={styles.heroSub}>
+                    Semana {semana.numero} de {routine.semanas.length}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.heroProgressWrap}>
+                <View style={styles.heroProgressHead}>
+                  <Text style={styles.heroProgressLabel}>Progreso de esta semana</Text>
+                  <Text style={styles.heroProgressPct}>{weekPct}%</Text>
+                </View>
+                <View style={styles.progressBarBg}>
+                  <View style={[styles.progressBarFill, { width: `${weekPct}%` }]} />
+                </View>
+              </View>
+            </View>
+
             <View style={styles.weekChipsRow}>
               {routine.semanas.map((s, i) => (
                 <Pressable key={s.id} style={[styles.weekChip, i === weekIndex && styles.weekChipActive]} onPress={() => setWeekIndex(i)}>
@@ -386,11 +436,7 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
               ))}
             </View>
 
-            <View style={styles.statusRow}>
-              <Text style={styles.statusBadge}>Progreso de la semana: {weekProgress(semana, latestWeights)}%</Text>
-              <Text style={styles.statusBadge}>Progreso de la rutina: {routineProgress(routine, latestWeights)}%</Text>
-            </View>
-
+            <Text style={styles.sectionLabel}>Días de esta semana</Text>
             <View style={styles.daysList}>
               {semana.dias.map((dia, diaIndex) => {
                 const pct = dayProgress(dia, latestWeights);
@@ -399,8 +445,12 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
                 const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e, latestWeights)).length;
                 const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
                 return (
-                  <Pressable key={dia.id} style={styles.dayRow} onPress={() => handleOpenDay(diaIndex)}>
-                    <RingProgress pct={pct} size={40} />
+                  <Pressable
+                    key={dia.id}
+                    style={({ pressed }) => [styles.dayRow, done && styles.dayRowDone, pressed && styles.dayRowPressed]}
+                    onPress={() => handleOpenDay(diaIndex)}
+                  >
+                    <RingProgress pct={pct} size={44} />
                     <View style={styles.dayRowInfo}>
                       <Text style={styles.dayRowTitle}>{dayDisplayLabel(dia.dia_semana, dia.nombre)}</Text>
                       <Text style={styles.dayRowSubtitle}>{subtitle}</Text>
@@ -414,13 +464,14 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
           </>
         ) : (
           <>
-            <Pressable style={styles.backLink} onPress={handleBackToWeek}>
+            <Pressable style={styles.backLink} onPress={handleBackToWeek} hitSlop={6}>
               <Ionicons name="chevron-back" size={16} color={colors.accent2} />
               <Text style={styles.backLinkText}>Volver a la semana</Text>
             </Pressable>
 
             <Text style={styles.dayTitle}>{dayDisplayLabel(semana.dias[openDay].dia_semana, semana.dias[openDay].nombre)}</Text>
             <Pressable
+              style={styles.helpLinkWrap}
               onPress={() =>
                 Alert.alert(
                   "¿Cómo cargo los pesos?",
@@ -428,7 +479,13 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
                 )
               }
             >
-              <Text style={styles.helpLink}>{routine.nombre} · Semana {semana.numero} · ¿Cómo cargo esto?</Text>
+              <Text style={styles.helpLinkText}>
+                {routine.nombre} · Semana {semana.numero}
+              </Text>
+              <View style={styles.helpLinkBadge}>
+                <Ionicons name="help-circle-outline" size={13} color={colors.accent2} />
+                <Text style={styles.helpLinkBadgeText}>¿Cómo cargo esto?</Text>
+              </View>
             </Pressable>
 
             {semana.dias[openDay].ejercicios
@@ -437,20 +494,27 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
                 const last = latestWeights.get(exc.id);
                 const history = exerciseHistory.get(exc.exercise_id);
                 const unit = inputs.units.get(exc.id) ?? "kg";
-                const rows = exc.mismo_peso ? [{ serie: 1, subLabel: "Anterior" }] : Array.from({ length: exc.serie }, (_, i) => ({ serie: i + 1, subLabel: `Serie ${i + 1} · anterior` }));
+                const rows = exc.mismo_peso ? [{ serie: 1, title: "Peso de hoy" }] : Array.from({ length: exc.serie }, (_, i) => ({ serie: i + 1, title: `Serie ${i + 1}` }));
+                const exerciseDone = isExerciseDone(exc, latestWeights);
 
                 return (
-                  <View key={exc.id} style={styles.excCard}>
+                  <View key={exc.id} style={[styles.excCard, exerciseDone && styles.excCardDone]}>
                     <View style={styles.excHead}>
-                      <Text style={styles.excName}>{exc.nombre_snapshot}</Text>
-                      <Pressable onPress={() => setMenuFor(exc)} hitSlop={8}>
-                        <Ionicons name="ellipsis-vertical" size={16} color={colors.textMuted} />
+                      <View style={styles.excHeadLeft}>
+                        <View style={styles.excNameRow}>
+                          {exerciseDone && <Ionicons name="checkmark-circle" size={16} color={colors.live} style={styles.excDoneIcon} />}
+                          <Text style={styles.excName}>{exc.nombre_snapshot}</Text>
+                        </View>
+                        <Text style={styles.excSub}>
+                          {exc.serie} series x {formatRepe(exc.repe, exc.repe_max)} repeticiones
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => setMenuFor(exc)} hitSlop={10} style={styles.kebabBtn}>
+                        <Ionicons name="ellipsis-vertical" size={18} color={colors.textMuted} />
                       </Pressable>
                     </View>
-                    <Text style={styles.excSub}>
-                      {exc.serie} series x {formatRepe(exc.repe, exc.repe_max)} repeticiones
-                    </Text>
 
+                    <Text style={styles.unitRowLabel}>Unidad</Text>
                     <View style={styles.unitRow}>
                       {UNITS.map((u) => (
                         <Pressable key={u} style={[styles.unitChip, unit === u && styles.unitChipActive]} onPress={() => setUnit(exc.id, u)}>
@@ -459,36 +523,45 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
                       ))}
                     </View>
 
-                    {rows.map(({ serie, subLabel }) => {
-                      const historyEntries = history?.get(serie);
-                      const val = inputs.values.get(rowKey(exc.id, serie)) ?? { peso: "", repe: "" };
-                      return (
-                        <View key={serie} style={styles.serieRow}>
-                          <Text style={styles.serieSub}>
-                            {subLabel}: {previousValuesText(historyEntries)}
-                          </Text>
-                          <View style={styles.serieInputsRow}>
-                            <TextInput
-                              style={styles.serieInput}
-                              placeholder={UNIT_LABELS[unit]}
-                              placeholderTextColor={colors.textMuted}
-                              keyboardType="numeric"
-                              value={val.peso}
-                              onChangeText={(v) => setValue(rowKey(exc.id, serie), { peso: v })}
-                            />
-                            <Text style={styles.serieX}>x</Text>
-                            <TextInput
-                              style={styles.serieInput}
-                              placeholder="reps"
-                              placeholderTextColor={colors.textMuted}
-                              keyboardType="numeric"
-                              value={val.repe}
-                              onChangeText={(v) => setValue(rowKey(exc.id, serie), { repe: v })}
-                            />
+                    <View style={styles.seriesWrap}>
+                      {rows.map(({ serie, title }) => {
+                        const historyEntries = history?.get(serie);
+                        const val = inputs.values.get(rowKey(exc.id, serie)) ?? { peso: "", repe: "" };
+                        return (
+                          <View key={serie} style={styles.serieRow}>
+                            <View style={styles.serieInfo}>
+                              <Text style={styles.serieLabel}>{title}</Text>
+                              <Text style={styles.serieSub}>Anterior: {previousValuesText(historyEntries)}</Text>
+                            </View>
+                            <View style={styles.serieInputsRow}>
+                              <View style={styles.fieldMini}>
+                                <Text style={styles.fieldMiniLabel}>{UNIT_LABELS[unit]}</Text>
+                                <TextInput
+                                  style={styles.fieldMiniInput}
+                                  placeholder="0"
+                                  placeholderTextColor={colors.textMuted}
+                                  keyboardType="numeric"
+                                  value={val.peso}
+                                  onChangeText={(v) => setValue(rowKey(exc.id, serie), { peso: v })}
+                                />
+                              </View>
+                              <Text style={styles.serieX}>×</Text>
+                              <View style={styles.fieldMini}>
+                                <Text style={styles.fieldMiniLabel}>Reps</Text>
+                                <TextInput
+                                  style={styles.fieldMiniInput}
+                                  placeholder="0"
+                                  placeholderTextColor={colors.textMuted}
+                                  keyboardType="numeric"
+                                  value={val.repe}
+                                  onChangeText={(v) => setValue(rowKey(exc.id, serie), { repe: v })}
+                                />
+                              </View>
+                            </View>
                           </View>
-                        </View>
-                      );
-                    })}
+                        );
+                      })}
+                    </View>
 
                     {todayComments.has(exc.id) && (
                       <View style={styles.commentNote}>
@@ -549,6 +622,8 @@ export function PesosScreen({ routineId, uid }: { routineId: string; uid?: strin
         </View>
       )}
 
+      {viewerId && <ReportErrorModal visible={reportModalOpen} userId={viewerId} onClose={() => setReportModalOpen(false)} />}
+
       {saved && <AuthOverlay state={{ kind: "success", text: "¡Peso actualizado con éxito!" }} />}
     </View>
   );
@@ -558,24 +633,50 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "700", textAlign: "center" },
-  scroll: { padding: 16, paddingBottom: 48, gap: 10 },
-  trainerBanner: { color: colors.accent2, fontSize: 12.5, fontWeight: "600", marginBottom: 4 },
-  weekChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
-  weekChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
+  scroll: { padding: 16, paddingBottom: 48, gap: 12 },
+
+  studentsBackLink: { flexDirection: "row", alignItems: "center", gap: 2, marginBottom: 2 },
+  studentsBackLinkText: { color: colors.accent2, fontSize: 13.5, fontWeight: "700" },
+
+  trainerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.input,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  trainerBannerText: { color: colors.accent2, fontSize: 12.5, fontWeight: "600", flex: 1 },
+
+  heroCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    padding: 18,
+    gap: 16,
+  },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 16 },
+  heroInfo: { flex: 1, gap: 2 },
+  heroEyebrow: { color: colors.textMuted, fontSize: 11.5, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  heroTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  heroSub: { color: colors.textMuted, fontSize: 12.5 },
+  heroProgressWrap: { gap: 6 },
+  heroProgressHead: { flexDirection: "row", justifyContent: "space-between" },
+  heroProgressLabel: { color: colors.textMuted, fontSize: 12.5, fontWeight: "600" },
+  heroProgressPct: { color: colors.text, fontSize: 12.5, fontWeight: "700" },
+  progressBarBg: { height: 8, borderRadius: 4, backgroundColor: colors.surface2, overflow: "hidden" },
+  progressBarFill: { height: "100%", backgroundColor: colors.accent2, borderRadius: 4 },
+
+  weekChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  weekChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
   weekChipActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent2 },
   weekChipText: { color: colors.textMuted, fontSize: 12.5, fontWeight: "700" },
   weekChipTextActive: { color: colors.accent2 },
-  statusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
-  statusBadge: {
-    color: colors.textMuted,
-    fontSize: 11.5,
-    fontWeight: "700",
-    backgroundColor: colors.surface2,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    overflow: "hidden",
-  },
+
+  sectionLabel: { color: colors.textMuted, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 2 },
+
   daysList: { gap: 10 },
   dayRow: {
     flexDirection: "row",
@@ -587,43 +688,84 @@ const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: colors.surface,
   },
+  dayRowDone: { borderColor: "rgba(47, 217, 113, 0.35)" },
+  dayRowPressed: { borderColor: colors.accent2 },
   dayRowInfo: { flex: 1, gap: 2 },
   dayRowTitle: { color: colors.text, fontSize: 14.5, fontWeight: "700" },
   dayRowSubtitle: { color: colors.textMuted, fontSize: 12 },
-  dayRowStatus: { color: colors.textMuted, fontSize: 11.5, fontWeight: "700" },
-  dayRowStatusDone: { color: colors.live },
-  backLink: { flexDirection: "row", alignItems: "center", gap: 2, marginBottom: 8 },
+  dayRowStatus: {
+    color: colors.accent2,
+    backgroundColor: colors.accentSoft,
+    fontSize: 11,
+    fontWeight: "700",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    overflow: "hidden",
+  },
+  dayRowStatusDone: { color: colors.live, backgroundColor: colors.liveSoft },
+
+  backLink: { flexDirection: "row", alignItems: "center", gap: 2, marginBottom: 4 },
   backLinkText: { color: colors.accent2, fontSize: 13.5, fontWeight: "700" },
-  dayTitle: { color: colors.text, fontSize: 19, fontWeight: "800" },
-  helpLink: { color: colors.textMuted, fontSize: 12.5, marginBottom: 8, textDecorationLine: "underline" },
-  excCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 16, gap: 8, marginBottom: 4 },
-  excHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  excName: { color: colors.text, fontSize: 15, fontWeight: "700", flex: 1 },
+  dayTitle: { color: colors.text, fontSize: 20, fontWeight: "800" },
+
+  helpLinkWrap: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 4 },
+  helpLinkText: { color: colors.textMuted, fontSize: 12.5 },
+  helpLinkBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+  helpLinkBadgeText: { color: colors.accent2, fontSize: 11.5, fontWeight: "700" },
+
+  excCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 16, gap: 12 },
+  excCardDone: { borderColor: "rgba(47, 217, 113, 0.3)" },
+  excHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  excHeadLeft: { flex: 1, gap: 3 },
+  excNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  excDoneIcon: { marginTop: -1 },
+  excName: { color: colors.text, fontSize: 15.5, fontWeight: "700", flexShrink: 1 },
   excSub: { color: colors.textMuted, fontSize: 12.5 },
-  unitRow: { flexDirection: "row", gap: 8, marginTop: 2 },
+  kebabBtn: { padding: 2 },
+
+  unitRowLabel: { color: colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  unitRow: { flexDirection: "row", gap: 8, marginTop: -6 },
   unitChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   unitChipActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent2 },
   unitChipText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   unitChipTextActive: { color: colors.accent2 },
-  serieRow: { gap: 6, marginTop: 4 },
+
+  seriesWrap: { gap: 14 },
+  serieRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
+  },
+  serieInfo: { flex: 1, gap: 3 },
+  serieLabel: { color: colors.text, fontSize: 13, fontWeight: "700" },
   serieSub: { color: colors.textMuted, fontSize: 11.5 },
-  serieInputsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  serieInput: {
-    flex: 1,
+  serieInputsRow: { flexDirection: "row", alignItems: "flex-end", gap: 6, flexShrink: 0 },
+  fieldMini: { width: 60, gap: 4 },
+  fieldMiniLabel: { color: colors.textMuted, fontSize: 10.5, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.2, textAlign: "center" },
+  fieldMiniInput: {
     backgroundColor: colors.surface2,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.input,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 11,
     color: colors.text,
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
   },
-  serieX: { color: colors.textMuted, fontSize: 13, fontWeight: "700" },
-  commentNote: { backgroundColor: colors.accentSoft, borderRadius: radius.input, padding: 10, marginTop: 4, gap: 2 },
+  serieX: { color: colors.textMuted, fontSize: 13, fontWeight: "700", paddingBottom: 11 },
+
+  commentNote: { backgroundColor: colors.accentSoft, borderRadius: radius.input, padding: 10, gap: 2 },
   commentNoteLabel: { color: colors.accent2, fontSize: 11, fontWeight: "700" },
   commentNoteText: { color: colors.text, fontSize: 13 },
   errorText: { color: colors.errorText, fontSize: 13, textAlign: "center" },
+
   modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10, 12, 15, 0.7)", alignItems: "center", justifyContent: "center", padding: 24 },
   modalCard: { width: "100%", maxWidth: 440, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.card, padding: 24, gap: 10 },
   modalTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },

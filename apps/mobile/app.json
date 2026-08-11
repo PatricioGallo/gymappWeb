@@ -39,6 +39,13 @@
         {
           "photosPermission": "Gym Social necesita acceso a tus fotos para que puedas cambiar tu foto de perfil."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ff8a3d"
+        }
       ]
     ],
     "experiments": {

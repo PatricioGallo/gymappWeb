@@ -5,33 +5,37 @@ import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ActionMenu, type ActionMenuItem } from "@/components/ActionMenu";
+import { AuthOverlay } from "@/components/AuthOverlay";
 import { formatFechaCorta } from "@/lib/dias";
 import { routineLastProgressLabel, routineProgressPct, type RoutineListMode, type RoutineWithCounts, type WeightLogEntry } from "@/lib/profileService";
-import { deleteRoutine, setRoutinePublic } from "@/lib/routineService";
+import { cloneRoutineForUser, deleteRoutine, setRoutinePublic } from "@/lib/routineService";
+import { listSubscribers, type SubscriberListRow } from "@/lib/subscriptionService";
 import { colors, radius } from "@/theme/colors";
 
 import { ConfirmModal } from "./ConfirmModal";
-
-function notImplemented() {
-  Alert.alert("Próximamente", "Esta función todavía no está disponible en la app.");
-}
 
 export function RoutineCard({
   routine,
   mode,
   logs,
   ownerName,
+  viewerId,
+  isTrainer,
   onFinalize,
   onReactivate,
   onDeleted,
+  onActivated,
 }: {
   routine: RoutineWithCounts;
   mode: RoutineListMode;
   logs: WeightLogEntry[];
   ownerName: string | null;
+  viewerId: string;
+  isTrainer: boolean;
   onFinalize: (routine: RoutineWithCounts) => void;
   onReactivate: (routine: RoutineWithCounts) => void;
   onDeleted: (routine: RoutineWithCounts) => void;
+  onActivated: () => void;
 }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,6 +44,11 @@ export function RoutineCard({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
+
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [subscribers, setSubscribers] = useState<SubscriberListRow[]>([]);
+  const [activating, setActivating] = useState(false);
+  const [activated, setActivated] = useState(false);
 
   async function handleToggleVisibility() {
     setTogglingVisibility(true);
@@ -69,6 +78,31 @@ export function RoutineCard({
       setDeleting(false);
       Alert.alert("No se pudo eliminar", "Probá de nuevo en unos segundos.");
     }
+  }
+
+  async function handleActivateFor(targetUserId: string) {
+    setAssignOpen(false);
+    setActivating(true);
+    const { error } = await cloneRoutineForUser(routine.id, targetUserId, { isTemplate: false });
+    setActivating(false);
+    if (error) {
+      Alert.alert("No se pudo activar", error);
+      return;
+    }
+    setActivated(true);
+    setTimeout(() => {
+      setActivated(false);
+      onActivated();
+    }, 1300);
+  }
+
+  async function handlePressActivate() {
+    if (!isTrainer) {
+      handleActivateFor(viewerId);
+      return;
+    }
+    setSubscribers(await listSubscribers(viewerId).catch(() => []));
+    setAssignOpen(true);
   }
 
   const menuItems: ActionMenuItem[] = [
@@ -141,7 +175,7 @@ export function RoutineCard({
           </>
         )}
         {mode === "historic" && <SmallGradientButton title="Reactivar" onPress={() => onReactivate(routine)} />}
-        {mode === "saved" && <SmallGradientButton title="Activar o asignar" onPress={notImplemented} />}
+        {mode === "saved" && <SmallGradientButton title={isTrainer ? "Activar o asignar" : "Activar"} onPress={handlePressActivate} />}
       </View>
 
       <ActionMenu visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} />
@@ -158,6 +192,18 @@ export function RoutineCard({
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
       />
+
+      <ActionMenu
+        visible={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        items={[
+          { label: "Vos mismo", onPress: () => handleActivateFor(viewerId) },
+          ...(subscribers.length === 0
+            ? [{ label: "Todavía no tenés alumnos aceptados", onPress: () => {} }]
+            : subscribers.map((s) => ({ label: `${s.nombre} ${s.apellido}`.trim() || s.username, onPress: () => handleActivateFor(s.id) }))),
+        ]}
+      />
+      {(activating || activated) && <AuthOverlay state={activating ? { kind: "loading", text: "Activando..." } : { kind: "success", text: "¡Rutina activada con éxito!" }} />}
     </View>
   );
 }

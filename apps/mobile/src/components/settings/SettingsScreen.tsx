@@ -7,13 +7,14 @@ import { BlockedTab } from "@/components/settings/BlockedTab";
 import { EditProfileTab } from "@/components/settings/EditProfileTab";
 import { NotificationsTab } from "@/components/settings/NotificationsTab";
 import { PrivacyTab } from "@/components/settings/PrivacyTab";
+import { VerificationTab } from "@/components/settings/VerificationTab";
 import { getProfile, type Profile } from "@/lib/profileService";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/theme/colors";
 
-type SettingsTab = "edit" | "privacy" | "notifications" | "blocked";
+type SettingsTab = "edit" | "privacy" | "notifications" | "blocked" | "verification";
 
-const TABS: { key: SettingsTab; label: string }[] = [
+const BASE_TABS: { key: SettingsTab; label: string }[] = [
   { key: "edit", label: "Editar perfil" },
   { key: "privacy", label: "Privacidad" },
   { key: "notifications", label: "Notificaciones" },
@@ -55,6 +56,9 @@ export function SettingsScreen() {
     );
   }
 
+  const canVerify = profile.user_type === "entrenador" || profile.user_type === "gimnasio";
+  const TABS = canVerify ? [...BASE_TABS, { key: "verification" as const, label: "Verificación" }] : BASE_TABS;
+
   return (
     <View style={styles.flex}>
       <ScreenHeader title="Configuración" onBack={() => router.back()} avatarUrl={profile.avatar_url} />
@@ -73,6 +77,7 @@ export function SettingsScreen() {
           {tab === "privacy" && <PrivacyTab profile={profile} userId={userId} onSaved={handleSaved} />}
           {tab === "notifications" && <NotificationsTab profile={profile} userId={userId} onSaved={handleSaved} />}
           {tab === "blocked" && <BlockedTab userId={userId} />}
+          {tab === "verification" && canVerify && <VerificationTab profile={profile} userId={userId} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

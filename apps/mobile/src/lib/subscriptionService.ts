@@ -3,6 +3,18 @@ import type { Tables } from "@/types/database";
 
 export type SubscriptionStatus = "none" | "pending" | "accepted" | "ended" | "self";
 
+export interface SubscriptionRequestRow {
+  id: string;
+  subscriberId: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
+  createdAt: string;
+}
+
 export interface SubscriberListRow {
   id: string;
   username: string;
@@ -12,6 +24,18 @@ export interface SubscriberListRow {
   userType: Tables<"profiles">["user_type"];
   isVerified: boolean;
   subscribedAt: string;
+}
+
+export interface HistoricSubscriberRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
+  subscribedAt: string;
+  endedAt: string;
 }
 
 export async function getSubscriberCount(userId: string): Promise<number> {
@@ -64,4 +88,88 @@ export async function listSubscribers(userId: string, search = ""): Promise<Subs
 /** Del lado del entrenador: cancela la suscripcion de cualquiera de sus alumnos en cualquier momento. */
 export async function removeSubscriber(trainerId: string, subscriberId: string): Promise<{ error?: string }> {
   return unsubscribeOrCancel(subscriberId, trainerId);
+}
+
+export async function getPendingSubscriptionRequestCount(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("trainer_id", userId)
+    .eq("status", "pending");
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function listSubscriptionRequests(userId: string): Promise<SubscriptionRequestRow[]> {
+  const { data: rows, error } = await supabase
+    .from("subscriptions")
+    .select("id, created_at, subscriber_id")
+    .eq("trainer_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  if (!rows || rows.length === 0) return [];
+
+  const subscriberIds = [...new Set(rows.map((r) => r.subscriber_id))];
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles_public")
+    .select("id, username, nombre, apellido, avatar_url, user_type, is_verified")
+    .in("id", subscriberIds);
+  if (profilesError) throw profilesError;
+
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  return rows
+    .map((r) => {
+      const p = profileById.get(r.subscriber_id);
+      if (!p || !p.user_type) return null;
+      return {
+        id: r.id,
+        subscriberId: r.subscriber_id,
+        username: p.username ?? "",
+        nombre: p.nombre ?? "",
+        apellido: p.apellido ?? "",
+        avatarUrl: p.avatar_url,
+        userType: p.user_type,
+        isVerified: p.is_verified ?? false,
+        createdAt: r.created_at,
+      };
+    })
+    .filter((r): r is SubscriptionRequestRow => r !== null);
+}
+
+export async function acceptSubscriptionRequest(subscriptionId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("subscriptions").update({ status: "accepted" }).eq("id", subscriptionId);
+  if (error) return { error: "No se pudo aceptar la solicitud. Probá de nuevo." };
+  return {};
+}
+
+export async function rejectSubscriptionRequest(subscriptionId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("subscriptions").delete().eq("id", subscriptionId);
+  if (error) return { error: "No se pudo rechazar la solicitud. Probá de nuevo." };
+  return {};
+}
+
+// La RPC (SECURITY DEFINER) hace el mismo chequeo de privacidad que list_subscribers.
+export async function listHistoricSubscribers(userId: string, search = ""): Promise<HistoricSubscriberRow[]> {
+  const { data, error } = await supabase.rpc("list_historic_subscribers", { p_user_id: userId, p_search: search.trim() || undefined, p_limit: 100 });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    userType: r.user_type,
+    isVerified: r.is_verified,
+    subscribedAt: r.subscribed_at,
+    endedAt: r.ended_at,
+  }));
+}
+
+/** Borra definitivamente un registro historico (status='ended'). No afecta suscripciones activas. */
+export async function deleteHistoricSubscription(trainerId: string, subscriberId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("subscriptions").delete().eq("trainer_id", trainerId).eq("subscriber_id", subscriberId).eq("status", "ended");
+  if (error) return { error: "No se pudo eliminar el registro. Probá de nuevo." };
+  return {};
 }

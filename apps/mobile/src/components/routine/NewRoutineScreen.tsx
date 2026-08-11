@@ -8,11 +8,12 @@ import { AuthOverlay } from "@/components/AuthOverlay";
 import { FormField } from "@/components/FormField";
 import { OutlineButton } from "@/components/OutlineButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { ActionMenu, type ActionMenuItem } from "@/components/ActionMenu";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { diaLabel, DIA_LABELS } from "@/lib/dias";
 import { type Exercise, listExercises } from "@/lib/exerciseService";
-import { getProfile, type Profile } from "@/lib/profileService";
-import { createRoutine, type NewDayInput } from "@/lib/routineService";
+import { getProfile, listRoutines, type Profile, type RoutineWithCounts } from "@/lib/profileService";
+import { cloneRoutineForUser, createRoutine, type NewDayInput } from "@/lib/routineService";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/theme/colors";
 
@@ -53,6 +54,9 @@ export function NewRoutineScreen() {
   const [pickerTarget, setPickerTarget] = useState<{ dayIndex: number; exerciseIndex: number } | null>(null);
 
   const [savePhase, setSavePhase] = useState<SavePhase>({ kind: "idle" });
+  const [ownRoutinesOpen, setOwnRoutinesOpen] = useState(false);
+  const [ownRoutines, setOwnRoutines] = useState<RoutineWithCounts[]>([]);
+  const [cloningBase, setCloningBase] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -69,8 +73,30 @@ export function NewRoutineScreen() {
     setStep("setup");
   }
 
-  function handleBrowseRoutines() {
-    Alert.alert("Próximamente", "Elegir una rutina existente como base todavía no está disponible en la app.");
+  async function handleBrowseRoutines() {
+    if (!userId) return;
+    const [active, historic, saved] = await Promise.all([
+      listRoutines(userId, "active").catch(() => []),
+      listRoutines(userId, "historic").catch(() => []),
+      listRoutines(userId, "saved").catch(() => []),
+    ]);
+    setOwnRoutines([...active, ...historic, ...saved]);
+    setOwnRoutinesOpen(true);
+  }
+
+  async function handleUseAsBase(routineId: string) {
+    if (!userId || !profile) return;
+    setOwnRoutinesOpen(false);
+    setCloningBase(true);
+    const isTemplate = profile.user_type === "usuario" || profile.user_type === "entrenador" || profile.user_type === "admin";
+    const { error } = await cloneRoutineForUser(routineId, userId, { isTemplate });
+    setCloningBase(false);
+    if (error) {
+      Alert.alert("No se pudo crear la rutina", error);
+      return;
+    }
+    setSavePhase({ kind: "success", message: isTemplate ? "¡Rutina guardada con éxito! Espere, será redirigido." : "¡Rutina creada con éxito! Espere, será redirigido." });
+    setTimeout(() => router.replace("/"), 1800);
   }
 
   function handleSetupSubmit() {
@@ -322,8 +348,8 @@ export function NewRoutineScreen() {
               <View style={styles.chooserIcon}>
                 <Ionicons name="list-outline" size={22} color={colors.accent2} />
               </View>
-              <Text style={styles.chooserCardTitle}>Ver rutinas</Text>
-              <Text style={styles.chooserCardSubtitle}>Rutinas de Gym Social, de gente que seguís o tuyas propias</Text>
+              <Text style={styles.chooserCardTitle}>Usar una rutina tuya como base</Text>
+              <Text style={styles.chooserCardSubtitle}>Elegí entre tus rutinas activas, históricas o guardadas</Text>
             </Pressable>
           </View>
         )}
@@ -425,6 +451,17 @@ export function NewRoutineScreen() {
         <AuthOverlay state={{ kind: "loading", text: savePhase.kind === "creating" ? "Creando rutina..." : "Activando rutina..." }} />
       )}
       {savePhase.kind === "success" && <AuthOverlay state={{ kind: "success", text: savePhase.message }} />}
+
+      <ActionMenu
+        visible={ownRoutinesOpen}
+        onClose={() => setOwnRoutinesOpen(false)}
+        items={
+          ownRoutines.length === 0
+            ? ([{ label: "Todavía no tenés rutinas propias", onPress: () => {} }] as ActionMenuItem[])
+            : ownRoutines.map((r) => ({ label: r.nombre, onPress: () => handleUseAsBase(r.id) }))
+        }
+      />
+      {cloningBase && <AuthOverlay state={{ kind: "loading", text: "Creando rutina..." }} />}
     </KeyboardAvoidingView>
   );
 }

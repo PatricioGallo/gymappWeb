@@ -8,7 +8,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanim
 
 import { ActionMenu, type ActionMenuItem } from "@/components/ActionMenu";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { getFollowCounts } from "@/lib/followService";
+import { getFollowCounts, getPendingFollowRequestCount } from "@/lib/followService";
 import {
   computeWeeklyFrequency,
   finishRoutine,
@@ -28,7 +28,7 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "@/lib/profileService";
-import { getSubscriberCount } from "@/lib/subscriptionService";
+import { getPendingSubscriptionRequestCount, getSubscriberCount } from "@/lib/subscriptionService";
 import { getPlatform } from "@/lib/socialLinks";
 import { getUserTypeLabel } from "@/lib/verifiedBadge";
 import { colors, radius } from "@/theme/colors";
@@ -50,10 +50,6 @@ const PLATFORM_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   other: "link",
 };
 
-function notImplemented() {
-  Alert.alert("Próximamente", "Esta función todavía no está disponible en la app.");
-}
-
 type ConfirmAction = { kind: "finalize" | "reactivate"; routine: RoutineWithCounts };
 
 export function ProfileScreen({ userId }: { userId: string }) {
@@ -63,6 +59,8 @@ export function ProfileScreen({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [subscriberCount, setSubscriberCount] = useState<number | null>(null);
+  const [followReqCount, setFollowReqCount] = useState(0);
+  const [subReqCount, setSubReqCount] = useState(0);
   const [logs, setLogs] = useState<WeightLogEntry[]>([]);
   const [activeRoutinesCount, setActiveRoutinesCount] = useState(0);
 
@@ -107,21 +105,25 @@ export function ProfileScreen({ userId }: { userId: string }) {
   );
 
   const loadAll = useCallback(async () => {
-    const [profileData, counts, weightLogs, activeList] = await Promise.all([
+    const [profileData, counts, weightLogs, activeList, pendingFollowReqs] = await Promise.all([
       getProfile(userId),
       getFollowCounts(userId),
       listWeightLogsWithContext(userId),
       listRoutines(userId, "active"),
+      getPendingFollowRequestCount(userId).catch(() => 0),
     ]);
     setProfile(profileData);
     setFollowCounts(counts);
     setLogs(weightLogs);
     setActiveRoutinesCount(activeList.length);
+    setFollowReqCount(pendingFollowReqs);
 
     if (profileData?.user_type === "entrenador") {
       setSubscriberCount(await getSubscriberCount(userId));
+      setSubReqCount(await getPendingSubscriptionRequestCount(userId).catch(() => 0));
     } else {
       setSubscriberCount(null);
+      setSubReqCount(0);
     }
 
     setRoutineTab("active");
@@ -218,8 +220,14 @@ export function ProfileScreen({ userId }: { userId: string }) {
   const top = mostFrequentExercise(logs);
   const excProgress = top ? logs.filter((l) => l.exerciseId === top.id) : [];
 
+  const isStaff = profile.user_type === "admin" || profile.user_type === "colaborador";
   const menuItems: ActionMenuItem[] = [
     { label: "Compartir perfil", onPress: handleShare },
+    ...(isStaff ? [{ label: "Administrar", onPress: () => router.push("/admin" as never) }] : []),
+    { label: followReqCount > 0 ? `Solicitudes de seguimiento (${followReqCount})` : "Solicitudes de seguimiento", onPress: () => router.push("/follow-requests") },
+    ...(isEntrenador
+      ? [{ label: subReqCount > 0 ? `Solicitudes de suscripción (${subReqCount})` : "Solicitudes de suscripción", onPress: () => router.push("/subscription-requests") }]
+      : []),
     { label: "Configuración", onPress: () => router.push("/settings") },
     { label: "Reportar un error", onPress: () => setReportModalOpen(true) },
   ];
@@ -309,7 +317,9 @@ export function ProfileScreen({ userId }: { userId: string }) {
           <QuickCard icon="barbell" title="Tus rutinas" subtitle="Ver y gestionar tus rutinas activas" onPress={scrollToRoutines} />
           <QuickCard icon="stats-chart" title="Progreso completo" subtitle="Gráficos detallados por ejercicio" onPress={() => router.push("/progress")} />
           <QuickCard icon="add-circle" title="Nueva rutina" subtitle="Armá una rutina desde cero" onPress={() => router.push("/routine/new")} />
-          {isEntrenador && <QuickCard icon="people" title="Tus alumnos" subtitle="Rutinas, progreso y comentarios de tus suscriptores" onPress={notImplemented} />}
+          {isEntrenador && (
+            <QuickCard icon="people" title="Tus alumnos" subtitle="Rutinas, progreso y comentarios de tus suscriptores" onPress={() => router.push("/students" as never)} />
+          )}
         </View>
       </View>
 
@@ -383,11 +393,17 @@ export function ProfileScreen({ userId }: { userId: string }) {
                       mode={routineTab}
                       logs={logs}
                       ownerName={ownerName}
+                      viewerId={userId}
+                      isTrainer={isEntrenador}
                       onFinalize={(r) => setConfirmAction({ kind: "finalize", routine: r })}
                       onReactivate={(r) => setConfirmAction({ kind: "reactivate", routine: r })}
                       onDeleted={async () => {
                         await loadRoutinesForTab(routineTab);
                         if (routineTab === "active") setActiveRoutinesCount((await listRoutines(userId, "active")).length);
+                      }}
+                      onActivated={async () => {
+                        await loadRoutinesForTab(routineTab);
+                        setActiveRoutinesCount((await listRoutines(userId, "active")).length);
                       }}
                     />
                   );

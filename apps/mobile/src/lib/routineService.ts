@@ -142,3 +142,37 @@ export async function createRoutine(
   }
   return { id: data as unknown as string };
 }
+
+/** Clona una rutina existente (plantilla propia u otra) para otro usuario, o para uno mismo
+ * ("Copiar a mis guardadas"). Toma la estructura de la semana 1 como base y la repite en todas
+ * las semanas -- mismo comportamiento que "openClonePreview" en la web (rutins.ts). */
+export async function cloneRoutineForUser(
+  sourceRoutineId: string,
+  targetUserId: string,
+  opts: { isTemplate?: boolean; isPublic?: boolean; provenanceUserId?: string | null } = {}
+): Promise<{ id?: string; error?: string }> {
+  const detail = await getRoutineDetail(sourceRoutineId);
+  if (!detail || detail.semanas.length === 0) return { error: "No se pudo cargar la rutina de origen." };
+
+  const baseWeek = detail.semanas[0];
+  const dias: NewDayInput[] = baseWeek.dias.map((d) => ({
+    dia_semana: d.dia_semana,
+    nombre: d.nombre,
+    ejercicios: d.ejercicios.map((e, orden) => ({
+      exercise_id: e.exercise_id,
+      nombre_snapshot: e.nombre_snapshot,
+      info_snapshot: e.info_snapshot,
+      serie: e.serie,
+      repe: e.repe,
+      repe_max: e.repe_max,
+      nota: e.nota ?? "",
+      es_medible: e.es_medible,
+      mismo_peso: e.mismo_peso,
+      orden,
+    })),
+  }));
+
+  const provenanceUserId = detail.copied_from_user_id ?? opts.provenanceUserId ?? undefined;
+
+  return createRoutine(targetUserId, detail.nombre, detail.semanas.length, dias, opts.isPublic ?? false, opts.isTemplate ?? false, provenanceUserId);
+}

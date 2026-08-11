@@ -11,6 +11,7 @@ import { Logo } from "@/components/Logo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ProfileScreen } from "@/components/profile/ProfileScreen";
 import { signIn } from "@/lib/authService";
+import { registerForPushNotifications } from "@/lib/pushService";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/theme/colors";
 
@@ -31,6 +32,10 @@ export default function Index() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (session?.user.id) void registerForPushNotifications(session.user.id);
+  }, [session?.user.id]);
 
   if (session === undefined) {
     return (

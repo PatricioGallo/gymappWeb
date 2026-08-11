@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/components/profile/Avatar";
 import { Logo } from "@/components/Logo";
 import { signOut } from "@/lib/authService";
+import { getUnreadConversationCount } from "@/lib/chatService";
 import { getUnreadNotificationCount, markAllNotificationsRead } from "@/lib/notificationService";
 import { colors } from "@/theme/colors";
 
@@ -27,6 +28,7 @@ export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onB
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +36,11 @@ export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onB
       getUnreadNotificationCount()
         .then((count) => {
           if (!cancelled) setUnreadCount(count);
+        })
+        .catch(() => {});
+      getUnreadConversationCount()
+        .then((count) => {
+          if (!cancelled) setUnreadChatCount(count);
         })
         .catch(() => {});
     }
@@ -82,6 +89,15 @@ export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onB
       <View style={styles.rightGroup}>
         <Pressable onPress={() => router.push("/search")} hitSlop={8} style={styles.bellBtn}>
           <Ionicons name="search" size={22} color={colors.text} />
+        </Pressable>
+
+        <Pressable onPress={() => router.push("/chats" as never)} hitSlop={8} style={styles.bellBtn}>
+          <Ionicons name={unreadChatCount > 0 ? "chatbubble" : "chatbubble-outline"} size={21} color={colors.text} />
+          {unreadChatCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadChatCount > 9 ? "9+" : String(unreadChatCount)}</Text>
+            </View>
+          )}
         </Pressable>
 
         <Pressable onPress={handleBellPress} hitSlop={8} style={styles.bellBtn}>

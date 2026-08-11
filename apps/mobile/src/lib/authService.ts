@@ -1,5 +1,6 @@
-import { supabase } from "./supabaseClient";
+import { unregisterCurrentDeviceToken } from "./pushService";
 import { isReservedUsername } from "./reservedUsernames";
+import { supabase } from "./supabaseClient";
 
 export interface SignUpFields {
   email: string;
@@ -98,5 +99,9 @@ export async function signIn(identifier: string, password: string): Promise<{ er
 }
 
 export async function signOut(): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session?.user.id) await unregisterCurrentDeviceToken(session.user.id);
   await supabase.auth.signOut();
 }

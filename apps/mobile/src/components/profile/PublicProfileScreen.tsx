@@ -24,6 +24,8 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "@/lib/profileService";
+import { getOrCreateConversation } from "@/lib/chatService";
+import { cloneRoutineForUser } from "@/lib/routineService";
 import { getPlatform } from "@/lib/socialLinks";
 import { getSubscriberCount, getSubscriptionStatus, subscribeToTrainer, unsubscribeOrCancel, type SubscriptionStatus } from "@/lib/subscriptionService";
 import { supabase } from "@/lib/supabaseClient";
@@ -47,10 +49,6 @@ const PLATFORM_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   x: "logo-twitter",
   other: "link",
 };
-
-function notImplemented() {
-  Alert.alert("Próximamente", "Esta función todavía no está disponible en la app.");
-}
 
 interface TargetProfile {
   id: string;
@@ -105,6 +103,10 @@ export function PublicProfileScreen({ username }: { username: string }) {
 
   const [logs, setLogs] = useState<WeightLogEntry[]>([]);
   const [routines, setRoutines] = useState<RoutineWithCounts[]>([]);
+  const [viewerCanCopyToSaved, setViewerCanCopyToSaved] = useState(false);
+  const [copyingRoutine, setCopyingRoutine] = useState<RoutineWithCounts | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportUserOpen, setReportUserOpen] = useState(false);
@@ -112,6 +114,7 @@ export function PublicProfileScreen({ username }: { username: string }) {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockSuccess, setBlockSuccess] = useState(false);
+  const [messageBusy, setMessageBusy] = useState(false);
 
   const load = useCallback(async () => {
     const {
@@ -119,7 +122,11 @@ export function PublicProfileScreen({ username }: { username: string }) {
     } = await supabase.auth.getSession();
     const myId = session?.user.id ?? null;
     setViewerId(myId);
-    if (myId) getProfile(myId).then((p) => setViewerAvatarUrl(p?.avatar_url ?? null));
+    if (myId)
+      getProfile(myId).then((p) => {
+        setViewerAvatarUrl(p?.avatar_url ?? null);
+        setViewerCanCopyToSaved(p?.user_type === "entrenador" || p?.user_type === "usuario" || p?.user_type === "admin");
+      });
 
     const full = await getProfileByUsername(username);
     const basic = full ? null : await getProfileBasicByUsername(username);
@@ -242,6 +249,35 @@ export function PublicProfileScreen({ username }: { username: string }) {
       }
       setSubscriptionStatus("none");
     }
+  }
+
+  async function handleMessagePress() {
+    if (!target) return;
+    setMessageBusy(true);
+    const { id, error } = await getOrCreateConversation(target.id);
+    setMessageBusy(false);
+    if (error || !id) {
+      Alert.alert("No se pudo abrir la conversación", error ?? "Probá de nuevo.");
+      return;
+    }
+    router.push({ pathname: "/chat/[conversationId]", params: { conversationId: id } });
+  }
+
+  async function handleConfirmCopy() {
+    if (!viewerId || !copyingRoutine) return;
+    setCopying(true);
+    const { error } = await cloneRoutineForUser(copyingRoutine.id, viewerId, { isTemplate: true, provenanceUserId: target?.id ?? null });
+    setCopying(false);
+    if (error) {
+      setCopyingRoutine(null);
+      Alert.alert("No se pudo copiar", error);
+      return;
+    }
+    setCopySuccess(true);
+    setTimeout(() => {
+      setCopySuccess(false);
+      setCopyingRoutine(null);
+    }, 1400);
   }
 
   async function handleConfirmBlock() {
@@ -392,7 +428,7 @@ export function PublicProfileScreen({ username }: { username: string }) {
         )}
 
         <View style={styles.profileActions}>
-          <Pressable style={styles.outlineActionButton} onPress={notImplemented}>
+          <Pressable style={styles.outlineActionButton} onPress={handleMessagePress} disabled={messageBusy}>
             <Text style={styles.outlineActionText}>Mensaje</Text>
           </Pressable>
           {showFollowBtn && (
@@ -476,7 +512,13 @@ export function PublicProfileScreen({ username }: { username: string }) {
                 ) : (
                   <View style={styles.routinesList}>
                     {routines.map((routine) => (
-                      <ViewOnlyRoutineCard key={routine.id} routine={routine} onPress={notImplemented} />
+                      <ViewOnlyRoutineCard
+                        key={routine.id}
+                        routine={routine}
+                        canCopy={viewerCanCopyToSaved && routine.is_public}
+                        onView={() => router.push({ pathname: "/routine/view/[routineId]", params: { routineId: routine.id } })}
+                        onCopy={() => setCopyingRoutine(routine)}
+                      />
                     ))}
                   </View>
                 )}
@@ -513,6 +555,18 @@ export function PublicProfileScreen({ username }: { username: string }) {
         onConfirm={handleConfirmBlock}
         onCancel={() => setBlockConfirmOpen(false)}
       />
+      <ConfirmModal
+        visible={copyingRoutine !== null}
+        title="Copiar a mis guardadas"
+        subtitle={`Se va a guardar una copia de "${copyingRoutine?.nombre}" en tus rutinas guardadas, con los mismos ejercicios.`}
+        confirmLabel="Guardar copia"
+        loadingText="Copiando..."
+        successText="¡Copiada a tus guardadas!"
+        loading={copying}
+        success={copySuccess}
+        onConfirm={handleConfirmCopy}
+        onCancel={() => setCopyingRoutine(null)}
+      />
     </View>
   );
 }
@@ -526,12 +580,27 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ViewOnlyRoutineCard({ routine, onPress }: { routine: RoutineWithCounts; onPress: () => void }) {
+function ViewOnlyRoutineCard({
+  routine,
+  canCopy,
+  onView,
+  onCopy,
+}: {
+  routine: RoutineWithCounts;
+  canCopy: boolean;
+  onView: () => void;
+  onCopy: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuItems: ActionMenuItem[] = [{ label: "Ver", onPress: onView }, ...(canCopy ? [{ label: "Copiar a mis guardadas", onPress: onCopy }] : [])];
+
   return (
-    <Pressable style={styles.routineCard} onPress={onPress}>
+    <View style={styles.routineCard}>
       <View style={styles.routineTopRow}>
         <Text style={styles.routineStartedTag}>Iniciada el {formatFechaCorta(routine.fecha_inicio)}</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Pressable onPress={() => setMenuOpen(true)} hitSlop={8}>
+          <Ionicons name="ellipsis-vertical" size={18} color={colors.textMuted} />
+        </Pressable>
       </View>
       <Text style={styles.routineTitle}>{routine.nombre}</Text>
       <View style={styles.routineStatsGrid}>
@@ -548,7 +617,8 @@ function ViewOnlyRoutineCard({ routine, onPress }: { routine: RoutineWithCounts;
           <Text style={styles.routineStatValue}>{routine.ejerciciosCount}</Text>
         </View>
       </View>
-    </Pressable>
+      <ActionMenu visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} />
+    </View>
   );
 }
 
