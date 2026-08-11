@@ -29,6 +29,21 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return data;
 }
 
+/** Fila completa (incluye email): solo la ve el dueño, un admin o un entrenador con
+ * rutinas asignadas al usuario, via RLS. Si no hay acceso completo devuelve null. */
+export async function getProfileByUsername(username: string): Promise<Profile | null> {
+  const { data, error } = await supabase.from("profiles").select("*").eq("username", username).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** Fallback publico (sin email/settings) para cuando getProfileByUsername no devuelve nada. */
+export async function getProfileBasicByUsername(username: string): Promise<ProfileBasic | null> {
+  const { data, error } = await supabase.from("profiles_public").select("*").eq("username", username).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 /** Trae varios perfiles básicos de una vez (ej. quién asignó/copió una rutina), indexados por id. */
 export async function getProfilesBasicByIds(ids: (string | null | undefined)[]): Promise<Map<string, ProfileBasic>> {
   const uniqueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];

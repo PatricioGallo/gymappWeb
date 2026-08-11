@@ -19,8 +19,8 @@ const POLL_INTERVAL_MS = 60000;
 
 /**
  * Header consistente en todas las pantallas: flecha atrás (si aplica) +
- * título centrado (o el logo, en el perfil) + campana de notificaciones y
- * foto de perfil a la derecha (la foto abre el menú de salir).
+ * título centrado (o el logo, en el perfil) + lupa de búsqueda, campana de
+ * notificaciones y foto de perfil a la derecha (la foto abre el menú de salir).
  */
 export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onBack?: () => void; avatarUrl: string | null }) {
   const insets = useSafeAreaInsets();
@@ -80,6 +80,10 @@ export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onB
       )}
 
       <View style={styles.rightGroup}>
+        <Pressable onPress={() => router.push("/search")} hitSlop={8} style={styles.bellBtn}>
+          <Ionicons name="search" size={22} color={colors.text} />
+        </Pressable>
+
         <Pressable onPress={handleBellPress} hitSlop={8} style={styles.bellBtn}>
           <Ionicons name={unreadCount > 0 ? "notifications" : "notifications-outline"} size={22} color={colors.text} />
           {unreadCount > 0 && (
