@@ -1,25 +1,62 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/profile/Avatar";
 import { Logo } from "@/components/Logo";
 import { signOut } from "@/lib/authService";
+import { getUnreadNotificationCount, markAllNotificationsRead } from "@/lib/notificationService";
 import { colors } from "@/theme/colors";
 
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 
 const AVATAR_MENU_ITEMS: ActionMenuItem[] = [{ label: "Cerrar sesión", onPress: () => signOut(), danger: true }];
 
+// Igual que en la web (src/lib/notifications.ts): polling, no realtime.
+const POLL_INTERVAL_MS = 60000;
+
 /**
  * Header consistente en todas las pantallas: flecha atrás (si aplica) +
- * título centrado (o el logo, en el perfil) + foto de perfil a la derecha
- * que abre el menú de salir.
+ * título centrado (o el logo, en el perfil) + campana de notificaciones y
+ * foto de perfil a la derecha (la foto abre el menú de salir).
  */
 export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onBack?: () => void; avatarUrl: string | null }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    function refresh() {
+      getUnreadNotificationCount()
+        .then((count) => {
+          if (!cancelled) setUnreadCount(count);
+        })
+        .catch(() => {});
+    }
+
+    refresh();
+    const interval = setInterval(refresh, POLL_INTERVAL_MS);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refresh();
+    });
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, []);
+
+  async function handleBellPress() {
+    // Igual que en el header mobile de la web: abrir la campana marca todo
+    // como leído y lleva directo al listado completo (no hay dropdown).
+    setUnreadCount(0);
+    router.push("/notifications");
+    await markAllNotificationsRead().catch(() => {});
+  }
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
@@ -42,9 +79,20 @@ export function ScreenHeader({ title, onBack, avatarUrl }: { title?: string; onB
         <Logo height={40} />
       )}
 
-      <Pressable onPress={() => setMenuOpen(true)} hitSlop={8}>
-        <Avatar uri={avatarUrl} size={44} />
-      </Pressable>
+      <View style={styles.rightGroup}>
+        <Pressable onPress={handleBellPress} hitSlop={8} style={styles.bellBtn}>
+          <Ionicons name={unreadCount > 0 ? "notifications" : "notifications-outline"} size={22} color={colors.text} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? "9+" : String(unreadCount)}</Text>
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable onPress={() => setMenuOpen(true)} hitSlop={8}>
+          <Avatar uri={avatarUrl} size={44} />
+        </Pressable>
+      </View>
 
       <ActionMenu visible={menuOpen} onClose={() => setMenuOpen(false)} items={AVATAR_MENU_ITEMS} />
     </View>
@@ -65,4 +113,19 @@ const styles = StyleSheet.create({
   side: { width: 40, justifyContent: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   title: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  rightGroup: { flexDirection: "row", alignItems: "center", gap: 14 },
+  bellBtn: { width: 26, height: 26, alignItems: "center", justifyContent: "center" },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  badgeText: { color: colors.text, fontSize: 10, fontWeight: "700" },
 });
