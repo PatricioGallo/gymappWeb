@@ -1,13 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { ActionMenu, type ActionMenuItem } from "@/components/ActionMenu";
-import { Logo } from "@/components/Logo";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { getFollowCounts } from "@/lib/followService";
 import {
   computeWeeklyFrequency,
@@ -29,7 +29,6 @@ import {
   type WeightLogEntry,
 } from "@/lib/profileService";
 import { getSubscriberCount } from "@/lib/subscriptionService";
-import { signOut } from "@/lib/authService";
 import { getPlatform } from "@/lib/socialLinks";
 import { getUserTypeLabel } from "@/lib/verifiedBadge";
 import { colors, radius } from "@/theme/colors";
@@ -58,7 +57,7 @@ function notImplemented() {
 type ConfirmAction = { kind: "finalize" | "reactivate"; routine: RoutineWithCounts };
 
 export function ProfileScreen({ userId }: { userId: string }) {
-  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -74,11 +73,17 @@ export function ProfileScreen({ userId }: { userId: string }) {
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmSuccess, setConfirmSuccess] = useState(false);
+
+  const scrollRef = useRef<ScrollView>(null);
+  const routinesSectionY = useRef(0);
+
+  function scrollToRoutines() {
+    scrollRef.current?.scrollTo({ y: Math.max(routinesSectionY.current - 16, 0), animated: true });
+  }
 
   const loadRoutinesForTab = useCallback(
     async (tab: RoutineListMode) => {
@@ -219,20 +224,14 @@ export function ProfileScreen({ userId }: { userId: string }) {
     { label: "Reportar un error", onPress: () => setReportModalOpen(true) },
   ];
 
-  const avatarMenuItems: ActionMenuItem[] = [{ label: "Cerrar sesión", onPress: () => signOut(), danger: true }];
-
   const routinesTitle = routineTab === "active" ? "Rutinas activas" : routineTab === "historic" ? "Rutinas históricas" : "Rutinas guardadas";
 
   return (
     <View style={styles.flex}>
-      <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
-        <Logo height={38} />
-        <Pressable onPress={() => setAvatarMenuOpen(true)} hitSlop={8}>
-          <Avatar uri={profile.avatar_url} size={42} />
-        </Pressable>
-      </View>
+      <ScreenHeader avatarUrl={profile.avatar_url} />
 
       <ScrollView
+        ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent2} />}
@@ -301,9 +300,9 @@ export function ProfileScreen({ userId }: { userId: string }) {
         {/* ---------- Quick actions ---------- */}
       <View style={styles.section}>
         <View style={styles.quickGrid}>
-          <QuickCard icon="barbell" title="Tus rutinas" subtitle="Ver y gestionar tus rutinas activas" onPress={notImplemented} />
+          <QuickCard icon="barbell" title="Tus rutinas" subtitle="Ver y gestionar tus rutinas activas" onPress={scrollToRoutines} />
           <QuickCard icon="stats-chart" title="Progreso completo" subtitle="Gráficos detallados por ejercicio" onPress={notImplemented} />
-          <QuickCard icon="add-circle" title="Nueva rutina" subtitle="Armá una rutina desde cero" onPress={notImplemented} />
+          <QuickCard icon="add-circle" title="Nueva rutina" subtitle="Armá una rutina desde cero" onPress={() => router.push("/routine/new")} />
           {isEntrenador && <QuickCard icon="people" title="Tus alumnos" subtitle="Rutinas, progreso y comentarios de tus suscriptores" onPress={notImplemented} />}
         </View>
       </View>
@@ -349,7 +348,7 @@ export function ProfileScreen({ userId }: { userId: string }) {
       </View>
 
       {/* ---------- Rutinas ---------- */}
-      <View style={styles.rutinasPanel}>
+      <View style={styles.rutinasPanel} onLayout={(e) => (routinesSectionY.current = e.nativeEvent.layout.y)}>
         <View style={styles.section}>
           <Text style={styles.eyebrow}>TUS RUTINAS</Text>
           <Text style={styles.sectionTitle}>{routinesTitle}</Text>
@@ -363,7 +362,7 @@ export function ProfileScreen({ userId }: { userId: string }) {
           <Animated.View layout={LinearTransition.duration(250)}>
             {routines.length === 0 && !routinesLoading ? (
               <Animated.View key="routines-empty" entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)}>
-                <RoutinesEmptyState mode={routineTab} isEntrenador={isEntrenador} />
+                <RoutinesEmptyState mode={routineTab} isEntrenador={isEntrenador} onCreatePress={() => router.push("/routine/new")} />
               </Animated.View>
             ) : (
               <Animated.View key="routines-list" entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} style={styles.routinesList}>
@@ -391,7 +390,6 @@ export function ProfileScreen({ userId }: { userId: string }) {
       </ScrollView>
 
       <ActionMenu visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} />
-      <ActionMenu visible={avatarMenuOpen} onClose={() => setAvatarMenuOpen(false)} items={avatarMenuItems} />
       <ReportErrorModal visible={reportModalOpen} userId={userId} onClose={() => setReportModalOpen(false)} />
       <ConfirmModal
         visible={confirmAction !== null}
@@ -461,23 +459,37 @@ function RoutineTabButton({ label, active, onPress }: { label: string; active: b
   );
 }
 
-function RoutinesEmptyState({ mode, isEntrenador }: { mode: RoutineListMode; isEntrenador: boolean }) {
+function RoutinesEmptyState({ mode, isEntrenador, onCreatePress }: { mode: RoutineListMode; isEntrenador: boolean; onCreatePress: () => void }) {
   const copy =
     mode === "active"
-      ? { title: "Todavía no tenés rutinas activas", body: "Creá tu primera rutina para empezar a entrenar con Gym Social." }
+      ? {
+          title: "Todavía no tenés rutinas activas",
+          body: "Creá tu primera rutina para empezar a entrenar con Gym Social.",
+          button: "Crear nueva rutina",
+        }
       : mode === "historic"
-        ? { title: "Todavía no tenés rutinas históricas", body: "Cuando finalices una rutina activa, va a aparecer acá." }
+        ? { title: "Todavía no tenés rutinas históricas", body: "Cuando finalices una rutina activa, va a aparecer acá.", button: null }
         : isEntrenador
-          ? { title: "Todavía no tenés rutinas guardadas", body: "Armá una plantilla y despues asignásela a cualquiera de tus suscriptores aceptados." }
+          ? {
+              title: "Todavía no tenés rutinas guardadas",
+              body: "Armá una plantilla y despues asignásela a cualquiera de tus suscriptores aceptados.",
+              button: "Crear plantilla",
+            }
           : {
               title: "Todavía no tenés rutinas guardadas",
               body: "Cuando creás una rutina nueva, te preguntamos si la querés activar ya. Si elegís que no, queda acá para que la actives cuando quieras.",
+              button: "Crear rutina",
             };
   return (
     <View style={styles.emptyState}>
       <Ionicons name="barbell-outline" size={28} color={colors.textMuted} />
       <Text style={styles.emptyTitle}>{copy.title}</Text>
       <Text style={styles.emptyBody}>{copy.body}</Text>
+      {copy.button && (
+        <Pressable style={styles.emptyStateButton} onPress={onCreatePress}>
+          <Text style={styles.emptyStateButtonText}>{copy.button}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -495,16 +507,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
   scroll: { padding: 20, paddingBottom: 48, gap: 20 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    backgroundColor: colors.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
   heroRow: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
   heroInfo: { flex: 1, gap: 4, paddingTop: 4 },
   usernameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -586,6 +588,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "700", marginTop: 4 },
   emptyBody: { color: colors.textMuted, fontSize: 13, textAlign: "center", lineHeight: 19 },
+  emptyStateButton: {
+    marginTop: 6,
+    backgroundColor: colors.accent2,
+    borderRadius: radius.pill,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  emptyStateButtonText: { color: colors.bg, fontWeight: "700", fontSize: 13.5 },
   statCardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   statCard: {
     flexBasis: "47%",
