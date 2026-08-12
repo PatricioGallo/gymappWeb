@@ -38,6 +38,9 @@ import { submitErrorReport, validateErrorReport } from "../services/errorReport.
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
+import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
+import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
+import { getUserPosts, getUserPostCount, getPost, toggleLike, toggleRepost, type FeedPost, type PostAuthor } from "../services/post.service";
 
 declare const Chart: any;
 
@@ -222,9 +225,10 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
 async function renderProfileStats(userId: string, username: string, canViewLists: boolean, userType: Profile["user_type"]) {
   const stats = document.getElementById("profileStats");
   if (!stats) return;
-  // Publicaciones todavia no existe (llega con el feed de la red social): se
-  // muestra en 0 hasta que se sume ese sistema. Seguidores/seguidos si son reales.
-  const counts = await getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 }));
+  const [counts, postCount] = await Promise.all([
+    getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 })),
+    getUserPostCount(userId).catch(() => 0),
+  ]);
   // Suscriptores solo aplica a entrenadores (gimnasio tendra su propio sistema mas adelante).
   const subscriberCount = userType === "entrenador" ? await getSubscriberCount(userId).catch(() => 0) : null;
   const u = encodeURIComponent(username);
@@ -235,7 +239,7 @@ async function renderProfileStats(userId: string, username: string, canViewLists
   }
 
   stats.innerHTML = `
-    <span class="profile-stat"><strong>0</strong> publicaciones</span>
+    <span class="profile-stat"><strong>${postCount}</strong> publicaciones</span>
     ${stat(counts.followers, "seguidores", "followers")}
     ${stat(counts.following, "seguidos", "following")}
     ${subscriberCount !== null ? stat(subscriberCount, "suscriptores", "subscribers") : ""}
@@ -707,6 +711,7 @@ function confirmBlockModal(targetId: string, username: string) {
 function renderPrivateNotice(nombre: string) {
   document.getElementById("quickActionsSection")?.remove();
   document.getElementById("rutinas")?.remove();
+  document.getElementById("repsSection")?.remove();
 
   const statsSection = document.getElementById("statsSection");
   const container = statsSection?.querySelector(".container");
@@ -875,6 +880,138 @@ async function refreshRoutinesAndStats() {
   const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType, routinesCtx.ownerBasic);
   const statValue = document.getElementById("activeRoutinesStatValue");
   if (statValue && count !== undefined) statValue.textContent = String(count);
+}
+
+// ---------- Reps ----------
+
+const REPS_PAGE_SIZE = 20;
+
+
+function goToAuthorProfile(author: PostAuthor): void {
+  window.location.href = `profile.html?u=${encodeURIComponent(author.username)}`;
+}
+
+async function renderProfileReps(targetUserId: string, isOwner: boolean) {
+  const section = document.getElementById("repsSection");
+  const listEl = document.getElementById("repsSectionList");
+  const loadMoreBtn = document.getElementById("repsSectionLoadMoreBtn") as HTMLButtonElement | null;
+  if (!section || !listEl) return;
+
+  const eyebrow = document.getElementById("repsSectionEyebrow");
+  if (eyebrow && !isOwner) eyebrow.textContent = "Sus Reps";
+
+  let reps: FeedPost[] = await getUserPosts(targetUserId).catch(() => []);
+
+  function renderList() {
+    listEl!.innerHTML = reps.length
+      ? reps.map((p) => renderPostCard(p, myId, { compact: true })).join("")
+      : `<p class="exc-pick-empty">Todavía no publicó ningún Rep.</p>`;
+    wirePostCard(listEl!, reps, handlers);
+  }
+
+  async function handleLikeToggle(post: FeedPost) {
+    if (!myId) {
+      window.location.href = "login.html";
+      return;
+    }
+    const wasLiked = post.likedByMe;
+    post.likedByMe = !wasLiked;
+    post.likes_count += wasLiked ? -1 : 1;
+    renderList();
+    const { error } = await toggleLike(post.id, myId, wasLiked);
+    if (error) {
+      post.likedByMe = wasLiked;
+      post.likes_count += wasLiked ? 1 : -1;
+      renderList();
+      alert(error);
+    }
+  }
+
+  async function handleRepostToggle(post: FeedPost) {
+    if (!myId) {
+      window.location.href = "login.html";
+      return;
+    }
+    const wasReposted = post.repostedByMe;
+    post.repostedByMe = !wasReposted;
+    post.reposts_count += wasReposted ? -1 : 1;
+    renderList();
+    const { error } = await toggleRepost(post.id, myId, wasReposted);
+    if (error) {
+      post.repostedByMe = wasReposted;
+      post.reposts_count += wasReposted ? 1 : -1;
+      renderList();
+      alert(error);
+    }
+  }
+
+  const handlers: PostCardHandlers = {
+    onLikeToggle: (post) => void handleLikeToggle(post),
+    onRepostToggle: (post) => void handleRepostToggle(post),
+    onCommentClick: (post) => {
+      if (!myId) {
+        window.location.href = "login.html";
+        return;
+      }
+      openCommentModal(post, myId, () => {
+        post.comments_count += 1;
+        renderList();
+      });
+    },
+    onQuoteClick: (post) => {
+      if (!myId) {
+        window.location.href = "login.html";
+        return;
+      }
+      openQuoteModal(post, myId, (created) => {
+        // Si estas mirando tu propio perfil, la cita nueva entra a esta misma lista.
+        if (!isOwner || created.author_id !== myId) return;
+        getPost(created.id)
+          .then((hydrated) => {
+            if (!hydrated) return;
+            reps = [hydrated, ...reps];
+            renderList();
+          })
+          .catch(() => {});
+      });
+    },
+    onShareClick: (post) => {
+      if (!myId) {
+        window.location.href = "login.html";
+        return;
+      }
+      void openShareToChatModal(post, myId);
+    },
+    onDeleteClick: (post) => {
+      confirmDeletePost(post, () => {
+        reps = reps.filter((p) => p.id !== post.id);
+        renderList();
+      });
+    },
+    onAuthorClick: goToAuthorProfile,
+    onOpenPost: (post) => {
+      window.location.href = `post.html?id=${encodeURIComponent(post.id)}`;
+    },
+  };
+
+  renderList();
+
+  if (loadMoreBtn) {
+    loadMoreBtn.hidden = reps.length < REPS_PAGE_SIZE;
+    loadMoreBtn.addEventListener("click", async () => {
+      if (reps.length === 0) return;
+      loadMoreBtn.disabled = true;
+      const older = await getUserPosts(targetUserId, reps[reps.length - 1].feedTimestamp);
+      loadMoreBtn.disabled = false;
+      if (older.length === 0) {
+        loadMoreBtn.hidden = true;
+        return;
+      }
+      reps = [...reps, ...older];
+      renderList();
+      loadMoreBtn.hidden = older.length < REPS_PAGE_SIZE;
+    });
+  }
 }
 
 // Una rutina asignada y privada es del que la asigno, no de quien la recibe: el
@@ -1500,6 +1637,7 @@ async function main() {
   routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
   renderStats(logs, activeCount ?? 0, isOwner);
+  void renderProfileReps(displayProfile.id!, isOwner);
 }
 
 main();

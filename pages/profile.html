@@ -19,6 +19,7 @@
 
       <nav class="site-nav account-nav" id="siteNav">
         <a href="profile.html" class="active" id="navPerfil">Mi perfil</a>
+        <a href="feed.html">Reps</a>
         <a href="admin.html" id="adminLink">Administrar<span class="nav-dot" id="adminLinkDot" hidden></span></a>
         <a href="followRequests.html" id="navFollowRequests">Solicitudes de seguimiento<span class="nav-badge" id="followReqBadge" hidden>0</span></a>
         <a href="subscriptionRequests.html" id="navSubscriptionRequests">Solicitudes de suscripción<span class="nav-badge" id="subReqBadge" hidden>0</span></a>
@@ -128,6 +129,17 @@
         <button class="routine-tab" data-tab="saved" type="button" id="savedTabBtn" hidden>Guardadas</button>
       </div>
       <div id="routinesContent"></div>
+    </div>
+  </section>
+
+  <section class="steps" id="repsSection">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow" id="repsSectionEyebrow">Tus Reps</span>
+        <h2>Reps</h2>
+      </div>
+      <div class="post-feed-list post-feed-list-compact" id="repsSectionList"></div>
+      <button type="button" class="chat-load-more" id="repsSectionLoadMoreBtn" hidden>Cargar más</button>
     </div>
   </section>
 

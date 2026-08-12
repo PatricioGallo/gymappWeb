@@ -72,6 +72,7 @@ export interface SendMessageInput {
   attachmentPath?: string;
   attachmentType?: "image" | "audio";
   attachmentDurationSeconds?: number;
+  sharedPostId?: string;
 }
 
 export async function sendMessage(conversationId: string, input: SendMessageInput): Promise<{ message?: ChatMessage; error?: string }> {
@@ -81,6 +82,7 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_attachment_path: input.attachmentPath,
     p_attachment_type: input.attachmentType,
     p_attachment_duration_seconds: input.attachmentDurationSeconds,
+    p_shared_post_id: input.sharedPostId,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };

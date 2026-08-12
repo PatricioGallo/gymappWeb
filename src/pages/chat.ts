@@ -3,6 +3,7 @@ import { escapeHtml } from "../lib/dom";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { supabase } from "../lib/supabaseClient";
 import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
+import { getPostsByIds, type FeedPost } from "../services/post.service";
 import {
   listConversations,
   listMessages,
@@ -66,6 +67,9 @@ const previewCancelBtn = document.getElementById("chatPreviewCancel") as HTMLBut
 let messages: ChatMessage[] = [];
 const renderedIds = new Set<string>();
 const attachmentUrlCache = new Map<string, string>();
+// Reps compartidos en el chat: se resuelven en batch (una consulta por pagina cargada,
+// no una por burbuja) y quedan cacheados por id para no repetir el fetch.
+const sharedPostsCache = new Map<string, FeedPost>();
 const audioPlayers = new Map<string, HTMLAudioElement>();
 // Forma de onda precalculada (una vez por mensaje) a partir del audio ya grabado, para
 // mostrar las barras reales y no solo un pulso generico. Aparte del <audio> de reproduccion:
@@ -176,9 +180,40 @@ function ticksHtml(m: ChatMessage): string {
   return `<svg class="chat-bubble-ticks${isRead ? " is-read" : ""}" viewBox="0 0 16 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${CHECK_ICON_PATHS}</svg>`;
 }
 
+async function hydrateSharedPosts(list: ChatMessage[]): Promise<void> {
+  const ids = [...new Set(list.map((m) => m.shared_post_id).filter((id): id is string => !!id))].filter((id) => !sharedPostsCache.has(id));
+  if (ids.length === 0) return;
+  const map = await getPostsByIds(ids);
+  map.forEach((post, id) => sharedPostsCache.set(id, post));
+}
+
+function sharedPostPreviewHtml(postId: string): string {
+  const post = sharedPostsCache.get(postId);
+  if (!post) return `<div class="chat-shared-post chat-shared-post-missing">Rep no disponible</div>`;
+  const content = post.content ?? "";
+  const preview = content.length > 100 ? `${content.slice(0, 100)}…` : content;
+  const thumb = post.media_url
+    ? post.media_type === "video"
+      ? `<video class="chat-shared-post-thumb" src="${escapeHtml(post.media_url)}" muted playsinline></video>`
+      : `<img class="chat-shared-post-thumb" src="${escapeHtml(post.media_url)}" alt="">`
+    : "";
+  return `
+    <a class="chat-shared-post" href="post.html?id=${encodeURIComponent(post.id)}">
+      <div class="chat-shared-post-head">
+        <img class="chat-shared-post-avatar" src="${escapeHtml(post.author.avatarUrl || "/images/avatars/default.svg")}" alt="">
+        <span class="chat-shared-post-name">${escapeHtml(post.author.username)}${renderVerifiedBadge(post.author.userType, post.author.isVerified, 12)}</span>
+      </div>
+      ${preview ? `<p class="chat-shared-post-text">${escapeHtml(preview)}</p>` : ""}
+      ${thumb}
+    </a>
+  `;
+}
+
 function bubbleHtml(m: ChatMessage, isMe: boolean): string {
   let mediaHtml = "";
-  if (m.attachment_type === "image" && m.attachment_path) {
+  if (m.shared_post_id) {
+    mediaHtml = sharedPostPreviewHtml(m.shared_post_id);
+  } else if (m.attachment_type === "image" && m.attachment_path) {
     mediaHtml = `
       <button type="button" class="chat-bubble-image" data-path="${escapeHtml(m.attachment_path)}">
         <img data-path="${escapeHtml(m.attachment_path)}" alt="Foto" class="chat-bubble-img-el">
@@ -255,6 +290,7 @@ async function renderInitialMessages(): Promise<void> {
   const page = await listMessages(conversationId!);
   messages = page.slice().reverse();
   messages.forEach((m) => renderedIds.add(m.id));
+  await hydrateSharedPosts(messages);
   messagesEl.innerHTML = messages.length
     ? buildMessagesHtml(messages)
     : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
@@ -278,6 +314,7 @@ async function prependOlderMessages(): Promise<void> {
   const ascendingOlder = older.slice().reverse();
   ascendingOlder.forEach((m) => renderedIds.add(m.id));
   messages = [...ascendingOlder, ...messages];
+  await hydrateSharedPosts(ascendingOlder);
 
   const prevScrollHeight = messagesEl.scrollHeight;
   messagesEl.innerHTML = buildMessagesHtml(messages);
@@ -288,9 +325,10 @@ async function prependOlderMessages(): Promise<void> {
 
 loadMoreBtn.addEventListener("click", () => void prependOlderMessages());
 
-function appendMessage(m: ChatMessage): void {
+async function appendMessage(m: ChatMessage): Promise<void> {
   if (renderedIds.has(m.id)) return;
   renderedIds.add(m.id);
+  await hydrateSharedPosts([m]);
 
   const lastDayBefore = messages.length > 0 ? new Date(messages[messages.length - 1].created_at).toDateString() : null;
   messages.push(m);
@@ -317,7 +355,7 @@ supabase
   .channel(`chat-thread-${conversationId}`)
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
     const msg = payload.new as ChatMessage;
-    appendMessage(msg);
+    void appendMessage(msg);
     if (msg.sender_id !== userId && document.visibilityState === "visible") {
       void markConversationRead(conversationId!);
     }
@@ -736,7 +774,7 @@ async function handleSend(): Promise<void> {
   composerInput.value = "";
   composerInput.style.height = "auto";
   clearPendingAttachment();
-  appendMessage(message);
+  void appendMessage(message);
 
   if (conversationStatus === "pending" && isInitiator === false) {
     conversationStatus = "accepted";
