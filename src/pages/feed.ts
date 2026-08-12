@@ -1,9 +1,9 @@
-import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
+import { setupNavToggle, setupRevealObserver, setupAutoHideHeader, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
 import {
-  getFeed,
+  getPersonalizedFeed,
   createPost,
   toggleLike,
   toggleRepost,
@@ -14,17 +14,23 @@ import {
   type Post,
   type PostAuthor,
 } from "../services/post.service";
+import { getSuggestedProfiles, type SuggestedProfile } from "../services/search.service";
+import { followUser } from "../services/follow.service";
+import { resultAvatar, resultFullName } from "../lib/search";
+import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
 setupNavToggle();
 setupRevealObserver();
+setupAutoHideHeader();
 const userId = await requireAuth();
 
-// Coincide con el limite por pagina que usa getFeed() por defecto en post.service.ts.
+// Coincide con el limite por pagina que usa getPersonalizedFeed() por defecto en post.service.ts.
 const FEED_PAGE_SIZE = 20;
 const POST_MAX = 140;
 
 const listEl = document.getElementById("postFeedList")!;
-const loadMoreBtn = document.getElementById("postFeedLoadMoreBtn") as HTMLButtonElement;
+const sentinel = document.getElementById("postFeedSentinel")!;
+const sentinelSpinner = document.getElementById("postFeedSentinelSpinner") as HTMLDivElement;
 
 const composerForm = document.getElementById("postComposerForm") as HTMLFormElement;
 const composerInput = document.getElementById("postComposerInput") as HTMLTextAreaElement;
@@ -209,22 +215,118 @@ function renderFeed(): void {
   wirePostCard(listEl, posts, postCardHandlers);
 }
 
+// Cuenta solo lo que ya trajo el server (no la lista local, que puede tener
+// Reps propios agregados adelante al publicar/citar) -- el algoritmo ordena
+// por puntaje, no por fecha, asi que un cursor de "antes de tal fecha" no
+// sirve para paginar; offset es lo mas simple que funciona con ese orden.
+let feedOffset = 0;
+let isLoadingMore = false;
+let feedExhausted = false;
+
 async function loadMore(): Promise<void> {
-  if (posts.length === 0) return;
-  loadMoreBtn.disabled = true;
-  const older = await getFeed(posts[posts.length - 1].feedTimestamp);
-  loadMoreBtn.disabled = false;
+  if (isLoadingMore || feedExhausted) return;
+  isLoadingMore = true;
+  sentinelSpinner.hidden = false;
+  const older = await getPersonalizedFeed(feedOffset);
+  isLoadingMore = false;
+  sentinelSpinner.hidden = true;
+
   if (older.length === 0) {
-    loadMoreBtn.hidden = true;
+    feedExhausted = true;
+    feedObserver.disconnect();
     return;
   }
+  feedOffset += older.length;
   posts = [...posts, ...older];
   renderFeed();
-  loadMoreBtn.hidden = older.length < FEED_PAGE_SIZE;
+  if (older.length < FEED_PAGE_SIZE) {
+    feedExhausted = true;
+    feedObserver.disconnect();
+  }
 }
 
-loadMoreBtn.addEventListener("click", () => void loadMore());
+// Scroll infinito: el sentinel vive siempre al final de la lista (fuera de
+// #postFeedList, asi renderFeed() no lo pisa) y dispara loadMore() apenas
+// entra en viewport. rootMargin adelanta el disparo ~600px antes de que el
+// sentinel sea visible de verdad, para que la carga no se note como corte.
+// root:null funciona igual en mobile (scrollea la ventana) que en desktop
+// (scrollea .feed-main): IntersectionObserver respeta el clipping de
+// cualquier ancestro con overflow, no solo el root explicito.
+const feedObserver = new IntersectionObserver(
+  (entries) => {
+    if (entries[0]?.isIntersecting) void loadMore();
+  },
+  { rootMargin: "600px 0px" }
+);
+feedObserver.observe(sentinel);
 
-posts = await getFeed();
+posts = await getPersonalizedFeed(0);
+feedOffset = posts.length;
 renderFeed();
-loadMoreBtn.hidden = posts.length < FEED_PAGE_SIZE;
+if (posts.length < FEED_PAGE_SIZE) {
+  feedExhausted = true;
+  feedObserver.disconnect();
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar derecha: "a quién seguir" (solo desktop, ver .feed-side-right en CSS)
+// ---------------------------------------------------------------------------
+
+const suggestionsEl = document.getElementById("feedSuggestionsList");
+let suggestions: SuggestedProfile[] = [];
+
+function suggestionRowHtml(s: SuggestedProfile): string {
+  return `
+    <div class="search-page-item search-suggestion-item" data-username="${encodeURIComponent(s.username)}">
+      <img src="${escapeHtml(resultAvatar(s))}" alt="" class="search-page-avatar">
+      <span class="search-page-body">
+        <p class="search-page-name">${escapeHtml(s.username)}${renderVerifiedBadge(s.user_type, s.is_verified)}</p>
+        <p class="search-page-meta">${escapeHtml(resultFullName(s))}</p>
+      </span>
+      <button type="button" class="btn btn-outline btn-sm follow-suggestion-btn" data-id="${escapeHtml(s.id)}">Seguir</button>
+    </div>
+  `;
+}
+
+function renderSuggestions(): void {
+  if (!suggestionsEl) return;
+  suggestionsEl.innerHTML = suggestions.length
+    ? suggestions.map((s) => suggestionRowHtml(s)).join("")
+    : `<p class="exc-pick-empty">No hay sugerencias por ahora.</p>`;
+
+  suggestionsEl.querySelectorAll<HTMLDivElement>(".search-suggestion-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      window.location.href = `profile.html?u=${item.dataset.username}`;
+    });
+  });
+  suggestionsEl.querySelectorAll<HTMLButtonElement>(".follow-suggestion-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void handleFollowSuggestion(btn);
+    });
+  });
+}
+
+async function handleFollowSuggestion(btn: HTMLButtonElement): Promise<void> {
+  const targetId = btn.dataset.id!;
+  btn.disabled = true;
+  const { status, error } = await followUser(userId, targetId);
+  if (error) {
+    alert(error);
+    btn.disabled = false;
+    return;
+  }
+  btn.textContent = status === "pending" ? "Solicitud enviada" : "Siguiendo";
+  suggestions = suggestions.filter((s) => s.id !== targetId);
+}
+
+if (suggestionsEl) {
+  getSuggestedProfiles(5)
+    .then((list) => {
+      suggestions = list;
+      renderSuggestions();
+    })
+    .catch(() => {
+      // silencioso: si fallan las sugerencias, el feed sigue funcionando
+    });
+}

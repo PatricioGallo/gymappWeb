@@ -36,8 +36,65 @@ const POST_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 const POST_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const POST_VIDEO_TYPES = ["video/mp4", "video/webm"];
 
+const URL_RE = /https?:\/\/[^\s]+/i;
+
+/** Primera URL http(s) encontrada en el texto del Rep, o null si no hay ninguna. */
+export function extractFirstUrl(content: string): string | null {
+  const match = content.match(URL_RE);
+  if (!match) return null;
+  // Sacamos puntuacion de cierre pegada al final ("mirá esto: https://x.com." o "(https://x.com)").
+  return match[0].replace(/[.,;:!?)\]}'"]+$/, "");
+}
+
+interface LinkPreviewFields {
+  link_url: string;
+  link_title: string | null;
+  link_description: string | null;
+  link_image_url: string | null;
+  link_site_name: string | null;
+}
+
+/**
+ * Le pide a la edge function link-preview que scrapee los meta og:x / twitter:x de la
+ * URL (estilo Facebook/Twitter). Best-effort: si falla (timeout, sitio bloqueado, sin
+ * tags, etc.) devuelve null y el Rep se publica igual, sin preview -- nunca debe
+ * trabar la publicacion.
+ */
+async function fetchLinkPreview(url: string): Promise<LinkPreviewFields | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke<{
+      title?: string | null;
+      description?: string | null;
+      image?: string | null;
+      siteName?: string | null;
+    }>("link-preview", { body: { url } });
+    if (error || !data || (!data.title && !data.description && !data.image)) return null;
+    return {
+      link_url: url,
+      link_title: data.title ?? null,
+      link_description: data.description ?? null,
+      link_image_url: data.image ?? null,
+      link_site_name: data.siteName ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function friendlyError(error: { message?: string; code?: string } | null, fallback: string): string {
   return error?.message?.trim() || fallback;
+}
+
+// Mensaje de negocio: si tu perfil es privado, no podes comentar/repostear/citar
+// Reps de gente que no seguis (dar me gusta si esta permitido siempre). Lo
+// deciden los triggers *_enforce_*_privacy_gate en la base -- todos levantan
+// una excepcion con "perfil privado" en el texto para poder mapearla aca al
+// mensaje que ve el usuario, sin acoplar la UI al texto interno del trigger.
+const PRIVATE_INTERACTION_MESSAGE =
+  "Si tu perfil es privado no podés comentar ni repostear (ni citar) a gente que no seguís. Sí podés poner me gusta. Esa es la diferencia entre perfil público y privado.";
+
+function isPrivateInteractionError(error: { message?: string } | null): boolean {
+  return !!error?.message?.includes("perfil privado");
 }
 
 async function getViewerId(): Promise<string | null> {
@@ -182,6 +239,24 @@ export async function getFeed(beforeIso?: string, limit = FEED_PAGE_SIZE): Promi
   return entries.slice(0, limit);
 }
 
+/**
+ * Feed "Para vos": orden que da el algoritmo (get_personalized_feed, ver migración
+ * add_get_personalized_feed) en vez de puro orden cronológico -- seguidos/seguidores
+ * primero, después popularidad regional, género opuesto popular en tu región, y un
+ * ajuste por afinidad personal (perfiles visitados, autores que likeaste antes).
+ * No mezcla reposts-en-el-feed (a diferencia de getFeed): el orden no es cronológico,
+ * así que no hay un timestamp único para intercalarlos de forma consistente.
+ * Paginación por offset (no por cursor de fecha, porque el orden no es por fecha).
+ */
+export async function getPersonalizedFeed(offset = 0, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+  const viewerId = await getViewerId();
+  const { data, error } = await supabase.rpc("get_personalized_feed", { p_limit: limit, p_offset: offset });
+  if (error) throw error;
+  const rows = data ?? [];
+  const hydratedById = await hydratePosts(rows, viewerId);
+  return rows.map((r) => hydratedById.get(r.id)).filter((p): p is FeedPost => !!p);
+}
+
 /** Hilo completo (raíz + todas sus continuaciones) a partir del id de la raíz. */
 export async function getThread(rootId: string): Promise<FeedPost[]> {
   const viewerId = await getViewerId();
@@ -246,9 +321,15 @@ export async function createPost(
   mediaUrl?: string,
   mediaType?: "image" | "video"
 ): Promise<{ post?: Post; error?: string }> {
+  const trimmed = content.trim();
+  // Si ya hay imagen/video adjunto no buscamos preview del link: mostrar las dos cosas
+  // a la vez satura la tarjeta, y el media adjunto es la intencion mas explicita.
+  const url = !mediaUrl && trimmed ? extractFirstUrl(trimmed) : null;
+  const linkPreview = url ? await fetchLinkPreview(url) : null;
+
   const { data, error } = await supabase
     .from("posts")
-    .insert({ author_id: authorId, content: content.trim() || null, media_url: mediaUrl ?? null, media_type: mediaType ?? null })
+    .insert({ author_id: authorId, content: trimmed || null, media_url: mediaUrl ?? null, media_type: mediaType ?? null, ...linkPreview })
     .select("*")
     .single();
   if (error) return { error: friendlyError(error, "No se pudo publicar el Rep. Probá de nuevo.") };
@@ -256,12 +337,19 @@ export async function createPost(
 }
 
 export async function createQuote(authorId: string, quotedPostId: string, content: string): Promise<{ post?: Post; error?: string }> {
+  const trimmed = content.trim();
+  const url = trimmed ? extractFirstUrl(trimmed) : null;
+  const linkPreview = url ? await fetchLinkPreview(url) : null;
+
   const { data, error } = await supabase
     .from("posts")
-    .insert({ author_id: authorId, quoted_post_id: quotedPostId, content: content.trim() || null })
+    .insert({ author_id: authorId, quoted_post_id: quotedPostId, content: trimmed || null, ...linkPreview })
     .select("*")
     .single();
-  if (error) return { error: friendlyError(error, "No se pudo citar el Rep. Probá de nuevo.") };
+  if (error) {
+    if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
+    return { error: friendlyError(error, "No se pudo citar el Rep. Probá de nuevo.") };
+  }
   return { post: data };
 }
 
@@ -294,6 +382,7 @@ export async function toggleRepost(postId: string, userId: string, currentlyRepo
   const { error } = await supabase.from("post_reposts").insert({ post_id: postId, user_id: userId });
   if (error) {
     if (error.code === "23505") return {};
+    if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
     return { error: "No se pudo repostear." };
   }
   return {};
@@ -332,6 +421,7 @@ export async function addComment(
     .single();
   if (error) {
     if (error.message?.includes("otro Rep")) return { error: "No se pudo responder a ese comentario." };
+    if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
     return { error: friendlyError(error, "No se pudo comentar. Probá de nuevo.") };
   }
   return { comment: data };

@@ -124,6 +124,9 @@ form?.addEventListener("submit", async (event) => {
   const mail = (document.getElementById("mail") as HTMLInputElement).value.trim();
   const fechaNacimiento = (document.getElementById("birthdate") as HTMLInputElement).value;
   const nacionalidad = (document.getElementById("nationality") as HTMLSelectElement).value;
+  const genero = (document.getElementById("genero") as HTMLSelectElement).value as "hombre" | "mujer" | "otro" | "";
+  const provincia = (document.getElementById("provincia") as HTMLInputElement).value.trim();
+  const ciudad = (document.getElementById("ciudad") as HTMLInputElement).value.trim();
   const pass = (document.getElementById("pass") as HTMLInputElement).value;
   const pass2 = (document.getElementById("pass2") as HTMLInputElement).value;
   const terms = (document.getElementById("terms") as HTMLInputElement).checked;
@@ -152,6 +155,14 @@ form?.addEventListener("submit", async (event) => {
     showError("ERROR! Elegí tu nacionalidad.");
     return;
   }
+  if (!genero) {
+    showError("ERROR! Elegí tu género.");
+    return;
+  }
+  if (!provincia) {
+    showError("ERROR! Ingresá tu provincia.");
+    return;
+  }
   if (!terms) {
     showError("ERROR! Debés aceptar los Términos y Condiciones para registrarte.");
     return;
@@ -173,7 +184,19 @@ form?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const { error } = await signUp({ email: mail, password: pass, nombre, apellido, username, fechaNacimiento, nacionalidad, userType: selectedRole });
+  const { error } = await signUp({
+    email: mail,
+    password: pass,
+    nombre,
+    apellido,
+    username,
+    fechaNacimiento,
+    nacionalidad,
+    genero,
+    provincia,
+    ciudad,
+    userType: selectedRole,
+  });
 
   if (error) {
     if (loaderBody) loaderBody.innerHTML = "";

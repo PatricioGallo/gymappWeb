@@ -40,6 +40,31 @@ function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="">`;
 }
 
+function domainOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+// Preview estilo Facebook/Twitter cuando el texto trae un link (ver fetchLinkPreview
+// en post.service.ts, que scrapea los meta og:*/twitter:* al publicar). Nunca convive
+// con media adjunta: si subiste una imagen/video, esa es la intencion mas explicita.
+function linkPreviewHtml(post: Post): string {
+  if (!post.link_url || post.media_url) return "";
+  return `
+    <a class="post-link-preview" href="${escapeHtml(post.link_url)}" target="_blank" rel="noopener noreferrer">
+      ${post.link_image_url ? `<img class="post-link-preview-image" src="${escapeHtml(post.link_image_url)}" alt="">` : ""}
+      <div class="post-link-preview-body">
+        <span class="post-link-preview-domain">${escapeHtml(post.link_site_name || domainOf(post.link_url))}</span>
+        ${post.link_title ? `<p class="post-link-preview-title">${escapeHtml(post.link_title)}</p>` : ""}
+        ${post.link_description ? `<p class="post-link-preview-desc">${escapeHtml(post.link_description)}</p>` : ""}
+      </div>
+    </a>
+  `;
+}
+
 // Sin controls: esta miniatura vive adentro de un <a> (el link al Rep citado), y anidar
 // controles de video interactivos dentro de un link da problemas de click. Es solo preview.
 function quotedMediaHtml(mediaUrl: string | null, mediaType: string | null): string {
@@ -107,6 +132,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
           </div>
           ${contentHtml(post.content, "post-card-text")}
           ${mediaHtml(post.media_url, post.media_type)}
+          ${linkPreviewHtml(post)}
           ${quotedPostHtml(post.quotedPost)}
           ${actionsHtml(post, viewerId)}
         </div>

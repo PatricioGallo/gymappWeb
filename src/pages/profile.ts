@@ -14,6 +14,7 @@ import {
   reactivateRoutine,
   listWeightLogsWithContext,
   parseProfileLinks,
+  touchProfileVisit,
   type Profile,
   type ProfileBasic,
   type ProfileLink,
@@ -885,6 +886,8 @@ async function refreshRoutinesAndStats() {
 // ---------- Reps ----------
 
 const REPS_PAGE_SIZE = 20;
+// Reps deshabilitado temporalmente en el perfil (pedido explícito del usuario).
+const REPS_ENABLED = false;
 
 
 function goToAuthorProfile(author: PostAuthor): void {
@@ -895,7 +898,7 @@ async function renderProfileReps(targetUserId: string, isOwner: boolean) {
   const section = document.getElementById("repsSection");
   const listEl = document.getElementById("repsSectionList");
   const loadMoreBtn = document.getElementById("repsSectionLoadMoreBtn") as HTMLButtonElement | null;
-  if (!section || !listEl) return;
+  if (!REPS_ENABLED || !section || !listEl) return;
 
   const eyebrow = document.getElementById("repsSectionEyebrow");
   if (eyebrow && !isOwner) eyebrow.textContent = "Sus Reps";
@@ -1575,6 +1578,11 @@ async function main() {
 
   const isOwner = displayProfile.id === myId;
   const nombre = displayProfile.nombre ?? "Este usuario";
+
+  // Señal para el algoritmo del feed (get_personalized_feed): perfiles que
+  // visitaste le dan un pequeño boost a ese autor. Nunca debe romper la carga
+  // del perfil si falla.
+  if (!isOwner && myId) void touchProfileVisit(displayProfile.id!);
 
   renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "", displayProfile.user_type ?? "usuario", displayProfile.is_verified ?? false);
 

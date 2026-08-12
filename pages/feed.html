@@ -9,7 +9,7 @@
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
 <link rel="stylesheet" href="/css/modern.css">
 </head>
-<body>
+<body class="feed-page">
 
   <header class="site-header">
     <div class="container">
@@ -66,27 +66,67 @@
   <div id="loaderBody"></div>
 
   <section class="features">
-    <div class="container post-feed-container">
-      <form class="post-composer" id="postComposerForm">
-        <textarea id="postComposerInput" class="post-composer-input" rows="3" maxlength="140" placeholder="¿Qué estás entrenando hoy?"></textarea>
-        <div class="post-composer-preview" id="postComposerPreview" hidden>
-          <img id="postComposerPreviewImg" alt="" hidden>
-          <video id="postComposerPreviewVideo" hidden muted controls></video>
-          <button type="button" class="post-composer-preview-remove" id="postComposerRemoveMedia" aria-label="Quitar adjunto">✕</button>
-        </div>
-        <div class="post-composer-toolbar">
-          <label class="chat-composer-btn" title="Adjuntar imagen o video">
-            <input type="file" id="postComposerMediaInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" hidden>
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
-          </label>
-          <span class="post-composer-counter" id="postComposerCounter">140</span>
-          <button type="submit" class="btn btn-primary btn-sm" id="postComposerSubmit" disabled>Publicar</button>
-        </div>
-        <div class="alert_message" id="postComposerAlert"></div>
-      </form>
+    <div class="container feed-layout">
+      <nav class="feed-side feed-side-left" aria-label="Accesos rápidos">
+        <a href="profile.html" class="feed-side-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
+          <span>Perfil</span>
+        </a>
+        <a href="chats.html" class="feed-side-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>Chats</span>
+        </a>
+        <a href="notifications.html" class="feed-side-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span>Notificaciones</span>
+        </a>
+        <a href="search.html" class="feed-side-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Buscar</span>
+        </a>
+      </nav>
 
-      <div class="post-feed-list" id="postFeedList"></div>
-      <button type="button" class="chat-load-more" id="postFeedLoadMoreBtn" hidden>Cargar más</button>
+      <div class="feed-main post-feed-container">
+        <form class="post-composer" id="postComposerForm">
+          <textarea id="postComposerInput" class="post-composer-input" rows="3" maxlength="140" placeholder="¿Qué estás entrenando hoy?"></textarea>
+          <div class="post-composer-preview" id="postComposerPreview" hidden>
+            <img id="postComposerPreviewImg" alt="" hidden>
+            <video id="postComposerPreviewVideo" hidden muted controls></video>
+            <button type="button" class="post-composer-preview-remove" id="postComposerRemoveMedia" aria-label="Quitar adjunto">✕</button>
+          </div>
+          <div class="post-composer-toolbar">
+            <label class="chat-composer-btn" title="Adjuntar imagen o video">
+              <input type="file" id="postComposerMediaInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+            </label>
+            <span class="post-composer-counter" id="postComposerCounter">140</span>
+            <button type="submit" class="btn btn-primary btn-sm" id="postComposerSubmit" disabled>Publicar</button>
+          </div>
+          <div class="alert_message" id="postComposerAlert"></div>
+        </form>
+
+        <div class="post-feed-list" id="postFeedList"></div>
+        <div class="post-feed-sentinel" id="postFeedSentinel" aria-hidden="true"><div class="modern-spinner" id="postFeedSentinelSpinner" hidden></div></div>
+      </div>
+
+      <aside class="feed-side feed-side-right">
+        <div class="feed-suggestions">
+          <div class="search-recent-header"><span>Sugerencias para seguir</span></div>
+          <div id="feedSuggestionsList"></div>
+        </div>
+
+        <footer class="feed-side-footer">
+          <a class="brand" href="profile.html">
+            <img src="/images/logo.png" alt="Gym Social">
+          </a>
+          <p>Tu gymbro digital: rutinas, pesos y progreso, todo en un mismo lugar.</p>
+          <nav class="footer-links">
+            <a href="profile.html">Perfil</a>
+            <a href="exit.html">Salir</a>
+          </nav>
+          <span class="feed-side-footer-copy">© 2026 Gym Social. Todos los derechos reservados.</span>
+        </footer>
+      </aside>
     </div>
   </section>
 
