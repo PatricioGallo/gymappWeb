@@ -193,7 +193,7 @@ function sharedPostPreviewHtml(postId: string): string {
   const preview = content.length > 100 ? `${content.slice(0, 100)}…` : content;
   const thumb = post.media_url
     ? post.media_type === "video"
-      ? `<video class="chat-shared-post-thumb" src="${escapeHtml(post.media_url)}" muted playsinline></video>`
+      ? `<video class="chat-shared-post-thumb" src="${escapeHtml(post.media_url)}" muted playsinline autoplay loop preload="metadata"></video>`
       : `<img class="chat-shared-post-thumb" src="${escapeHtml(post.media_url)}" alt="">`
     : "";
   return `
