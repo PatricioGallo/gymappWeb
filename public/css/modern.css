@@ -3167,7 +3167,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .back-link:hover { color: var(--accent-2); }
-.back-link svg { width: 15px; height: 15px; }
+.back-link svg { width: 15px; height: 15px; stroke: currentColor; }
 .back-link[hidden] { display: none; }
 
 /* ---------- Constructor de rutina (rutinsView) ---------- */
@@ -4441,6 +4441,12 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-composer-counter-over { color: var(--accent); font-weight: 700; }
 
 .post-feed-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+
+/* Marcador para el scroll infinito (ver IntersectionObserver en feed.ts): sin
+   altura no entra nunca en el viewport y el observer no dispara, por eso el
+   padding minimo aunque no haya spinner visible. */
+.post-feed-sentinel { display: flex; justify-content: center; padding: 16px 0; }
+.post-feed-sentinel .modern-spinner { width: 26px; height: 26px; }
 .post-feed-list-compact { gap: 10px; }
 
 .post-card {
@@ -4543,6 +4549,59 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-quoted-time { color: var(--text-muted); font-size: 12px; }
 .post-quoted-text { margin: 0; font-size: 13.5px; line-height: 1.4; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .post-quoted-media { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin-top: 8px; }
+
+/* Preview de link (og:title/og:description/og:image), estilo Facebook/Twitter. */
+.post-link-preview {
+  display: block;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.post-link-preview:hover { border-color: var(--accent-2); }
+
+.post-link-preview-image {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  background: var(--surface);
+}
+
+.post-link-preview-body { padding: 10px 12px; }
+
+.post-link-preview-domain {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.post-link-preview-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.post-link-preview-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 
 .post-card-actions {
   display: flex;

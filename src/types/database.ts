@@ -693,6 +693,11 @@ export type Database = {
           created_at: string
           id: string
           likes_count: number
+          link_description: string | null
+          link_image_url: string | null
+          link_site_name: string | null
+          link_title: string | null
+          link_url: string | null
           media_type: string | null
           media_url: string | null
           quoted_post_id: string | null
@@ -709,6 +714,11 @@ export type Database = {
           created_at?: string
           id?: string
           likes_count?: number
+          link_description?: string | null
+          link_image_url?: string | null
+          link_site_name?: string | null
+          link_title?: string | null
+          link_url?: string | null
           media_type?: string | null
           media_url?: string | null
           quoted_post_id?: string | null
@@ -725,6 +735,11 @@ export type Database = {
           created_at?: string
           id?: string
           likes_count?: number
+          link_description?: string | null
+          link_image_url?: string | null
+          link_site_name?: string | null
+          link_title?: string | null
+          link_url?: string | null
           media_type?: string | null
           media_url?: string | null
           quoted_post_id?: string | null
@@ -1710,6 +1725,11 @@ export type Database = {
           created_at: string
           id: string
           likes_count: number
+          link_description: string | null
+          link_image_url: string | null
+          link_site_name: string | null
+          link_title: string | null
+          link_url: string | null
           media_type: string | null
           media_url: string | null
           quoted_post_id: string | null

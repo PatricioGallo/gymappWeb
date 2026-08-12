@@ -25,6 +25,16 @@ const userId = await requireAuth();
 
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
 
+// Vuelve a la pagina anterior (feed, perfil, busqueda, etc.), sea cual sea --
+// por eso no es un href fijo. El <a href="feed.html"> del markup queda como
+// fallback si se abrio este Rep directo (sin historial previo en esta pestaña).
+document.getElementById("postBackLink")?.addEventListener("click", (e) => {
+  if (window.history.length > 1) {
+    e.preventDefault();
+    window.history.back();
+  }
+});
+
 const threadListEl = document.getElementById("postThreadList")!;
 const emptyEl = document.getElementById("postDetailEmpty") as HTMLDivElement;
 const commentsWrapEl = document.getElementById("postCommentsWrap") as HTMLDivElement;

@@ -29,7 +29,8 @@ const FEED_PAGE_SIZE = 20;
 const POST_MAX = 140;
 
 const listEl = document.getElementById("postFeedList")!;
-const loadMoreBtn = document.getElementById("postFeedLoadMoreBtn") as HTMLButtonElement;
+const sentinel = document.getElementById("postFeedSentinel")!;
+const sentinelSpinner = document.getElementById("postFeedSentinelSpinner") as HTMLDivElement;
 
 const composerForm = document.getElementById("postComposerForm") as HTMLFormElement;
 const composerInput = document.getElementById("postComposerInput") as HTMLTextAreaElement;
@@ -219,27 +220,53 @@ function renderFeed(): void {
 // por puntaje, no por fecha, asi que un cursor de "antes de tal fecha" no
 // sirve para paginar; offset es lo mas simple que funciona con ese orden.
 let feedOffset = 0;
+let isLoadingMore = false;
+let feedExhausted = false;
 
 async function loadMore(): Promise<void> {
-  loadMoreBtn.disabled = true;
+  if (isLoadingMore || feedExhausted) return;
+  isLoadingMore = true;
+  sentinelSpinner.hidden = false;
   const older = await getPersonalizedFeed(feedOffset);
-  loadMoreBtn.disabled = false;
+  isLoadingMore = false;
+  sentinelSpinner.hidden = true;
+
   if (older.length === 0) {
-    loadMoreBtn.hidden = true;
+    feedExhausted = true;
+    feedObserver.disconnect();
     return;
   }
   feedOffset += older.length;
   posts = [...posts, ...older];
   renderFeed();
-  loadMoreBtn.hidden = older.length < FEED_PAGE_SIZE;
+  if (older.length < FEED_PAGE_SIZE) {
+    feedExhausted = true;
+    feedObserver.disconnect();
+  }
 }
 
-loadMoreBtn.addEventListener("click", () => void loadMore());
+// Scroll infinito: el sentinel vive siempre al final de la lista (fuera de
+// #postFeedList, asi renderFeed() no lo pisa) y dispara loadMore() apenas
+// entra en viewport. rootMargin adelanta el disparo ~600px antes de que el
+// sentinel sea visible de verdad, para que la carga no se note como corte.
+// root:null funciona igual en mobile (scrollea la ventana) que en desktop
+// (scrollea .feed-main): IntersectionObserver respeta el clipping de
+// cualquier ancestro con overflow, no solo el root explicito.
+const feedObserver = new IntersectionObserver(
+  (entries) => {
+    if (entries[0]?.isIntersecting) void loadMore();
+  },
+  { rootMargin: "600px 0px" }
+);
+feedObserver.observe(sentinel);
 
 posts = await getPersonalizedFeed(0);
 feedOffset = posts.length;
 renderFeed();
-loadMoreBtn.hidden = posts.length < FEED_PAGE_SIZE;
+if (posts.length < FEED_PAGE_SIZE) {
+  feedExhausted = true;
+  feedObserver.disconnect();
+}
 
 // ---------------------------------------------------------------------------
 // Sidebar derecha: "a quién seguir" (solo desktop, ver .feed-side-right en CSS)
