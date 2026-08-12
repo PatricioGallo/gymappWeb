@@ -4067,6 +4067,14 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   scroll-behavior: smooth;
 }
 
+.chat-messages-loading { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+/* Marcador arriba de todo de la lista (ver prependOlderMessages en chat.ts): sin
+   altura no entra nunca en el viewport y el observer no dispara, por eso el
+   padding minimo aunque no haya spinner visible. */
+.chat-load-sentinel { display: flex; justify-content: center; padding: 10px 0; flex-shrink: 0; }
+.chat-load-sentinel .modern-spinner { width: 22px; height: 22px; }
+
 /* Scrollbars minimalistas para las areas que scrollean dentro del chat (lista
    de conversaciones, mensajes, solicitudes): finas y gris oscuro, en vez del
    scrollbar grueso por defecto del navegador. */

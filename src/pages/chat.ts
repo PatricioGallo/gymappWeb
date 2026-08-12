@@ -47,7 +47,6 @@ const requestBannerName = document.getElementById("chatRequestBannerName")!;
 const bannerAcceptBtn = document.getElementById("chatBannerAccept") as HTMLButtonElement;
 const bannerDeclineBtn = document.getElementById("chatBannerDecline") as HTMLButtonElement;
 const pendingNote = document.getElementById("chatPendingNote") as HTMLParagraphElement;
-const loadMoreBtn = document.getElementById("chatLoadMoreBtn") as HTMLButtonElement;
 const messagesEl = document.getElementById("chatMessages") as HTMLDivElement;
 const composerForm = document.getElementById("chatComposer") as HTMLFormElement;
 const composerInput = document.getElementById("chatComposerInput") as HTMLTextAreaElement;
@@ -282,33 +281,70 @@ function refreshBubbleTicks(m: ChatMessage): void {
   timeEl.innerHTML = `${timeLabel(m.created_at)}${ticksHtml(m)}`;
 }
 
-function scrollToBottom(): void {
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+// .chat-messages tiene scroll-behavior:smooth en CSS (para que un mensaje nuevo
+// aparezca con una animacion linda) -- esa propiedad tambien pisa una asignacion
+// directa de scrollTop, no solo scrollTo()/scrollIntoView(). Por eso hace falta
+// pedir "instant" explicitamente para las correcciones de posicion que no
+// tienen que animarse (abrir la conversacion, cargar mensajes viejos arriba).
+function scrollToBottom(behavior: ScrollBehavior = "smooth"): void {
+  messagesEl.scrollTo({ top: messagesEl.scrollHeight, left: 0, behavior });
+}
+
+// Solo se carga la ultima pagina de entrada (arranca directo ahi, ver
+// scrollToBottom("instant") mas abajo); el resto de la conversacion se trae de a
+// paginas cuando el usuario scrollea cerca del principio (ver olderMessagesObserver),
+// nunca todo junto -- pensado para conversaciones que con el tiempo pueden ser largas.
+const SENTINEL_HTML = `<div class="chat-load-sentinel" id="chatLoadSentinel"><div class="modern-spinner" id="chatLoadSpinner" hidden></div></div>`;
+
+let olderExhausted = false;
+let isLoadingOlder = false;
+
+// El sentinel vive siempre como primer hijo de #chatMessages, asi que cada
+// reconstruccion del innerHTML lo recrea -- por eso se vuelve a observar el
+// nodo nuevo despues de cada render en vez de observar uno solo fijo.
+const olderMessagesObserver = new IntersectionObserver(
+  (entries) => {
+    if (entries[0]?.isIntersecting) void prependOlderMessages();
+  },
+  { root: messagesEl, rootMargin: "150px 0px" }
+);
+
+function observeLoadSentinel(): void {
+  const sentinel = document.getElementById("chatLoadSentinel");
+  if (sentinel) olderMessagesObserver.observe(sentinel);
 }
 
 async function renderInitialMessages(): Promise<void> {
+  messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
   const page = await listMessages(conversationId!);
   messages = page.slice().reverse();
   messages.forEach((m) => renderedIds.add(m.id));
   await hydrateSharedPosts(messages);
+  olderExhausted = page.length < MESSAGES_PAGE_SIZE;
   messagesEl.innerHTML = messages.length
-    ? buildMessagesHtml(messages)
+    ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
     : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
-  loadMoreBtn.hidden = page.length < MESSAGES_PAGE_SIZE;
   await hydrateImages();
-  scrollToBottom();
+  scrollToBottom("instant"); // abre directo posicionado ahi, sin animar el salto
+  if (!olderExhausted) observeLoadSentinel();
 
   const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
   if (hasUnreadFromOther) void markConversationRead(conversationId!);
 }
 
 async function prependOlderMessages(): Promise<void> {
-  if (messages.length === 0) return;
-  loadMoreBtn.disabled = true;
+  if (messages.length === 0 || olderExhausted || isLoadingOlder) return;
+  isLoadingOlder = true;
+  const spinner = document.getElementById("chatLoadSpinner");
+  if (spinner) spinner.hidden = false; // si tarda un toque, que se note que esta cargando
+
   const older = await listMessages(conversationId!, messages[0].created_at);
-  loadMoreBtn.disabled = false;
+  isLoadingOlder = false;
+
   if (older.length === 0) {
-    loadMoreBtn.hidden = true;
+    olderExhausted = true;
+    olderMessagesObserver.disconnect();
+    document.getElementById("chatLoadSentinel")?.remove();
     return;
   }
   const ascendingOlder = older.slice().reverse();
@@ -316,14 +352,14 @@ async function prependOlderMessages(): Promise<void> {
   messages = [...ascendingOlder, ...messages];
   await hydrateSharedPosts(ascendingOlder);
 
+  olderExhausted = older.length < MESSAGES_PAGE_SIZE;
   const prevScrollHeight = messagesEl.scrollHeight;
-  messagesEl.innerHTML = buildMessagesHtml(messages);
+  messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
   await hydrateImages();
-  messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
-  loadMoreBtn.hidden = older.length < MESSAGES_PAGE_SIZE;
+  messagesEl.scrollTo({ top: messagesEl.scrollHeight - prevScrollHeight, left: 0, behavior: "instant" });
+  if (olderExhausted) olderMessagesObserver.disconnect();
+  else observeLoadSentinel();
 }
-
-loadMoreBtn.addEventListener("click", () => void prependOlderMessages());
 
 async function appendMessage(m: ChatMessage): Promise<void> {
   if (renderedIds.has(m.id)) return;
