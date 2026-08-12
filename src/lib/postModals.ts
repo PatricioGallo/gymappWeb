@@ -14,8 +14,8 @@ import {
 import { getOrCreateConversation, sendMessage } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
 
-const QUOTE_MAX = 140;
-const COMMENT_MODAL_MAX = 140;
+const QUOTE_MAX = 240;
+const COMMENT_MODAL_MAX = 240;
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
 
 function closeOverlay(): void {

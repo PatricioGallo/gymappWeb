@@ -28,7 +28,7 @@ const userId = await requireAuth();
 
 // Coincide con el limite por pagina que usa getPersonalizedFeed() por defecto en post.service.ts.
 const FEED_PAGE_SIZE = 20;
-const POST_MAX = 140;
+const POST_MAX = 240;
 
 const listEl = document.getElementById("postFeedList")!;
 const sentinel = document.getElementById("postFeedSentinel")!;

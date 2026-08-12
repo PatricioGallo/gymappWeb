@@ -30,8 +30,8 @@ export interface FeedComment extends PostComment {
 }
 
 const FEED_PAGE_SIZE = 20;
-const POST_CONTENT_MAX = 140;
-const COMMENT_CONTENT_MAX = 140;
+const POST_CONTENT_MAX = 240;
+const COMMENT_CONTENT_MAX = 240;
 const POST_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 const POST_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const POST_VIDEO_TYPES = ["video/mp4", "video/webm"];
