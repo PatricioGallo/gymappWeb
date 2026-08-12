@@ -3,7 +3,7 @@ import { escapeHtml } from "../lib/dom";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
 import {
-  getFeed,
+  getPersonalizedFeed,
   createPost,
   toggleLike,
   toggleRepost,
@@ -24,7 +24,7 @@ setupRevealObserver();
 setupAutoHideHeader();
 const userId = await requireAuth();
 
-// Coincide con el limite por pagina que usa getFeed() por defecto en post.service.ts.
+// Coincide con el limite por pagina que usa getPersonalizedFeed() por defecto en post.service.ts.
 const FEED_PAGE_SIZE = 20;
 const POST_MAX = 140;
 
@@ -214,15 +214,21 @@ function renderFeed(): void {
   wirePostCard(listEl, posts, postCardHandlers);
 }
 
+// Cuenta solo lo que ya trajo el server (no la lista local, que puede tener
+// Reps propios agregados adelante al publicar/citar) -- el algoritmo ordena
+// por puntaje, no por fecha, asi que un cursor de "antes de tal fecha" no
+// sirve para paginar; offset es lo mas simple que funciona con ese orden.
+let feedOffset = 0;
+
 async function loadMore(): Promise<void> {
-  if (posts.length === 0) return;
   loadMoreBtn.disabled = true;
-  const older = await getFeed(posts[posts.length - 1].feedTimestamp);
+  const older = await getPersonalizedFeed(feedOffset);
   loadMoreBtn.disabled = false;
   if (older.length === 0) {
     loadMoreBtn.hidden = true;
     return;
   }
+  feedOffset += older.length;
   posts = [...posts, ...older];
   renderFeed();
   loadMoreBtn.hidden = older.length < FEED_PAGE_SIZE;
@@ -230,7 +236,8 @@ async function loadMore(): Promise<void> {
 
 loadMoreBtn.addEventListener("click", () => void loadMore());
 
-posts = await getFeed();
+posts = await getPersonalizedFeed(0);
+feedOffset = posts.length;
 renderFeed();
 loadMoreBtn.hidden = posts.length < FEED_PAGE_SIZE;
 

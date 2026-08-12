@@ -772,14 +772,66 @@ export type Database = {
           },
         ]
       }
+      profile_visits: {
+        Row: {
+          last_visited_at: string
+          visit_count: number
+          visited_id: string
+          visitor_id: string
+        }
+        Insert: {
+          last_visited_at?: string
+          visit_count?: number
+          visited_id: string
+          visitor_id: string
+        }
+        Update: {
+          last_visited_at?: string
+          visit_count?: number
+          visited_id?: string
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_visits_visited_id_fkey"
+            columns: ["visited_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_visits_visited_id_fkey"
+            columns: ["visited_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_visits_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_visits_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           apellido: string
           avatar_url: string | null
           bio: string | null
+          ciudad: string | null
           created_at: string
           email: string
           fecha_nacimiento: string
+          genero: string | null
           id: string
           is_public: boolean
           is_verified: boolean
@@ -788,6 +840,7 @@ export type Database = {
           nacionalidad: string | null
           nombre: string
           notification_prefs: Json
+          provincia: string | null
           show_last_seen: boolean
           show_read_receipts: boolean
           updated_at: string
@@ -799,9 +852,11 @@ export type Database = {
           apellido: string
           avatar_url?: string | null
           bio?: string | null
+          ciudad?: string | null
           created_at?: string
           email: string
           fecha_nacimiento: string
+          genero?: string | null
           id: string
           is_public?: boolean
           is_verified?: boolean
@@ -810,6 +865,7 @@ export type Database = {
           nacionalidad?: string | null
           nombre: string
           notification_prefs?: Json
+          provincia?: string | null
           show_last_seen?: boolean
           show_read_receipts?: boolean
           updated_at?: string
@@ -821,9 +877,11 @@ export type Database = {
           apellido?: string
           avatar_url?: string | null
           bio?: string | null
+          ciudad?: string | null
           created_at?: string
           email?: string
           fecha_nacimiento?: string
+          genero?: string | null
           id?: string
           is_public?: boolean
           is_verified?: boolean
@@ -832,6 +890,7 @@ export type Database = {
           nacionalidad?: string | null
           nombre?: string
           notification_prefs?: Json
+          provincia?: string | null
           show_last_seen?: boolean
           show_read_receipts?: boolean
           updated_at?: string
@@ -1590,6 +1649,10 @@ export type Database = {
       can_access_day: { Args: { did: string }; Returns: boolean }
       can_access_routine: { Args: { rid: string }; Returns: boolean }
       can_access_week: { Args: { wid: string }; Returns: boolean }
+      can_interact_with_post_author: {
+        Args: { p_author_id: string }
+        Returns: boolean
+      }
       can_view_day: { Args: { did: string }; Returns: boolean }
       can_view_routine: { Args: { rid: string }; Returns: boolean }
       can_view_week: { Args: { wid: string }; Returns: boolean }
@@ -1637,6 +1700,31 @@ export type Database = {
       get_or_create_conversation: {
         Args: { p_other_user_id: string }
         Returns: string
+      }
+      get_personalized_feed: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          author_id: string
+          comments_count: number
+          content: string | null
+          created_at: string
+          id: string
+          likes_count: number
+          media_type: string | null
+          media_url: string | null
+          quoted_post_id: string | null
+          quotes_count: number
+          reposts_count: number
+          thread_parent_id: string | null
+          thread_root_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "posts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
@@ -1824,6 +1912,10 @@ export type Database = {
         }[]
       }
       touch_last_seen: { Args: never; Returns: undefined }
+      touch_profile_visit: {
+        Args: { p_visited_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       exercise_category:

@@ -61,7 +61,20 @@ export async function updateProfileFields(
   fields: Partial<
     Pick<
       Profile,
-      "nombre" | "apellido" | "fecha_nacimiento" | "nacionalidad" | "is_public" | "bio" | "links" | "notification_prefs" | "zoom_enabled" | "show_last_seen" | "show_read_receipts"
+      | "nombre"
+      | "apellido"
+      | "fecha_nacimiento"
+      | "nacionalidad"
+      | "genero"
+      | "provincia"
+      | "ciudad"
+      | "is_public"
+      | "bio"
+      | "links"
+      | "notification_prefs"
+      | "zoom_enabled"
+      | "show_last_seen"
+      | "show_read_receipts"
     >
   >
 ): Promise<{ error?: string }> {
@@ -73,6 +86,11 @@ export async function updateProfileFields(
 /** Actualiza mi "última conexión" (heartbeat simple, sin presencia realtime). Falla en silencio: no es crítico. */
 export async function touchLastSeen(): Promise<void> {
   await supabase.rpc("touch_last_seen");
+}
+
+/** Señal de afinidad para el algoritmo del feed (get_personalized_feed): registra que visité el perfil de otro usuario. */
+export async function touchProfileVisit(visitedId: string): Promise<void> {
+  await supabase.rpc("touch_profile_visit", { p_visited_id: visitedId });
 }
 
 export async function updateEmail(email: string): Promise<{ error?: string }> {

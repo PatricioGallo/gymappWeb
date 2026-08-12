@@ -76,6 +76,27 @@
 
           <div class="field-row">
             <div class="field">
+              <label for="genero">Género</label>
+              <select id="genero" name="genero">
+                <option value="">Elegí una opción</option>
+                <option value="hombre">Hombre</option>
+                <option value="mujer">Mujer</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="provincia">Provincia</label>
+              <input type="text" id="provincia" name="provincia" placeholder="Ej: Tucumán" autocomplete="address-level1">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="ciudad">Ciudad (opcional)</label>
+            <input type="text" id="ciudad" name="ciudad" placeholder="Ej: San Miguel de Tucumán" autocomplete="address-level2">
+          </div>
+
+          <div class="field-row">
+            <div class="field">
               <label for="pass">Contraseña</label>
               <input type="password" id="pass" name="pass" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
             </div>

@@ -14,6 +14,7 @@ import {
   reactivateRoutine,
   listWeightLogsWithContext,
   parseProfileLinks,
+  touchProfileVisit,
   type Profile,
   type ProfileBasic,
   type ProfileLink,
@@ -1577,6 +1578,11 @@ async function main() {
 
   const isOwner = displayProfile.id === myId;
   const nombre = displayProfile.nombre ?? "Este usuario";
+
+  // Señal para el algoritmo del feed (get_personalized_feed): perfiles que
+  // visitaste le dan un pequeño boost a ese autor. Nunca debe romper la carga
+  // del perfil si falla.
+  if (!isOwner && myId) void touchProfileVisit(displayProfile.id!);
 
   renderProfileIdentity(displayProfile.username ?? "", nombre, displayProfile.apellido ?? "", displayProfile.user_type ?? "usuario", displayProfile.is_verified ?? false);
 

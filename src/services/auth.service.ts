@@ -9,6 +9,9 @@ export interface SignUpFields {
   username: string;
   fechaNacimiento: string;
   nacionalidad: string;
+  genero: "hombre" | "mujer" | "otro";
+  provincia: string;
+  ciudad?: string;
   userType?: "usuario" | "entrenador";
 }
 
@@ -72,6 +75,9 @@ export async function signUp(fields: SignUpFields): Promise<{ error?: string }> 
         username,
         fecha_nacimiento: fields.fechaNacimiento,
         nacionalidad: fields.nacionalidad,
+        genero: fields.genero,
+        provincia: fields.provincia,
+        ciudad: fields.ciudad ?? "",
         user_type: fields.userType ?? "usuario",
       },
     },

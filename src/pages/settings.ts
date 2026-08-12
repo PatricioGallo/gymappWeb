@@ -133,6 +133,25 @@ function renderEditTab() {
           </select>
         </div>
       </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="editGenero">Género</label>
+          <select id="editGenero">
+            <option value="" ${!profile!.genero ? "selected" : ""}>Elegí una opción</option>
+            <option value="hombre" ${profile!.genero === "hombre" ? "selected" : ""}>Hombre</option>
+            <option value="mujer" ${profile!.genero === "mujer" ? "selected" : ""}>Mujer</option>
+            <option value="otro" ${profile!.genero === "otro" ? "selected" : ""}>Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="editProvincia">Provincia</label>
+          <input type="text" id="editProvincia" placeholder="Ej: Tucumán" value="${escapeHtml(profile!.provincia ?? "")}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="editCiudad">Ciudad (opcional)</label>
+        <input type="text" id="editCiudad" placeholder="Ej: San Miguel de Tucumán" value="${escapeHtml(profile!.ciudad ?? "")}">
+      </div>
       <div class="field">
         <label for="editBio">Biografía</label>
         <textarea id="editBio" rows="3" maxlength="${MAX_BIO_LENGTH}">${escapeHtml(profile!.bio ?? "")}</textarea>
@@ -247,6 +266,9 @@ function renderEditTab() {
     const apellido = (document.getElementById("editApellido") as HTMLInputElement).value.trim();
     const fechaNacimiento = (document.getElementById("editBirthdate") as HTMLInputElement).value;
     const nacionalidad = (document.getElementById("editNationality") as HTMLSelectElement).value;
+    const genero = (document.getElementById("editGenero") as HTMLSelectElement).value as "hombre" | "mujer" | "otro" | "";
+    const provincia = (document.getElementById("editProvincia") as HTMLInputElement).value.trim();
+    const ciudad = (document.getElementById("editCiudad") as HTMLInputElement).value.trim();
     const bio = bioField.value.trim();
 
     if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
@@ -295,6 +317,9 @@ function renderEditTab() {
       apellido,
       fecha_nacimiento: fechaNacimiento,
       nacionalidad,
+      genero: genero || null,
+      provincia: provincia || null,
+      ciudad: ciudad || null,
       bio: bio || null,
       links: newLinks as unknown as Profile["links"],
     });
@@ -303,7 +328,17 @@ function renderEditTab() {
       return;
     }
 
-    Object.assign(profile!, { nombre, apellido, fecha_nacimiento: fechaNacimiento, nacionalidad, bio: bio || null, links: newLinks });
+    Object.assign(profile!, {
+      nombre,
+      apellido,
+      fecha_nacimiento: fechaNacimiento,
+      nacionalidad,
+      genero: genero || null,
+      provincia: provincia || null,
+      ciudad: ciudad || null,
+      bio: bio || null,
+      links: newLinks,
+    });
     showSavedAnimation();
   });
 }

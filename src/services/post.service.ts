@@ -40,6 +40,18 @@ function friendlyError(error: { message?: string; code?: string } | null, fallba
   return error?.message?.trim() || fallback;
 }
 
+// Mensaje de negocio: si tu perfil es privado, no podes comentar/repostear/citar
+// Reps de gente que no seguis (dar me gusta si esta permitido siempre). Lo
+// deciden los triggers *_enforce_*_privacy_gate en la base -- todos levantan
+// una excepcion con "perfil privado" en el texto para poder mapearla aca al
+// mensaje que ve el usuario, sin acoplar la UI al texto interno del trigger.
+const PRIVATE_INTERACTION_MESSAGE =
+  "Si tu perfil es privado no podés comentar ni repostear (ni citar) a gente que no seguís. Sí podés poner me gusta. Esa es la diferencia entre perfil público y privado.";
+
+function isPrivateInteractionError(error: { message?: string } | null): boolean {
+  return !!error?.message?.includes("perfil privado");
+}
+
 async function getViewerId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
@@ -182,6 +194,24 @@ export async function getFeed(beforeIso?: string, limit = FEED_PAGE_SIZE): Promi
   return entries.slice(0, limit);
 }
 
+/**
+ * Feed "Para vos": orden que da el algoritmo (get_personalized_feed, ver migración
+ * add_get_personalized_feed) en vez de puro orden cronológico -- seguidos/seguidores
+ * primero, después popularidad regional, género opuesto popular en tu región, y un
+ * ajuste por afinidad personal (perfiles visitados, autores que likeaste antes).
+ * No mezcla reposts-en-el-feed (a diferencia de getFeed): el orden no es cronológico,
+ * así que no hay un timestamp único para intercalarlos de forma consistente.
+ * Paginación por offset (no por cursor de fecha, porque el orden no es por fecha).
+ */
+export async function getPersonalizedFeed(offset = 0, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+  const viewerId = await getViewerId();
+  const { data, error } = await supabase.rpc("get_personalized_feed", { p_limit: limit, p_offset: offset });
+  if (error) throw error;
+  const rows = data ?? [];
+  const hydratedById = await hydratePosts(rows, viewerId);
+  return rows.map((r) => hydratedById.get(r.id)).filter((p): p is FeedPost => !!p);
+}
+
 /** Hilo completo (raíz + todas sus continuaciones) a partir del id de la raíz. */
 export async function getThread(rootId: string): Promise<FeedPost[]> {
   const viewerId = await getViewerId();
@@ -261,7 +291,10 @@ export async function createQuote(authorId: string, quotedPostId: string, conten
     .insert({ author_id: authorId, quoted_post_id: quotedPostId, content: content.trim() || null })
     .select("*")
     .single();
-  if (error) return { error: friendlyError(error, "No se pudo citar el Rep. Probá de nuevo.") };
+  if (error) {
+    if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
+    return { error: friendlyError(error, "No se pudo citar el Rep. Probá de nuevo.") };
+  }
   return { post: data };
 }
 
@@ -294,6 +327,7 @@ export async function toggleRepost(postId: string, userId: string, currentlyRepo
   const { error } = await supabase.from("post_reposts").insert({ post_id: postId, user_id: userId });
   if (error) {
     if (error.code === "23505") return {};
+    if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
     return { error: "No se pudo repostear." };
   }
   return {};
@@ -332,6 +366,7 @@ export async function addComment(
     .single();
   if (error) {
     if (error.message?.includes("otro Rep")) return { error: "No se pudo responder a ese comentario." };
+    if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
     return { error: friendlyError(error, "No se pudo comentar. Probá de nuevo.") };
   }
   return { comment: data };
