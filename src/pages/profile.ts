@@ -885,6 +885,8 @@ async function refreshRoutinesAndStats() {
 // ---------- Reps ----------
 
 const REPS_PAGE_SIZE = 20;
+// Reps deshabilitado temporalmente en el perfil (pedido explícito del usuario).
+const REPS_ENABLED = false;
 
 
 function goToAuthorProfile(author: PostAuthor): void {
@@ -895,7 +897,7 @@ async function renderProfileReps(targetUserId: string, isOwner: boolean) {
   const section = document.getElementById("repsSection");
   const listEl = document.getElementById("repsSectionList");
   const loadMoreBtn = document.getElementById("repsSectionLoadMoreBtn") as HTMLButtonElement | null;
-  if (!section || !listEl) return;
+  if (!REPS_ENABLED || !section || !listEl) return;
 
   const eyebrow = document.getElementById("repsSectionEyebrow");
   if (eyebrow && !isOwner) eyebrow.textContent = "Sus Reps";

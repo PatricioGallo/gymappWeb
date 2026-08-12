@@ -1,4 +1,4 @@
-import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
+import { setupNavToggle, setupRevealObserver, setupAutoHideHeader, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
@@ -14,9 +14,14 @@ import {
   type Post,
   type PostAuthor,
 } from "../services/post.service";
+import { getSuggestedProfiles, type SuggestedProfile } from "../services/search.service";
+import { followUser } from "../services/follow.service";
+import { resultAvatar, resultFullName } from "../lib/search";
+import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
 setupNavToggle();
 setupRevealObserver();
+setupAutoHideHeader();
 const userId = await requireAuth();
 
 // Coincide con el limite por pagina que usa getFeed() por defecto en post.service.ts.
@@ -228,3 +233,66 @@ loadMoreBtn.addEventListener("click", () => void loadMore());
 posts = await getFeed();
 renderFeed();
 loadMoreBtn.hidden = posts.length < FEED_PAGE_SIZE;
+
+// ---------------------------------------------------------------------------
+// Sidebar derecha: "a quién seguir" (solo desktop, ver .feed-side-right en CSS)
+// ---------------------------------------------------------------------------
+
+const suggestionsEl = document.getElementById("feedSuggestionsList");
+let suggestions: SuggestedProfile[] = [];
+
+function suggestionRowHtml(s: SuggestedProfile): string {
+  return `
+    <div class="search-page-item search-suggestion-item" data-username="${encodeURIComponent(s.username)}">
+      <img src="${escapeHtml(resultAvatar(s))}" alt="" class="search-page-avatar">
+      <span class="search-page-body">
+        <p class="search-page-name">${escapeHtml(s.username)}${renderVerifiedBadge(s.user_type, s.is_verified)}</p>
+        <p class="search-page-meta">${escapeHtml(resultFullName(s))}</p>
+      </span>
+      <button type="button" class="btn btn-outline btn-sm follow-suggestion-btn" data-id="${escapeHtml(s.id)}">Seguir</button>
+    </div>
+  `;
+}
+
+function renderSuggestions(): void {
+  if (!suggestionsEl) return;
+  suggestionsEl.innerHTML = suggestions.length
+    ? suggestions.map((s) => suggestionRowHtml(s)).join("")
+    : `<p class="exc-pick-empty">No hay sugerencias por ahora.</p>`;
+
+  suggestionsEl.querySelectorAll<HTMLDivElement>(".search-suggestion-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      window.location.href = `profile.html?u=${item.dataset.username}`;
+    });
+  });
+  suggestionsEl.querySelectorAll<HTMLButtonElement>(".follow-suggestion-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void handleFollowSuggestion(btn);
+    });
+  });
+}
+
+async function handleFollowSuggestion(btn: HTMLButtonElement): Promise<void> {
+  const targetId = btn.dataset.id!;
+  btn.disabled = true;
+  const { status, error } = await followUser(userId, targetId);
+  if (error) {
+    alert(error);
+    btn.disabled = false;
+    return;
+  }
+  btn.textContent = status === "pending" ? "Solicitud enviada" : "Siguiendo";
+  suggestions = suggestions.filter((s) => s.id !== targetId);
+}
+
+if (suggestionsEl) {
+  getSuggestedProfiles(5)
+    .then((list) => {
+      suggestions = list;
+      renderSuggestions();
+    })
+    .catch(() => {
+      // silencioso: si fallan las sugerencias, el feed sigue funcionando
+    });
+}

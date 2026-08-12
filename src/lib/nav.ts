@@ -177,6 +177,34 @@ export function setupRevealObserver(): void {
   mutationObserver.observe(document.body, { childList: true, subtree: true });
 }
 
+/** Header sticky que se esconde al scrollear para abajo y reaparece al scrollear para arriba, solo en mobile (ver .header-hidden en modern.css). Pensado para paginas de scroll largo como feed.html. */
+export function setupAutoHideHeader(): void {
+  const header = document.querySelector<HTMLElement>(".site-header");
+  if (!header) return;
+
+  const MOBILE_QUERY = "(max-width: 859px)";
+  const SCROLL_THRESHOLD = 8; // ignora micro-scrolls (rebote de iOS, etc.)
+  let lastY = window.scrollY;
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      const y = window.scrollY;
+      if (!window.matchMedia(MOBILE_QUERY).matches) {
+        header.classList.remove("header-hidden");
+        lastY = y;
+        return;
+      }
+
+      const delta = y - lastY;
+      if (Math.abs(delta) < SCROLL_THRESHOLD) return;
+      header.classList.toggle("header-hidden", delta > 0 && y > header.offsetHeight);
+      lastY = y;
+    },
+    { passive: true }
+  );
+}
+
 export async function redirectIfAuthenticated(): Promise<void> {
   const { data } = await supabase.auth.getSession();
   if (!data.session) return;
