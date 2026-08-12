@@ -18,6 +18,24 @@ export async function insertWeightLogs(userId: string, entries: NewWeightLog[]):
   if (error) throw error;
 }
 
+// Dias marcados "terminado" a mano (ver ruedita en pesos.ts), independiente de si
+// se cargo o no el 100% de los pesos: la sesion puede haberse dado por terminada igual.
+export async function getCompletedDayIds(userId: string, routineDayIds: string[]): Promise<Set<string>> {
+  if (routineDayIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("routine_day_completions")
+    .select("routine_day_id")
+    .eq("user_id", userId)
+    .in("routine_day_id", routineDayIds);
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => r.routine_day_id));
+}
+
+export async function markDayComplete(userId: string, routineDayId: string): Promise<void> {
+  const { error } = await supabase.from("routine_day_completions").upsert({ user_id: userId, routine_day_id: routineDayId }, { onConflict: "routine_day_id,user_id" });
+  if (error) throw error;
+}
+
 // Borra unicamente la carga de hoy para este ejercicio (todas sus series), sin tocar
 // registros de dias anteriores: "deshacer" lo que se acaba de guardar por error.
 export async function deleteTodayWeightLog(userId: string, routineExerciseId: string, fecha: string): Promise<void> {

@@ -1,7 +1,8 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
-import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
+import { getRoutineDetail, setRoutineShareable, type RoutineDetail } from "../services/routine.service";
+import { createPost } from "../services/post.service";
 import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
 import {
@@ -9,6 +10,8 @@ import {
   deleteTodayWeightLog,
   getLatestWeights,
   getExerciseHistory,
+  getCompletedDayIds,
+  markDayComplete,
   type LatestWeightsMap,
   type LatestWeightEntry,
   type WeightUnit,
@@ -17,6 +20,11 @@ import { getTodayComments, upsertExerciseComment, deleteExerciseComment, MAX_COM
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
+
+// El aviso automatico de "publicar" al completar un dia molesta si aparece cada vez:
+// se guarda que ya se mostro una vez (en este navegador) para no insistir mas. De ahi
+// en mas "Publicar" y "Marcar como terminado" quedan disponibles a mano en la ruedita.
+const DAY_PUBLISH_PROMPT_KEY = "gymsocial_day_publish_prompted";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
 const UNIT_PLACEHOLDERS: Record<WeightUnit, string> = { kg: "kg", lb: "lb", bloques: "bl" };
@@ -106,6 +114,18 @@ function setupWeightMenuOutsideClick() {
     if (target.closest(".weight-menu-wrap")) return;
     document.querySelectorAll<HTMLElement>(".weight-menu-panel").forEach((p) => (p.hidden = true));
     document.querySelectorAll<HTMLButtonElement>(".weight-menu-btn").forEach((b) => {
+      b.classList.remove("open");
+      b.setAttribute("aria-expanded", "false");
+    });
+  });
+}
+
+function setupDayMenuOutsideClick() {
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".day-row-menu-wrap")) return;
+    document.querySelectorAll<HTMLElement>(".day-row-menu-panel").forEach((p) => (p.hidden = true));
+    document.querySelectorAll<HTMLButtonElement>(".day-row-menu-btn").forEach((b) => {
       b.classList.remove("open");
       b.setAttribute("aria-expanded", "false");
     });
@@ -217,6 +237,84 @@ function openCommentModal(exc: { id: string; nombre_snapshot: string }, weekInde
   });
 }
 
+// Se dispara automaticamente la primera vez que un dia llega al 100% (ver
+// saveWeights, gateado por DAY_PUBLISH_PROMPT_KEY para no insistir despues), y a mano
+// desde la ruedita de cada dia en cualquier momento (con el % que tenga en ese instante,
+// no necesariamente 100). El link usa el token "compartible" de la rutina (mismo
+// mecanismo que "Publicar" en las rutinas del perfil) mas &dia=<indice> para que
+// showExc.html abra ese dia puntual ya desplegado en vez de la rutina entera colapsada.
+async function openPublishDayModal(weekIndex: number, diaIndex: number, pct: number, onDone: () => void = () => openDay(weekIndex, diaIndex)): Promise<void> {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  const dia = routine!.semanas[weekIndex].dias[diaIndex];
+  const dayLabel = dayDisplayLabel(dia.dia_semana, dia.nombre);
+
+  loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Preparando...</p></div>`;
+
+  let shareUrl: string;
+  try {
+    const token = routine!.is_shareable ? routine!.share_token : await setRoutineShareable(routine!.id, true);
+    shareUrl = `${window.location.origin}/pages/showExc.html?token=${token}&dia=${diaIndex}`;
+  } catch {
+    loaderBody.innerHTML = "";
+    alert("No se pudo preparar el link para publicar. Probá de nuevo.");
+    onDone();
+    return;
+  }
+
+  const defaultText = `Terminé el día de "${dayLabel}" en un ${pct}%: ${shareUrl}`;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Publicar día</h2>
+        <p class="subtitle">Se publica como un Rep en tu perfil. Podés editar el texto antes.</p>
+        <div class="field">
+          <textarea id="publishDayText" rows="4" maxlength="240">${escapeHtml(defaultText)}</textarea>
+        </div>
+        <div class="alert_message" id="publishDayAlert"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="publishDaySkip">Ahora no</button>
+          <button type="button" class="btn btn-primary" id="publishDaySubmit">Publicar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("publishDaySkip")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+    onDone();
+  });
+
+  document.getElementById("publishDaySubmit")?.addEventListener("click", async () => {
+    const textarea = document.getElementById("publishDayText") as HTMLTextAreaElement;
+    const alertEl = document.getElementById("publishDayAlert")!;
+    const content = textarea.value.trim();
+    if (!content) {
+      alertEl.innerHTML = "<p>Escribí algo para publicar.</p>";
+      return;
+    }
+    const submitBtn = document.getElementById("publishDaySubmit") as HTMLButtonElement;
+    submitBtn.disabled = true;
+    const { error } = await createPost(myId, content);
+    if (error) {
+      alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      submitBtn.disabled = false;
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+        <p>¡Publicado!</p>
+      </div>
+    `;
+    setTimeout(() => {
+      loaderBody.innerHTML = "";
+      onDone();
+    }, 1200);
+  });
+}
+
 // Muestra el ultimo valor guardado por unidad, sin importar la fecha: puede ser de
 // otra semana de la rutina o de hoy mismo (si ya se cargo en otra ocurrencia del ejercicio).
 function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
@@ -246,6 +344,7 @@ function exerciseDefaultUnit(bySerie: Map<number, LatestWeightEntry[]> | undefin
 setupNavToggle();
 setupRevealObserver();
 setupWeightMenuOutsideClick();
+setupDayMenuOutsideClick();
 const myId = await requireAuth();
 
 const params = new URLSearchParams(window.location.search);
@@ -264,6 +363,9 @@ let exerciseHistory: LatestWeightsMap = new Map();
 let todayComments: Map<string, ExerciseComment> = new Map();
 let allExerciseIds: string[] = [];
 let allCatalogExerciseIds: string[] = [];
+// Dias marcados "terminado" a mano (ruedita), ademas de los que llegan al 100% de
+// pesos cargados solos -- ver markDayComplete.
+let completedDayIds: Set<string> = new Set();
 
 function ringMarkup(pct: number): string {
   const r = 16;
@@ -355,24 +457,82 @@ function renderWeek(weekIndex: number) {
   weekContent.innerHTML = semana.dias
     .map((dia, diaIndex) => {
       const pct = dayProgress(dia);
-      const done = pct >= 100;
+      // "Completo" tambien cuando se marco a mano (ver markDayDoneBtn): la sesion
+      // puede haberse dado por terminada sin cargar el 100% de los pesos.
+      const done = pct >= 100 || completedDayIds.has(dia.id);
       const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
       const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
       const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
 
+      // Entrenar "por" un alumno publica desde la cuenta del entrenador: no se ofrece
+      // "Publicar" en ese caso. Sin ningun item aplicable no se arma la ruedita.
+      const menuItems = [
+        !isTrainingForOther ? `<button type="button" class="profile-menu-item publishDayBtn" data-dia="${diaIndex}">Publicar</button>` : "",
+        !done ? `<button type="button" class="profile-menu-item markDayDoneBtn" data-dia="${diaIndex}">Marcar como terminado</button>` : "",
+      ]
+        .filter(Boolean)
+        .join("");
+      const menu = menuItems
+        ? `<div class="profile-menu-wrap day-row-menu-wrap">
+             <button type="button" class="profile-menu-btn day-row-menu-btn" data-dia="${diaIndex}" aria-label="Más opciones" aria-expanded="false">${WEIGHT_MENU_KEBAB_ICON}</button>
+             <div class="profile-menu-panel day-row-menu-panel" hidden>${menuItems}</div>
+           </div>`
+        : "";
+
       return `
-        <button class="day-row reveal ${done ? "done" : ""}" type="button" data-dia="${diaIndex}">
-          ${ringMarkup(pct)}
-          <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
-          <span class="day-row-status ${done ? "done" : "pending"}">${done ? "Completo" : "Pendiente"}</span>
-          <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-        </button>
+        <div class="day-row reveal ${done ? "done" : ""}" data-dia="${diaIndex}">
+          <button class="day-row-main" type="button" data-dia="${diaIndex}">
+            ${ringMarkup(pct)}
+            <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
+            <span class="day-row-status ${done ? "done" : "pending"}">${done ? "Completo" : "Pendiente"}</span>
+            <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          ${menu}
+        </div>
       `;
     })
     .join("");
 
-  weekContent.querySelectorAll<HTMLButtonElement>(".day-row").forEach((row) => {
-    row.addEventListener("click", () => openDay(weekIndex, Number(row.dataset.dia)));
+  weekContent.querySelectorAll<HTMLButtonElement>(".day-row-main").forEach((btn) => {
+    btn.addEventListener("click", () => openDay(weekIndex, Number(btn.dataset.dia)));
+  });
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".day-row-menu-btn").forEach((btn) => {
+    const panel = btn.nextElementSibling as HTMLElement | null;
+    if (!panel) return;
+    btn.addEventListener("click", () => {
+      const willOpen = panel.hidden;
+      weekContent.querySelectorAll<HTMLElement>(".day-row-menu-panel").forEach((p) => (p.hidden = true));
+      weekContent.querySelectorAll<HTMLButtonElement>(".day-row-menu-btn").forEach((b) => {
+        b.classList.remove("open");
+        b.setAttribute("aria-expanded", "false");
+      });
+      panel.hidden = !willOpen;
+      btn.classList.toggle("open", willOpen);
+      btn.setAttribute("aria-expanded", String(willOpen));
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".publishDayBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const diaIndex = Number(btn.dataset.dia);
+      void openPublishDayModal(weekIndex, diaIndex, dayProgress(semana.dias[diaIndex]), () => renderWeek(weekIndex));
+    });
+  });
+
+  weekContent.querySelectorAll<HTMLButtonElement>(".markDayDoneBtn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const diaIndex = Number(btn.dataset.dia);
+      btn.disabled = true;
+      try {
+        await markDayComplete(targetUserId, semana.dias[diaIndex].id);
+        completedDayIds.add(semana.dias[diaIndex].id);
+        renderWeek(weekIndex);
+      } catch {
+        btn.disabled = false;
+        alert("No se pudo marcar el día como terminado. Probá de nuevo.");
+      }
+    });
   });
 }
 
@@ -607,6 +767,10 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
   const loaderBody = document.getElementById("loaderBody")!;
   loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Guardando pesos...</p></div>`;
 
+  // Se compara contra el progreso previo para ofrecer publicar solo en el momento en
+  // que el dia pasa a estar completo, no en cada guardado posterior de un dia ya terminado.
+  const pctBefore = dayProgress(routine!.semanas[weekIndex].dias[diaIndex]);
+
   try {
     await insertWeightLogs(targetUserId, entries);
     loaderBody.innerHTML = `
@@ -616,10 +780,22 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
       </div>
     `;
     [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
-    setTimeout(() => {
-      loaderBody.innerHTML = "";
-      openDay(weekIndex, diaIndex);
-    }, 1500);
+
+    // Entrenar "por" un alumno publica desde la cuenta del entrenador (myId), no la
+    // del alumno: no tiene sentido ofrecer publicar en ese caso. El aviso automatico
+    // se muestra una unica vez en la vida del navegador (ver DAY_PUBLISH_PROMPT_KEY):
+    // de ahi en mas "Publicar" y "Marcar como terminado" quedan solo en la ruedita.
+    const pctNow = dayProgress(routine!.semanas[weekIndex].dias[diaIndex]);
+    const alreadyPrompted = localStorage.getItem(DAY_PUBLISH_PROMPT_KEY);
+    if (!isTrainingForOther && pctBefore < 100 && pctNow === 100 && !alreadyPrompted) {
+      localStorage.setItem(DAY_PUBLISH_PROMPT_KEY, "1");
+      setTimeout(() => void openPublishDayModal(weekIndex, diaIndex, pctNow), 1200);
+    } else {
+      setTimeout(() => {
+        loaderBody.innerHTML = "";
+        openDay(weekIndex, diaIndex);
+      }, 1500);
+    }
   } catch {
     loaderBody.innerHTML = "";
     alertMessage.innerHTML = "<p>ERROR! No se pudo guardar.</p>";
@@ -639,10 +815,12 @@ async function init() {
 
   allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
   allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
-  [latestWeights, exerciseHistory, todayComments] = await Promise.all([
+  const allDayIds = routine.semanas.flatMap((s) => s.dias.map((d) => d.id));
+  [latestWeights, exerciseHistory, todayComments, completedDayIds] = await Promise.all([
     getLatestWeights(allExerciseIds),
     getExerciseHistory(allCatalogExerciseIds),
     getTodayComments(allExerciseIds, TODAY),
+    getCompletedDayIds(targetUserId, allDayIds),
   ]);
   if (isTrainingForOther) {
     const target = await getProfileBasicById(targetUserId).catch(() => null);

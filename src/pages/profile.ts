@@ -21,7 +21,7 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
-import { setRoutinePublic } from "../services/routine.service";
+import { setRoutinePublic, setRoutineShareable } from "../services/routine.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
 import { getOrCreateConversation } from "../services/chat.service";
@@ -47,6 +47,7 @@ import {
   getUserLikedPosts,
   getUserPostCount,
   getPost,
+  createPost,
   toggleLike,
   toggleRepost,
   recordPostView,
@@ -1258,6 +1259,7 @@ function renderActiveRoutines(
                  fullyOwned
                    ? `<a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
                <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
+               <button type="button" class="profile-menu-item publishRoutineBtn" data-id="${r.id}">Publicar</button>
                <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>`
                    : ""
                }
@@ -1318,6 +1320,12 @@ function renderActiveRoutines(
         btn.disabled = false;
         alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
       }
+    });
+  });
+  container.querySelectorAll<HTMLButtonElement>(".publishRoutineBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (routine) void openPublishRoutineModal(routine);
     });
   });
 }
@@ -1423,6 +1431,7 @@ function renderSavedRoutines(
             <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
             <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
             <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
+            <button type="button" class="profile-menu-item publishRoutineBtn" data-id="${r.id}">Publicar</button>
             <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>
           </div>
         </div>
@@ -1467,6 +1476,12 @@ function renderSavedRoutines(
         btn.disabled = false;
         alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
       }
+    });
+  });
+  container.querySelectorAll<HTMLButtonElement>(".publishRoutineBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (routine) void openPublishRoutineModal(routine);
     });
   });
 }
@@ -1659,6 +1674,76 @@ function openReactivateModal(routineId: string) {
   });
 }
 
+// El link usa el token "compartible" de la rutina (no showExc.html?rid=) para que
+// cualquiera que vea el Rep pueda abrirlo, sea o no seguidor y este o no logueado --
+// mismo mecanismo que el boton Compartir de showExc.html.
+async function openPublishRoutineModal(routine: RoutineWithCounts): Promise<void> {
+  if (!myId) return;
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Preparando...</p></div>`;
+
+  let shareUrl: string;
+  try {
+    const token = routine.is_shareable ? routine.share_token : await setRoutineShareable(routine.id, true);
+    shareUrl = `${window.location.origin}/pages/showExc.html?token=${token}`;
+  } catch {
+    alert("No se pudo preparar el link para publicar. Probá de nuevo.");
+    closeOverlay();
+    return;
+  }
+
+  const defaultText = `Mirá mi nueva rutina: ${shareUrl}`;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Publicar rutina</h2>
+        <p class="subtitle">Se publica como un Rep en tu perfil. Podés editar el texto antes.</p>
+        <div class="field">
+          <textarea id="publishRoutineText" rows="4" maxlength="240">${escapeHtml(defaultText)}</textarea>
+        </div>
+        <div class="alert_message" id="publishRoutineAlert"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="publishRoutineCancel">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="publishRoutineSubmit">Publicar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("publishRoutineCancel")?.addEventListener("click", closeOverlay);
+  document.getElementById("publishRoutineSubmit")?.addEventListener("click", async () => {
+    const textarea = document.getElementById("publishRoutineText") as HTMLTextAreaElement;
+    const alertEl = document.getElementById("publishRoutineAlert")!;
+    const content = textarea.value.trim();
+    if (!content) {
+      alertEl.innerHTML = "<p>Escribí algo para publicar.</p>";
+      return;
+    }
+    const submitBtn = document.getElementById("publishRoutineSubmit") as HTMLButtonElement;
+    submitBtn.disabled = true;
+    const { error } = await createPost(myId!, content);
+    if (error) {
+      alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      submitBtn.disabled = false;
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina publicada!</p>
+      </div>
+    `;
+    setTimeout(closeOverlay, 1600);
+  });
+}
 
 // ---------- Armado de la pagina ----------
 

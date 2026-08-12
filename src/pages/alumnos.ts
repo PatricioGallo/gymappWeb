@@ -19,6 +19,7 @@ import {
 } from "../services/subscription.service";
 import { listRecentComments, type RecentCommentRow } from "../services/comment.service";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
+import { getOrCreateConversation } from "../services/chat.service";
 
 setupNavToggle();
 setupRevealObserver();
@@ -120,6 +121,7 @@ function studentCardMarkup(s: StudentRow): string {
         <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${STUDENT_MENU_GEAR_ICON}</button>
         <div class="profile-menu-panel routine-menu-panel" hidden>
           <a class="profile-menu-item" href="progress.html?uid=${s.id}">Ver progreso</a>
+          <button type="button" class="profile-menu-item messageStudentBtn" data-id="${s.id}">Enviar mensaje</button>
           ${
             s.activeRoutine
               ? `<a class="profile-menu-item" href="pesos.html?rid=${s.activeRoutine.id}&uid=${s.id}">Empezar entrenamiento</a>`
@@ -179,6 +181,9 @@ function renderCurrentList(students: StudentRow[], query: string) {
 
   wireStudentMenus(listEl);
 
+  listEl.querySelectorAll<HTMLButtonElement>(".messageStudentBtn").forEach((btn) => {
+    btn.addEventListener("click", () => void openStudentChat(btn.dataset.id!));
+  });
   listEl.querySelectorAll<HTMLButtonElement>(".cancelSubBtn").forEach((btn) => {
     btn.addEventListener("click", () => confirmCancelSubscription(btn.dataset.id!, btn.dataset.nombre!));
   });
@@ -196,6 +201,15 @@ function renderCurrentList(students: StudentRow[], query: string) {
 function closeOverlay() {
   const loaderBody = document.getElementById("loaderBody");
   if (loaderBody) loaderBody.innerHTML = "";
+}
+
+async function openStudentChat(studentId: string): Promise<void> {
+  const { id, error } = await getOrCreateConversation(studentId);
+  if (error || !id) {
+    alert(error || "No se pudo abrir la conversación.");
+    return;
+  }
+  window.location.href = `chat.html?c=${id}`;
 }
 
 function confirmCancelSubscription(studentId: string, nombre: string) {
@@ -404,6 +418,7 @@ function historicStudentCardMarkup(s: HistoricSubscriberRow): string {
       <div class="profile-menu-wrap routine-menu-wrap">
         <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${STUDENT_MENU_GEAR_ICON}</button>
         <div class="profile-menu-panel routine-menu-panel" hidden>
+          <button type="button" class="profile-menu-item messageStudentBtn" data-id="${s.id}">Enviar mensaje</button>
           <button type="button" class="profile-menu-item historicRoutinesBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Ver rutinas históricas</button>
           <button type="button" class="profile-menu-item profile-menu-item-danger deleteHistoricBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Eliminar</button>
         </div>
@@ -437,6 +452,9 @@ function renderHistoricList(students: HistoricSubscriberRow[], query: string) {
 
   wireStudentMenus(listEl);
 
+  listEl.querySelectorAll<HTMLButtonElement>(".messageStudentBtn").forEach((btn) => {
+    btn.addEventListener("click", () => void openStudentChat(btn.dataset.id!));
+  });
   listEl.querySelectorAll<HTMLButtonElement>(".historicRoutinesBtn").forEach((btn) => {
     btn.addEventListener("click", () => openHistoricRoutinesModal(btn.dataset.id!, btn.dataset.nombre!, false));
   });

@@ -1103,6 +1103,49 @@ export type Database = {
           },
         ]
       }
+      routine_day_completions: {
+        Row: {
+          created_at: string
+          id: string
+          routine_day_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          routine_day_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          routine_day_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_day_completions_routine_day_id_fkey"
+            columns: ["routine_day_id"]
+            isOneToOne: false
+            referencedRelation: "routine_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routine_day_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routine_day_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routine_days: {
         Row: {
           dia_semana: number

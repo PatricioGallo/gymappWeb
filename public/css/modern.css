@@ -3084,6 +3084,24 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .day-row:hover { border-color: var(--accent-2); }
 .day-row.done { border-color: rgba(47, 217, 113, 0.35); }
 
+/* pesos.html: el dia ya no es un unico boton (hacia falta lugar para la ruedita al
+   lado), asi que .day-row pasa a ser el contenedor y .day-row-main es lo clickeable
+   para abrir el dia -- mismo look de antes, solo con un elemento mas al costado. */
+.day-row-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+}
+
 .day-ring { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
 .day-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .day-ring circle { fill: none; stroke-width: 4; }

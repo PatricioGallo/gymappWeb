@@ -14,6 +14,9 @@ setupRevealObserver();
 const params = new URLSearchParams(window.location.search);
 const routineId = params.get("rid");
 const shareToken = params.get("token");
+// Deep link a un dia puntual (ver "Publicar" al terminar un dia en pesos.ts): abre
+// ese dia ya desplegado y hace scroll hasta el, en vez de dejarlo colapsado como el resto.
+const diaParam = params.get("dia");
 
 const { data: sessionData } = await supabase.auth.getSession();
 const isLoggedIn = Boolean(sessionData.session);
@@ -83,6 +86,7 @@ async function renderAuthenticated(id: string) {
 
   const diasBase = routine.semanas[0]?.dias ?? [];
   renderWeekContent(diasBase, routine.semanas.length);
+  if (diaParam !== null) focusDay(Number(diaParam));
 
   initShare(
     async () => {
@@ -150,6 +154,14 @@ function toggleDay(diaIndex: number) {
   (detail as HTMLElement).hidden = !isOpen;
 }
 
+function focusDay(diaIndex: number) {
+  if (Number.isNaN(diaIndex)) return;
+  const accordion = document.querySelector(`.day-accordion[data-dia="${diaIndex}"]`);
+  if (!accordion) return;
+  toggleDay(diaIndex);
+  accordion.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // ---------- Modo publico (?token=) ----------
 
 async function renderShared(token: string) {
@@ -209,6 +221,7 @@ async function renderShared(token: string) {
         openExerciseModal(exc.nombre, exc.info, exc.nota, "Gym Social", exc.category, exc.image_url);
       });
     });
+    if (diaParam !== null) focusDay(Number(diaParam));
   }
 
   initShare(async () => window.location.href, routine.nombre, ownerName);
