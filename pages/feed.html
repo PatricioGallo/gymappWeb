@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Gym Social - Solicitudes de suscripción</title>
+<title>Gym Social - Reps</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="language" content="es">
 <link rel="icon" href="/images/fevicon.png" type="image/png" />
@@ -20,7 +20,7 @@
         <a href="profile.html" id="navPerfil">Mi perfil</a>
         <a href="feed.html">Reps</a>
         <a href="admin.html" id="adminLink">Administrar<span class="nav-dot" id="adminLinkDot" hidden></span></a>
-        <a href="followRequests.html" id="navFollowRequests">Solicitudes de seguimiento<span class="nav-badge" id="followReqBadge" hidden>0</span></a>
+        <a href="followRequests.html">Solicitudes de seguimiento<span class="nav-badge" id="followReqBadge" hidden>0</span></a>
         <a href="subscriptionRequests.html" id="navSubscriptionRequests">Solicitudes de suscripción<span class="nav-badge" id="subReqBadge" hidden>0</span></a>
         <a href="settings.html">Configuración</a>
         <a href="exit.html" id="navSalir">Salir</a>
@@ -66,10 +66,27 @@
   <div id="loaderBody"></div>
 
   <section class="features">
-    <div class="container">
-      <span class="eyebrow eyebrow-standalone">Solicitudes de suscripción</span>
-      <p class="chart-sub" id="subReqSummary">Cargando...</p>
-      <div class="notif-page-list" id="subReqList"></div>
+    <div class="container post-feed-container">
+      <form class="post-composer" id="postComposerForm">
+        <textarea id="postComposerInput" class="post-composer-input" rows="3" maxlength="140" placeholder="¿Qué estás entrenando hoy?"></textarea>
+        <div class="post-composer-preview" id="postComposerPreview" hidden>
+          <img id="postComposerPreviewImg" alt="" hidden>
+          <video id="postComposerPreviewVideo" hidden muted controls></video>
+          <button type="button" class="post-composer-preview-remove" id="postComposerRemoveMedia" aria-label="Quitar adjunto">✕</button>
+        </div>
+        <div class="post-composer-toolbar">
+          <label class="chat-composer-btn" title="Adjuntar imagen o video">
+            <input type="file" id="postComposerMediaInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+          </label>
+          <span class="post-composer-counter" id="postComposerCounter">140</span>
+          <button type="submit" class="btn btn-primary btn-sm" id="postComposerSubmit" disabled>Publicar</button>
+        </div>
+        <div class="alert_message" id="postComposerAlert"></div>
+      </form>
+
+      <div class="post-feed-list" id="postFeedList"></div>
+      <button type="button" class="chat-load-more" id="postFeedLoadMoreBtn" hidden>Cargar más</button>
     </div>
   </section>
 
@@ -94,6 +111,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/subscriptionRequests.ts"></script>
+  <script type="module" src="/src/pages/feed.ts"></script>
 </body>
 </html>

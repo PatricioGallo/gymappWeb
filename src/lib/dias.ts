@@ -17,3 +17,17 @@ export function formatFechaCorta(iso: string): string {
   const [y, m, d] = datePart.split("-").map(Number);
   return `${d}/${m}/${y}`;
 }
+
+/** Timestamp corto estilo redes sociales: "ahora", "5m", "2h", "3d" o "3 sep" (con año si no es el actual). */
+export function formatTiempoRelativo(iso: string): string {
+  const date = new Date(iso);
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (diffMin < 1) return "ahora";
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return `${diffDay}d`;
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" });
+}

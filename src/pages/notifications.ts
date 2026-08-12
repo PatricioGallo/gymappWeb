@@ -20,6 +20,10 @@ const TYPE_ICON: Record<string, string> = {
   follow_request: "🔔",
   follow_accepted: "✅",
   follow_rejected: "🚫",
+  like: "❤️",
+  comment: "💬",
+  repost: "🔁",
+  quote: "❝",
 };
 
 function relativeTime(iso: string): string {

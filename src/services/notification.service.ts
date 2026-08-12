@@ -3,7 +3,18 @@ import type { Tables } from "../types/database";
 
 // Nombrado AppNotification (no Notification) para no pisar la Notification API del navegador.
 export type AppNotification = Tables<"notifications">;
-export type NotificationType = "routine_assigned" | "issue_status" | "admin_message";
+export type NotificationType =
+  | "routine_assigned"
+  | "issue_status"
+  | "admin_message"
+  | "follow"
+  | "follow_request"
+  | "follow_accepted"
+  | "follow_rejected"
+  | "like"
+  | "comment"
+  | "repost"
+  | "quote";
 
 const RECENT_LIMIT = 8;
 const FULL_LIST_LIMIT = 200;
