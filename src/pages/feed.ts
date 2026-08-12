@@ -1,7 +1,7 @@
 import { setupNavToggle, setupRevealObserver, setupAutoHideHeader, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderPostCard, wirePostCard, youtubeEmbedHtml, type PostCardHandlers } from "../lib/postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
+import { openQuoteModal, openShareToChatModal, openCommentModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import {
   getPersonalizedFeed,
   createPost,
@@ -11,6 +11,7 @@ import {
   uploadPostMedia,
   extractFirstUrl,
   extractYouTubeVideoId,
+  recordPostView,
   getPost,
   type FeedPost,
   type Post,
@@ -146,40 +147,47 @@ async function handlePublish(): Promise<void> {
   const localPreviewUrl = pendingMedia?.previewUrl;
   const localPreviewKind = pendingMedia?.kind;
 
-  let mediaUrl: string | undefined;
-  let mediaType: "image" | "video" | undefined;
-  if (pendingMedia) {
-    const { url, mediaType: type, error } = await uploadPostMedia(userId, pendingMedia.file);
-    if (error || !url) {
-      composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
-      setPublishing(false);
+  // try/finally: si algo de aca adentro tira una excepcion no prevista (red,
+  // render, lo que sea), el composer no puede quedar pegado en "Publicando..."
+  // para siempre -- setPublishing(false) tiene que correr siempre.
+  try {
+    let mediaUrl: string | undefined;
+    let mediaType: "image" | "video" | undefined;
+    if (pendingMedia) {
+      const { url, mediaType: type, error } = await uploadPostMedia(userId, pendingMedia.file);
+      if (error || !url) {
+        composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
+        return;
+      }
+      mediaUrl = url;
+      mediaType = type;
+    }
+
+    const { post, error } = await createPost(userId, content, mediaUrl, mediaType);
+    if (error || !post) {
+      composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo publicar el Rep.")}</p>`;
       return;
     }
-    mediaUrl = url;
-    mediaType = type;
-  }
 
-  const { post, error } = await createPost(userId, content, mediaUrl, mediaType);
-  if (error || !post) {
-    composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo publicar el Rep.")}</p>`;
-    setPublishing(false);
-    return;
-  }
-
-  const hydrated = await getPost(post.id).catch(() => null);
-  if (hydrated) {
-    if (localPreviewUrl && localPreviewKind === mediaType) {
-      hydrated.media_url = localPreviewUrl;
-      setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 60_000);
+    const hydrated = await getPost(post.id).catch(() => null);
+    if (hydrated) {
+      if (localPreviewUrl && localPreviewKind === mediaType) {
+        hydrated.media_url = localPreviewUrl;
+        setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 60_000);
+      }
+      posts = [hydrated, ...posts];
+      renderFeed();
     }
-    posts = [hydrated, ...posts];
-    renderFeed();
-  }
 
-  composerInput.value = "";
-  setPublishing(false);
-  clearPendingMedia(!!localPreviewUrl);
-  updateComposerState();
+    composerInput.value = "";
+    clearPendingMedia(!!localPreviewUrl);
+  } catch (err) {
+    console.error("[feed] error publicando Rep:", err);
+    composerAlert.innerHTML = `<p>No se pudo publicar el Rep. Probá de nuevo.</p>`;
+  } finally {
+    setPublishing(false);
+    updateComposerState();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +260,10 @@ const postCardHandlers: PostCardHandlers = {
   onShareClick: (post) => void openShareToChatModal(post, userId),
   onDeleteClick: handleDeleteClick,
   onAuthorClick: goToProfile,
+  onMetricsClick: (post) => openPostMetricsModal(post),
+  onView: (post) => {
+    if (post.author_id !== userId) void recordPostView(post.id, userId);
+  },
   onOpenPost: (post) => goToPost(post.id),
 };
 

@@ -6,10 +6,12 @@ import {
   deletePost,
   addComment,
   validateCommentContent,
+  getPostViewers,
   type FeedPost,
   type FeedComment,
   type Post,
   type PostComment,
+  type PostViewer,
 } from "../services/post.service";
 import { getOrCreateConversation, sendMessage } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
@@ -339,6 +341,69 @@ export async function openShareToChatModal(post: FeedPost, viewerId: string): Pr
   });
 
   await runSearch("");
+}
+
+function postViewerRowHtml(v: PostViewer): string {
+  return `
+    <a class="post-share-row" href="profile.html?u=${encodeURIComponent(v.username)}">
+      <img src="${escapeHtml(v.avatarUrl || DEFAULT_AVATAR)}" class="chat-avatar" alt="">
+      <span class="post-share-name">${escapeHtml(v.username)}${renderVerifiedBadge(v.userType, v.isVerified)}</span>
+      <span class="post-viewer-time">${formatTiempoRelativo(v.viewedAt)}</span>
+    </a>
+  `;
+}
+
+/** Metricas del Rep: cuanta gente lo vio y quienes, en una lista scrolleable con "cargar mas". */
+export function openPostMetricsModal(post: FeedPost): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Métricas del Rep</h2>
+        <p class="subtitle">${post.views_count} ${post.views_count === 1 ? "persona vio" : "personas vieron"} este Rep.</p>
+        <div class="post-share-list" id="postMetricsList"><p class="exc-pick-empty">Cargando...</p></div>
+        <button type="button" class="chat-load-more" id="postMetricsLoadMore" hidden>Cargar más</button>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="postMetricsClose" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("postMetricsClose")?.addEventListener("click", closeOverlay);
+
+  const listEl = document.getElementById("postMetricsList")!;
+  const loadMoreBtn = document.getElementById("postMetricsLoadMore") as HTMLButtonElement;
+  let viewers: PostViewer[] = [];
+
+  function renderViewers(): void {
+    listEl.innerHTML = viewers.length ? viewers.map(postViewerRowHtml).join("") : `<p class="exc-pick-empty">Todavía nadie vio este Rep.</p>`;
+  }
+
+  getPostViewers(post.id)
+    .then((rows) => {
+      viewers = rows;
+      renderViewers();
+      loadMoreBtn.hidden = rows.length < 30;
+    })
+    .catch(() => {
+      listEl.innerHTML = `<p class="exc-pick-empty">No se pudo cargar quién vio este Rep.</p>`;
+    });
+
+  loadMoreBtn.addEventListener("click", async () => {
+    if (viewers.length === 0) return;
+    loadMoreBtn.disabled = true;
+    const older = await getPostViewers(post.id, viewers[viewers.length - 1].viewedAt).catch(() => []);
+    loadMoreBtn.disabled = false;
+    if (older.length === 0) {
+      loadMoreBtn.hidden = true;
+      return;
+    }
+    viewers = [...viewers, ...older];
+    renderViewers();
+    loadMoreBtn.hidden = older.length < 30;
+  });
 }
 
 /** Confirmacion de borrado, mismo mecanismo que confirmBlockModal/confirmFinishRoutine en profile.ts. */

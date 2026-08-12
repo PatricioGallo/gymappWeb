@@ -27,6 +27,7 @@ export interface FeedPost extends Post {
 
 export interface FeedComment extends PostComment {
   author: PostAuthor;
+  likedByMe: boolean;
 }
 
 const FEED_PAGE_SIZE = 20;
@@ -34,7 +35,8 @@ const POST_CONTENT_MAX = 240;
 const COMMENT_CONTENT_MAX = 240;
 const POST_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 const POST_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const POST_VIDEO_TYPES = ["video/mp4", "video/webm"];
+// quicktime = .mov (formato nativo de iPhone), 3gpp = Android viejo, x-msvideo = .avi, x-matroska = .mkv.
+const POST_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/3gpp", "video/x-msvideo", "video/x-matroska"];
 
 const URL_RE = /https?:\/\/[^\s]+/i;
 const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -482,16 +484,76 @@ export function validateCommentContent(content: string): string | null {
 }
 
 export async function listComments(postId: string): Promise<FeedComment[]> {
+  const viewerId = await getViewerId();
   const { data, error } = await supabase.from("post_comments").select("*").eq("post_id", postId).order("created_at", { ascending: true });
   if (error) throw error;
   const rows = data ?? [];
   const authorsById = await fetchAuthorsByIds(rows.map((r) => r.author_id));
+
+  let likedCommentIds = new Set<string>();
+  if (viewerId && rows.length) {
+    const { data: likeRows, error: likesError } = await supabase
+      .from("comment_likes")
+      .select("comment_id")
+      .eq("user_id", viewerId)
+      .in(
+        "comment_id",
+        rows.map((r) => r.id)
+      );
+    if (likesError) throw likesError;
+    likedCommentIds = new Set((likeRows ?? []).map((r) => r.comment_id));
+  }
+
   return rows
     .map((r) => {
       const author = authorsById.get(r.author_id);
-      return author ? { ...r, author } : null;
+      return author ? { ...r, author, likedByMe: likedCommentIds.has(r.id) } : null;
     })
     .filter((c): c is FeedComment => c !== null);
+}
+
+export async function toggleCommentLike(commentId: string, userId: string, currentlyLiked: boolean): Promise<{ error?: string }> {
+  if (currentlyLiked) {
+    const { error } = await supabase.from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", userId);
+    if (error) return { error: "No se pudo actualizar el me gusta." };
+    return {};
+  }
+  const { error } = await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: userId });
+  if (error) {
+    if (error.code === "23505") return {}; // ya tenia el like (doble click) -- no es un error real para el usuario
+    return { error: "No se pudo dar me gusta." };
+  }
+  return {};
+}
+
+export interface PostViewer extends PostAuthor {
+  viewedAt: string;
+}
+
+// Silencioso a proposito: una vista es un dato secundario, no algo por lo que
+// interrumpir al usuario si falla (sin conexion, RLS, lo que sea).
+export async function recordPostView(postId: string, viewerId: string): Promise<void> {
+  const { error } = await supabase.from("post_views").insert({ post_id: postId, viewer_id: viewerId });
+  if (error && error.code !== "23505") {
+    // ya lo habia visto antes (23505) o fallo silencioso -- ninguno amerita romper la UI
+  }
+}
+
+/** Quienes vieron un Rep (boton de metricas), mas recientes primero. */
+export async function getPostViewers(postId: string, beforeIso?: string, limit = 30): Promise<PostViewer[]> {
+  let query = supabase.from("post_views").select("viewer_id, created_at").eq("post_id", postId).order("created_at", { ascending: false }).limit(limit);
+  if (beforeIso) query = query.lt("created_at", beforeIso);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+  const authorsById = await fetchAuthorsByIds(rows.map((r) => r.viewer_id));
+  return rows
+    .map((r) => {
+      const author = authorsById.get(r.viewer_id);
+      return author ? { ...author, viewedAt: r.created_at } : null;
+    })
+    .filter((v): v is PostViewer => v !== null);
 }
 
 export async function addComment(
@@ -522,7 +584,7 @@ export async function deleteComment(commentId: string): Promise<{ error?: string
 export async function uploadPostMedia(authorId: string, file: File): Promise<{ url?: string; mediaType?: "image" | "video"; error?: string }> {
   const isImage = POST_IMAGE_TYPES.includes(file.type);
   const isVideo = POST_VIDEO_TYPES.includes(file.type);
-  if (!isImage && !isVideo) return { error: "Formato no soportado. Usá JPG, PNG, WEBP, MP4 o WEBM." };
+  if (!isImage && !isVideo) return { error: "Formato no soportado. Usá JPG, PNG, WEBP, MP4, MOV, WEBM, 3GP, AVI o MKV." };
   if (file.size > POST_MEDIA_MAX_BYTES) return { error: "El archivo es muy pesado. Máximo 50MB." };
 
   const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");

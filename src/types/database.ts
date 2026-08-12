@@ -14,6 +14,49 @@ export type Database = {
   }
   public: {
     Tables: {
+      comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_messages: {
         Row: {
           created_at: string
@@ -549,6 +592,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          likes_count: number
           parent_comment_id: string | null
           post_id: string
         }
@@ -557,6 +601,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          likes_count?: number
           parent_comment_id?: string | null
           post_id: string
         }
@@ -565,6 +610,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          likes_count?: number
           parent_comment_id?: string | null
           post_id?: string
         }
@@ -685,6 +731,49 @@ export type Database = {
           },
         ]
       }
+      post_views: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          viewer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          viewer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_views_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_views_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_views_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_id: string
@@ -706,6 +795,7 @@ export type Database = {
           thread_parent_id: string | null
           thread_root_id: string | null
           updated_at: string
+          views_count: number
           youtube_video_id: string | null
         }
         Insert: {
@@ -728,6 +818,7 @@ export type Database = {
           thread_parent_id?: string | null
           thread_root_id?: string | null
           updated_at?: string
+          views_count?: number
           youtube_video_id?: string | null
         }
         Update: {
@@ -750,6 +841,7 @@ export type Database = {
           thread_parent_id?: string | null
           thread_root_id?: string | null
           updated_at?: string
+          views_count?: number
           youtube_video_id?: string | null
         }
         Relationships: [
@@ -1741,6 +1833,7 @@ export type Database = {
           thread_parent_id: string | null
           thread_root_id: string | null
           updated_at: string
+          views_count: number
           youtube_video_id: string | null
         }[]
         SetofOptions: {

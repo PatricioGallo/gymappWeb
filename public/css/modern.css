@@ -4414,7 +4414,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   border: 1px solid var(--border);
 }
 .post-composer-preview img,
-.post-composer-preview video { display: block; width: 100%; max-height: 260px; object-fit: cover; }
+.post-composer-preview video { display: block; max-width: 100%; max-height: 260px; width: auto; height: auto; margin: 0 auto; }
 
 .post-composer-preview-uploading {
   position: absolute;
@@ -4548,13 +4548,18 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-card-link { color: var(--accent-2); text-decoration: none; }
 .post-card-link:hover { text-decoration: underline; }
 
+/* max-width/max-height + width/height:auto (en vez de width:100% + object-fit:cover):
+   un video/foto vertical grabado en celular respeta su relacion de aspecto real y se
+   ve completo, angosto y alto -- con width:100% + cover se estiraba a todo el ancho
+   de la card en pc y terminaba haciendole zoom/crop, perdiendo la mayor parte del cuadro. */
 .post-card-media {
   display: block;
-  width: 100%;
+  max-width: 100%;
   max-height: 420px;
-  object-fit: cover;
+  width: auto;
+  height: auto;
   border-radius: var(--radius-sm);
-  margin-top: 10px;
+  margin: 10px auto 0;
   border: 1px solid var(--border);
   background: #000;
   cursor: pointer;
@@ -4749,6 +4754,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-share-row:hover { background: var(--surface-2); }
 .post-share-row:disabled { opacity: 0.6; cursor: default; }
 .post-share-name { font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+.post-viewer-time { margin-left: auto; flex-shrink: 0; font-size: 11.5px; color: var(--text-muted); }
 
 .post-share-external { display: flex; gap: 10px; margin-bottom: 4px; }
 .post-share-external-btn {
@@ -4853,6 +4859,26 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-comment-name { font-weight: 700; font-size: 13.5px; display: inline-flex; align-items: center; gap: 2px; }
 .post-comment-time { color: var(--text-muted); font-size: 12px; }
 .post-comment-text { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+
+.post-comment-actions { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+
+.post-comment-like {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.post-comment-like svg { flex-shrink: 0; width: 15px; height: 15px; }
+.post-comment-like:hover { background: var(--surface-2); color: var(--text); }
+.post-comment-like.is-active { color: var(--accent); }
+
 .post-comment-reply {
   border: none;
   background: none;
@@ -4860,7 +4886,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
-  padding: 4px 0 0;
+  padding: 4px 6px;
 }
 .post-comment-reply:hover { color: var(--accent-2); }
 .post-comment-delete {

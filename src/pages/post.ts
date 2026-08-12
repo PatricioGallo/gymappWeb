@@ -3,8 +3,8 @@ import { escapeHtml } from "../lib/dom";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { formatTiempoRelativo } from "../lib/dias";
 import { supabase } from "../lib/supabaseClient";
-import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, confirmDeletePost } from "../lib/postModals";
+import { renderPostCard, wirePostCard, ICON_HEART, ICON_HEART_FILLED, type PostCardHandlers } from "../lib/postCard";
+import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import {
   getPost,
   getThread,
@@ -12,6 +12,8 @@ import {
   toggleRepost,
   listComments,
   deleteComment,
+  toggleCommentLike,
+  recordPostView,
   type FeedPost,
   type FeedComment,
   type Post,
@@ -127,6 +129,10 @@ const postCardHandlers: PostCardHandlers = {
   onShareClick: (post) => void openShareToChatModal(post, userId),
   onDeleteClick: handleDeleteClick,
   onAuthorClick: goToProfile,
+  onMetricsClick: (post) => openPostMetricsModal(post),
+  onView: (post) => {
+    if (post.author_id !== userId) void recordPostView(post.id, userId);
+  },
   onOpenPost: (post) => {
     if (post.id !== focusedPostId) goToPost(post.id);
   },
@@ -175,7 +181,10 @@ function commentHtml(c: FeedComment, depth: number): string {
           <span class="post-comment-time">${formatTiempoRelativo(c.created_at)}</span>
         </div>
         <p class="post-comment-text">${escapeHtml(c.content).replace(/\n/g, "<br>")}</p>
-        <button type="button" class="post-comment-reply" data-id="${c.id}">Responder</button>
+        <div class="post-comment-actions">
+          <button type="button" class="post-comment-like${c.likedByMe ? " is-active" : ""}" data-action="like" data-id="${c.id}" aria-label="Me gusta">${c.likedByMe ? ICON_HEART_FILLED : ICON_HEART}<span>${c.likes_count}</span></button>
+          <button type="button" class="post-comment-reply" data-id="${c.id}">Responder</button>
+        </div>
       </div>
       ${isOwner ? `<button type="button" class="post-comment-delete" data-id="${c.id}" aria-label="Eliminar comentario">✕</button>` : ""}
     </div>
@@ -185,6 +194,22 @@ function commentHtml(c: FeedComment, depth: number): string {
 function renderCommentBranch(byParent: Map<string | null, FeedComment[]>, parentId: string | null, depth: number): string {
   const children = byParent.get(parentId) ?? [];
   return children.map((c) => commentHtml(c, depth) + renderCommentBranch(byParent, c.id, depth + 1)).join("");
+}
+
+async function handleCommentLikeToggle(id: string): Promise<void> {
+  const comment = comments.find((c) => c.id === id);
+  if (!comment) return;
+  const wasLiked = comment.likedByMe;
+  comment.likedByMe = !wasLiked;
+  comment.likes_count += wasLiked ? -1 : 1;
+  renderComments();
+  const { error } = await toggleCommentLike(id, userId, wasLiked);
+  if (error) {
+    comment.likedByMe = wasLiked;
+    comment.likes_count += wasLiked ? 1 : -1;
+    renderComments();
+    alert(error);
+  }
 }
 
 function renderComments(): void {
@@ -199,6 +224,9 @@ function renderComments(): void {
       const comment = comments.find((c) => c.id === btn.dataset.id);
       if (comment) openCommentReplyModal(comment, userId, () => void refreshComments());
     });
+  });
+  commentsListEl.querySelectorAll<HTMLButtonElement>(".post-comment-like").forEach((btn) => {
+    btn.addEventListener("click", () => void handleCommentLikeToggle(btn.dataset.id!));
   });
 }
 

@@ -40,7 +40,7 @@ import { submitUserReport, validateUserReport } from "../services/userReport.ser
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
+import { openQuoteModal, openShareToChatModal, openCommentModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import {
   getUserRepsAndReposts,
   getUserMedia,
@@ -49,6 +49,7 @@ import {
   getPost,
   toggleLike,
   toggleRepost,
+  recordPostView,
   type FeedPost,
   type PostAuthor,
 } from "../services/post.service";
@@ -1045,6 +1046,10 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       });
     },
     onAuthorClick: goToAuthorProfile,
+    onMetricsClick: (post) => openPostMetricsModal(post),
+    onView: (post) => {
+      if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
+    },
     onOpenPost: (post) => goToPost(post.id),
   };
 

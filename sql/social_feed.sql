@@ -481,7 +481,7 @@ values (
   'post-media',
   true,
   52428800,
-  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']
+  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime', 'video/3gpp', 'video/x-msvideo', 'video/x-matroska']
 )
 on conflict (id) do nothing;
 
