@@ -30,9 +30,37 @@ function authorLineHtml(author: PostAuthor, badgeSize = 14): string {
   return `${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, badgeSize)}`;
 }
 
-function contentHtml(content: string | null, className: string): string {
+const URL_MATCH_RE = /https?:\/\/[^\s]+/gi;
+const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]}'"]+$/;
+
+// El preview de abajo (linkPreviewHtml/youtubeEmbedHtml) es solo un adelanto: el
+// texto del Rep puede traer la URL tal cual la pegó el usuario, y esa tiene que
+// seguir siendo un link de verdad al que se le pueda hacer click y te lleve ahi.
+function linkifyHtml(text: string): string {
+  let html = "";
+  let lastIndex = 0;
+  for (const match of text.matchAll(URL_MATCH_RE)) {
+    const start = match.index ?? 0;
+    let url = match[0];
+    const trailingMatch = url.match(URL_TRAILING_PUNCT_RE);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    if (trailing) url = url.slice(0, -trailing.length);
+
+    html += escapeHtml(text.slice(lastIndex, start)).replace(/\n/g, "<br>");
+    html += `<a class="post-card-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+    html += escapeHtml(trailing);
+    lastIndex = start + match[0].length;
+  }
+  html += escapeHtml(text.slice(lastIndex)).replace(/\n/g, "<br>");
+  return html;
+}
+
+// linkify=false para texto que ya vive adentro de un <a> (la cita: quotedPostHtml
+// envuelve todo en el link al Rep citado, y anidar un <a> adentro rompe el click).
+function contentHtml(content: string | null, className: string, linkify = false): string {
   if (!content) return "";
-  return `<div class="${className}">${escapeHtml(content).replace(/\n/g, "<br>")}</div>`;
+  const body = linkify ? linkifyHtml(content) : escapeHtml(content).replace(/\n/g, "<br>");
+  return `<div class="${className}">${body}</div>`;
 }
 
 function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
@@ -147,7 +175,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
             <span class="post-card-dot">·</span>
             <span class="post-card-time">${formatTiempoRelativo(post.feedTimestamp)}</span>
           </div>
-          ${contentHtml(post.content, "post-card-text")}
+          ${contentHtml(post.content, "post-card-text", true)}
           ${mediaHtml(post.media_url, post.media_type)}
           ${!post.media_url && post.youtube_video_id ? youtubeEmbedHtml(post.youtube_video_id) : ""}
           ${linkPreviewHtml(post)}

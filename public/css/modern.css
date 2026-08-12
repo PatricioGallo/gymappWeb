@@ -4531,6 +4531,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   word-break: break-word;
 }
 
+.post-card-link { color: var(--accent-2); text-decoration: none; }
+.post-card-link:hover { text-decoration: underline; }
+
 .post-card-media {
   display: block;
   width: 100%;
