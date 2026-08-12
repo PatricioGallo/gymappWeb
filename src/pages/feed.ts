@@ -241,9 +241,10 @@ function renderFeed(): void {
 }
 
 // Cuenta solo lo que ya trajo el server (no la lista local, que puede tener
-// Reps propios agregados adelante al publicar/citar) -- el algoritmo ordena
-// por puntaje, no por fecha, asi que un cursor de "antes de tal fecha" no
-// sirve para paginar; offset es lo mas simple que funciona con ese orden.
+// Reps propios agregados adelante al publicar/citar) -- el orden prioriza la
+// fecha pero no es puramente cronologico (algoritmo + variedad aleatoria en
+// cada llamada, ver get_personalized_feed), asi que un cursor de "antes de
+// tal fecha" no sirve para paginar; offset es lo mas simple que funciona.
 let feedOffset = 0;
 let isLoadingMore = false;
 let feedExhausted = false;
