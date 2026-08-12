@@ -923,6 +923,12 @@ function activityEmptyMessage(tab: Exclude<ActivityTab, "stats">, isOwner: boole
   return isOwner ? "Todavía no le pusiste me gusta a nada." : "Todavía no le puso me gusta a nada.";
 }
 
+function activitySubtitle(tab: Exclude<ActivityTab, "stats">, isOwner: boolean, nombre: string): string {
+  if (tab === "reps") return isOwner ? "Los Reps que publicaste y reposteaste." : `Los Reps que publicó y reposteó ${nombre}.`;
+  if (tab === "media") return isOwner ? "Las fotos y videos que subiste." : `Las fotos y videos que subió ${nombre}.`;
+  return isOwner ? "Los Reps que te gustaron." : `Los Reps que le gustaron a ${nombre}.`;
+}
+
 function goToAuthorProfile(author: PostAuthor): void {
   window.location.href = `profile.html?u=${encodeURIComponent(author.username)}`;
 }
@@ -931,14 +937,20 @@ function goToPost(postId: string): void {
   window.location.href = `post.html?id=${encodeURIComponent(postId)}`;
 }
 
-function setupActivityTabs(targetUserId: string, isOwner: boolean): void {
+function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string): void {
   const tabsEl = document.getElementById("activityTabs");
   const statsContent = document.getElementById("statsContent");
   const listEl = document.getElementById("activityPostsList");
   const sentinel = document.getElementById("activityPostsSentinel");
   const spinner = document.getElementById("activityPostsSpinner");
   const titleEl = document.getElementById("activityTitle");
+  const subtitleEl = document.getElementById("statsSubtitle");
   if (!tabsEl || !statsContent || !listEl || !sentinel) return;
+
+  // Ya viene seteado (por defecto o en 3ra persona si no sos el dueño, ver
+  // main()) al momento de llamar a esta funcion -- se lo guarda para poder
+  // volver a el cuando se vuelve a la pestaña de Estadisticas.
+  const statsSubtitleText = subtitleEl?.textContent ?? "";
 
   let activeTab: ActivityTab = "stats";
   let posts: FeedPost[] = [];
@@ -1080,10 +1092,12 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean): void {
       listEl!.hidden = true;
       sentinel!.hidden = true;
       if (titleEl) titleEl.textContent = "Estadísticas";
+      if (subtitleEl) subtitleEl.textContent = statsSubtitleText;
       return;
     }
 
     if (titleEl) titleEl.textContent = ACTIVITY_TITLES[tab];
+    if (subtitleEl) subtitleEl.textContent = activitySubtitle(tab, isOwner, nombre);
     statsContent!.hidden = true;
     listEl!.hidden = false;
     listEl!.innerHTML = `<p class="exc-pick-empty">Cargando...</p>`;
@@ -1735,7 +1749,7 @@ async function main() {
   routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
   renderStats(logs, activeCount ?? 0, isOwner);
-  setupActivityTabs(displayProfile.id!, isOwner);
+  setupActivityTabs(displayProfile.id!, isOwner, nombre);
 }
 
 main();
