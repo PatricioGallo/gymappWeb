@@ -45,14 +45,17 @@ const previewImg = document.getElementById("postComposerPreviewImg") as HTMLImag
 const previewVideo = document.getElementById("postComposerPreviewVideo") as HTMLVideoElement;
 const removeMediaBtn = document.getElementById("postComposerRemoveMedia") as HTMLButtonElement;
 const youtubePreviewWrap = document.getElementById("postComposerYoutubePreview") as HTMLDivElement;
+const uploadingOverlay = document.getElementById("postComposerUploadingOverlay") as HTMLDivElement;
 
 let posts: FeedPost[] = [];
 
 type PendingMedia = { file: File; previewUrl: string; kind: "image" | "video" };
 let pendingMedia: PendingMedia | null = null;
 
-function clearPendingMedia(): void {
-  if (pendingMedia) URL.revokeObjectURL(pendingMedia.previewUrl);
+// keepBlobUrl=true cuando el blob local se reutiliza para el Rep recien publicado
+// (ver handlePublish): no lo revocamos aca, se revoca solo despues con un delay.
+function clearPendingMedia(keepBlobUrl = false): void {
+  if (pendingMedia && !keepBlobUrl) URL.revokeObjectURL(pendingMedia.previewUrl);
   pendingMedia = null;
   previewWrap.hidden = true;
   previewImg.hidden = true;
@@ -100,7 +103,7 @@ mediaInput.addEventListener("change", () => {
   showMediaPreview();
 });
 
-removeMediaBtn.addEventListener("click", clearPendingMedia);
+removeMediaBtn.addEventListener("click", () => clearPendingMedia());
 
 function updateComposerState(): void {
   const len = composerInput.value.length;
@@ -119,6 +122,14 @@ composerForm.addEventListener("submit", (e) => {
   void handlePublish();
 });
 
+function setPublishing(publishing: boolean): void {
+  composerSubmit.disabled = publishing;
+  composerSubmit.innerHTML = publishing ? `<span class="btn-spinner"></span> Publicando...` : "Publicar";
+  removeMediaBtn.disabled = publishing;
+  mediaInput.disabled = publishing;
+  if (pendingMedia) uploadingOverlay.hidden = !publishing;
+}
+
 async function handlePublish(): Promise<void> {
   const content = composerInput.value;
   composerAlert.innerHTML = "";
@@ -128,14 +139,20 @@ async function handlePublish(): Promise<void> {
     return;
   }
 
-  composerSubmit.disabled = true;
+  setPublishing(true);
+  // Se guarda antes de subir: si el post sale bien, esto se reusa para mostrar
+  // el Rep recien publicado al toque (ver mas abajo) en vez del media_url
+  // remoto, que recien subido tarda en volver a bajar de la red.
+  const localPreviewUrl = pendingMedia?.previewUrl;
+  const localPreviewKind = pendingMedia?.kind;
+
   let mediaUrl: string | undefined;
   let mediaType: "image" | "video" | undefined;
   if (pendingMedia) {
     const { url, mediaType: type, error } = await uploadPostMedia(userId, pendingMedia.file);
     if (error || !url) {
       composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
-      composerSubmit.disabled = false;
+      setPublishing(false);
       return;
     }
     mediaUrl = url;
@@ -145,18 +162,23 @@ async function handlePublish(): Promise<void> {
   const { post, error } = await createPost(userId, content, mediaUrl, mediaType);
   if (error || !post) {
     composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo publicar el Rep.")}</p>`;
-    composerSubmit.disabled = false;
+    setPublishing(false);
     return;
   }
 
   const hydrated = await getPost(post.id).catch(() => null);
   if (hydrated) {
+    if (localPreviewUrl && localPreviewKind === mediaType) {
+      hydrated.media_url = localPreviewUrl;
+      setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 60_000);
+    }
     posts = [hydrated, ...posts];
     renderFeed();
   }
 
   composerInput.value = "";
-  clearPendingMedia();
+  setPublishing(false);
+  clearPendingMedia(!!localPreviewUrl);
   updateComposerState();
 }
 

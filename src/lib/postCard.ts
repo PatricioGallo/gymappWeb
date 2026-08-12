@@ -65,7 +65,7 @@ function contentHtml(content: string | null, className: string, linkify = false)
 
 function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   if (!mediaUrl) return "";
-  if (mediaType === "video") return `<video class="post-card-media" src="${escapeHtml(mediaUrl)}" controls playsinline></video>`;
+  if (mediaType === "video") return `<video class="post-card-media" src="${escapeHtml(mediaUrl)}" controls playsinline preload="metadata"></video>`;
   return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="">`;
 }
 
