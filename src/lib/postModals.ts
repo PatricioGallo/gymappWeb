@@ -43,7 +43,10 @@ function lockBodyScroll(): () => void {
     body.style.left = prev.left;
     body.style.right = prev.right;
     body.style.width = prev.width;
-    window.scrollTo(0, scrollY);
+    // behavior:"instant" explicito: el html tiene scroll-behavior:smooth global,
+    // que si no se lo pisa anima este scrollTo y se ve como si la pagina arrancara
+    // arriba de todo y bajara "sola" hasta donde estaba -- tiene que ser instantaneo.
+    window.scrollTo({ top: scrollY, left: 0, behavior: "instant" });
   };
 }
 
@@ -79,7 +82,12 @@ export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"
     </div>
   `;
 
+  const overlay = document.getElementById("mediaLightboxOverlay")!;
+
+  let closed = false;
   function close(): void {
+    if (closed) return;
+    closed = true;
     document.removeEventListener("keydown", onKeydown);
     unlockBodyScroll();
     closeOverlay();
@@ -90,9 +98,54 @@ export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"
   document.addEventListener("keydown", onKeydown);
 
   document.getElementById("mediaLightboxClose")?.addEventListener("click", close);
-  document.getElementById("mediaLightboxOverlay")?.addEventListener("click", (e) => {
+  overlay.addEventListener("click", (e) => {
     if (e.target === e.currentTarget) close(); // solo el fondo cierra, no un click en la imagen/video
   });
+
+  // Deslizar hacia abajo cierra el visor (estilo Instagram/Twitter): se sigue
+  // el dedo en vivo y si pasa el umbral (o el gesto fue rapido) cierra; si no,
+  // vuelve solo a su lugar. La apertura desliza desde abajo via CSS (ver
+  // .media-lightbox en modern.css); esto es el gesto inverso para cerrar.
+  const DISMISS_DISTANCE = 120;
+  const DISMISS_VELOCITY = 0.5; // px/ms
+  let dragging = false;
+  let startY = 0;
+  let startTime = 0;
+  let dragY = 0;
+
+  function onPointerDown(e: PointerEvent): void {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if ((e.target as HTMLElement).closest(".media-lightbox-close")) return;
+    dragging = true;
+    startY = e.clientY;
+    startTime = Date.now();
+    dragY = 0;
+    overlay.classList.add("media-lightbox-dragging");
+    overlay.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: PointerEvent): void {
+    if (!dragging) return;
+    dragY = Math.max(0, e.clientY - startY);
+    overlay.style.transform = dragY ? `translateY(${dragY}px)` : "";
+    overlay.style.opacity = dragY ? String(Math.max(1 - dragY / 400, 0.4)) : "";
+  }
+  function endDrag(): void {
+    if (!dragging) return;
+    dragging = false;
+    overlay.classList.remove("media-lightbox-dragging");
+    const velocity = dragY / Math.max(Date.now() - startTime, 1);
+    if (dragY > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) {
+      close();
+      return;
+    }
+    overlay.style.transform = "";
+    overlay.style.opacity = "";
+  }
+
+  overlay.addEventListener("pointerdown", onPointerDown);
+  overlay.addEventListener("pointermove", onPointerMove);
+  overlay.addEventListener("pointerup", endDrag);
+  overlay.addEventListener("pointercancel", endDrag);
 }
 
 /** Modal para citar un Rep: textarea corto + contador, llama a createQuote y avisa via onCreated. */

@@ -262,6 +262,18 @@ function renderFeed(): void {
   wirePostCard(listEl, posts, postCardHandlers);
 }
 
+// Suma posts al final sin tocar los ya renderizados (a diferencia de renderFeed,
+// que pisa TODO el innerHTML): reemplazar toda la lista al cargar mas Reps hacia
+// abajo le hacia perder al navegador la referencia de scroll y saltaba al principio
+// de la pagina. Wireado en un contenedor aparte para no volver a enganchar los
+// listeners de las cards viejas (quedarian duplicados).
+function appendFeedPosts(newPosts: FeedPost[]): void {
+  const temp = document.createElement("div");
+  temp.innerHTML = newPosts.map((p) => renderPostCard(p, userId)).join("");
+  wirePostCard(temp, newPosts, postCardHandlers);
+  while (temp.firstChild) listEl.appendChild(temp.firstChild);
+}
+
 // Cuenta solo lo que ya trajo el server (no la lista local, que puede tener
 // Reps propios agregados adelante al publicar/citar) -- el orden prioriza la
 // fecha pero no es puramente cronologico (algoritmo + variedad aleatoria en
@@ -286,7 +298,7 @@ async function loadMore(): Promise<void> {
   }
   feedOffset += older.length;
   posts = [...posts, ...older];
-  renderFeed();
+  appendFeedPosts(older);
   if (older.length < FEED_PAGE_SIZE) {
     feedExhausted = true;
     feedObserver.disconnect();

@@ -4647,7 +4647,10 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-composer-youtube-preview { margin: 10px 0; }
 .post-composer-youtube-preview .post-youtube-embed { margin-top: 0; }
 
-/* Visor a pantalla completa de foto/video (ver openMediaLightbox en postModals.ts). */
+/* Visor a pantalla completa de foto/video (ver openMediaLightbox en postModals.ts).
+   Abre deslizando desde abajo; el gesto de arrastrar para cerrar mueve este mismo
+   elemento via transform inline (ver onPointerMove), por eso la transition solo
+   corre cuando NO se esta arrastrando -- si no, el drag se sentiria con delay. */
 .media-lightbox {
   position: fixed;
   inset: 0;
@@ -4656,7 +4659,15 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.92);
-  animation: overlay-in 0.2s ease-out;
+  animation: media-lightbox-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  touch-action: none;
+}
+.media-lightbox-dragging { transition: none; animation: none; }
+
+@keyframes media-lightbox-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 .media-lightbox-media {
