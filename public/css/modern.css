@@ -4915,11 +4915,11 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   max-width: 260px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--surface);
+  color: var(--text);
   padding: 10px 12px;
   margin-bottom: 4px;
 }
-.chat-bubble-me .chat-shared-post { background: rgba(0, 0, 0, 0.08); }
 .chat-shared-post-missing { color: var(--text-muted); font-size: 13px; }
 
 .chat-shared-post-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
