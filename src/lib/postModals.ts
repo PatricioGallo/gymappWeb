@@ -23,6 +23,30 @@ function closeOverlay(): void {
   if (loaderBody) loaderBody.innerHTML = "";
 }
 
+// Frena el scroll de fondo con body fijo (no solo overflow:hidden) porque en Safari/Chrome
+// mobile un position:fixed insertado mientras la pagina todavia tiene inercia de scroll
+// puede quedar mal ubicado -- "flota" en el punto donde estaba scrolleada la pagina en vez
+// de cubrir la pantalla, hasta el proximo scroll. Frenar el scroll antes de insertar el
+// overlay evita esa carrera. Restaura la posicion exacta al cerrar.
+function lockBodyScroll(): () => void {
+  const scrollY = window.scrollY;
+  const body = document.body;
+  const prev = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, width: body.style.width };
+  body.style.position = "fixed";
+  body.style.top = `-${scrollY}px`;
+  body.style.left = "0";
+  body.style.right = "0";
+  body.style.width = "100%";
+  return () => {
+    body.style.position = prev.position;
+    body.style.top = prev.top;
+    body.style.left = prev.left;
+    body.style.right = prev.right;
+    body.style.width = prev.width;
+    window.scrollTo(0, scrollY);
+  };
+}
+
 function successCheckHtml(message: string): string {
   return `
     <div class="success-check-container">
@@ -42,6 +66,8 @@ export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
 
+  const unlockBodyScroll = lockBodyScroll();
+
   loaderBody.innerHTML = `
     <div class="media-lightbox" id="mediaLightboxOverlay">
       <button type="button" class="media-lightbox-close" id="mediaLightboxClose" aria-label="Cerrar">✕</button>
@@ -55,6 +81,7 @@ export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"
 
   function close(): void {
     document.removeEventListener("keydown", onKeydown);
+    unlockBodyScroll();
     closeOverlay();
   }
   function onKeydown(e: KeyboardEvent): void {
