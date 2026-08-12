@@ -265,9 +265,13 @@ export async function getFeed(beforeIso?: string, limit = FEED_PAGE_SIZE): Promi
  * así que no hay un timestamp único para intercalarlos de forma consistente.
  * Paginación por offset (no por cursor de fecha, porque el orden no es por fecha).
  */
-export async function getPersonalizedFeed(offset = 0, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+// seed: fijo por sesion de scroll (lo genera feed.ts una vez y lo reusa en cada
+// pagina) para que el jitter aleatorio del orden sea *estable* entre paginas y no
+// repita Reps -- ver el comentario en get_personalized_feed (migracion
+// personalized_feed_seeded_random_no_dupes) para el detalle de por que hacia falta.
+export async function getPersonalizedFeed(offset = 0, limit = FEED_PAGE_SIZE, seed?: string): Promise<FeedPost[]> {
   const viewerId = await getViewerId();
-  const { data, error } = await supabase.rpc("get_personalized_feed", { p_limit: limit, p_offset: offset });
+  const { data, error } = await supabase.rpc("get_personalized_feed", { p_limit: limit, p_offset: offset, p_seed: seed });
   if (error) throw error;
   const rows = data ?? [];
   const hydratedById = await hydratePosts(rows, viewerId);

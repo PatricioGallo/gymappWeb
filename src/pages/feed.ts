@@ -295,26 +295,47 @@ let feedOffset = 0;
 let isLoadingMore = false;
 let feedExhausted = false;
 
+// Un seed fijo por carga de pagina (no por request): se lo mandamos a CADA
+// llamada de getPersonalizedFeed (la inicial y todos los loadMore) para que el
+// orden con jitter aleatorio del algoritmo sea estable durante todo el scroll y
+// no repita un Rep que ya se mostro en una pagina anterior. Distinto en cada
+// entrada al feed (F5, volver a la pagina), asi sigue habiendo variedad entre
+// visitas. Ver el comentario en get_personalized_feed para el detalle.
+const feedSeed = crypto.randomUUID();
+const shownPostIds = new Set<string>();
+
 async function loadMore(): Promise<void> {
   if (isLoadingMore || feedExhausted) return;
   isLoadingMore = true;
   sentinelSpinner.hidden = false;
-  const older = await getPersonalizedFeed(feedOffset);
+  const older = await getPersonalizedFeed(feedOffset, FEED_PAGE_SIZE, feedSeed);
   isLoadingMore = false;
   sentinelSpinner.hidden = true;
+
+  feedOffset += older.length;
+  // Segunda barrera ademas del seed estable: bajo ningun motivo se repite un
+  // Rep ya mostrado en esta sesion de scroll, pase lo que pase del lado del server.
+  const fresh = older.filter((p) => !shownPostIds.has(p.id));
+  fresh.forEach((p) => shownPostIds.add(p.id));
 
   if (older.length === 0) {
     feedExhausted = true;
     feedObserver.disconnect();
     return;
   }
-  feedOffset += older.length;
-  posts = [...posts, ...older];
-  appendFeedPosts(older);
+  if (fresh.length > 0) {
+    posts = [...posts, ...fresh];
+    appendFeedPosts(fresh);
+  }
   if (older.length < FEED_PAGE_SIZE) {
     feedExhausted = true;
     feedObserver.disconnect();
+    return;
   }
+  // Si esta pagina vino entera repetida (0 nuevos), el sentinel no vuelve a
+  // disparar solo -- pedimos la proxima pagina de una para no dejar el feed
+  // trabado sin avisar.
+  if (fresh.length === 0) void loadMore();
 }
 
 // Scroll infinito: el sentinel vive siempre al final de la lista (fuera de
@@ -332,7 +353,8 @@ const feedObserver = new IntersectionObserver(
 );
 feedObserver.observe(sentinel);
 
-posts = await getPersonalizedFeed(0);
+posts = await getPersonalizedFeed(0, FEED_PAGE_SIZE, feedSeed);
+posts.forEach((p) => shownPostIds.add(p.id));
 feedOffset = posts.length;
 renderFeed();
 if (posts.length < FEED_PAGE_SIZE) {

@@ -1812,7 +1812,7 @@ export type Database = {
         Returns: string
       }
       get_personalized_feed: {
-        Args: { p_limit?: number; p_offset?: number }
+        Args: { p_limit?: number; p_offset?: number; p_seed?: string }
         Returns: {
           author_id: string
           comments_count: number
