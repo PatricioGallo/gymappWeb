@@ -1,6 +1,6 @@
 import { setupNavToggle, setupRevealObserver, setupAutoHideHeader, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
+import { renderPostCard, wirePostCard, youtubeEmbedHtml, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
 import {
   getPersonalizedFeed,
@@ -9,6 +9,8 @@ import {
   toggleRepost,
   validatePostContent,
   uploadPostMedia,
+  extractFirstUrl,
+  extractYouTubeVideoId,
   getPost,
   type FeedPost,
   type Post,
@@ -42,6 +44,7 @@ const previewWrap = document.getElementById("postComposerPreview") as HTMLDivEle
 const previewImg = document.getElementById("postComposerPreviewImg") as HTMLImageElement;
 const previewVideo = document.getElementById("postComposerPreviewVideo") as HTMLVideoElement;
 const removeMediaBtn = document.getElementById("postComposerRemoveMedia") as HTMLButtonElement;
+const youtubePreviewWrap = document.getElementById("postComposerYoutubePreview") as HTMLDivElement;
 
 let posts: FeedPost[] = [];
 
@@ -57,6 +60,24 @@ function clearPendingMedia(): void {
   previewImg.src = "";
   previewVideo.src = "";
   updateComposerState();
+  updateYoutubePreview();
+}
+
+// Vista previa en vivo del video de YouTube apenas se pega el link en el composer
+// (estilo Facebook/Twitter, pero con el video de verdad, no solo una imagen). Nunca
+// convive con un archivo adjunto: si hay media, esa es la intencion mas explicita.
+function updateYoutubePreview(): void {
+  const videoId = !pendingMedia ? extractYouTubeVideoId(extractFirstUrl(composerInput.value) ?? "") : null;
+  if (!videoId) {
+    youtubePreviewWrap.hidden = true;
+    youtubePreviewWrap.innerHTML = "";
+    delete youtubePreviewWrap.dataset.videoId;
+    return;
+  }
+  if (youtubePreviewWrap.dataset.videoId === videoId) return; // mismo video que ya se esta mostrando, no re-crear el iframe
+  youtubePreviewWrap.dataset.videoId = videoId;
+  youtubePreviewWrap.hidden = false;
+  youtubePreviewWrap.innerHTML = youtubeEmbedHtml(videoId);
 }
 
 function showMediaPreview(): void {
@@ -67,6 +88,7 @@ function showMediaPreview(): void {
   if (pendingMedia.kind === "image") previewImg.src = pendingMedia.previewUrl;
   else previewVideo.src = pendingMedia.previewUrl;
   updateComposerState();
+  updateYoutubePreview();
 }
 
 mediaInput.addEventListener("change", () => {
@@ -86,7 +108,10 @@ function updateComposerState(): void {
   composerCounter.classList.toggle("post-composer-counter-over", len > POST_MAX);
   composerSubmit.disabled = (len === 0 && !pendingMedia) || len > POST_MAX;
 }
-composerInput.addEventListener("input", updateComposerState);
+composerInput.addEventListener("input", () => {
+  updateComposerState();
+  updateYoutubePreview();
+});
 updateComposerState();
 
 composerForm.addEventListener("submit", (e) => {

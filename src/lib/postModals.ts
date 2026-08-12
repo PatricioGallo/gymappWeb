@@ -37,6 +37,37 @@ function successCheckHtml(message: string): string {
   `;
 }
 
+/** Visor a pantalla completa de la foto/video de un Rep: click en el media lo abre. Se cierra con la cruz, Escape, o clickeando el fondo. */
+export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="media-lightbox" id="mediaLightboxOverlay">
+      <button type="button" class="media-lightbox-close" id="mediaLightboxClose" aria-label="Cerrar">✕</button>
+      ${
+        mediaType === "video"
+          ? `<video class="media-lightbox-media" src="${escapeHtml(mediaUrl)}" controls autoplay playsinline></video>`
+          : `<img class="media-lightbox-media" src="${escapeHtml(mediaUrl)}" alt="">`
+      }
+    </div>
+  `;
+
+  function close(): void {
+    document.removeEventListener("keydown", onKeydown);
+    closeOverlay();
+  }
+  function onKeydown(e: KeyboardEvent): void {
+    if (e.key === "Escape") close();
+  }
+  document.addEventListener("keydown", onKeydown);
+
+  document.getElementById("mediaLightboxClose")?.addEventListener("click", close);
+  document.getElementById("mediaLightboxOverlay")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) close(); // solo el fondo cierra, no un click en la imagen/video
+  });
+}
+
 /** Modal para citar un Rep: textarea corto + contador, llama a createQuote y avisa via onCreated. */
 export function openQuoteModal(post: FeedPost, authorId: string, onCreated: (created: Post) => void): void {
   const loaderBody = document.getElementById("loaderBody");

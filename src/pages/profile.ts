@@ -1,4 +1,4 @@
-import { setupNavToggle, setupRevealObserver } from "../lib/nav";
+import { setupNavToggle, setupRevealObserver, setupAutoHideHeader } from "../lib/nav";
 import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
@@ -41,12 +41,23 @@ import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
-import { getUserPosts, getUserPostCount, getPost, toggleLike, toggleRepost, type FeedPost, type PostAuthor } from "../services/post.service";
+import {
+  getUserRepsAndReposts,
+  getUserMedia,
+  getUserLikedPosts,
+  getUserPostCount,
+  getPost,
+  toggleLike,
+  toggleRepost,
+  type FeedPost,
+  type PostAuthor,
+} from "../services/post.service";
 
 declare const Chart: any;
 
 setupNavToggle();
 setupRevealObserver();
+setupAutoHideHeader();
 setupProfileMenuToggle();
 setupRoutineMenuOutsideClick();
 
@@ -712,7 +723,6 @@ function confirmBlockModal(targetId: string, username: string) {
 function renderPrivateNotice(nombre: string) {
   document.getElementById("quickActionsSection")?.remove();
   document.getElementById("rutinas")?.remove();
-  document.getElementById("repsSection")?.remove();
 
   const statsSection = document.getElementById("statsSection");
   const container = statsSection?.querySelector(".container");
@@ -883,36 +893,67 @@ async function refreshRoutinesAndStats() {
   if (statValue && count !== undefined) statValue.textContent = String(count);
 }
 
-// ---------- Reps ----------
+// ---------- Actividad: Estadísticas / Tus Reps / Multimedia / Me gusta ----------
+// Selector debajo de "Tu actividad": por defecto las estadisticas (stats de
+// siempre), y 3 pestañas mas que muestran listas de Reps -- reemplaza a la
+// vieja seccion #repsSection (fija, solo "Tus Reps"), ahora consolidada aca.
+// "Tus Reps" incluye tanto los Reps propios como los reposteados (fusionados
+// y ordenados cronologicamente, ver getUserRepsAndReposts).
 
-const REPS_PAGE_SIZE = 20;
-// Reps deshabilitado temporalmente en el perfil (pedido explícito del usuario).
-const REPS_ENABLED = false;
+const ACTIVITY_PAGE_SIZE = 20;
 
+type ActivityTab = "stats" | "reps" | "media" | "likes";
+type ActivityFetcher = (userId: string, beforeIso?: string) => Promise<FeedPost[]>;
+
+const ACTIVITY_FETCHERS: Record<Exclude<ActivityTab, "stats">, ActivityFetcher> = {
+  reps: getUserRepsAndReposts,
+  media: getUserMedia,
+  likes: getUserLikedPosts,
+};
+
+const ACTIVITY_TITLES: Record<Exclude<ActivityTab, "stats">, string> = {
+  reps: "Reps",
+  media: "Multimedia",
+  likes: "Me gusta",
+};
+
+function activityEmptyMessage(tab: Exclude<ActivityTab, "stats">, isOwner: boolean): string {
+  if (tab === "reps") return isOwner ? "Todavía no publicaste ningún Rep." : "Todavía no publicó ningún Rep.";
+  if (tab === "media") return isOwner ? "Todavía no subiste fotos ni videos." : "Todavía no subió fotos ni videos.";
+  return isOwner ? "Todavía no le pusiste me gusta a nada." : "Todavía no le puso me gusta a nada.";
+}
 
 function goToAuthorProfile(author: PostAuthor): void {
   window.location.href = `profile.html?u=${encodeURIComponent(author.username)}`;
 }
 
-async function renderProfileReps(targetUserId: string, isOwner: boolean) {
-  const section = document.getElementById("repsSection");
-  const listEl = document.getElementById("repsSectionList");
-  const loadMoreBtn = document.getElementById("repsSectionLoadMoreBtn") as HTMLButtonElement | null;
-  if (!REPS_ENABLED || !section || !listEl) return;
+function goToPost(postId: string): void {
+  window.location.href = `post.html?id=${encodeURIComponent(postId)}`;
+}
 
-  const eyebrow = document.getElementById("repsSectionEyebrow");
-  if (eyebrow && !isOwner) eyebrow.textContent = "Sus Reps";
+function setupActivityTabs(targetUserId: string, isOwner: boolean): void {
+  const tabsEl = document.getElementById("activityTabs");
+  const statsContent = document.getElementById("statsContent");
+  const listEl = document.getElementById("activityPostsList");
+  const sentinel = document.getElementById("activityPostsSentinel");
+  const spinner = document.getElementById("activityPostsSpinner");
+  const titleEl = document.getElementById("activityTitle");
+  if (!tabsEl || !statsContent || !listEl || !sentinel) return;
 
-  let reps: FeedPost[] = await getUserPosts(targetUserId).catch(() => []);
+  let activeTab: ActivityTab = "stats";
+  let posts: FeedPost[] = [];
+  let cursor: string | undefined;
+  let loadingMore = false;
+  let exhausted = false;
 
-  function renderList() {
-    listEl!.innerHTML = reps.length
-      ? reps.map((p) => renderPostCard(p, myId, { compact: true })).join("")
-      : `<p class="exc-pick-empty">Todavía no publicó ningún Rep.</p>`;
-    wirePostCard(listEl!, reps, handlers);
+  function renderList(): void {
+    if (activeTab === "stats") return;
+    const tab = activeTab as Exclude<ActivityTab, "stats">;
+    listEl!.innerHTML = posts.length ? posts.map((p) => renderPostCard(p, myId, { compact: true })).join("") : `<p class="exc-pick-empty">${activityEmptyMessage(tab, isOwner)}</p>`;
+    wirePostCard(listEl!, posts, handlers);
   }
 
-  async function handleLikeToggle(post: FeedPost) {
+  async function handleLikeToggle(post: FeedPost): Promise<void> {
     if (!myId) {
       window.location.href = "login.html";
       return;
@@ -930,7 +971,7 @@ async function renderProfileReps(targetUserId: string, isOwner: boolean) {
     }
   }
 
-  async function handleRepostToggle(post: FeedPost) {
+  async function handleRepostToggle(post: FeedPost): Promise<void> {
     if (!myId) {
       window.location.href = "login.html";
       return;
@@ -967,12 +1008,12 @@ async function renderProfileReps(targetUserId: string, isOwner: boolean) {
         return;
       }
       openQuoteModal(post, myId, (created) => {
-        // Si estas mirando tu propio perfil, la cita nueva entra a esta misma lista.
-        if (!isOwner || created.author_id !== myId) return;
+        // Si estas mirando tu propio perfil y esta abierta la pestaña de Reps, la cita nueva entra a esta misma lista.
+        if (activeTab !== "reps" || !isOwner || created.author_id !== myId) return;
         getPost(created.id)
           .then((hydrated) => {
             if (!hydrated) return;
-            reps = [hydrated, ...reps];
+            posts = [hydrated, ...posts];
             renderList();
           })
           .catch(() => {});
@@ -987,34 +1028,83 @@ async function renderProfileReps(targetUserId: string, isOwner: boolean) {
     },
     onDeleteClick: (post) => {
       confirmDeletePost(post, () => {
-        reps = reps.filter((p) => p.id !== post.id);
+        posts = posts.filter((p) => p.id !== post.id);
         renderList();
       });
     },
     onAuthorClick: goToAuthorProfile,
-    onOpenPost: (post) => {
-      window.location.href = `post.html?id=${encodeURIComponent(post.id)}`;
-    },
+    onOpenPost: (post) => goToPost(post.id),
   };
 
-  renderList();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) void loadMore();
+    },
+    { rootMargin: "600px 0px" }
+  );
 
-  if (loadMoreBtn) {
-    loadMoreBtn.hidden = reps.length < REPS_PAGE_SIZE;
-    loadMoreBtn.addEventListener("click", async () => {
-      if (reps.length === 0) return;
-      loadMoreBtn.disabled = true;
-      const older = await getUserPosts(targetUserId, reps[reps.length - 1].feedTimestamp);
-      loadMoreBtn.disabled = false;
-      if (older.length === 0) {
-        loadMoreBtn.hidden = true;
-        return;
-      }
-      reps = [...reps, ...older];
-      renderList();
-      loadMoreBtn.hidden = older.length < REPS_PAGE_SIZE;
-    });
+  async function loadMore(): Promise<void> {
+    if (activeTab === "stats" || loadingMore || exhausted) return;
+    loadingMore = true;
+    if (spinner) spinner.hidden = false;
+    const fetcher = ACTIVITY_FETCHERS[activeTab as Exclude<ActivityTab, "stats">];
+    const older = await fetcher(targetUserId, cursor).catch(() => []);
+    loadingMore = false;
+    if (spinner) spinner.hidden = true;
+
+    if (older.length === 0) {
+      exhausted = true;
+      observer.disconnect();
+      return;
+    }
+    cursor = older[older.length - 1].feedTimestamp;
+    posts = [...posts, ...older];
+    renderList();
+    if (older.length < ACTIVITY_PAGE_SIZE) {
+      exhausted = true;
+      observer.disconnect();
+    }
   }
+
+  async function switchTab(tab: ActivityTab): Promise<void> {
+    if (tab === activeTab) return;
+    activeTab = tab;
+    observer.disconnect();
+
+    tabsEl!.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === tab);
+    });
+
+    if (tab === "stats") {
+      statsContent!.hidden = false;
+      listEl!.hidden = true;
+      sentinel!.hidden = true;
+      if (titleEl) titleEl.textContent = "Estadísticas";
+      return;
+    }
+
+    if (titleEl) titleEl.textContent = ACTIVITY_TITLES[tab];
+    statsContent!.hidden = true;
+    listEl!.hidden = false;
+    listEl!.innerHTML = `<p class="exc-pick-empty">Cargando...</p>`;
+    sentinel!.hidden = false;
+
+    posts = [];
+    cursor = undefined;
+    exhausted = false;
+
+    posts = await ACTIVITY_FETCHERS[tab](targetUserId).catch(() => []);
+    cursor = posts.length ? posts[posts.length - 1].feedTimestamp : undefined;
+    renderList();
+    if (posts.length < ACTIVITY_PAGE_SIZE) exhausted = true;
+    else observer.observe(sentinel!);
+  }
+
+  tabsEl.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".routine-tab");
+    if (!btn?.dataset.tab) return;
+    void switchTab(btn.dataset.tab as ActivityTab);
+  });
 }
 
 // Una rutina asignada y privada es del que la asigno, no de quien la recibe: el
@@ -1645,7 +1735,7 @@ async function main() {
   routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
   renderStats(logs, activeCount ?? 0, isOwner);
-  void renderProfileReps(displayProfile.id!, isOwner);
+  setupActivityTabs(displayProfile.id!, isOwner);
 }
 
 main();

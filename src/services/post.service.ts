@@ -37,6 +37,7 @@ const POST_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const POST_VIDEO_TYPES = ["video/mp4", "video/webm"];
 
 const URL_RE = /https?:\/\/[^\s]+/i;
+const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 
 /** Primera URL http(s) encontrada en el texto del Rep, o null si no hay ninguna. */
 export function extractFirstUrl(content: string): string | null {
@@ -44,6 +45,12 @@ export function extractFirstUrl(content: string): string | null {
   if (!match) return null;
   // Sacamos puntuacion de cierre pegada al final ("mirá esto: https://x.com." o "(https://x.com)").
   return match[0].replace(/[.,;:!?)\]}'"]+$/, "");
+}
+
+/** Id del video si la URL es de YouTube (watch/youtu.be/embed/shorts), o null. No pega a la red: es solo un parseo. */
+export function extractYouTubeVideoId(url: string): string | null {
+  const match = url.match(YOUTUBE_RE);
+  return match ? match[1] : null;
 }
 
 interface LinkPreviewFields {
@@ -79,6 +86,14 @@ async function fetchLinkPreview(url: string): Promise<LinkPreviewFields | null> 
   } catch {
     return null;
   }
+}
+
+/** Si el link es de YouTube, embed de video (sin pegarle a la red). Si no, va al link-preview generico. */
+async function resolveLinkFields(url: string | null): Promise<{ youtube_video_id?: string } | LinkPreviewFields | null> {
+  if (!url) return null;
+  const youtubeId = extractYouTubeVideoId(url);
+  if (youtubeId) return { youtube_video_id: youtubeId };
+  return fetchLinkPreview(url);
 }
 
 function friendlyError(error: { message?: string; code?: string } | null, fallback: string): string {
@@ -280,16 +295,87 @@ export async function getPost(id: string): Promise<FeedPost | null> {
   return hydratedById.get(data.id) ?? null;
 }
 
-/** Reps de un usuario para la sección de su perfil (incluye continuaciones de hilo propias, no incluye reposts). */
-export async function getUserPosts(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+/**
+ * Reps propios de un usuario + lo que reposteo, mezclados y ordenados por
+ * feedTimestamp (pestaña "Tus Reps" del perfil) -- mismo patrón de mezcla que
+ * getFeed pero acotado a un solo usuario en vez del feed general.
+ */
+export async function getUserRepsAndReposts(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
   const viewerId = await getViewerId();
-  let query = supabase.from("posts").select("*").eq("author_id", userId).order("created_at", { ascending: false }).limit(limit);
+
+  let postsQuery = supabase.from("posts").select("*").eq("author_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (beforeIso) postsQuery = postsQuery.lt("created_at", beforeIso);
+
+  let repostsQuery = supabase.from("post_reposts").select("post_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (beforeIso) repostsQuery = repostsQuery.lt("created_at", beforeIso);
+
+  const [{ data: postRows, error: postsError }, { data: repostRows, error: repostsError }] = await Promise.all([postsQuery, repostsQuery]);
+  if (postsError) throw postsError;
+  if (repostsError) throw repostsError;
+
+  const repostTargetIds = (repostRows ?? []).map((r) => r.post_id);
+  const { data: repostTargets, error: repostTargetsError } = repostTargetIds.length
+    ? await supabase.from("posts").select("*").in("id", repostTargetIds)
+    : { data: [] as Post[], error: null };
+  if (repostTargetsError) throw repostTargetsError;
+
+  const allRows = [...(postRows ?? []), ...(repostTargets ?? [])];
+  const hydratedById = await hydratePosts(allRows, viewerId);
+  const reposterAuthorsById = await fetchAuthorsByIds([userId]);
+  const reposter = reposterAuthorsById.get(userId);
+
+  const entries: FeedPost[] = [];
+  for (const p of postRows ?? []) {
+    const hydrated = hydratedById.get(p.id);
+    if (hydrated) entries.push(hydrated);
+  }
+  for (const r of repostRows ?? []) {
+    const hydrated = hydratedById.get(r.post_id);
+    if (hydrated && reposter) entries.push({ ...hydrated, repostedBy: reposter, feedTimestamp: r.created_at });
+  }
+
+  entries.sort((a, b) => (a.feedTimestamp < b.feedTimestamp ? 1 : -1));
+  return entries.slice(0, limit);
+}
+
+/** Reps propios de un usuario con foto o video adjunto (pestaña "Multimedia" del perfil). */
+export async function getUserMedia(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+  const viewerId = await getViewerId();
+  let query = supabase.from("posts").select("*").eq("author_id", userId).not("media_url", "is", null).order("created_at", { ascending: false }).limit(limit);
   if (beforeIso) query = query.lt("created_at", beforeIso);
   const { data, error } = await query;
   if (error) throw error;
   const rows = data ?? [];
   const hydratedById = await hydratePosts(rows, viewerId);
   return rows.map((r) => hydratedById.get(r.id)).filter((p): p is FeedPost => !!p);
+}
+
+/** Posts a los que un usuario le puso me gusta (pestaña "Me gusta" del perfil), mas recientes primero segun cuando likeo. */
+export async function getUserLikedPosts(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+  const viewerId = await getViewerId();
+  let likesQuery = supabase.from("post_likes").select("post_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (beforeIso) likesQuery = likesQuery.lt("created_at", beforeIso);
+  const { data: likeRows, error: likesError } = await likesQuery;
+  if (likesError) throw likesError;
+  const rows = likeRows ?? [];
+  if (rows.length === 0) return [];
+
+  const { data: postRows, error: postsError } = await supabase
+    .from("posts")
+    .select("*")
+    .in(
+      "id",
+      rows.map((r) => r.post_id)
+    );
+  if (postsError) throw postsError;
+
+  const hydratedById = await hydratePosts(postRows ?? [], viewerId);
+  return rows
+    .map((r) => {
+      const hydrated = hydratedById.get(r.post_id);
+      return hydrated ? { ...hydrated, feedTimestamp: r.created_at } : null;
+    })
+    .filter((p): p is FeedPost => !!p);
 }
 
 export async function getUserPostCount(userId: string): Promise<number> {
@@ -325,11 +411,11 @@ export async function createPost(
   // Si ya hay imagen/video adjunto no buscamos preview del link: mostrar las dos cosas
   // a la vez satura la tarjeta, y el media adjunto es la intencion mas explicita.
   const url = !mediaUrl && trimmed ? extractFirstUrl(trimmed) : null;
-  const linkPreview = url ? await fetchLinkPreview(url) : null;
+  const linkFields = await resolveLinkFields(url);
 
   const { data, error } = await supabase
     .from("posts")
-    .insert({ author_id: authorId, content: trimmed || null, media_url: mediaUrl ?? null, media_type: mediaType ?? null, ...linkPreview })
+    .insert({ author_id: authorId, content: trimmed || null, media_url: mediaUrl ?? null, media_type: mediaType ?? null, ...linkFields })
     .select("*")
     .single();
   if (error) return { error: friendlyError(error, "No se pudo publicar el Rep. Probá de nuevo.") };
@@ -339,11 +425,11 @@ export async function createPost(
 export async function createQuote(authorId: string, quotedPostId: string, content: string): Promise<{ post?: Post; error?: string }> {
   const trimmed = content.trim();
   const url = trimmed ? extractFirstUrl(trimmed) : null;
-  const linkPreview = url ? await fetchLinkPreview(url) : null;
+  const linkFields = await resolveLinkFields(url);
 
   const { data, error } = await supabase
     .from("posts")
-    .insert({ author_id: authorId, quoted_post_id: quotedPostId, content: trimmed || null, ...linkPreview })
+    .insert({ author_id: authorId, quoted_post_id: quotedPostId, content: trimmed || null, ...linkFields })
     .select("*")
     .single();
   if (error) {
