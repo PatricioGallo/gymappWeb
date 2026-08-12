@@ -110,10 +110,18 @@
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
-        <h2>Estadísticas</h2>
+        <h2 id="activityTitle">Estadísticas</h2>
         <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
       </div>
+      <div class="routine-tabs" id="activityTabs">
+        <button class="routine-tab active" data-tab="stats" type="button">Tu actividad</button>
+        <button class="routine-tab" data-tab="reps" type="button">Tus Reps</button>
+        <button class="routine-tab" data-tab="reposts" type="button">Tus Rereps</button>
+        <button class="routine-tab" data-tab="likes" type="button">Me gusta</button>
+      </div>
       <div id="statsContent"></div>
+      <div class="post-feed-list post-feed-list-compact" id="activityPostsList" hidden></div>
+      <div class="post-feed-sentinel" id="activityPostsSentinel" hidden><div class="modern-spinner" id="activityPostsSpinner" hidden></div></div>
     </div>
   </section>
 
@@ -129,17 +137,6 @@
         <button class="routine-tab" data-tab="saved" type="button" id="savedTabBtn" hidden>Guardadas</button>
       </div>
       <div id="routinesContent"></div>
-    </div>
-  </section>
-
-  <section class="steps" id="repsSection" hidden>
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow" id="repsSectionEyebrow">Tus Reps</span>
-        <h2>Reps</h2>
-      </div>
-      <div class="post-feed-list post-feed-list-compact" id="repsSectionList"></div>
-      <button type="button" class="chat-load-more" id="repsSectionLoadMoreBtn" hidden>Cargar más</button>
     </div>
   </section>
 

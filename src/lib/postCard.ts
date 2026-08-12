@@ -1,6 +1,7 @@
 import { escapeHtml } from "./dom";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
+import { openMediaLightbox } from "./postModals";
 import type { FeedPost, Post, PostAuthor } from "../services/post.service";
 
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
@@ -40,6 +41,22 @@ function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="">`;
 }
 
+// nocookie: no larga cookies de tracking hasta que se le da play, buen default sin pedirle nada al usuario.
+export function youtubeEmbedHtml(videoId: string): string {
+  return `
+    <div class="post-youtube-embed">
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}"
+        title="Video de YouTube"
+        loading="lazy"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+      ></iframe>
+    </div>
+  `;
+}
+
 function domainOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -52,7 +69,7 @@ function domainOf(url: string): string {
 // en post.service.ts, que scrapea los meta og:*/twitter:* al publicar). Nunca convive
 // con media adjunta: si subiste una imagen/video, esa es la intencion mas explicita.
 function linkPreviewHtml(post: Post): string {
-  if (!post.link_url || post.media_url) return "";
+  if (!post.link_url || post.media_url || post.youtube_video_id) return "";
   return `
     <a class="post-link-preview" href="${escapeHtml(post.link_url)}" target="_blank" rel="noopener noreferrer">
       ${post.link_image_url ? `<img class="post-link-preview-image" src="${escapeHtml(post.link_image_url)}" alt="">` : ""}
@@ -132,6 +149,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
           </div>
           ${contentHtml(post.content, "post-card-text")}
           ${mediaHtml(post.media_url, post.media_type)}
+          ${!post.media_url && post.youtube_video_id ? youtubeEmbedHtml(post.youtube_video_id) : ""}
           ${linkPreviewHtml(post)}
           ${quotedPostHtml(post.quotedPost)}
           ${actionsHtml(post, viewerId)}
@@ -157,6 +175,14 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
     card.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", () => handlers.onQuoteClick(post));
     card.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", () => handlers.onShareClick(post));
     card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", () => handlers.onDeleteClick?.(post));
+
+    // Click en la foto/video adjunto abre el visor grande (ver openMediaLightbox en
+    // postModals.ts), en vez de navegar al detalle del Rep como el resto de la tarjeta.
+    card.querySelector<HTMLElement>(".post-card-media")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!post.media_url) return;
+      openMediaLightbox(post.media_url, post.media_type === "video" ? "video" : "image");
+    });
 
     if (handlers.onOpenPost) {
       card.addEventListener("click", (e) => {

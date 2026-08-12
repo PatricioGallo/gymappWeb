@@ -706,6 +706,7 @@ export type Database = {
           thread_parent_id: string | null
           thread_root_id: string | null
           updated_at: string
+          youtube_video_id: string | null
         }
         Insert: {
           author_id: string
@@ -727,6 +728,7 @@ export type Database = {
           thread_parent_id?: string | null
           thread_root_id?: string | null
           updated_at?: string
+          youtube_video_id?: string | null
         }
         Update: {
           author_id?: string
@@ -748,6 +750,7 @@ export type Database = {
           thread_parent_id?: string | null
           thread_root_id?: string | null
           updated_at?: string
+          youtube_video_id?: string | null
         }
         Relationships: [
           {
@@ -1738,6 +1741,7 @@ export type Database = {
           thread_parent_id: string | null
           thread_root_id: string | null
           updated_at: string
+          youtube_video_id: string | null
         }[]
         SetofOptions: {
           from: "*"
