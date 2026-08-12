@@ -1,4 +1,4 @@
-import { setupNavToggle, setupRevealObserver } from "../lib/nav";
+import { setupNavToggle, setupRevealObserver, setupAutoHideHeader } from "../lib/nav";
 import { supabase } from "../lib/supabaseClient";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
@@ -42,8 +42,8 @@ import { getPlatform } from "../lib/socialLinks";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, confirmDeletePost } from "../lib/postModals";
 import {
-  getUserPosts,
-  getUserReposts,
+  getUserRepsAndReposts,
+  getUserMedia,
   getUserLikedPosts,
   getUserPostCount,
   getPost,
@@ -57,6 +57,7 @@ declare const Chart: any;
 
 setupNavToggle();
 setupRevealObserver();
+setupAutoHideHeader();
 setupProfileMenuToggle();
 setupRoutineMenuOutsideClick();
 
@@ -892,31 +893,33 @@ async function refreshRoutinesAndStats() {
   if (statValue && count !== undefined) statValue.textContent = String(count);
 }
 
-// ---------- Actividad: Tu actividad / Tus Reps / Tus Rereps / Me gusta ----------
+// ---------- Actividad: Estadísticas / Tus Reps / Multimedia / Me gusta ----------
 // Selector debajo de "Tu actividad": por defecto las estadisticas (stats de
 // siempre), y 3 pestañas mas que muestran listas de Reps -- reemplaza a la
 // vieja seccion #repsSection (fija, solo "Tus Reps"), ahora consolidada aca.
+// "Tus Reps" incluye tanto los Reps propios como los reposteados (fusionados
+// y ordenados cronologicamente, ver getUserRepsAndReposts).
 
 const ACTIVITY_PAGE_SIZE = 20;
 
-type ActivityTab = "stats" | "reps" | "reposts" | "likes";
+type ActivityTab = "stats" | "reps" | "media" | "likes";
 type ActivityFetcher = (userId: string, beforeIso?: string) => Promise<FeedPost[]>;
 
 const ACTIVITY_FETCHERS: Record<Exclude<ActivityTab, "stats">, ActivityFetcher> = {
-  reps: getUserPosts,
-  reposts: getUserReposts,
+  reps: getUserRepsAndReposts,
+  media: getUserMedia,
   likes: getUserLikedPosts,
 };
 
 const ACTIVITY_TITLES: Record<Exclude<ActivityTab, "stats">, string> = {
   reps: "Reps",
-  reposts: "Rereps",
+  media: "Multimedia",
   likes: "Me gusta",
 };
 
 function activityEmptyMessage(tab: Exclude<ActivityTab, "stats">, isOwner: boolean): string {
   if (tab === "reps") return isOwner ? "Todavía no publicaste ningún Rep." : "Todavía no publicó ningún Rep.";
-  if (tab === "reposts") return isOwner ? "Todavía no reposteaste nada." : "Todavía no reposteó nada.";
+  if (tab === "media") return isOwner ? "Todavía no subiste fotos ni videos." : "Todavía no subió fotos ni videos.";
   return isOwner ? "Todavía no le pusiste me gusta a nada." : "Todavía no le puso me gusta a nada.";
 }
 

@@ -295,44 +295,59 @@ export async function getPost(id: string): Promise<FeedPost | null> {
   return hydratedById.get(data.id) ?? null;
 }
 
-/** Reps de un usuario para la sección de su perfil (incluye continuaciones de hilo propias, no incluye reposts). */
-export async function getUserPosts(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+/**
+ * Reps propios de un usuario + lo que reposteo, mezclados y ordenados por
+ * feedTimestamp (pestaña "Tus Reps" del perfil) -- mismo patrón de mezcla que
+ * getFeed pero acotado a un solo usuario en vez del feed general.
+ */
+export async function getUserRepsAndReposts(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
   const viewerId = await getViewerId();
-  let query = supabase.from("posts").select("*").eq("author_id", userId).order("created_at", { ascending: false }).limit(limit);
+
+  let postsQuery = supabase.from("posts").select("*").eq("author_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (beforeIso) postsQuery = postsQuery.lt("created_at", beforeIso);
+
+  let repostsQuery = supabase.from("post_reposts").select("post_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (beforeIso) repostsQuery = repostsQuery.lt("created_at", beforeIso);
+
+  const [{ data: postRows, error: postsError }, { data: repostRows, error: repostsError }] = await Promise.all([postsQuery, repostsQuery]);
+  if (postsError) throw postsError;
+  if (repostsError) throw repostsError;
+
+  const repostTargetIds = (repostRows ?? []).map((r) => r.post_id);
+  const { data: repostTargets, error: repostTargetsError } = repostTargetIds.length
+    ? await supabase.from("posts").select("*").in("id", repostTargetIds)
+    : { data: [] as Post[], error: null };
+  if (repostTargetsError) throw repostTargetsError;
+
+  const allRows = [...(postRows ?? []), ...(repostTargets ?? [])];
+  const hydratedById = await hydratePosts(allRows, viewerId);
+  const reposterAuthorsById = await fetchAuthorsByIds([userId]);
+  const reposter = reposterAuthorsById.get(userId);
+
+  const entries: FeedPost[] = [];
+  for (const p of postRows ?? []) {
+    const hydrated = hydratedById.get(p.id);
+    if (hydrated) entries.push(hydrated);
+  }
+  for (const r of repostRows ?? []) {
+    const hydrated = hydratedById.get(r.post_id);
+    if (hydrated && reposter) entries.push({ ...hydrated, repostedBy: reposter, feedTimestamp: r.created_at });
+  }
+
+  entries.sort((a, b) => (a.feedTimestamp < b.feedTimestamp ? 1 : -1));
+  return entries.slice(0, limit);
+}
+
+/** Reps propios de un usuario con foto o video adjunto (pestaña "Multimedia" del perfil). */
+export async function getUserMedia(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
+  const viewerId = await getViewerId();
+  let query = supabase.from("posts").select("*").eq("author_id", userId).not("media_url", "is", null).order("created_at", { ascending: false }).limit(limit);
   if (beforeIso) query = query.lt("created_at", beforeIso);
   const { data, error } = await query;
   if (error) throw error;
   const rows = data ?? [];
   const hydratedById = await hydratePosts(rows, viewerId);
   return rows.map((r) => hydratedById.get(r.id)).filter((p): p is FeedPost => !!p);
-}
-
-/** Posts que un usuario reposteo (pestaña "Tus Rereps" del perfil), mas recientes primero segun cuando reposteo. */
-export async function getUserReposts(userId: string, beforeIso?: string, limit = FEED_PAGE_SIZE): Promise<FeedPost[]> {
-  const viewerId = await getViewerId();
-  let repostsQuery = supabase.from("post_reposts").select("post_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
-  if (beforeIso) repostsQuery = repostsQuery.lt("created_at", beforeIso);
-  const { data: repostRows, error: repostsError } = await repostsQuery;
-  if (repostsError) throw repostsError;
-  const rows = repostRows ?? [];
-  if (rows.length === 0) return [];
-
-  const { data: postRows, error: postsError } = await supabase
-    .from("posts")
-    .select("*")
-    .in(
-      "id",
-      rows.map((r) => r.post_id)
-    );
-  if (postsError) throw postsError;
-
-  const hydratedById = await hydratePosts(postRows ?? [], viewerId);
-  return rows
-    .map((r) => {
-      const hydrated = hydratedById.get(r.post_id);
-      return hydrated ? { ...hydrated, feedTimestamp: r.created_at } : null;
-    })
-    .filter((p): p is FeedPost => !!p);
 }
 
 /** Posts a los que un usuario le puso me gusta (pestaña "Me gusta" del perfil), mas recientes primero segun cuando likeo. */

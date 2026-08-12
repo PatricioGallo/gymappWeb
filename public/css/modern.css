@@ -2202,6 +2202,13 @@ a.profile-stat:hover { color: var(--accent-2); }
 
 button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family: inherit; color: inherit; }
 
+/* "Tus rutinas" quedó pegado a las quick-action cards al subirlo arriba de
+   Estadísticas. margin (no padding): necesitamos aire en blanco antes de que
+   arranque el fondo gris de .steps, el mismo que ya separa "Editar perfil" de
+   esas cards (16px padding-bottom de .profile-hero + 24px padding-top de
+   .quick-actions). */
+#rutinas { margin-top: 40px; }
+
 /* ---------- Stat cards ---------- */
 
 .stat-card {
@@ -4441,11 +4448,14 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-composer-counter-over { color: var(--accent); font-weight: 700; }
 
 .post-feed-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+/* [hidden] pierde contra un display:flex de menor especificidad de origen sin esto */
+.post-feed-list[hidden] { display: none; }
 
 /* Marcador para el scroll infinito (ver IntersectionObserver en feed.ts): sin
    altura no entra nunca en el viewport y el observer no dispara, por eso el
    padding minimo aunque no haya spinner visible. */
 .post-feed-sentinel { display: flex; justify-content: center; padding: 16px 0; }
+.post-feed-sentinel[hidden] { display: none; }
 .post-feed-sentinel .modern-spinner { width: 26px; height: 26px; }
 .post-feed-list-compact { gap: 10px; }
 
@@ -4866,15 +4876,16 @@ body.feed-page .site-footer { display: none; }
      apenas se esconde una vez (deja de re-pegarse al volver a subir). Por eso
      aca pasa a fixed solo en esta pagina/ancho, compensando el hueco que deja
      en el flujo con el padding-top de .features. */
-  body.feed-page .site-header {
+  body.header-autohide .site-header {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     transition: transform 0.25s ease;
   }
-  body.feed-page .site-header.header-hidden { transform: translateY(-100%); }
+  body.header-autohide .site-header.header-hidden { transform: translateY(-100%); }
   body.feed-page .features { padding-top: calc(var(--header-h) + 24px); }
+  body.profile-page .profile-hero { padding-top: calc(var(--header-h) + 52px); }
 }
 
 @media (min-width: 860px) {
