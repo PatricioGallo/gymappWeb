@@ -783,7 +783,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
     const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
     const repeValue = repInput?.value.trim() ?? "";
     const repe = repeValue === "" ? NaN : Number(repeValue);
-    if (Number.isNaN(peso) || peso <= 0 || Number.isNaN(repe) || repe <= 0) {
+    if (Number.isNaN(peso) || peso < 0 || Number.isNaN(repe) || repe <= 0) {
       error = true;
       return;
     }
@@ -800,7 +800,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
   });
 
   if (error) {
-    alertMessage.innerHTML = "<p>Ingresá solo números mayores a 0.</p>";
+    alertMessage.innerHTML = "<p>El peso no puede ser negativo y las repeticiones tienen que ser mayores a 0.</p>";
     return;
   }
   if (entries.length === 0) {
