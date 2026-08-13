@@ -111,6 +111,11 @@ function setupTabs() {
       }
     });
   });
+
+  const requestedTab = new URLSearchParams(location.search).get("tab");
+  if (requestedTab) {
+    tabsWrap.querySelector<HTMLButtonElement>(`.routine-tab[data-tab="${requestedTab}"]`)?.click();
+  }
 }
 
 // ---------- Editar perfil ----------

@@ -12,7 +12,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Gym Social", {
       body: data.body || "",
-      icon: "/images/icon-192.png",
+      icon: data.icon || "/images/icon-192.png",
       badge: "/images/icon-192.png",
       data: { url: data.url || "/pages/notifications.html" },
     })
