@@ -164,7 +164,7 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: rgba(10, 12, 15, 0.85);
+  background: rgba(28, 32, 39, 0.85);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
@@ -4216,6 +4216,8 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -4324,39 +4326,69 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .chat-load-sentinel .modern-spinner { width: 22px; height: 22px; }
 
 /* Scrollbars minimalistas para las areas que scrollean dentro del chat (lista
-   de conversaciones, mensajes, solicitudes): finas y gris oscuro, en vez del
-   scrollbar grueso por defecto del navegador. */
+   de conversaciones, solicitudes): finas y gris oscuro, en vez del scrollbar
+   grueso por defecto del navegador. Los mensajes (.chat-messages) van sin
+   scrollbar visible -- para volver al final ahi esta chat-scroll-bottom-btn. */
 .chat-list-pane,
-.chat-messages,
 .chat-requests-list {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
 .chat-list-pane::-webkit-scrollbar,
-.chat-messages::-webkit-scrollbar,
 .chat-requests-list::-webkit-scrollbar {
   width: 6px;
 }
 
 .chat-list-pane::-webkit-scrollbar-track,
-.chat-messages::-webkit-scrollbar-track,
 .chat-requests-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .chat-list-pane::-webkit-scrollbar-thumb,
-.chat-messages::-webkit-scrollbar-thumb,
 .chat-requests-list::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 999px;
 }
 
 .chat-list-pane::-webkit-scrollbar-thumb:hover,
-.chat-messages::-webkit-scrollbar-thumb:hover,
 .chat-requests-list::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+.chat-messages {
+  scrollbar-width: none;
+}
+
+.chat-messages::-webkit-scrollbar { display: none; }
+
+.chat-messages-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.chat-scroll-bottom-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 14px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.chat-scroll-bottom-btn[hidden] { display: none; }
+.chat-scroll-bottom-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.chat-scroll-bottom-btn svg { width: 18px; height: 18px; stroke: currentColor; }
 
 .chat-date-divider {
   display: flex;

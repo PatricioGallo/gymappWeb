@@ -61,6 +61,7 @@ const bannerAcceptBtn = document.getElementById("chatBannerAccept") as HTMLButto
 const bannerDeclineBtn = document.getElementById("chatBannerDecline") as HTMLButtonElement;
 const pendingNote = document.getElementById("chatPendingNote") as HTMLParagraphElement;
 const messagesEl = document.getElementById("chatMessages") as HTMLDivElement;
+const scrollBottomBtn = document.getElementById("chatScrollBottomBtn") as HTMLButtonElement;
 const composerForm = document.getElementById("chatComposer") as HTMLFormElement;
 const composerInput = document.getElementById("chatComposerInput") as HTMLTextAreaElement;
 const imageInput = document.getElementById("chatImageInput") as HTMLInputElement;
@@ -316,6 +317,16 @@ function scrollToBottom(behavior: ScrollBehavior = "smooth"): void {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, left: 0, behavior });
 }
 
+// Aparece si te alejaste bastante del final (mismo umbral que "wasNearBottom" en
+// appendMessage) -- para volver de un salto si scrolleaste muy arriba en el historial.
+function updateScrollBottomBtn(): void {
+  const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+  scrollBottomBtn.hidden = distanceFromBottom < 300;
+}
+
+messagesEl.addEventListener("scroll", updateScrollBottomBtn);
+scrollBottomBtn.addEventListener("click", () => scrollToBottom());
+
 // Solo se carga la ultima pagina de entrada (arranca directo ahi, ver
 // scrollToBottom("instant") mas abajo); el resto de la conversacion se trae de a
 // paginas cuando el usuario scrollea cerca del principio (ver olderMessagesObserver),
@@ -405,6 +416,7 @@ async function appendMessage(m: ChatMessage): Promise<void> {
   messagesEl.insertAdjacentHTML("beforeend", html);
   void hydrateImages();
   if (wasNearBottom) scrollToBottom();
+  else updateScrollBottomBtn(); // el mensaje nuevo alejo aun mas el final, sin disparar "scroll"
 }
 
 await renderInitialMessages();

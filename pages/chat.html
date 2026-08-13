@@ -97,7 +97,12 @@
 
       <p class="chat-pending-note" id="chatPendingNote" hidden>Le enviaste una solicitud de mensaje. Vas a poder chatear normalmente cuando la acepte.</p>
 
-      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-messages-wrap">
+        <div class="chat-messages" id="chatMessages"></div>
+        <button type="button" class="chat-scroll-bottom-btn" id="chatScrollBottomBtn" aria-label="Ir al mensaje más reciente" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        </button>
+      </div>
 
       <div class="chat-record-bar" id="chatRecordBar" hidden>
         <span class="chat-record-dot"></span>
