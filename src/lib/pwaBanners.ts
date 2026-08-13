@@ -4,7 +4,6 @@ import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNo
 const INSTALL_SNOOZE_KEY = "gs_install_banner_snooze_until";
 const INSTALL_SNOOZE_DAYS = 7;
 const PWA_TRACK_KEY = "gs_pwa_track_date";
-const DESKTOP_PUSH_ASKED_KEY = "gs_desktop_push_asked";
 
 export function isStandalone(): boolean {
   return (navigator as { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
@@ -238,60 +237,5 @@ export async function setupPushReminderBanner(userId: string): Promise<void> {
   actions.appendChild(cta);
 
   addCloseButton(banner);
-  mountBanner(banner);
-}
-
-/**
- * Banner "activá las notificaciones" para PC en una pestaña normal (no requiere instalar
- * la PWA para que las push funcionen, a diferencia de mobile). A diferencia del banner de
- * arriba -- que insiste en cada página una vez instalada la app -- este se pregunta una
- * sola vez: se cierre o se acepte, no vuelve a aparecer.
- */
-export async function setupDesktopPushBanner(userId: string): Promise<void> {
-  if (isMobileDevice() || isStandalone() || !isPushSupported()) return;
-  if (localStorage.getItem(DESKTOP_PUSH_ASKED_KEY)) return;
-  if (Notification.permission === "denied") {
-    localStorage.setItem(DESKTOP_PUSH_ASKED_KEY, "1");
-    return;
-  }
-  const enabled = await isPushEnabledForUser(userId);
-  if (enabled) {
-    localStorage.setItem(DESKTOP_PUSH_ASKED_KEY, "1");
-    return;
-  }
-
-  const banner = buildBanner(BELL_ICON_PATH, "Activá las notificaciones", "Enterate al instante de mensajes, me gusta y seguidores nuevos.");
-  const actions = banner.querySelector(".app-banner-actions")!;
-  const body = banner.querySelector(".app-banner-body")!;
-
-  const cta = document.createElement("button");
-  cta.type = "button";
-  cta.className = "app-banner-cta";
-  cta.textContent = "Activar";
-  cta.addEventListener("click", async () => {
-    cta.disabled = true;
-    cta.textContent = "Activando...";
-    const { error } = await enablePushNotifications(userId);
-    if (error) {
-      cta.disabled = false;
-      cta.textContent = "Activar";
-      let errorEl = body.querySelector<HTMLParagraphElement>(".app-banner-error");
-      if (!errorEl) {
-        errorEl = document.createElement("p");
-        errorEl.className = "app-banner-error";
-        body.appendChild(errorEl);
-      }
-      errorEl.textContent = error;
-      return;
-    }
-    localStorage.setItem(DESKTOP_PUSH_ASKED_KEY, "1");
-    removeBanner(banner);
-  });
-  actions.appendChild(cta);
-
-  addCloseButton(banner, () => {
-    localStorage.setItem(DESKTOP_PUSH_ASKED_KEY, "1");
-  });
-
   mountBanner(banner);
 }
