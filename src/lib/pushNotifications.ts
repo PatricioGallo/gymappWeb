@@ -1,0 +1,71 @@
+import { upsertPushSubscription, deletePushSubscriptionByEndpoint, hasStoredPushSubscription } from "../services/pushNotification.service";
+
+const SW_PATH = "/sw.js";
+
+export function isPushSupported(): boolean {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+// En iOS, Notification/Push directamente no existen salvo que la web este agregada a
+// la pantalla de inicio (PWA instalada) -- Safari en una pestaña normal no los soporta.
+export function isIosNonStandalone(): boolean {
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = (navigator as { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  return isIos && !isStandalone;
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function getRegistration(): Promise<ServiceWorkerRegistration> {
+  return (await navigator.serviceWorker.getRegistration(SW_PATH)) ?? (await navigator.serviceWorker.register(SW_PATH));
+}
+
+/** Suscripción activa en este navegador (si el usuario ya activó las push antes acá). */
+export async function getActivePushSubscription(): Promise<PushSubscription | null> {
+  if (!isPushSupported()) return null;
+  const registration = await getRegistration();
+  return registration.pushManager.getSubscription();
+}
+
+/** true si ese dispositivo/navegador ya tiene la suscripción guardada del lado del servidor. */
+export async function isPushEnabledForUser(userId: string): Promise<boolean> {
+  const subscription = await getActivePushSubscription();
+  if (!subscription) return false;
+  return hasStoredPushSubscription(userId, subscription.endpoint);
+}
+
+export async function enablePushNotifications(userId: string): Promise<{ error?: string }> {
+  if (!isPushSupported()) return { error: "Este navegador no soporta notificaciones push." };
+  const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+  if (!vapidPublicKey) return { error: "Falta configurar la clave pública de push." };
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return { error: "No diste permiso para las notificaciones." };
+
+  try {
+    const registration = await getRegistration();
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+      });
+    }
+    return await upsertPushSubscription(userId, subscription);
+  } catch {
+    return { error: "No se pudo activar las notificaciones. Probá de nuevo." };
+  }
+}
+
+export async function disablePushNotifications(): Promise<void> {
+  const subscription = await getActivePushSubscription();
+  if (!subscription) return;
+  const endpoint = subscription.endpoint;
+  await subscription.unsubscribe();
+  await deletePushSubscriptionByEndpoint(endpoint);
+}
