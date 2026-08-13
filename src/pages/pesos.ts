@@ -643,14 +643,21 @@ function openDay(weekIndex: number, diaIndex: number) {
 
           const rowsMarkup = rows
             .map(({ setIndex, subLabel }) => {
-              const today = todayEntry(last?.get(setIndex));
+              const lastEntries = last?.get(setIndex);
+              const today = todayEntry(lastEntries);
               const historyEntries = history?.get(setIndex);
-              const repeValue = today ? today.repe ?? exc.repe : exc.repe;
+              // Si hoy todavia no se cargo nada para esta serie, se precarga el campo con lo
+              // ultimo que se cargo para esta misma ocurrencia (este dia/semana puntual), no
+              // con el historial de otros dias donde aparezca el mismo ejercicio: un ejercicio
+              // que todavia esta pendiente en este dia (nunca se cargo aca) tiene que arrancar
+              // vacio, aunque el mismo ejercicio ya se haya cargado en otro dia de la rutina.
+              const prefill = today ?? lastEntries?.[0] ?? null;
+              const repeValue = prefill ? prefill.repe ?? exc.repe : exc.repe;
               return `
         <div class="weight-field-serie">
           <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
           <div class="weight-field-inputs">
-            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${today ? today.peso : ""}">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${prefill ? prefill.peso : ""}">
             <span class="weight-field-x">x</span>
             <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
           </div>
