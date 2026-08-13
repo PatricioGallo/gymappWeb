@@ -334,14 +334,21 @@ function renderExercise(group: ExerciseGroup) {
 // una sola serie con mismo_peso cuenta como todas) -- duplicada aca a proposito, no
 // compartida, siguiendo la convencion del resto del codebase.
 
-function isExerciseDone(e: RoutineExerciseWithAuthor, latestWeights: LatestWeightsMap): boolean {
+// Cuantas series de este ejercicio tienen peso cargado. Con mismo_peso todas las series
+// comparten una unica carga, asi que cuentan todas-o-nada.
+function exerciseDoneSeries(e: RoutineExerciseWithAuthor, latestWeights: LatestWeightsMap): number {
   const bySerie = latestWeights.get(e.id);
-  if (!bySerie) return false;
-  const requiredSeries = e.mismo_peso ? 1 : e.serie;
-  for (let i = 1; i <= requiredSeries; i++) {
-    if (!bySerie.get(i)?.length) return false;
+  if (!bySerie) return 0;
+  if (e.mismo_peso) return bySerie.get(1)?.length ? e.serie : 0;
+  let done = 0;
+  for (let i = 1; i <= e.serie; i++) {
+    if (bySerie.get(i)?.length) done++;
   }
-  return true;
+  return done;
+}
+
+function isExerciseDone(e: RoutineExerciseWithAuthor, latestWeights: LatestWeightsMap): boolean {
+  return exerciseDoneSeries(e, latestWeights) >= e.serie;
 }
 
 function lastLoggedEntry(exerciseId: string, latestWeights: LatestWeightsMap): LatestWeightEntry | null {
@@ -355,11 +362,14 @@ function lastLoggedEntry(exerciseId: string, latestWeights: LatestWeightsMap): L
   return best;
 }
 
+// El progreso se pesa por cantidad de series, no por cantidad de ejercicios: un ejercicio
+// de 5 series pesa mas que uno de 2 series, en vez de contar ambos como "un ejercicio".
 function progressStats(exs: RoutineExerciseWithAuthor[], latestWeights: LatestWeightsMap): { done: number; total: number; pct: number } {
   const trackable = exs.filter((e) => e.es_medible);
-  if (trackable.length === 0) return { done: 0, total: 0, pct: 100 };
-  const done = trackable.filter((e) => isExerciseDone(e, latestWeights)).length;
-  return { done, total: trackable.length, pct: Math.round((done / trackable.length) * 100) };
+  const total = trackable.reduce((sum, e) => sum + e.serie, 0);
+  if (total === 0) return { done: 0, total: 0, pct: 100 };
+  const done = trackable.reduce((sum, e) => sum + exerciseDoneSeries(e, latestWeights), 0);
+  return { done, total, pct: Math.round((done / total) * 100) };
 }
 
 function activeRingMarkup(pct: number): string {
@@ -412,7 +422,7 @@ function exerciseRowMarkup(e: RoutineExerciseWithAuthor, latestWeights: LatestWe
 
 function dayMarkup(dia: RoutineDetail["semanas"][number]["dias"][number], latestWeights: LatestWeightsMap, comments: Map<string, ExerciseComment>): string {
   const stats = progressStats(dia.ejercicios, latestWeights);
-  const subtitle = stats.total === 0 ? `${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}` : `${stats.done} de ${stats.total} ejercicios con carga`;
+  const subtitle = stats.total === 0 ? `${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? "" : "s"}` : `${stats.done} de ${stats.total} series con carga`;
 
   return `
     <div class="day-accordion reveal">
@@ -455,7 +465,7 @@ function activeRoutineMarkup(routine: RoutineDetail, latestWeights: LatestWeight
     <div class="chart-card reveal">
       <div class="routine-progress-head"><span>Progreso general de la rutina</span><strong>${overall.pct}%</strong></div>
       <div class="routine-progress-bar"><span style="width:${overall.pct}%"></span></div>
-      <p class="chart-sub">${overall.done} de ${overall.total} ejercicios con carga registrada.</p>
+      <p class="chart-sub">${overall.done} de ${overall.total} series con carga registrada.</p>
     </div>
     ${routine.semanas.map((s) => weekMarkup(s, latestWeights, comments)).join("")}
   `;

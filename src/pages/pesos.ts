@@ -414,23 +414,38 @@ function ringMarkup(pct: number): string {
   `;
 }
 
-// Un ejercicio se considera completo solo cuando TODAS sus series tienen peso
-// cargado (una sola serie, con mismo_peso, cuenta como todas).
-function isExerciseDone(e: { id: string; serie: number; mismo_peso: boolean }): boolean {
+// Cuantas series de este ejercicio tienen peso cargado (cualquier fecha, no solo hoy). Con
+// mismo_peso todas las series comparten una unica carga, asi que cuentan todas-o-nada.
+function exerciseDoneSeries(e: { id: string; serie: number; mismo_peso: boolean }): number {
   const bySerie = latestWeights.get(e.id);
-  if (!bySerie) return false;
-  const requiredSeries = e.mismo_peso ? 1 : e.serie;
-  for (let i = 1; i <= requiredSeries; i++) {
-    if (!bySerie.get(i)?.length) return false;
+  if (!bySerie) return 0;
+  if (e.mismo_peso) return bySerie.get(1)?.length ? e.serie : 0;
+  let done = 0;
+  for (let i = 1; i <= e.serie; i++) {
+    if (bySerie.get(i)?.length) done++;
   }
-  return true;
+  return done;
+}
+
+// Un ejercicio se considera completo solo cuando TODAS sus series tienen peso cargado.
+function isExerciseDone(e: { id: string; serie: number; mismo_peso: boolean }): boolean {
+  return exerciseDoneSeries(e) >= e.serie;
+}
+
+// El progreso se pesa por cantidad de series, no por cantidad de ejercicios: un ejercicio
+// de 5 series pesa mas que uno de 2 series, en vez de contar ambos como "un ejercicio".
+function dayTotalSeries(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
+  return dia.ejercicios.filter((e) => e.es_medible).reduce((sum, e) => sum + e.serie, 0);
+}
+
+function dayDoneSeries(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
+  return dia.ejercicios.filter((e) => e.es_medible).reduce((sum, e) => sum + exerciseDoneSeries(e), 0);
 }
 
 function dayProgress(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
-  const trackable = dia.ejercicios.filter((e) => e.es_medible);
-  if (trackable.length === 0) return 100;
-  const done = trackable.filter((e) => isExerciseDone(e)).length;
-  return Math.round((done / trackable.length) * 100);
+  const total = dayTotalSeries(dia);
+  if (total === 0) return 100;
+  return Math.round((dayDoneSeries(dia) / total) * 100);
 }
 
 // Timestamp mas reciente entre TODOS los registros de TODOS los ejercicios medibles de
@@ -483,10 +498,8 @@ function routineProgress(): number {
   let done = 0;
   routine!.semanas.forEach((semana) => {
     semana.dias.forEach((dia) => {
-      dia.ejercicios.forEach((e) => {
-        total++;
-        if (isExerciseDone(e)) done++;
-      });
+      total += dayTotalSeries(dia);
+      done += dayDoneSeries(dia);
     });
   });
   return total === 0 ? 0 : Math.round((done / total) * 100);
@@ -497,10 +510,8 @@ function weekProgress(weekIndex: number): number {
   let total = 0;
   let done = 0;
   semana.dias.forEach((dia) => {
-    dia.ejercicios.forEach((e) => {
-      total++;
-      if (isExerciseDone(e)) done++;
-    });
+    total += dayTotalSeries(dia);
+    done += dayDoneSeries(dia);
   });
   return total === 0 ? 0 : Math.round((done / total) * 100);
 }
