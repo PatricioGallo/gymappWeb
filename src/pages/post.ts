@@ -122,6 +122,7 @@ function goToPost(id: string): void {
 }
 
 const postCardHandlers: PostCardHandlers = {
+  viewerId: userId,
   onLikeToggle: (post) => void handleLikeToggle(post),
   onRepostToggle: (post) => void handleRepostToggle(post),
   onCommentClick: handleCommentClick,
@@ -136,6 +137,9 @@ const postCardHandlers: PostCardHandlers = {
   onOpenPost: (post) => {
     if (post.id !== focusedPostId) goToPost(post.id);
   },
+  // El hilo puede traer Reps de otros autores (citas encadenadas): igual que en el
+  // perfil, el swipe-arriba se queda siempre en el autor del Rep que se tocó.
+  getVideoQueue: (current) => currentThread.filter((p) => p.author_id === current.author_id && p.media_type === "video" && p.media_url),
 };
 
 // ---------------------------------------------------------------------------

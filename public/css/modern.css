@@ -4866,8 +4866,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   background: rgba(0, 0, 0, 0.92);
   animation: media-lightbox-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   transition: transform 0.25s ease, opacity 0.25s ease;
@@ -4880,21 +4879,45 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   to { transform: translateY(0); }
 }
 
+/* El media ocupa lo que sobra arriba del pie (texto + acciones); min-height:0 es lo que
+   deja que flex:1 realmente achique este panel en vez de desbordar la pantalla. */
+.media-lightbox-media-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
 .media-lightbox-media {
   max-width: min(92vw, 1100px);
-  max-height: 90vh;
+  max-height: 100%;
   object-fit: contain;
   border-radius: var(--radius-sm);
 }
 
 @media (max-width: 859px) {
+  .media-lightbox-media-wrap { padding: 0; }
   .media-lightbox-media {
     max-width: 100vw;
-    max-height: 100vh;
-    max-height: 100dvh;
     border-radius: 0;
   }
 }
+
+/* Pie con el texto del Rep y la barra de acciones (me gusta, comentar, citar...), misma
+   pinta que en la tarjeta del feed -- ver .post-card-main/.post-card-actions. */
+.media-lightbox-footer {
+  flex-shrink: 0;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: rgba(10, 12, 15, 0.97);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* .post-card-avatar vive normalmente adentro de .post-card-avatar-btn (que le da
+   flex-shrink:0); aca va suelto porque no es clickeable, asi que lo repite directo. */
+.media-lightbox-footer .post-card-avatar { flex-shrink: 0; }
 
 .media-lightbox-close {
   position: absolute;

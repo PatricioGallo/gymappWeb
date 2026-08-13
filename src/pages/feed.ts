@@ -253,6 +253,7 @@ function handleDeleteClick(post: FeedPost): void {
 }
 
 const postCardHandlers: PostCardHandlers = {
+  viewerId: userId,
   onLikeToggle: (post) => void handleLikeToggle(post),
   onRepostToggle: (post) => void handleRepostToggle(post),
   onCommentClick: handleCommentClick,
@@ -265,6 +266,11 @@ const postCardHandlers: PostCardHandlers = {
     if (post.author_id !== userId) void recordPostView(post.id, userId);
   },
   onOpenPost: (post) => goToPost(post.id),
+  // El feed mezcla autores a proposito -- "otro video, sea del mismo usuario o de otro"
+  // (a diferencia del perfil, ver getVideoQueue ahi). Cierra sobre `posts` en vivo (no una
+  // copia): sigue trayendo videos nuevos aunque el Rep tocado venga de una tanda vieja de
+  // scroll infinito cargada antes de que el feed creciera.
+  getVideoQueue: () => posts.filter((p) => p.media_type === "video" && p.media_url),
 };
 
 function renderFeed(): void {

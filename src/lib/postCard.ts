@@ -7,6 +7,9 @@ import type { FeedPost, Post, PostAuthor } from "../services/post.service";
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
 
 export interface PostCardHandlers {
+  /** Quién está mirando (o null si no hay sesión resuelta todavía): decide, entre otras
+   * cosas, el botón de borrar y el "isOwner" de cada Rep dentro del visor de media. */
+  viewerId: string | null;
   onLikeToggle(post: FeedPost): void;
   onRepostToggle(post: FeedPost): void;
   onCommentClick(post: FeedPost): void;
@@ -19,6 +22,14 @@ export interface PostCardHandlers {
   onView?(post: FeedPost): void;
   /** Tocar la tarjeta (fuera de los botones/links de acción) abre el detalle del Rep, como en Twitter. */
   onOpenPost?(post: FeedPost): void;
+  /**
+   * Cola de Reps con video para el swipe-hacia-arriba dentro del visor (ver
+   * openMediaLightbox): a partir del Rep que se tocó, en qué otros videos se puede seguir
+   * pasando. Cada página define el alcance correcto -- el feed mezcla autores, un perfil
+   * solo debe traer los del mismo autor que currentPost (ni siquiera en la pestaña "Me
+   * gusta", que puede traer Reps de otras personas).
+   */
+  getVideoQueue(currentPost: FeedPost): FeedPost[];
 }
 
 const ICON_COMMENT = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
@@ -30,7 +41,7 @@ const ICON_SHARE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" 
 const ICON_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
 const ICON_METRICS = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>`;
 
-function authorLineHtml(author: PostAuthor, badgeSize = 14): string {
+export function authorLineHtml(author: PostAuthor, badgeSize = 14): string {
   return `${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, badgeSize)}`;
 }
 
@@ -61,7 +72,7 @@ function linkifyHtml(text: string): string {
 
 // linkify=false para texto que ya vive adentro de un <a> (la cita: quotedPostHtml
 // envuelve todo en el link al Rep citado, y anidar un <a> adentro rompe el click).
-function contentHtml(content: string | null, className: string, linkify = false): string {
+export function contentHtml(content: string | null, className: string, linkify = false): string {
   if (!content) return "";
   const body = linkify ? linkifyHtml(content) : escapeHtml(content).replace(/\n/g, "<br>");
   return `<div class="${className}">${body}</div>`;
@@ -153,8 +164,7 @@ function repostedByHtml(repostedBy?: PostAuthor): string {
   `;
 }
 
-function actionsHtml(post: FeedPost, viewerId: string | null): string {
-  const isOwner = viewerId != null && viewerId === post.author_id;
+export function actionsHtml(post: FeedPost, isOwner: boolean): string {
   return `
     <div class="post-card-actions">
       <button type="button" class="post-action" data-action="comment" aria-label="Comentar">${ICON_COMMENT}<span>${post.comments_count}</span></button>
@@ -171,6 +181,7 @@ function actionsHtml(post: FeedPost, viewerId: string | null): string {
 /** Renderer central del feed/hilo/perfil: string puro de HTML, sin asumir nada de la pagina que lo use. */
 export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: { compact?: boolean }): string {
   const compact = opts?.compact ?? false;
+  const isOwner = viewerId != null && viewerId === post.author_id;
   return `
     <article class="post-card${compact ? " post-card-compact" : ""}" data-post-id="${post.id}">
       ${repostedByHtml(post.repostedBy)}
@@ -189,7 +200,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
           ${!post.media_url && post.youtube_video_id ? youtubeEmbedHtml(post.youtube_video_id) : ""}
           ${linkPreviewHtml(post)}
           ${quotedPostHtml(post.quotedPost)}
-          ${actionsHtml(post, viewerId)}
+          ${actionsHtml(post, isOwner)}
         </div>
       </div>
     </article>
@@ -259,7 +270,7 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
     card.querySelector<HTMLElement>(".post-card-media")?.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!post.media_url) return;
-      openMediaLightbox(post.media_url, post.media_type === "video" ? "video" : "image");
+      openMediaLightbox(post, handlers);
     });
 
     if (handlers.onOpenPost) {

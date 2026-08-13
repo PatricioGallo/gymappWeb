@@ -1003,6 +1003,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   }
 
   const handlers: PostCardHandlers = {
+    viewerId: myId,
     onLikeToggle: (post) => void handleLikeToggle(post),
     onRepostToggle: (post) => void handleRepostToggle(post),
     onCommentClick: (post) => {
@@ -1051,6 +1052,11 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
     },
     onOpenPost: (post) => goToPost(post.id),
+    // A diferencia del feed, en el perfil el swipe-arriba nunca tiene que mostrar un
+    // video de otra persona -- ni siquiera en la pestaña "Me gusta", que puede traer Reps
+    // ajenos: se filtra siempre por el autor del Rep que se tocó, no por targetUserId (da
+    // lo mismo salvo en esa pestaña, y ahi es justo donde importa la diferencia).
+    getVideoQueue: (current) => posts.filter((p) => p.author_id === current.author_id && p.media_type === "video" && p.media_url),
   };
 
   const observer = new IntersectionObserver(
