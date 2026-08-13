@@ -12,6 +12,7 @@ import {
   type LatestWeightsMap,
   type LatestWeightEntry,
   type WeightUnit,
+  type NewWeightLog,
 } from "../services/weightLog.service";
 import { getTodayComments, upsertExerciseComment, deleteExerciseComment, MAX_COMMENT_LENGTH, type ExerciseComment } from "../services/comment.service";
 import { formatRepe } from "../lib/reps";
@@ -276,6 +277,7 @@ let allCatalogExerciseIds: string[] = [];
 interface WeightDraft {
   entries: Record<string, { peso?: string; repe?: string }>; // key: `${routineExerciseId}:${serie}`
   units: Record<string, WeightUnit>; // key: routineExerciseId
+  updatedAt: number; // Date.now() del ultimo tipeo, usado para detectar sesiones abandonadas
 }
 
 // weekIndex/diaIndex del día actualmente abierto: los usa el listener delegado de abajo
@@ -352,7 +354,88 @@ function saveWeightDraft(weekIndex: number, diaIndex: number): void {
     clearWeightDraft(weekIndex, diaIndex);
     return;
   }
-  localStorage.setItem(draftKey(weekIndex, diaIndex), JSON.stringify({ entries, units }));
+  localStorage.setItem(draftKey(weekIndex, diaIndex), JSON.stringify({ entries, units, updatedAt: Date.now() }));
+}
+
+const STALE_DRAFT_HOURS = 3;
+
+// Todas las claves de borrador de ESTA rutina+usuario que hay en localStorage, sin importar
+// que día/semana sea -- para poder revisarlas todas al entrar, no solo la que se está
+// abriendo ahora.
+function allDraftKeysForRoutine(): { weekIndex: number; diaIndex: number; key: string }[] {
+  const prefix = `gs_pesos_draft_${routineId}_${targetUserId}_`;
+  const results: { weekIndex: number; diaIndex: number; key: string }[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const [weekPart, diaPart] = key.slice(prefix.length).split("_");
+    const weekIndex = Number(weekPart);
+    const diaIndex = Number(diaPart);
+    if (Number.isNaN(weekIndex) || Number.isNaN(diaIndex)) continue;
+    results.push({ weekIndex, diaIndex, key });
+  }
+  return results;
+}
+
+// Si quedó un borrador sin guardar hace más de 3hs, se asume que el entrenamiento ya terminó
+// y el usuario se olvidó de tocar "Guardar" -- se sube solo al remoto (con la fecha del
+// último tipeo, no la de hoy, para reflejar cuándo entrenó realmente) para que esa sesión no
+// se pierda. Corre al entrar a la pantalla, antes de traer los pesos ya guardados, para que
+// lo recién subido ya aparezca. Filas incompletas o inválidas se descartan en silencio (no
+// hay usuario mirando para corregirlas); si falla la subida, el borrador se deja intacto para
+// reintentar la próxima vez que se entre.
+async function autoUploadStaleDrafts(): Promise<void> {
+  const staleCutoff = Date.now() - STALE_DRAFT_HOURS * 3_600_000;
+
+  for (const { weekIndex, diaIndex, key } of allDraftKeysForRoutine()) {
+    let draft: WeightDraft | null;
+    try {
+      const raw = localStorage.getItem(key);
+      draft = raw ? (JSON.parse(raw) as WeightDraft) : null;
+    } catch {
+      draft = null;
+    }
+    if (!draft) {
+      localStorage.removeItem(key);
+      continue;
+    }
+    if (!draft.updatedAt || draft.updatedAt > staleCutoff) continue;
+
+    const dia = routine!.semanas[weekIndex]?.dias[diaIndex];
+    if (!dia) {
+      localStorage.removeItem(key);
+      continue;
+    }
+
+    const fecha = new Date(draft.updatedAt).toISOString().slice(0, 10);
+    const newEntries: NewWeightLog[] = [];
+    Object.entries(draft.entries).forEach(([entryKey, val]) => {
+      const [routineExerciseId, serieStr] = entryKey.split(":");
+      const exc = dia.ejercicios.find((e) => e.id === routineExerciseId);
+      if (!exc) return;
+      const peso = val.peso !== undefined ? Number(val.peso) : NaN;
+      const repe = val.repe !== undefined ? Number(val.repe) : NaN;
+      if (Number.isNaN(peso) || peso < 0 || Number.isNaN(repe) || repe <= 0) return;
+      newEntries.push({
+        routine_exercise_id: routineExerciseId,
+        exercise_id: exc.exercise_id,
+        fecha,
+        peso,
+        serie: Number(serieStr),
+        repe,
+        unidad: draft.units[routineExerciseId] ?? "kg",
+      });
+    });
+
+    if (newEntries.length > 0) {
+      try {
+        await insertWeightLogs(targetUserId, newEntries);
+      } catch {
+        continue; // se reintenta la proxima vez que se entre a esta pantalla
+      }
+    }
+    localStorage.removeItem(key);
+  }
 }
 
 // Aplica el borrador guardado (si hay) sobre los inputs recien renderizados de ese día,
@@ -842,6 +925,8 @@ async function init() {
     document.getElementById("weekStatus")?.remove();
     return;
   }
+
+  await autoUploadStaleDrafts();
 
   allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
   allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
