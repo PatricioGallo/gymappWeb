@@ -136,6 +136,7 @@ function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, 
     loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Borrando carga...</p></div>`;
     try {
       await deleteTodayWeightLog(targetUserId, exc.id, TODAY);
+      clearWeightDraftForExercise(weekIndex, diaIndex, exc.id);
       loaderBody.innerHTML = `
         <div class="success-check-container">
           <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
@@ -263,6 +264,139 @@ let latestWeights: LatestWeightsMap = new Map();
 let exerciseHistory: LatestWeightsMap = new Map();
 let todayComments: Map<string, ExerciseComment> = new Map();
 let allExerciseIds: string[] = [];
+
+// ---------------------------------------------------------------------------
+// Borrador local: si el usuario sale de la carga de pesos sin tocar "Guardar" (ej. a
+// contestar un mensaje), lo que ya tipeó no se pierde -- se guarda en localStorage en
+// cada tipeo y se restaura al volver a abrir ese mismo día, hasta que efectivamente
+// guarde (o borre esa carga), momento en el que el borrador ya no hace falta.
+// ---------------------------------------------------------------------------
+
+interface WeightDraft {
+  entries: Record<string, { peso?: string; repe?: string }>; // key: `${routineExerciseId}:${serie}`
+  units: Record<string, WeightUnit>; // key: routineExerciseId
+}
+
+// weekIndex/diaIndex del día actualmente abierto: los usa el listener delegado de abajo
+// (armado una sola vez) para saber bajo qué clave guardar cada tipeo.
+let activeDraftWeek: number | null = null;
+let activeDraftDia: number | null = null;
+
+function draftKey(weekIndex: number, diaIndex: number): string {
+  return `gs_pesos_draft_${routineId}_${targetUserId}_${weekIndex}_${diaIndex}`;
+}
+
+function loadWeightDraft(weekIndex: number, diaIndex: number): WeightDraft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(weekIndex, diaIndex));
+    return raw ? (JSON.parse(raw) as WeightDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearWeightDraft(weekIndex: number, diaIndex: number): void {
+  localStorage.removeItem(draftKey(weekIndex, diaIndex));
+}
+
+// Al borrar la carga de hoy de un ejercicio puntual (menu de tres puntos), si quedaba un
+// borrador con esos mismos valores, restoreWeightDraft() los volvería a poner apenas se
+// vuelve a abrir el día -- como si el borrado no hubiera pasado. Se limpia solo lo de ese
+// ejercicio, sin tocar el borrador de los demás ejercicios de la misma jornada.
+function clearWeightDraftForExercise(weekIndex: number, diaIndex: number, routineExerciseId: string): void {
+  const draft = loadWeightDraft(weekIndex, diaIndex);
+  if (!draft) return;
+  let changed = false;
+  Object.keys(draft.entries).forEach((key) => {
+    if (key.startsWith(`${routineExerciseId}:`)) {
+      delete draft.entries[key];
+      changed = true;
+    }
+  });
+  if (draft.units[routineExerciseId]) {
+    delete draft.units[routineExerciseId];
+    changed = true;
+  }
+  if (!changed) return;
+  if (Object.keys(draft.entries).length === 0) clearWeightDraft(weekIndex, diaIndex);
+  else localStorage.setItem(draftKey(weekIndex, diaIndex), JSON.stringify(draft));
+}
+
+// Vuelca lo que hay ahora mismo en los inputs de esa jornada a localStorage -- se llama en
+// cada tipeo (ver el listener delegado en weekContent, mas abajo). Si no quedó nada
+// cargado, borra el borrador en vez de dejar una entrada vacía dando vueltas.
+function saveWeightDraft(weekIndex: number, diaIndex: number): void {
+  const weekContent = document.getElementById("weekContent")!;
+  const entries: WeightDraft["entries"] = {};
+  const units: WeightDraft["units"] = {};
+  let hasAny = false;
+
+  weekContent.querySelectorAll<HTMLInputElement>(".weightInput").forEach((input) => {
+    const routineExerciseId = input.dataset.id;
+    const serie = input.dataset.serie;
+    if (!routineExerciseId || !serie) return;
+    const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
+    const peso = input.value.trim();
+    const repe = repInput?.value.trim() ?? "";
+    if (peso === "" && repe === "") return;
+    entries[`${routineExerciseId}:${serie}`] = { peso: peso || undefined, repe: repe || undefined };
+    hasAny = true;
+  });
+  weekContent.querySelectorAll<HTMLSelectElement>(".weightUnitSelect").forEach((select) => {
+    const routineExerciseId = select.closest(".weight-field-group")?.querySelector<HTMLInputElement>(".weightInput")?.dataset.id;
+    if (routineExerciseId) units[routineExerciseId] = select.value as WeightUnit;
+  });
+
+  if (!hasAny) {
+    clearWeightDraft(weekIndex, diaIndex);
+    return;
+  }
+  localStorage.setItem(draftKey(weekIndex, diaIndex), JSON.stringify({ entries, units }));
+}
+
+// Aplica el borrador guardado (si hay) sobre los inputs recien renderizados de ese día,
+// pisando lo que haya venido precargado del servidor -- el borrador es lo último que el
+// usuario tipeó, mas reciente que cualquier carga previa.
+function restoreWeightDraft(weekIndex: number, diaIndex: number): void {
+  const draft = loadWeightDraft(weekIndex, diaIndex);
+  if (!draft) return;
+  const weekContent = document.getElementById("weekContent")!;
+
+  weekContent.querySelectorAll<HTMLInputElement>(".weightInput").forEach((input) => {
+    const entry = draft.entries[`${input.dataset.id}:${input.dataset.serie}`];
+    if (!entry) return;
+    if (entry.peso !== undefined) input.value = entry.peso;
+    if (entry.repe !== undefined) {
+      const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
+      if (repInput) repInput.value = entry.repe;
+    }
+  });
+
+  weekContent.querySelectorAll<HTMLSelectElement>(".weightUnitSelect").forEach((select) => {
+    const group = select.closest(".weight-field-group");
+    const routineExerciseId = group?.querySelector<HTMLInputElement>(".weightInput")?.dataset.id;
+    const unit = routineExerciseId ? draft.units[routineExerciseId] : undefined;
+    if (!unit) return;
+    select.value = unit;
+    // El placeholder de los inputs de peso depende de la unidad elegida (ver el listener
+    // de "change" del select mas abajo); como el value se setea a mano sin disparar ese
+    // evento, el placeholder tambien hay que actualizarlo a mano.
+    const placeholder = UNIT_PLACEHOLDERS[unit];
+    group?.querySelectorAll<HTMLInputElement>(".weightInput").forEach((inp) => (inp.placeholder = placeholder));
+  });
+}
+
+// Delegado una sola vez sobre el contenedor estable (su innerHTML se reemplaza en cada
+// openDay(), pero el nodo en si nunca cambia) -- evita reenganchar un listener nuevo por
+// cada input de cada ejercicio, y por cada visita a un día.
+document.getElementById("weekContent")?.addEventListener("input", (e) => {
+  if (activeDraftWeek === null || activeDraftDia === null) return;
+  if ((e.target as HTMLElement).matches(".weightInput, .repInput")) saveWeightDraft(activeDraftWeek, activeDraftDia);
+});
+document.getElementById("weekContent")?.addEventListener("change", (e) => {
+  if (activeDraftWeek === null || activeDraftDia === null) return;
+  if ((e.target as HTMLElement).matches(".weightUnitSelect")) saveWeightDraft(activeDraftWeek, activeDraftDia);
+});
 let allCatalogExerciseIds: string[] = [];
 
 function ringMarkup(pct: number): string {
@@ -379,6 +513,8 @@ function renderWeek(weekIndex: number) {
 function backToWeek(weekIndex: number) {
   (document.getElementById("weekPicker") as HTMLElement).style.display = "";
   (document.getElementById("weekStatus") as HTMLElement).style.display = "";
+  activeDraftWeek = null;
+  activeDraftDia = null;
   renderWeek(weekIndex);
 }
 
@@ -423,6 +559,8 @@ function openDay(weekIndex: number, diaIndex: number) {
   const weekContent = document.getElementById("weekContent")!;
   (document.getElementById("weekPicker") as HTMLElement).style.display = "none";
   (document.getElementById("weekStatus") as HTMLElement).style.display = "none";
+  activeDraftWeek = weekIndex;
+  activeDraftDia = diaIndex;
 
   const trackable = dia.ejercicios.filter((e) => e.es_medible);
 
@@ -496,6 +634,8 @@ function openDay(weekIndex: number, diaIndex: number) {
       <button class="btn btn-primary btn-block" id="saveWeights" type="button">Guardar</button>
     </div>
   `;
+
+  restoreWeightDraft(weekIndex, diaIndex);
 
   weekContent.querySelectorAll<HTMLButtonElement>(".exc-info-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -609,6 +749,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
 
   try {
     await insertWeightLogs(targetUserId, entries);
+    clearWeightDraft(weekIndex, diaIndex); // ya quedo guardado remoto, el borrador local no hace mas falta
     loaderBody.innerHTML = `
       <div class="success-check-container">
         <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
