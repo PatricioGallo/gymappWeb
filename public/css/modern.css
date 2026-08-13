@@ -1515,7 +1515,9 @@ button:focus-visible {
 
 /* ---------- Banners de sistema (instalar PWA / activar push) ---------- */
 .app-banner {
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  grid-template-areas: "icon body actions";
   align-items: center;
   gap: 12px;
   max-width: var(--max-width);
@@ -1527,6 +1529,7 @@ button:focus-visible {
   animation: alert-in 0.2s ease-out;
 }
 .app-banner-icon {
+  grid-area: icon;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -1534,13 +1537,12 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
 .app-banner-icon svg { width: 18px; height: 18px; stroke: var(--accent-2); }
-.app-banner-body { flex: 1; min-width: 0; }
+.app-banner-body { grid-area: body; min-width: 0; }
 .app-banner-body strong { display: block; font-size: 14px; }
 .app-banner-body span { display: block; font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
-.app-banner-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.app-banner-actions { grid-area: actions; display: flex; align-items: center; gap: 8px; }
 .app-banner-cta {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #fff;
@@ -1563,9 +1565,23 @@ button:focus-visible {
   line-height: 0;
 }
 .app-banner-close svg { width: 16px; height: 16px; stroke: currentColor; }
-@media (max-width: 640px) {
-  .app-banner { margin: 10px 12px 0; flex-wrap: wrap; }
-  .app-banner-actions { margin-left: 46px; }
+.app-banner-error { margin: 4px 0 0; font-size: 12px; color: #ff8a8a; }
+@media (max-width: 859px) {
+  .app-banner {
+    grid-template-columns: 34px 1fr;
+    grid-template-areas:
+      "icon body"
+      "actions actions";
+    row-gap: 10px;
+    margin: 10px 12px 0;
+  }
+  .app-banner-actions { justify-content: flex-end; }
+
+  /* En feed.html/profile.html el header pasa a position:fixed en mobile (ver
+     "header-autohide" mas abajo) y sale del flujo del documento: sin esto el
+     banner queda flotando debajo, tapado por el header. Mismo criterio que ya
+     usan .features y .profile-hero para compensar ese hueco. */
+  body.header-autohide .app-banner { margin-top: calc(var(--header-h) + 14px); }
 }
 
 .auth-foot { text-align: center; margin-top: 22px; font-size: 13.5px; color: var(--text-muted); }
@@ -5010,8 +5026,11 @@ body.feed-page .site-footer { display: none; }
     transition: transform 0.25s ease;
   }
   body.header-autohide .site-header.header-hidden { transform: translateY(-100%); }
-  body.feed-page .features { padding-top: calc(var(--header-h) + 24px); }
-  body.profile-page .profile-hero { padding-top: calc(var(--header-h) + 52px); }
+  /* Si hay un .app-banner insertado, el ya ocupa el hueco del header fijo:
+     sin el :not() de aca, este padding se sumaria al margin-top del banner
+     y quedaria un espacio doble hasta el contenido. */
+  body.feed-page:not(.has-app-banner) .features { padding-top: calc(var(--header-h) + 24px); }
+  body.profile-page:not(.has-app-banner) .profile-hero { padding-top: calc(var(--header-h) + 52px); }
 }
 
 @media (min-width: 860px) {

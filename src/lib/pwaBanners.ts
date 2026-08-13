@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { isPushSupported, isIosNonStandalone, isPushEnabledForUser } from "./pushNotifications";
+import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications } from "./pushNotifications";
 
 const INSTALL_SNOOZE_KEY = "gs_install_banner_snooze_until";
 const INSTALL_SNOOZE_DAYS = 7;
@@ -7,6 +7,11 @@ const PWA_TRACK_KEY = "gs_pwa_track_date";
 
 export function isStandalone(): boolean {
   return (navigator as { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+/** Celular (Android/iPhone/iPad), no notebook/PC -- el banner de "instalá la app" no tiene sentido en desktop. */
+function isMobileDevice(): boolean {
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
 }
 
 // Chrome/Android (y desktop Chrome) avisan que se puede instalar via este evento, que hay
@@ -43,6 +48,11 @@ function buildBanner(iconPath: string, title: string, body: string): HTMLDivElem
   return banner;
 }
 
+function removeBanner(banner: HTMLDivElement): void {
+  banner.remove();
+  document.body.classList.remove("has-app-banner");
+}
+
 function addCloseButton(banner: HTMLDivElement, onClose?: () => void): void {
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
@@ -51,7 +61,7 @@ function addCloseButton(banner: HTMLDivElement, onClose?: () => void): void {
   closeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CLOSE_ICON_PATH}</svg>`;
   closeBtn.addEventListener("click", () => {
     onClose?.();
-    banner.remove();
+    removeBanner(banner);
   });
   banner.querySelector(".app-banner-actions")!.appendChild(closeBtn);
 }
@@ -60,11 +70,15 @@ function mountBanner(banner: HTMLDivElement): void {
   const header = document.querySelector(".site-header");
   if (!header) return;
   header.insertAdjacentElement("afterend", banner);
+  // En feed.html/profile.html el contenido de mas abajo suma su propio padding
+  // para el header fijo (ver modern.css); esta clase le avisa que ya no hace
+  // falta porque el banner ocupa ese hueco, si no queda un espacio doble.
+  document.body.classList.add("has-app-banner");
 }
 
 /** Banner "instalá la app" para quien todavía la usa desde el navegador. Postergable 7 días. */
 export function setupInstallBanner(): void {
-  if (isStandalone()) return;
+  if (isStandalone() || !isMobileDevice()) return;
   const snoozeUntil = Number(localStorage.getItem(INSTALL_SNOOZE_KEY) || 0);
   if (Date.now() < snoozeUntil) return;
 
@@ -86,7 +100,7 @@ export function setupInstallBanner(): void {
       await deferredInstallPrompt.prompt();
       const { outcome } = await deferredInstallPrompt.userChoice;
       deferredInstallPrompt = null;
-      if (outcome === "accepted") banner.remove();
+      if (outcome === "accepted") removeBanner(banner);
     });
     actions.appendChild(installBtn);
   }
@@ -111,11 +125,30 @@ export async function setupPushReminderBanner(userId: string): Promise<void> {
 
   const banner = buildBanner(BELL_ICON_PATH, "Activá las notificaciones", "Enterate al instante de mensajes, me gusta y seguidores nuevos.");
   const actions = banner.querySelector(".app-banner-actions")!;
+  const body = banner.querySelector(".app-banner-body")!;
 
-  const cta = document.createElement("a");
+  const cta = document.createElement("button");
+  cta.type = "button";
   cta.className = "app-banner-cta";
-  cta.href = "settings.html?tab=notifications";
   cta.textContent = "Activar";
+  cta.addEventListener("click", async () => {
+    cta.disabled = true;
+    cta.textContent = "Activando...";
+    const { error } = await enablePushNotifications(userId);
+    if (error) {
+      cta.disabled = false;
+      cta.textContent = "Activar";
+      let errorEl = body.querySelector<HTMLParagraphElement>(".app-banner-error");
+      if (!errorEl) {
+        errorEl = document.createElement("p");
+        errorEl.className = "app-banner-error";
+        body.appendChild(errorEl);
+      }
+      errorEl.textContent = error;
+      return;
+    }
+    removeBanner(banner);
+  });
   actions.appendChild(cta);
 
   addCloseButton(banner);
