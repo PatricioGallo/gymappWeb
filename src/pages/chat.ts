@@ -19,6 +19,7 @@ import {
   AUDIO_MAX_SECONDS,
   type ChatMessage,
 } from "../services/chat.service";
+import { refreshChatBadge } from "../lib/chat";
 
 setupNavToggle();
 setupRevealObserver();
@@ -36,6 +37,17 @@ if (!conversationId) {
 // navegue solo el iframe angosto (target=_top rompe afuera, a toda la pestaña).
 const isEmbedded = urlParams.get("embed") === "1";
 if (isEmbedded) document.body.classList.add("chat-embedded");
+
+// mark_conversation_read solo actualiza "messages", no dispara la suscripcion realtime
+// del badge del header (que escucha "conversations") -- por eso el iconito de mensaje
+// pendiente se quedaba pegado hasta el proximo poll. Lo refrescamos a mano aca mismo.
+// En desktop este chat corre embebido en un iframe dentro de chats.html (ver arriba), asi
+// que el header/badge visible es el del documento padre, no el de este iframe.
+async function markReadAndRefreshBadge(): Promise<void> {
+  await markConversationRead(conversationId!);
+  void refreshChatBadge();
+  if (isEmbedded && window.parent !== window) void refreshChatBadge(window.parent.document);
+}
 
 const profileLink = document.getElementById("chatThreadProfileLink") as HTMLAnchorElement;
 if (isEmbedded) profileLink.target = "_top";
@@ -329,7 +341,7 @@ async function renderInitialMessages(): Promise<void> {
   if (!olderExhausted) observeLoadSentinel();
 
   const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
-  if (hasUnreadFromOther) void markConversationRead(conversationId!);
+  if (hasUnreadFromOther) void markReadAndRefreshBadge();
 }
 
 async function prependOlderMessages(): Promise<void> {
@@ -393,7 +405,7 @@ supabase
     const msg = payload.new as ChatMessage;
     void appendMessage(msg);
     if (msg.sender_id !== userId && document.visibilityState === "visible") {
-      void markConversationRead(conversationId!);
+      void markReadAndRefreshBadge();
     }
     if (msg.sender_id !== userId && conversationStatus === "pending" && isInitiator) {
       conversationStatus = "accepted";
@@ -411,7 +423,7 @@ supabase
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
-  if (hasUnreadFromOther) void markConversationRead(conversationId!);
+  if (hasUnreadFromOther) void markReadAndRefreshBadge();
 });
 
 // ---------------------------------------------------------------------------

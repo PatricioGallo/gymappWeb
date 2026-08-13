@@ -12,7 +12,7 @@ import { getUnreadErrorReportCount } from "../services/errorReport.service";
 import { getUnreadUserReportCount } from "../services/userReport.service";
 import { getPendingVerificationRequestCount } from "../services/verification.service";
 import { touchLastSeen } from "../services/profile.service";
-import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner } from "./pwaBanners";
+import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner, setupDesktopPushBanner } from "./pwaBanners";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -67,6 +67,7 @@ async function populateUserMenuTrigger(): Promise<void> {
   void trackPwaInstallStatus(userId);
   setupInstallBanner();
   void setupPushReminderBanner(userId);
+  void setupDesktopPushBanner(userId);
 
   const { data } = await supabase.from("profiles_public").select("username, avatar_url, user_type, is_verified").eq("id", userId).maybeSingle();
   if (!data) return;
