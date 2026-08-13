@@ -36,6 +36,10 @@ export async function trackPwaInstallStatus(userId: string): Promise<void> {
 const BELL_ICON_PATH = `<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>`;
 const DOWNLOAD_ICON_PATH = `<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>`;
 const CLOSE_ICON_PATH = `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`;
+/** Icono "Compartir" de iOS: caja con flecha saliendo hacia arriba (asi aparece en la barra de Safari). */
+const IOS_SHARE_ICON_PATH = `<rect x="5" y="9" width="14" height="12" rx="2"/><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>`;
+/** Icono "Añadir a inicio": cuadrado redondeado con un "+", como el que Safari muestra en esa fila del share sheet. */
+const IOS_ADD_HOME_ICON_PATH = `<rect x="4" y="4" width="16" height="16" rx="5"/><path d="M12 8v8M8 12h8"/>`;
 
 function buildBanner(iconPath: string, title: string, body: string): HTMLDivElement {
   const banner = document.createElement("div");
@@ -105,11 +109,92 @@ export function setupInstallBanner(): void {
     actions.appendChild(installBtn);
   }
 
+  // iOS no tiene beforeinstallprompt: Safari no permite instalar en un toque,
+  // asi que en vez de un boton "Instalar" mostramos un mini-tutorial con los
+  // 3 pasos manuales (Compartir > Añadir a inicio > Añadir).
+  if (isIos) {
+    const howBtn = document.createElement("button");
+    howBtn.type = "button";
+    howBtn.className = "app-banner-cta";
+    howBtn.textContent = "Ver cómo";
+    howBtn.addEventListener("click", openIosInstallTutorial);
+    actions.appendChild(howBtn);
+  }
+
   addCloseButton(banner, () => {
     localStorage.setItem(INSTALL_SNOOZE_KEY, String(Date.now() + INSTALL_SNOOZE_DAYS * 86400000));
   });
 
   mountBanner(banner);
+}
+
+function iosTutorialStep(num: number, visualHtml: string, textHtml: string): string {
+  return `
+    <div class="ios-tut-step">
+      <div class="ios-tut-visual">${visualHtml}</div>
+      <div class="ios-tut-text">
+        <span class="ios-tut-num">${num}</span>
+        <p>${textHtml}</p>
+      </div>
+    </div>
+  `;
+}
+
+/** Modal con el paso a paso ilustrado para instalar en iOS (Safari no deja instalar en un toque). */
+function openIosInstallTutorial(): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  const shareIcon = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IOS_SHARE_ICON_PATH}</svg>`;
+  const addIcon = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IOS_ADD_HOME_ICON_PATH}</svg>`;
+
+  const step1Visual = `
+    <div class="ios-tut-toolbar">
+      <span class="ios-tut-icon-dot"></span>
+      <span class="ios-tut-icon-dot"></span>
+      <span class="ios-tut-icon ios-tut-icon-active">${shareIcon}</span>
+      <span class="ios-tut-icon-dot"></span>
+    </div>
+  `;
+  const step2Visual = `
+    <div class="ios-tut-sheet">
+      <div class="ios-tut-sheet-row"><span class="ios-tut-row-dot"></span><span class="ios-tut-row-line"></span></div>
+      <div class="ios-tut-sheet-row"><span class="ios-tut-row-dot"></span><span class="ios-tut-row-line"></span></div>
+      <div class="ios-tut-sheet-row ios-tut-sheet-row-active">${addIcon}<span>Añadir</span></div>
+    </div>
+  `;
+  const step3Visual = `
+    <div class="ios-tut-dialog">
+      <div class="ios-tut-dialog-head">
+        <span class="ios-tut-dialog-confirm">Añadir</span>
+      </div>
+      <div class="ios-tut-dialog-body">
+        <span class="ios-tut-app-icon"></span>
+        <span class="ios-tut-app-name">Gym Social</span>
+      </div>
+    </div>
+  `;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card ios-tut-card">
+        <h2>Instalá Gym Social</h2>
+        <p class="subtitle">En iPhone/iPad se instala desde Safari en 3 pasos.</p>
+        <div class="ios-tut-list">
+          ${iosTutorialStep(1, step1Visual, "Tocá el ícono <strong>Compartir</strong> en la barra de Safari.")}
+          ${iosTutorialStep(2, step2Visual, "Deslizá la lista de opciones y tocá <strong>\"Añadir a Inicio\"</strong>.")}
+          ${iosTutorialStep(3, step3Visual, "Confirmá tocando <strong>\"Añadir\"</strong> arriba a la derecha.")}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="iosTutClose" type="button">Entendido</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("iosTutClose")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
 }
 
 /**
