@@ -8,6 +8,20 @@ export function dayDisplayLabel(diaSemana: number, nombre?: string | null): stri
   return nombre?.trim() || diaLabel(diaSemana);
 }
 
+/** Fecha de un Date en "YYYY-MM-DD" segun el reloj LOCAL, no UTC -- a diferencia de
+ * `date.toISOString().slice(0, 10)`, que en husos horarios negativos (ej. Argentina,
+ * UTC-3) adelanta la fecha si son mas de las 21hs locales (ya es el dia siguiente en UTC). */
+export function dateToLocalISO(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export function todayLocalISO(): string {
+  return dateToLocalISO(new Date());
+}
+
 export function formatFechaCorta(iso: string): string {
   // Sirve tanto para fechas puras (routines.fecha_inicio, "YYYY-MM-DD") como para
   // timestamps completos (subscriptions.created_at/ended_at, timestamptz): sin

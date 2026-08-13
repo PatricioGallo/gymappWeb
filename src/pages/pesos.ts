@@ -1,6 +1,6 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { dayDisplayLabel } from "../lib/dias";
+import { dayDisplayLabel, dateToLocalISO, todayLocalISO } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
 import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
@@ -156,7 +156,7 @@ function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, 
   });
 }
 
-const TODAY = new Date().toISOString().slice(0, 10);
+const TODAY = todayLocalISO();
 
 function openCommentModal(exc: { id: string; nombre_snapshot: string }, weekIndex: number, diaIndex: number) {
   const loaderBody = document.getElementById("loaderBody");
@@ -407,7 +407,7 @@ async function autoUploadStaleDrafts(): Promise<void> {
       continue;
     }
 
-    const fecha = new Date(draft.updatedAt).toISOString().slice(0, 10);
+    const fecha = dateToLocalISO(new Date(draft.updatedAt));
     const newEntries: NewWeightLog[] = [];
     Object.entries(draft.entries).forEach(([entryKey, val]) => {
       const [routineExerciseId, serieStr] = entryKey.split(":");
@@ -854,7 +854,7 @@ function openDay(weekIndex: number, diaIndex: number) {
 async function saveWeights(weekIndex: number, diaIndex: number) {
   const alertMessage = document.getElementById("alert_message")!;
   const inputs = document.querySelectorAll<HTMLInputElement>(".weightInput");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
 
   const entries: { routine_exercise_id: string; exercise_id: string; fecha: string; peso: number; serie: number; repe: number; unidad: WeightUnit }[] = [];
   let error = false;

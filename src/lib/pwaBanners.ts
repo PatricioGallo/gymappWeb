@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications } from "./pushNotifications";
+import { todayLocalISO } from "./dias";
 
 const INSTALL_SNOOZE_KEY = "gs_install_banner_snooze_until";
 const INSTALL_SNOOZE_DAYS = 7;
@@ -27,7 +28,7 @@ window.addEventListener("beforeinstallprompt", (e) => {
 /** Guarda en el perfil si este dispositivo corre la web instalada como app (una vez por dia, para no pegarle a la base en cada pagina que visita). */
 export async function trackPwaInstallStatus(userId: string): Promise<void> {
   if (!isStandalone()) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   if (localStorage.getItem(PWA_TRACK_KEY) === today) return;
   localStorage.setItem(PWA_TRACK_KEY, today);
   await supabase.from("profiles").update({ pwa_installed: true, pwa_last_seen_at: new Date().toISOString() }).eq("id", userId);

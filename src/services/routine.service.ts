@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { todayLocalISO } from "../lib/dias";
 import type { Tables, Json } from "../types/database";
 
 export type Routine = Tables<"routines">;
@@ -35,7 +36,7 @@ export async function createRoutine(
     dias,
   }));
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
 
   const { data, error } = await supabase.rpc("create_routine", {
     p_user_id: userId,
