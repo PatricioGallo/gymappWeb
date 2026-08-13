@@ -1,6 +1,17 @@
 // Service worker minimo, solo para push notifications (no cachea nada / no offline).
 // Registrado desde src/lib/pushNotifications.ts.
 
+// Sin esto, un service worker nuevo se queda "esperando" hasta que se cierren todas las
+// pestañas/la PWA -- cualquier cambio aca (ej. como se arma el icono de la notificacion)
+// tardaria en llegar a quien ya la tiene instalada. skipWaiting + clients.claim lo activa
+// de inmediato en la siguiente carga.
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
