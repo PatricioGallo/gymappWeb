@@ -4208,7 +4208,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   display: flex;
   flex-direction: column;
   padding-top: 20px;
-  padding-bottom: 14px;
+  padding-bottom: 42px;
 }
 
 .chat-thread-header {
