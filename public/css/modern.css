@@ -4108,6 +4108,20 @@ body.chat-embedded .chat-thread-page {
 
 body.chat-embedded .chat-thread-container { max-width: none; }
 
+/* En mobile el chat ocupa toda la pantalla, sin el header general del sitio (mismo
+   criterio que ya usa .chat-embedded para el iframe de escritorio): la propia
+   .chat-thread-back alcanza para volver a chats.html, no hace falta el nav completo
+   arriba mientras se está escribiendo. Solo en mobile -- en desktop, chat.html se abre
+   embebido (chat-embedded, ver arriba) o, si se navega suelto, sigue con su header. */
+@media (max-width: 859px) {
+  body.chat-page .site-header { display: none; }
+
+  body.chat-page .chat-thread-page {
+    height: 100vh;
+    height: 100dvh;
+  }
+}
+
 /* Alto fijo = viewport menos el header: el composer queda siempre pegado
    abajo de la pantalla (haya pocos o muchos mensajes) y solo .chat-messages
    scrollea cuando el contenido no entra. */
