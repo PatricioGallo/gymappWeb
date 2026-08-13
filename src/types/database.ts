@@ -951,6 +951,8 @@ export type Database = {
           nombre: string
           notification_prefs: Json
           provincia: string | null
+          pwa_installed: boolean
+          pwa_last_seen_at: string | null
           show_last_seen: boolean
           show_read_receipts: boolean
           updated_at: string
@@ -976,6 +978,8 @@ export type Database = {
           nombre: string
           notification_prefs?: Json
           provincia?: string | null
+          pwa_installed?: boolean
+          pwa_last_seen_at?: string | null
           show_last_seen?: boolean
           show_read_receipts?: boolean
           updated_at?: string
@@ -1001,6 +1005,8 @@ export type Database = {
           nombre?: string
           notification_prefs?: Json
           provincia?: string | null
+          pwa_installed?: boolean
+          pwa_last_seen_at?: string | null
           show_last_seen?: boolean
           show_read_receipts?: boolean
           updated_at?: string
