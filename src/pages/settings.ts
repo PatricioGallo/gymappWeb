@@ -14,6 +14,7 @@ import {
   type ProfileLink,
 } from "../services/profile.service";
 import { listBlockedUsers, unblockUser, type BlockedUserRow } from "../services/block.service";
+import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, disablePushNotifications } from "../lib/pushNotifications";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
 import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
 import { ALL_PLATFORMS, getPlatform, type SocialPlatform } from "../lib/socialLinks";
@@ -495,7 +496,57 @@ function parseNotificationPrefs(raw: Profile["notification_prefs"]): Notificatio
   return { ...NOTIFICATION_DEFAULTS };
 }
 
-function renderNotificationsTab() {
+// El estado de "activada/desactivada" vive en el navegador (permiso + suscripcion),
+// no en el perfil -- por eso es una seccion aparte de los toggles de notification_prefs
+// (esos gatean que se genere la notificacion; esto gatea si tu dispositivo la recibe como push).
+async function pushSectionMarkup(): Promise<string> {
+  if (isIosNonStandalone()) {
+    return `
+      <div class="settings-toggle-row">
+        <div>
+          <span class="switch-label">Notificaciones push</span>
+          <p class="chart-sub" style="margin:4px 0 0;">En iPhone, agregá esta web a tu pantalla de inicio (Compartir → Añadir a inicio) para poder activarlas.</p>
+        </div>
+      </div>
+    `;
+  }
+  if (!isPushSupported()) {
+    return `
+      <div class="settings-toggle-row">
+        <div>
+          <span class="switch-label">Notificaciones push</span>
+          <p class="chart-sub" style="margin:4px 0 0;">Tu navegador no soporta notificaciones push.</p>
+        </div>
+      </div>
+    `;
+  }
+  if (Notification.permission === "denied") {
+    return `
+      <div class="settings-toggle-row">
+        <div>
+          <span class="switch-label">Notificaciones push</span>
+          <p class="chart-sub" style="margin:4px 0 0;">Bloqueaste el permiso de notificaciones. Activalo desde la configuración del navegador para poder recibirlas.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  const enabled = await isPushEnabledForUser(userId);
+  return `
+    <div class="settings-toggle-row">
+      <div>
+        <span class="switch-label">Notificaciones push</span>
+        <p class="chart-sub" style="margin:4px 0 0;">Recibí avisos en este dispositivo aunque no tengas la web abierta: mensajes de chat, me gusta, comentarios, seguidores y más.</p>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="pushToggle" ${enabled ? "checked" : ""} aria-label="Notificaciones push">
+        <span class="switch-track"></span>
+      </label>
+    </div>
+  `;
+}
+
+async function renderNotificationsTab() {
   const notificationsTab = document.getElementById("notificationsTab")!;
   const prefs = parseNotificationPrefs(profile!.notification_prefs);
 
@@ -525,6 +576,11 @@ function renderNotificationsTab() {
         .join("")}
       <div class="alert_message" id="notifAlert"></div>
     </div>
+    <div class="chart-card reveal" id="pushSection">
+      <h3>Push en este dispositivo</h3>
+      <p class="chart-sub">Cargando...</p>
+      <div class="alert_message" id="pushAlert"></div>
+    </div>
   `;
 
   notificationsTab.querySelectorAll<HTMLInputElement>(".notif-toggle").forEach((toggle) => {
@@ -543,6 +599,27 @@ function renderNotificationsTab() {
       }
       profile!.notification_prefs = newPrefs as unknown as Profile["notification_prefs"];
     });
+  });
+
+  const pushSection = document.getElementById("pushSection")!;
+  const pushMarkup = await pushSectionMarkup();
+  pushSection.innerHTML = `<h3>Push en este dispositivo</h3>${pushMarkup}<div class="alert_message" id="pushAlert"></div>`;
+
+  pushSection.querySelector<HTMLInputElement>("#pushToggle")?.addEventListener("change", async (e) => {
+    const toggle = e.target as HTMLInputElement;
+    const alertBox = document.getElementById("pushAlert")!;
+    alertBox.innerHTML = "";
+    toggle.disabled = true;
+    if (toggle.checked) {
+      const { error } = await enablePushNotifications(userId);
+      if (error) {
+        toggle.checked = false;
+        alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+      }
+    } else {
+      await disablePushNotifications();
+    }
+    toggle.disabled = false;
   });
 }
 
@@ -964,5 +1041,5 @@ async function renderVerificationTab(request: VerificationRequest | null) {
 setupTabs();
 renderEditTab();
 renderPrivacyTab();
-renderNotificationsTab();
+void renderNotificationsTab();
 renderPersonalizationTab();
