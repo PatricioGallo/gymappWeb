@@ -264,6 +264,7 @@ let latestWeights: LatestWeightsMap = new Map();
 let exerciseHistory: LatestWeightsMap = new Map();
 let todayComments: Map<string, ExerciseComment> = new Map();
 let allExerciseIds: string[] = [];
+let allCatalogExerciseIds: string[] = [];
 
 // ---------------------------------------------------------------------------
 // Borrador local: si el usuario sale de la carga de pesos sin tocar "Guardar" (ej. a
@@ -397,7 +398,6 @@ document.getElementById("weekContent")?.addEventListener("change", (e) => {
   if (activeDraftWeek === null || activeDraftDia === null) return;
   if ((e.target as HTMLElement).matches(".weightUnitSelect")) saveWeightDraft(activeDraftWeek, activeDraftDia);
 });
-let allCatalogExerciseIds: string[] = [];
 
 function ringMarkup(pct: number): string {
   const r = 16;
@@ -431,6 +431,51 @@ function dayProgress(dia: RoutineDetail["semanas"][number]["dias"][number]): num
   if (trackable.length === 0) return 100;
   const done = trackable.filter((e) => isExerciseDone(e)).length;
   return Math.round((done / trackable.length) * 100);
+}
+
+// Timestamp mas reciente entre TODOS los registros de TODOS los ejercicios medibles de
+// este día (cualquier serie, cualquier unidad) -- "cuando se tocó por última vez este
+// día", usado por dayStatus() para decidir si ya pasó a Incompleto. null si nunca se
+// cargó nada para este día.
+function dayLastActivityAt(dia: RoutineDetail["semanas"][number]["dias"][number]): string | null {
+  let latest: string | null = null;
+  dia.ejercicios
+    .filter((e) => e.es_medible)
+    .forEach((e) => {
+      latestWeights.get(e.id)?.forEach((entries) => {
+        entries.forEach((entry) => {
+          if (!latest || entry.createdAt > latest) latest = entry.createdAt;
+        });
+      });
+    });
+  return latest;
+}
+
+type DayStatus = "done" | "pending" | "incomplete";
+
+const INCOMPLETE_AFTER_HOURS = 24;
+
+/**
+ * "Pendiente": todavía no se completó y sigue siendo una sesión vigente/futura -- nunca se
+ * tocó, o se tocó hace menos de 24hs y no se empezó después otro día de la misma semana.
+ * "Incompleto": quedó a medias en el pasado -- pasaron más de 24hs desde el último toque,
+ * o ya se empezó (más reciente) otro día de la misma semana, así que no se va a completar.
+ */
+function dayStatus(semana: RoutineDetail["semanas"][number], dia: RoutineDetail["semanas"][number]["dias"][number]): DayStatus {
+  if (dayProgress(dia) >= 100) return "done";
+
+  const lastActivity = dayLastActivityAt(dia);
+  if (!lastActivity) return "pending";
+
+  const hoursSinceActivity = (Date.now() - new Date(lastActivity).getTime()) / 3_600_000;
+  if (hoursSinceActivity > INCOMPLETE_AFTER_HOURS) return "incomplete";
+
+  const startedOtherDayAfter = semana.dias.some((otherDia) => {
+    if (otherDia === dia) return false;
+    const otherActivity = dayLastActivityAt(otherDia);
+    return otherActivity !== null && otherActivity > lastActivity;
+  });
+  return startedOtherDayAfter ? "incomplete" : "pending";
 }
 
 function routineProgress(): number {
@@ -486,19 +531,21 @@ function renderWeek(weekIndex: number) {
   weekContent.dataset.week = String(weekIndex);
   renderWeekStatus(weekIndex);
 
+  const STATUS_LABELS: Record<DayStatus, string> = { done: "Completo", pending: "Pendiente", incomplete: "Incompleto" };
+
   weekContent.innerHTML = semana.dias
     .map((dia, diaIndex) => {
       const pct = dayProgress(dia);
-      const done = pct >= 100;
+      const status = dayStatus(semana, dia);
       const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
       const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
       const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
 
       return `
-        <button class="day-row reveal ${done ? "done" : ""}" type="button" data-dia="${diaIndex}">
+        <button class="day-row reveal ${status}" type="button" data-dia="${diaIndex}">
           ${ringMarkup(pct)}
           <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
-          <span class="day-row-status ${done ? "done" : "pending"}">${done ? "Completo" : "Pendiente"}</span>
+          <span class="day-row-status ${status}">${STATUS_LABELS[status]}</span>
           <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
       `;

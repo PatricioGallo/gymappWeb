@@ -3292,6 +3292,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .day-row-status.pending { background: var(--accent-soft); color: var(--accent-2); }
 .day-row-status.done { background: var(--live-soft); color: var(--live); }
+.day-row-status.incomplete { background: rgba(240, 68, 56, 0.14); color: #f04438; }
+.day-row.incomplete { border-color: rgba(240, 68, 56, 0.3); }
+.day-row.incomplete .ring-fg { stroke: #f04438; }
 
 .day-row-chevron { flex-shrink: 0; width: 18px; height: 18px; stroke: var(--text-muted); }
 
