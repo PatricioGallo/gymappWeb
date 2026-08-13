@@ -15,6 +15,7 @@ import {
 } from "../services/post.service";
 import { getOrCreateConversation, sendMessage } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
+import { actionsHtml, authorLineHtml, contentHtml, type PostCardHandlers } from "./postCard";
 
 const QUOTE_MAX = 240;
 const COMMENT_MODAL_MAX = 240;
@@ -66,25 +67,43 @@ function successCheckHtml(message: string): string {
   `;
 }
 
-/** Visor a pantalla completa de la foto/video de un Rep: click en el media lo abre. Se cierra con la cruz, Escape, o clickeando el fondo. */
-export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"): void {
+/**
+ * Visor a pantalla completa de la foto/video de un Rep: click en el media lo abre. Se
+ * cierra con la cruz, Escape, deslizando hacia abajo, o clickeando el fondo. Abajo del
+ * media muestra el texto del Rep y la misma barra de acciones (me gusta, comentar, citar,
+ * compartir...) que la tarjeta -- comentar/citar/compartir/borrar reemplazan este visor por
+ * su propio modal (los dos comparten el mismo slot #loaderBody), por eso cierran el visor
+ * antes de abrirse. Si hay más de un video en handlers.getVideoQueue(post), deslizar hacia
+ * arriba pasa al siguiente sin cerrar el visor (estilo Reels/TikTok).
+ */
+export function openMediaLightbox(post: FeedPost, handlers: PostCardHandlers): void {
   const loaderBody = document.getElementById("loaderBody");
-  if (!loaderBody) return;
+  if (!loaderBody || !post.media_url) return;
 
   const unlockBodyScroll = lockBodyScroll();
 
   loaderBody.innerHTML = `
     <div class="media-lightbox" id="mediaLightboxOverlay">
       <button type="button" class="media-lightbox-close" id="mediaLightboxClose" aria-label="Cerrar">✕</button>
-      ${
-        mediaType === "video"
-          ? `<video class="media-lightbox-media" src="${escapeHtml(mediaUrl)}" controls autoplay playsinline></video>`
-          : `<img class="media-lightbox-media" src="${escapeHtml(mediaUrl)}" alt="">`
-      }
+      <div class="media-lightbox-media-wrap" id="mediaLightboxMediaWrap"></div>
+      <div class="media-lightbox-footer" id="mediaLightboxFooter"></div>
     </div>
   `;
 
   const overlay = document.getElementById("mediaLightboxOverlay")!;
+  const mediaWrap = document.getElementById("mediaLightboxMediaWrap")!;
+  const footer = document.getElementById("mediaLightboxFooter")!;
+
+  // El video solo entra en la cola (para el swipe-arriba): las fotos se quedan solas, un
+  // swipe-arriba sobre una foto simplemente no encuentra "siguiente" y rebota. El caller
+  // (wirePostCard) ya filtra/ordena la cola segun el contexto -- feed mezcla autores,
+  // perfil solo trae del mismo autor que currentPost (ver getVideoQueue en cada página).
+  const queue = post.media_type === "video" ? handlers.getVideoQueue(post) : [post];
+  let index = Math.max(
+    queue.findIndex((p) => p.id === post.id),
+    0
+  );
+  let currentPost = queue[index] ?? post;
 
   let closed = false;
   function close(): void {
@@ -99,47 +118,142 @@ export function openMediaLightbox(mediaUrl: string, mediaType: "image" | "video"
   }
   document.addEventListener("keydown", onKeydown);
 
+  function renderMedia(): void {
+    const mediaUrl = currentPost.media_url!;
+    const mediaType: "image" | "video" = currentPost.media_type === "video" ? "video" : "image";
+    mediaWrap.innerHTML =
+      mediaType === "video"
+        ? `<video class="media-lightbox-media" src="${escapeHtml(mediaUrl)}" controls autoplay playsinline></video>`
+        : `<img class="media-lightbox-media" src="${escapeHtml(mediaUrl)}" alt="">`;
+    // autoplay a veces no alcanza solo con el atributo (el elemento se crea via innerHTML,
+    // no via una carga de página "de verdad"); .play() de mas no hace nada si ya arrancó.
+    mediaWrap.querySelector("video")?.play().catch(() => {});
+  }
+
+  // Me gusta/repostear se resuelven sin salir del visor (solo repintan la barra); el
+  // resto de las acciones abre su propio modal en el mismo #loaderBody, asi que hay que
+  // cerrar el visor antes -- si no, closeOverlay() del otro modal se lleva puesto todo.
+  function renderFooter(): void {
+    footer.innerHTML = `
+      <div class="post-card-main">
+        <img class="post-card-avatar" src="${escapeHtml(currentPost.author.avatarUrl || DEFAULT_AVATAR)}" alt="">
+        <div class="post-card-body">
+          <div class="post-card-head">
+            <span class="post-card-author">${authorLineHtml(currentPost.author)}</span>
+            <span class="post-card-dot">·</span>
+            <span class="post-card-time">${formatTiempoRelativo(currentPost.feedTimestamp)}</span>
+          </div>
+          ${contentHtml(currentPost.content, "post-card-text", true)}
+          <div id="mediaLightboxActions"></div>
+        </div>
+      </div>
+    `;
+    const actionsSlot = document.getElementById("mediaLightboxActions")!;
+    const isOwner = handlers.viewerId != null && handlers.viewerId === currentPost.author_id;
+    actionsSlot.innerHTML = actionsHtml(currentPost, isOwner);
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="like"]')?.addEventListener("click", () => {
+      handlers.onLikeToggle(currentPost);
+      renderFooter();
+    });
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="repost"]')?.addEventListener("click", () => {
+      handlers.onRepostToggle(currentPost);
+      renderFooter();
+    });
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="comment"]')?.addEventListener("click", () => {
+      close();
+      handlers.onCommentClick(currentPost);
+    });
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", () => {
+      close();
+      handlers.onQuoteClick(currentPost);
+    });
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", () => {
+      close();
+      handlers.onShareClick(currentPost);
+    });
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="metrics"]')?.addEventListener("click", () => {
+      close();
+      handlers.onMetricsClick?.(currentPost);
+    });
+    actionsSlot.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", () => {
+      close();
+      handlers.onDeleteClick?.(currentPost);
+    });
+  }
+
+  // true si habia un siguiente video al que pasar (y ya lo dejo montado); false si la cola
+  // se acabo, para que el gesto de arrastre sepa que tiene que rebotar en vez de "cerrar".
+  function goToNext(): boolean {
+    if (index >= queue.length - 1) return false;
+    index++;
+    currentPost = queue[index];
+    renderMedia();
+    renderFooter();
+    return true;
+  }
+
+  renderMedia();
+  renderFooter();
+
   document.getElementById("mediaLightboxClose")?.addEventListener("click", close);
   overlay.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) close(); // solo el fondo cierra, no un click en la imagen/video
+    if (e.target === e.currentTarget) close(); // solo el fondo cierra, no un click en la imagen/video/footer
   });
 
-  // Deslizar hacia abajo cierra el visor (estilo Instagram/Twitter): se sigue
-  // el dedo en vivo y si pasa el umbral (o el gesto fue rapido) cierra; si no,
-  // vuelve solo a su lugar. La apertura desliza desde abajo via CSS (ver
-  // .media-lightbox en modern.css); esto es el gesto inverso para cerrar.
+  // Deslizar hacia abajo cierra el visor; hacia arriba pasa al siguiente video de la cola
+  // (si hay). Se sigue el dedo en vivo y si pasa el umbral (o el gesto fue rapido) hace su
+  // acción; si no, vuelve solo a su lugar. La apertura desliza desde abajo via CSS (ver
+  // .media-lightbox en modern.css); esto es el gesto que la mueve despues de abierta.
+  //
+  // El drag no se "compromete" (transform/preventDefault/capture) hasta pasar
+  // DRAG_ENGAGE_THRESHOLD de movimiento vertical: por debajo de eso, un toque en los
+  // controles nativos del video (play/pausa, barra) sigue llegando intacto, sin que este
+  // gesto se lo coma -- por eso el <video> puede arrancar el tracking igual que el resto
+  // del visor (a diferencia de antes, que lo excluia del todo).
   const DISMISS_DISTANCE = 120;
   const DISMISS_VELOCITY = 0.5; // px/ms
+  const DRAG_ENGAGE_THRESHOLD = 12;
   let dragging = false;
+  let engaged = false;
   let startY = 0;
   let startTime = 0;
   let dragY = 0;
 
   function onPointerDown(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if ((e.target as HTMLElement).closest(".media-lightbox-close")) return;
+    if ((e.target as HTMLElement).closest(".media-lightbox-close, .media-lightbox-footer")) return;
     dragging = true;
+    engaged = false;
     startY = e.clientY;
     startTime = Date.now();
     dragY = 0;
-    overlay.classList.add("media-lightbox-dragging");
-    overlay.setPointerCapture(e.pointerId);
   }
   function onPointerMove(e: PointerEvent): void {
     if (!dragging) return;
-    dragY = Math.max(0, e.clientY - startY);
-    overlay.style.transform = dragY ? `translateY(${dragY}px)` : "";
-    overlay.style.opacity = dragY ? String(Math.max(1 - dragY / 400, 0.4)) : "";
+    dragY = e.clientY - startY;
+    if (!engaged) {
+      if (Math.abs(dragY) < DRAG_ENGAGE_THRESHOLD) return; // todavia podria ser un tap en los controles nativos
+      engaged = true;
+      overlay.classList.add("media-lightbox-dragging");
+      overlay.setPointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    overlay.style.transform = `translateY(${dragY}px)`;
+    overlay.style.opacity = dragY > 0 ? String(Math.max(1 - dragY / 400, 0.4)) : "1";
   }
   function endDrag(): void {
     if (!dragging) return;
     dragging = false;
+    if (!engaged) return; // fue un tap (ej. controles del video), no un arrastre: no tocar el overlay
     overlay.classList.remove("media-lightbox-dragging");
     const velocity = dragY / Math.max(Date.now() - startTime, 1);
     if (dragY > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) {
       close();
       return;
     }
+    // Si no habia siguiente, goToNext() no hizo nada y esto es simplemente el reset de
+    // "volver a su lugar" -- funciona igual para el rebote que para el cambio de video.
+    if (dragY < -DISMISS_DISTANCE || velocity < -DISMISS_VELOCITY) goToNext();
     overlay.style.transform = "";
     overlay.style.opacity = "";
   }

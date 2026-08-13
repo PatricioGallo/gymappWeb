@@ -1,20 +1,60 @@
 import { escapeHtml } from "./dom";
 import { CATEGORY_LABELS, type ExerciseCategory } from "../services/exercise.service";
+import { getExerciseStats, type ExerciseStats, type WeightUnit } from "../services/weightLog.service";
 
+const UNIT_SUFFIX: Record<WeightUnit, string> = { kg: "kg", lb: "lb", bloques: "bloques" };
+
+function formatPeso(peso: number, unidad: WeightUnit): string {
+  const rounded = Math.round(peso * 10) / 10;
+  return `${rounded} ${UNIT_SUFFIX[unidad]}`;
+}
+
+// fecha es un "YYYY-MM-DD" sin hora/timezone (ver TODAY en pesos.ts) -- parsearlo con
+// `new Date(string)` lo interpreta como medianoche UTC y en Argentina (UTC-3) muestra un
+// dia menos. new Date(y, m, d) arma una fecha local de verdad, sin ese corrimiento.
+function formatFecha(fecha: string): string {
+  const [y, m, d] = fecha.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function statsHtml(stats: ExerciseStats | null): string {
+  if (!stats) return `<p class="exc-modal-stat-empty">Todavía no cargaste pesos para este ejercicio.</p>`;
+  return `
+    <div class="exc-modal-stat">
+      <span class="exc-modal-stat-label">Peso promedio</span>
+      <span class="exc-modal-stat-value">${formatPeso(stats.avgPeso, stats.unidad)}</span>
+    </div>
+    <div class="exc-modal-stat">
+      <span class="exc-modal-stat-label">Peso máximo</span>
+      <span class="exc-modal-stat-value">${formatPeso(stats.maxPeso, stats.unidad)} <span class="exc-modal-stat-date">(${formatFecha(stats.maxFecha)})</span></span>
+    </div>
+  `;
+}
+
+/**
+ * userId/exerciseId son opcionales: solo la pantalla de carga de pesos (pesos.ts) los tiene
+ * a mano con sentido (el usuario dueño de esa carga puntual, no necesariamente quien mira
+ * la pantalla si un entrenador está cargando por un alumno) y muestra el promedio/máximo
+ * histórico. El visor de rutina de solo lectura (showExc.ts) no los pasa -- puede mostrarse
+ * sin sesión iniciada, o mirando la rutina de otra persona vía link compartido, así que ni
+ * corresponde mostrar "tu" historial ahí -- y el modal simplemente no muestra esa sección.
+ */
 export function openExerciseModal(
   nombre: string,
   info: string,
   nota: string | null,
   authorLabel: string,
-  category?: string | null,
-  imageUrl?: string | null
+  category: string | null | undefined,
+  imageUrl: string | null | undefined,
+  userId?: string,
+  exerciseId?: string
 ): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
   const categoryLabel = category ? CATEGORY_LABELS[category as ExerciseCategory] : null;
   loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="modal-card">
+    <div class="success-check-container exc-modal-overlay">
+      <div class="modal-card exc-modal-card">
         <h2>${escapeHtml(nombre)}</h2>
         ${categoryLabel ? `<span class="hero-badge">${escapeHtml(categoryLabel)}</span>` : ""}
         ${imageUrl ? `<img class="exc-modal-image" src="${escapeHtml(imageUrl)}" alt="Ejecución de ${escapeHtml(nombre)}" loading="lazy">` : ""}
@@ -25,6 +65,7 @@ export function openExerciseModal(
             : ""
         }
         <p class="auth-foot" style="text-align:left;margin-top:16px;">Ejercicio de ${escapeHtml(authorLabel)}</p>
+        ${userId && exerciseId ? `<div class="exc-modal-stats" id="excModalStats"><div class="modern-spinner"></div></div>` : ""}
         <div class="modal-actions"><button class="btn btn-outline" id="closeExcModal">Cerrar</button></div>
       </div>
     </div>
@@ -32,4 +73,14 @@ export function openExerciseModal(
   document.getElementById("closeExcModal")?.addEventListener("click", () => {
     loaderBody.innerHTML = "";
   });
+
+  if (!userId || !exerciseId) return;
+  const statsEl = document.getElementById("excModalStats");
+  getExerciseStats(userId, exerciseId)
+    .then((stats) => {
+      if (statsEl?.isConnected) statsEl.innerHTML = statsHtml(stats);
+    })
+    .catch(() => {
+      if (statsEl?.isConnected) statsEl.innerHTML = "";
+    });
 }

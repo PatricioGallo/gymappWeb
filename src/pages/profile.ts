@@ -94,31 +94,33 @@ function parseFechaISO(fecha: string): Date {
   return new Date(y, m - 1, d);
 }
 
-function computeWeeklyFrequency(logs: WeightLogEntry[], weeksBack = 8) {
+const WEEKDAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+function computeDailyFrequency(logs: WeightLogEntry[], daysBack = 7) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const buckets: { start: Date; count: number }[] = [];
-  for (let i = weeksBack - 1; i >= 0; i--) {
-    const start = new Date(today);
-    start.setDate(today.getDate() - today.getDay() - i * 7);
-    buckets.push({ start, count: 0 });
+  const days: { date: Date; exercises: Set<string> }[] = [];
+  const byKey = new Map<string, (typeof days)[number]>();
+  for (let i = daysBack - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const day = { date, exercises: new Set<string>() };
+    days.push(day);
+    byKey.set(date.toDateString(), day);
   }
-  const seenDates = new Set<string>();
   logs.forEach((entry) => {
-    // Un mismo entrenamiento carga varios pesos con la misma fecha: contamos
-    // la fecha una sola vez por bucket, no cada fila.
-    const key = entry.fecha;
-    const fecha = parseFechaISO(entry.fecha);
-    buckets.forEach((bucket) => {
-      const end = new Date(bucket.start);
-      end.setDate(bucket.start.getDate() + 7);
-      if (fecha >= bucket.start && fecha < end && !seenDates.has(`${bucket.start.getTime()}-${key}`)) {
-        seenDates.add(`${bucket.start.getTime()}-${key}`);
-        bucket.count++;
-      }
-    });
+    const day = byKey.get(parseFechaISO(entry.fecha).toDateString());
+    day?.exercises.add(entry.exerciseId);
   });
-  return buckets.map((b) => ({ label: `${b.start.getDate()}/${b.start.getMonth() + 1}`, count: b.count }));
+  return days.map((d) => ({ label: WEEKDAY_LABELS[d.date.getDay()], count: d.exercises.size }));
+}
+
+// Un mismo dia puede tener varias series cargadas para el mismo ejercicio -- para ver la
+// tendencia real (sube o baja) se toma el peso maximo de cada dia, no cada serie suelta.
+function maxWeightPerDay(entries: WeightLogEntry[]): { fecha: string; peso: number }[] {
+  const maxByFecha = new Map<string, number>();
+  entries.forEach((e) => maxByFecha.set(e.fecha, Math.max(e.peso, maxByFecha.get(e.fecha) ?? -Infinity)));
+  return [...maxByFecha.entries()].map(([fecha, peso]) => ({ fecha, peso })).sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
 
 function mostFrequentExercise(logs: WeightLogEntry[]): { id: string; name: string } | null {
@@ -796,6 +798,7 @@ function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerV
 
   const top = mostFrequentExercise(logs);
   const excProgress = top ? logs.filter((l) => l.exerciseId === top.id) : [];
+  const dailyProgress = maxWeightPerDay(excProgress);
 
   statsContent.innerHTML = `
     <div class="card-grid">
@@ -806,22 +809,22 @@ function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerV
     </div>
     <div class="chart-card reveal">
       <h3>Frecuencia de entrenamiento</h3>
-      <p class="chart-sub">Entrenamientos registrados por semana, últimas 8 semanas.</p>
+      <p class="chart-sub">Ejercicios distintos entrenados cada día de esta semana.</p>
       <div class="chart-wrap"><canvas id="freqChart"></canvas></div>
     </div>
     ${
-      excProgress.length >= 2
+      dailyProgress.length >= 2
         ? `<div class="chart-card reveal">
       <h3>Progreso: ${escapeHtml(top?.name ?? "")}</h3>
-      <p class="chart-sub">Evolución del peso registrado en ${ownerView ? "tu" : "su"} ejercicio más entrenado.</p>
+      <p class="chart-sub">Peso máximo por día en ${ownerView ? "tu" : "su"} ejercicio más entrenado.</p>
       <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
     </div>`
         : ""
     }
   `;
 
-  renderFreqChart(computeWeeklyFrequency(logs));
-  if (excProgress.length >= 2) renderProgressChart(excProgress);
+  renderFreqChart(computeDailyFrequency(logs));
+  if (dailyProgress.length >= 2) renderProgressChart(dailyProgress);
 }
 
 function renderFreqChart(buckets: { label: string; count: number }[]) {
@@ -831,7 +834,7 @@ function renderFreqChart(buckets: { label: string; count: number }[]) {
     type: "bar",
     data: {
       labels: buckets.map((b) => b.label),
-      datasets: [{ label: "Entrenamientos", data: buckets.map((b) => b.count), backgroundColor: "#ff8a3d", borderRadius: 6, maxBarThickness: 34 }],
+      datasets: [{ label: "Ejercicios", data: buckets.map((b) => b.count), backgroundColor: "#ff8a3d", borderRadius: 6, maxBarThickness: 34 }],
     },
     options: {
       responsive: true,
@@ -845,7 +848,7 @@ function renderFreqChart(buckets: { label: string; count: number }[]) {
   });
 }
 
-function renderProgressChart(entries: WeightLogEntry[]) {
+function renderProgressChart(entries: { fecha: string; peso: number }[]) {
   const canvas = document.getElementById("progressChart");
   if (!canvas || typeof Chart === "undefined") return;
   new Chart(canvas, {
@@ -1003,6 +1006,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   }
 
   const handlers: PostCardHandlers = {
+    viewerId: myId,
     onLikeToggle: (post) => void handleLikeToggle(post),
     onRepostToggle: (post) => void handleRepostToggle(post),
     onCommentClick: (post) => {
@@ -1051,6 +1055,11 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
     },
     onOpenPost: (post) => goToPost(post.id),
+    // A diferencia del feed, en el perfil el swipe-arriba nunca tiene que mostrar un
+    // video de otra persona -- ni siquiera en la pestaña "Me gusta", que puede traer Reps
+    // ajenos: se filtra siempre por el autor del Rep que se tocó, no por targetUserId (da
+    // lo mismo salvo en esa pestaña, y ahi es justo donde importa la diferencia).
+    getVideoQueue: (current) => posts.filter((p) => p.author_id === current.author_id && p.media_type === "video" && p.media_url),
   };
 
   const observer = new IntersectionObserver(

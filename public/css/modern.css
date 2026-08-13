@@ -28,7 +28,13 @@
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
 }
+/* Oculta la barra de scroll de la pagina (Chrome/Edge/Safari) sin perder el scroll en
+   si -- pedido especificamente para que no se vea en perfil/feed, pero al ser el html
+   general de toda la web aplica en cualquier pagina que scrollee la ventana. Los paneles
+   con scroll propio (ej. .chat-messages) tienen su propia barra fina, sin tocar. */
+html::-webkit-scrollbar { display: none; }
 
 body {
   margin: 0;
@@ -3286,6 +3292,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .day-row-status.pending { background: var(--accent-soft); color: var(--accent-2); }
 .day-row-status.done { background: var(--live-soft); color: var(--live); }
+.day-row-status.incomplete { background: rgba(240, 68, 56, 0.14); color: #f04438; }
+.day-row.incomplete { border-color: rgba(240, 68, 56, 0.3); }
+.day-row.incomplete .ring-fg { stroke: #f04438; }
 
 .day-row-chevron { flex-shrink: 0; width: 18px; height: 18px; stroke: var(--text-muted); }
 
@@ -3391,6 +3400,17 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-field .mini-input { width: 100%; }
 .exc-field-sep { display: none; }
 
+.exc-apply-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -4px 0 10px;
+}
+
+.exc-apply-all input[type="checkbox"] { accent-color: var(--accent-2); }
+
 .exc-extra {
   display: flex;
   align-items: center;
@@ -3458,6 +3478,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
   .exc-block-create .exc-remove { order: 2; align-self: flex-end; margin-bottom: 4.5px; }
   .exc-block-create .exc-extra { order: 3; flex: 1 1 100%; }
+  .exc-block-create .exc-apply-all { order: -1; flex: 1 1 100%; margin: 0 0 8px; }
 }
 
 .help-link {
@@ -3563,6 +3584,22 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   }
 }
 
+/* Modal de descripcion del ejercicio (ver exerciseModal.ts): mismo criterio que el
+   buscador de arriba, a pantalla completa en celular para que la imagen, la nota del
+   entrenador y las dos cajas de peso entren comodas sin sentirse amontonadas. */
+@media (max-width: 639px) {
+  .exc-modal-overlay { padding: 0; }
+  .exc-modal-card {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    padding: 24px 20px;
+    overflow-y: auto;
+  }
+}
+
 .modal-card h2 { margin: 0 0 4px; font-size: 20px; }
 .modal-card .hero-badge { display: inline-block; margin-bottom: 14px; }
 .exc-modal-image {
@@ -3575,6 +3612,33 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   margin-bottom: 16px;
 }
 .modal-card .subtitle { margin: 0 0 22px; font-size: 13.5px; color: var(--text-muted); }
+
+/* Promedio/maximo del ejercicio en el modal de descripcion (ver exerciseModal.ts): arranca
+   con un spinner mientras llega el fetch, .exc-modal-stat-empty si nunca cargo nada. */
+.exc-modal-stats { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 0; }
+/* El "Cerrar" quedaba pegado justo debajo de la ultima caja de stats (.modal-actions
+   solo trae 4px de margin-top por default, pensado para cuando lo de arriba ya viene con
+   su propio margen inferior) -- mas aire solo aca, sin afectar al resto de los modales
+   que comparten .modal-actions. */
+.exc-modal-card .modal-actions { margin-top: 22px; }
+.exc-modal-stats .modern-spinner { width: 22px; height: 22px; margin: 4px 0; }
+/* Label arriba, valor abajo (en vez de lado a lado): con "Peso máximo" + fecha al lado
+   quedaba mas ancho que "Peso promedio" solo, y las dos cajas no quedaban de la misma
+   altura/forma. Apiladas, ambas miden lo mismo pase lo que pase con el largo del valor. */
+.exc-modal-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+.exc-modal-stat-label { color: var(--text-muted); }
+.exc-modal-stat-value { font-weight: 700; font-size: 15px; }
+.exc-modal-stat-date { font-weight: 400; color: var(--text-muted); font-size: 12.5px; }
+.exc-modal-stat-empty { margin: 14px 0 0; font-size: 13px; color: var(--text-muted); }
+
 .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .modal-actions .btn { flex: 1; }
 
@@ -4665,6 +4729,19 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-feed-sentinel .modern-spinner { width: 26px; height: 26px; }
 .post-feed-list-compact { gap: 10px; }
 
+/* Pull-to-refresh (solo mobile, ver feed.ts): arranca en 0 y feed.ts anima su altura
+   a mano en cada pointermove mientras se arrastra (sin transition, sigue al dedo 1 a
+   1), y con transition solo al soltar (para el snap-back o quedarse en la altura fija
+   mientras carga). overscroll-behavior-y en .feed-main evita que el pull nativo del
+   navegador (que recarga toda la pagina) compita con este gesto. */
+.pull-refresh-indicator { display: flex; align-items: center; justify-content: center; height: 0; overflow: hidden; }
+.pull-refresh-indicator.pull-refresh-animate { transition: height 0.25s ease; }
+.pull-refresh-indicator .modern-spinner { width: 24px; height: 24px; flex-shrink: 0; }
+
+@media (max-width: 859px) {
+  .feed-main { overscroll-behavior-y: contain; }
+}
+
 .post-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -4853,8 +4930,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   background: rgba(0, 0, 0, 0.92);
   animation: media-lightbox-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   transition: transform 0.25s ease, opacity 0.25s ease;
@@ -4867,21 +4943,45 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   to { transform: translateY(0); }
 }
 
+/* El media ocupa lo que sobra arriba del pie (texto + acciones); min-height:0 es lo que
+   deja que flex:1 realmente achique este panel en vez de desbordar la pantalla. */
+.media-lightbox-media-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
 .media-lightbox-media {
   max-width: min(92vw, 1100px);
-  max-height: 90vh;
+  max-height: 100%;
   object-fit: contain;
   border-radius: var(--radius-sm);
 }
 
 @media (max-width: 859px) {
+  .media-lightbox-media-wrap { padding: 0; }
   .media-lightbox-media {
     max-width: 100vw;
-    max-height: 100vh;
-    max-height: 100dvh;
     border-radius: 0;
   }
 }
+
+/* Pie con el texto del Rep y la barra de acciones (me gusta, comentar, citar...), misma
+   pinta que en la tarjeta del feed -- ver .post-card-main/.post-card-actions. */
+.media-lightbox-footer {
+  flex-shrink: 0;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: rgba(10, 12, 15, 0.97);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* .post-card-avatar vive normalmente adentro de .post-card-avatar-btn (que le da
+   flex-shrink:0); aca va suelto porque no es clickeable, asi que lo repite directo. */
+.media-lightbox-footer .post-card-avatar { flex-shrink: 0; }
 
 .media-lightbox-close {
   position: absolute;

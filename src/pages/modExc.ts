@@ -38,6 +38,11 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
         <input type="hidden" class="excSelectInput" value="${exc?.exercise_id ?? ""}">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
       </div>
+      ${
+        exc && routine!.semanas.length > 1
+          ? `<label class="exc-apply-all"><input type="checkbox" class="applyAllWeeksCheck"> Aplicar este cambio a este mismo ejercicio en todas las semanas</label>`
+          : ""
+      }
       <div class="exc-fields-row">
         <label class="exc-field exc-field-series">
           <span class="exc-field-label">Series</span>
@@ -119,6 +124,17 @@ async function saveChanges() {
   }
   const pending: PendingDay[] = [];
 
+  // Ejercicios editados con el tilde "aplicar a todas las semanas" tildado: se buscan por
+  // exercise_id ORIGINAL (antes de esta edicion) dentro del mismo dia en las demas semanas,
+  // y se les pisa el contenido con esta misma fila -- asi tambien sirve para "reemplazar"
+  // un ejercicio por otro en todas las semanas, no solo para ajustar series/repe/nota.
+  interface ApplyAllRequest {
+    diaIndex: number;
+    originalExerciseId: string;
+    row: PendingRow;
+  }
+  const applyAllRequests: ApplyAllRequest[] = [];
+
   dayCards.forEach((dayCard, diaIndex) => {
     const dayId = dayCard.dataset.dayId!;
     const keepIds = new Set<string>();
@@ -178,6 +194,10 @@ async function saveChanges() {
       if (existingId) {
         keepIds.add(existingId);
         updates.push({ id: existingId, ...row });
+
+        const applyAll = (block.querySelector(".applyAllWeeksCheck") as HTMLInputElement | null)?.checked ?? false;
+        const originalExerciseId = semana.dias[diaIndex]?.ejercicios.find((e) => e.id === existingId)?.exercise_id;
+        if (applyAll && originalExerciseId) applyAllRequests.push({ diaIndex, originalExerciseId, row });
       } else {
         inserts.push(row);
       }
@@ -185,7 +205,6 @@ async function saveChanges() {
 
     if (!error && dayCard.querySelectorAll(".exc-block").length === 0) error = `Agregá al menos un ejercicio en ${diaLabelText}.`;
     pending.push({ dayId, keepIds, updates, inserts });
-    void diaIndex;
   });
 
   if (error) {
@@ -210,6 +229,20 @@ async function saveChanges() {
         ...toDelete.map((e) => deleteRoutineExercise(e.id)),
       ]);
     }
+
+    // Semanas no visitadas en esta sesion (routine.semanas sigue con los datos originales):
+    // para cada pedido de "aplicar a todas las semanas" se busca, en el mismo dia de cada
+    // otra semana, la fila que tenia el exercise_id original y se le pisa el contenido. Si
+    // esa semana no tiene mas ese ejercicio en ese dia, se la deja como esta.
+    await Promise.all(
+      applyAllRequests.flatMap((req) =>
+        routine!.semanas
+          .filter((_, wIdx) => wIdx !== weekIndex)
+          .map((otherSemana) => otherSemana.dias[req.diaIndex]?.ejercicios.find((e) => e.exercise_id === req.originalExerciseId))
+          .filter((match): match is RoutineExerciseWithAuthor => !!match)
+          .map((match) => updateRoutineExercise(match.id, { ...req.row, orden: match.orden }))
+      )
+    );
 
     loaderBody.innerHTML = `
       <div class="success-check-container">

@@ -35,6 +35,7 @@ export interface LatestWeightEntry {
   fecha: string;
   unidad: WeightUnit;
   repe: number | null;
+  createdAt: string;
 }
 
 // Cada serie puede tener un historial por unidad (kg/lb/bloques); el primer elemento
@@ -48,6 +49,7 @@ interface RawWeightRow {
   serie: number | null;
   unidad: WeightUnit;
   repe: number | null;
+  created_at: string;
 }
 
 function groupLatestWeights(rows: RawWeightRow[]): LatestWeightsMap {
@@ -73,7 +75,7 @@ function groupLatestWeights(rows: RawWeightRow[]): LatestWeightsMap {
       entries = [];
       bySerie.set(serieIndex, entries);
     }
-    entries.push({ peso: row.peso, fecha: row.fecha, unidad, repe: row.repe });
+    entries.push({ peso: row.peso, fecha: row.fecha, unidad, repe: row.repe, createdAt: row.created_at });
   });
   return map;
 }
@@ -85,7 +87,7 @@ export async function getLatestWeights(routineExerciseIds: string[]): Promise<La
 
   const { data, error } = await supabase
     .from("weight_logs")
-    .select("id:routine_exercise_id, peso, fecha, serie, unidad, repe")
+    .select("id:routine_exercise_id, peso, fecha, serie, unidad, repe, created_at")
     .in("routine_exercise_id", routineExerciseIds)
     .order("fecha", { ascending: false })
     .order("created_at", { ascending: false });
@@ -101,11 +103,51 @@ export async function getExerciseHistory(exerciseIds: string[]): Promise<LatestW
 
   const { data, error } = await supabase
     .from("weight_logs")
-    .select("id:exercise_id, peso, fecha, serie, unidad, repe")
+    .select("id:exercise_id, peso, fecha, serie, unidad, repe, created_at")
     .in("exercise_id", exerciseIds)
     .order("fecha", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) throw error;
   return groupLatestWeights((data ?? []) as RawWeightRow[]);
+}
+
+export interface ExerciseStats {
+  avgPeso: number;
+  maxPeso: number;
+  maxFecha: string;
+  unidad: WeightUnit;
+}
+
+// Promedio y maximo historico de este ejercicio puntual para userId (para el modal de
+// descripcion, ver exerciseModal.ts). A diferencia de getExerciseHistory/getLatestWeights
+// de arriba, filtra por user_id explicitamente en vez de confiar en el alcance de la RLS
+// de "select" (que a un entrenador tambien le deja ver las cargas de sus alumnos) -- sin
+// ese filtro, el promedio/maximo de un entrenador podria mezclar pesos de sus alumnos.
+export async function getExerciseStats(userId: string, exerciseId: string): Promise<ExerciseStats | null> {
+  const { data, error } = await supabase.from("weight_logs").select("peso, fecha, unidad").eq("user_id", userId).eq("exercise_id", exerciseId);
+
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+
+  // Los pesos se pueden cargar en distintas unidades (kg/lb/bloques) y no son
+  // convertibles entre si -- el promedio/maximo solo tienen sentido calculados sobre una
+  // sola. Se usa la mas repetida en el historial (no la del ultimo registro: alguien que
+  // cambio de unidad una sola vez recientemente igual quiere ver el numero que refleja la
+  // mayoria de sus cargas, no un maximo/promedio de una unica carga aislada).
+  const countByUnit = new Map<WeightUnit, number>();
+  data.forEach((r) => countByUnit.set(r.unidad, (countByUnit.get(r.unidad) ?? 0) + 1));
+  const unidad = [...countByUnit.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const sameUnit = data.filter((r) => r.unidad === unidad);
+
+  // El promedio se calcula sobre el maximo de cada dia (una carga por fecha), no sobre
+  // cada serie suelta: promediar todas las series mezcla el peso de calentamiento/series
+  // livianas con el peso de trabajo real y da un numero que no representa el progreso.
+  const maxByFecha = new Map<string, number>();
+  sameUnit.forEach((r) => maxByFecha.set(r.fecha, Math.max(r.peso, maxByFecha.get(r.fecha) ?? -Infinity)));
+  const dailyMaxes = [...maxByFecha.values()];
+  const avgPeso = dailyMaxes.reduce((sum, p) => sum + p, 0) / dailyMaxes.length;
+  const max = sameUnit.reduce((best, r) => (r.peso > best.peso ? r : best));
+
+  return { avgPeso, maxPeso: max.peso, maxFecha: max.fecha, unidad };
 }

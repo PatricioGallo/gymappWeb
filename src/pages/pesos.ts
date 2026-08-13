@@ -1,6 +1,6 @@
 import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { dayDisplayLabel } from "../lib/dias";
+import { dayDisplayLabel, dateToLocalISO, todayLocalISO } from "../lib/dias";
 import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
 import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
@@ -12,6 +12,7 @@ import {
   type LatestWeightsMap,
   type LatestWeightEntry,
   type WeightUnit,
+  type NewWeightLog,
 } from "../services/weightLog.service";
 import { getTodayComments, upsertExerciseComment, deleteExerciseComment, MAX_COMMENT_LENGTH, type ExerciseComment } from "../services/comment.service";
 import { formatRepe } from "../lib/reps";
@@ -136,6 +137,7 @@ function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, 
     loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Borrando carga...</p></div>`;
     try {
       await deleteTodayWeightLog(targetUserId, exc.id, TODAY);
+      clearWeightDraftForExercise(weekIndex, diaIndex, exc.id);
       loaderBody.innerHTML = `
         <div class="success-check-container">
           <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
@@ -154,7 +156,7 @@ function confirmDeleteWeightModal(exc: { id: string; nombre_snapshot: string }, 
   });
 }
 
-const TODAY = new Date().toISOString().slice(0, 10);
+const TODAY = todayLocalISO();
 
 function openCommentModal(exc: { id: string; nombre_snapshot: string }, weekIndex: number, diaIndex: number) {
   const loaderBody = document.getElementById("loaderBody");
@@ -265,6 +267,221 @@ let todayComments: Map<string, ExerciseComment> = new Map();
 let allExerciseIds: string[] = [];
 let allCatalogExerciseIds: string[] = [];
 
+// ---------------------------------------------------------------------------
+// Borrador local: si el usuario sale de la carga de pesos sin tocar "Guardar" (ej. a
+// contestar un mensaje), lo que ya tipeó no se pierde -- se guarda en localStorage en
+// cada tipeo y se restaura al volver a abrir ese mismo día, hasta que efectivamente
+// guarde (o borre esa carga), momento en el que el borrador ya no hace falta.
+// ---------------------------------------------------------------------------
+
+interface WeightDraft {
+  entries: Record<string, { peso?: string; repe?: string }>; // key: `${routineExerciseId}:${serie}`
+  units: Record<string, WeightUnit>; // key: routineExerciseId
+  updatedAt: number; // Date.now() del ultimo tipeo, usado para detectar sesiones abandonadas
+}
+
+// weekIndex/diaIndex del día actualmente abierto: los usa el listener delegado de abajo
+// (armado una sola vez) para saber bajo qué clave guardar cada tipeo.
+let activeDraftWeek: number | null = null;
+let activeDraftDia: number | null = null;
+
+function draftKey(weekIndex: number, diaIndex: number): string {
+  return `gs_pesos_draft_${routineId}_${targetUserId}_${weekIndex}_${diaIndex}`;
+}
+
+function loadWeightDraft(weekIndex: number, diaIndex: number): WeightDraft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(weekIndex, diaIndex));
+    return raw ? (JSON.parse(raw) as WeightDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearWeightDraft(weekIndex: number, diaIndex: number): void {
+  localStorage.removeItem(draftKey(weekIndex, diaIndex));
+}
+
+// Al borrar la carga de hoy de un ejercicio puntual (menu de tres puntos), si quedaba un
+// borrador con esos mismos valores, restoreWeightDraft() los volvería a poner apenas se
+// vuelve a abrir el día -- como si el borrado no hubiera pasado. Se limpia solo lo de ese
+// ejercicio, sin tocar el borrador de los demás ejercicios de la misma jornada.
+function clearWeightDraftForExercise(weekIndex: number, diaIndex: number, routineExerciseId: string): void {
+  const draft = loadWeightDraft(weekIndex, diaIndex);
+  if (!draft) return;
+  let changed = false;
+  Object.keys(draft.entries).forEach((key) => {
+    if (key.startsWith(`${routineExerciseId}:`)) {
+      delete draft.entries[key];
+      changed = true;
+    }
+  });
+  if (draft.units[routineExerciseId]) {
+    delete draft.units[routineExerciseId];
+    changed = true;
+  }
+  if (!changed) return;
+  if (Object.keys(draft.entries).length === 0) clearWeightDraft(weekIndex, diaIndex);
+  else localStorage.setItem(draftKey(weekIndex, diaIndex), JSON.stringify(draft));
+}
+
+// Vuelca lo que hay ahora mismo en los inputs de esa jornada a localStorage -- se llama en
+// cada tipeo (ver el listener delegado en weekContent, mas abajo). Si no quedó nada
+// cargado, borra el borrador en vez de dejar una entrada vacía dando vueltas.
+function saveWeightDraft(weekIndex: number, diaIndex: number): void {
+  const weekContent = document.getElementById("weekContent")!;
+  const entries: WeightDraft["entries"] = {};
+  const units: WeightDraft["units"] = {};
+  let hasAny = false;
+
+  weekContent.querySelectorAll<HTMLInputElement>(".weightInput").forEach((input) => {
+    const routineExerciseId = input.dataset.id;
+    const serie = input.dataset.serie;
+    if (!routineExerciseId || !serie) return;
+    const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
+    const peso = input.value.trim();
+    const repe = repInput?.value.trim() ?? "";
+    if (peso === "" && repe === "") return;
+    entries[`${routineExerciseId}:${serie}`] = { peso: peso || undefined, repe: repe || undefined };
+    hasAny = true;
+  });
+  weekContent.querySelectorAll<HTMLSelectElement>(".weightUnitSelect").forEach((select) => {
+    const routineExerciseId = select.closest(".weight-field-group")?.querySelector<HTMLInputElement>(".weightInput")?.dataset.id;
+    if (routineExerciseId) units[routineExerciseId] = select.value as WeightUnit;
+  });
+
+  if (!hasAny) {
+    clearWeightDraft(weekIndex, diaIndex);
+    return;
+  }
+  localStorage.setItem(draftKey(weekIndex, diaIndex), JSON.stringify({ entries, units, updatedAt: Date.now() }));
+}
+
+const STALE_DRAFT_HOURS = 3;
+
+// Todas las claves de borrador de ESTA rutina+usuario que hay en localStorage, sin importar
+// que día/semana sea -- para poder revisarlas todas al entrar, no solo la que se está
+// abriendo ahora.
+function allDraftKeysForRoutine(): { weekIndex: number; diaIndex: number; key: string }[] {
+  const prefix = `gs_pesos_draft_${routineId}_${targetUserId}_`;
+  const results: { weekIndex: number; diaIndex: number; key: string }[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const [weekPart, diaPart] = key.slice(prefix.length).split("_");
+    const weekIndex = Number(weekPart);
+    const diaIndex = Number(diaPart);
+    if (Number.isNaN(weekIndex) || Number.isNaN(diaIndex)) continue;
+    results.push({ weekIndex, diaIndex, key });
+  }
+  return results;
+}
+
+// Si quedó un borrador sin guardar hace más de 3hs, se asume que el entrenamiento ya terminó
+// y el usuario se olvidó de tocar "Guardar" -- se sube solo al remoto (con la fecha del
+// último tipeo, no la de hoy, para reflejar cuándo entrenó realmente) para que esa sesión no
+// se pierda. Corre al entrar a la pantalla, antes de traer los pesos ya guardados, para que
+// lo recién subido ya aparezca. Filas incompletas o inválidas se descartan en silencio (no
+// hay usuario mirando para corregirlas); si falla la subida, el borrador se deja intacto para
+// reintentar la próxima vez que se entre.
+async function autoUploadStaleDrafts(): Promise<void> {
+  const staleCutoff = Date.now() - STALE_DRAFT_HOURS * 3_600_000;
+
+  for (const { weekIndex, diaIndex, key } of allDraftKeysForRoutine()) {
+    let draft: WeightDraft | null;
+    try {
+      const raw = localStorage.getItem(key);
+      draft = raw ? (JSON.parse(raw) as WeightDraft) : null;
+    } catch {
+      draft = null;
+    }
+    if (!draft) {
+      localStorage.removeItem(key);
+      continue;
+    }
+    if (!draft.updatedAt || draft.updatedAt > staleCutoff) continue;
+
+    const dia = routine!.semanas[weekIndex]?.dias[diaIndex];
+    if (!dia) {
+      localStorage.removeItem(key);
+      continue;
+    }
+
+    const fecha = dateToLocalISO(new Date(draft.updatedAt));
+    const newEntries: NewWeightLog[] = [];
+    Object.entries(draft.entries).forEach(([entryKey, val]) => {
+      const [routineExerciseId, serieStr] = entryKey.split(":");
+      const exc = dia.ejercicios.find((e) => e.id === routineExerciseId);
+      if (!exc) return;
+      const peso = val.peso !== undefined ? Number(val.peso) : NaN;
+      const repe = val.repe !== undefined ? Number(val.repe) : NaN;
+      if (Number.isNaN(peso) || peso < 0 || Number.isNaN(repe) || repe <= 0) return;
+      newEntries.push({
+        routine_exercise_id: routineExerciseId,
+        exercise_id: exc.exercise_id,
+        fecha,
+        peso,
+        serie: Number(serieStr),
+        repe,
+        unidad: draft.units[routineExerciseId] ?? "kg",
+      });
+    });
+
+    if (newEntries.length > 0) {
+      try {
+        await insertWeightLogs(targetUserId, newEntries);
+      } catch {
+        continue; // se reintenta la proxima vez que se entre a esta pantalla
+      }
+    }
+    localStorage.removeItem(key);
+  }
+}
+
+// Aplica el borrador guardado (si hay) sobre los inputs recien renderizados de ese día,
+// pisando lo que haya venido precargado del servidor -- el borrador es lo último que el
+// usuario tipeó, mas reciente que cualquier carga previa.
+function restoreWeightDraft(weekIndex: number, diaIndex: number): void {
+  const draft = loadWeightDraft(weekIndex, diaIndex);
+  if (!draft) return;
+  const weekContent = document.getElementById("weekContent")!;
+
+  weekContent.querySelectorAll<HTMLInputElement>(".weightInput").forEach((input) => {
+    const entry = draft.entries[`${input.dataset.id}:${input.dataset.serie}`];
+    if (!entry) return;
+    if (entry.peso !== undefined) input.value = entry.peso;
+    if (entry.repe !== undefined) {
+      const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
+      if (repInput) repInput.value = entry.repe;
+    }
+  });
+
+  weekContent.querySelectorAll<HTMLSelectElement>(".weightUnitSelect").forEach((select) => {
+    const group = select.closest(".weight-field-group");
+    const routineExerciseId = group?.querySelector<HTMLInputElement>(".weightInput")?.dataset.id;
+    const unit = routineExerciseId ? draft.units[routineExerciseId] : undefined;
+    if (!unit) return;
+    select.value = unit;
+    // El placeholder de los inputs de peso depende de la unidad elegida (ver el listener
+    // de "change" del select mas abajo); como el value se setea a mano sin disparar ese
+    // evento, el placeholder tambien hay que actualizarlo a mano.
+    const placeholder = UNIT_PLACEHOLDERS[unit];
+    group?.querySelectorAll<HTMLInputElement>(".weightInput").forEach((inp) => (inp.placeholder = placeholder));
+  });
+}
+
+// Delegado una sola vez sobre el contenedor estable (su innerHTML se reemplaza en cada
+// openDay(), pero el nodo en si nunca cambia) -- evita reenganchar un listener nuevo por
+// cada input de cada ejercicio, y por cada visita a un día.
+document.getElementById("weekContent")?.addEventListener("input", (e) => {
+  if (activeDraftWeek === null || activeDraftDia === null) return;
+  if ((e.target as HTMLElement).matches(".weightInput, .repInput")) saveWeightDraft(activeDraftWeek, activeDraftDia);
+});
+document.getElementById("weekContent")?.addEventListener("change", (e) => {
+  if (activeDraftWeek === null || activeDraftDia === null) return;
+  if ((e.target as HTMLElement).matches(".weightUnitSelect")) saveWeightDraft(activeDraftWeek, activeDraftDia);
+});
+
 function ringMarkup(pct: number): string {
   const r = 16;
   const circumference = 2 * Math.PI * r;
@@ -280,23 +497,83 @@ function ringMarkup(pct: number): string {
   `;
 }
 
-// Un ejercicio se considera completo solo cuando TODAS sus series tienen peso
-// cargado (una sola serie, con mismo_peso, cuenta como todas).
-function isExerciseDone(e: { id: string; serie: number; mismo_peso: boolean }): boolean {
+// Cuantas series de este ejercicio tienen peso cargado (cualquier fecha, no solo hoy). Con
+// mismo_peso todas las series comparten una unica carga, asi que cuentan todas-o-nada.
+function exerciseDoneSeries(e: { id: string; serie: number; mismo_peso: boolean }): number {
   const bySerie = latestWeights.get(e.id);
-  if (!bySerie) return false;
-  const requiredSeries = e.mismo_peso ? 1 : e.serie;
-  for (let i = 1; i <= requiredSeries; i++) {
-    if (!bySerie.get(i)?.length) return false;
+  if (!bySerie) return 0;
+  if (e.mismo_peso) return bySerie.get(1)?.length ? e.serie : 0;
+  let done = 0;
+  for (let i = 1; i <= e.serie; i++) {
+    if (bySerie.get(i)?.length) done++;
   }
-  return true;
+  return done;
+}
+
+// Un ejercicio se considera completo solo cuando TODAS sus series tienen peso cargado.
+function isExerciseDone(e: { id: string; serie: number; mismo_peso: boolean }): boolean {
+  return exerciseDoneSeries(e) >= e.serie;
+}
+
+// El progreso se pesa por cantidad de series, no por cantidad de ejercicios: un ejercicio
+// de 5 series pesa mas que uno de 2 series, en vez de contar ambos como "un ejercicio".
+function dayTotalSeries(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
+  return dia.ejercicios.filter((e) => e.es_medible).reduce((sum, e) => sum + e.serie, 0);
+}
+
+function dayDoneSeries(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
+  return dia.ejercicios.filter((e) => e.es_medible).reduce((sum, e) => sum + exerciseDoneSeries(e), 0);
 }
 
 function dayProgress(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
-  const trackable = dia.ejercicios.filter((e) => e.es_medible);
-  if (trackable.length === 0) return 100;
-  const done = trackable.filter((e) => isExerciseDone(e)).length;
-  return Math.round((done / trackable.length) * 100);
+  const total = dayTotalSeries(dia);
+  if (total === 0) return 100;
+  return Math.round((dayDoneSeries(dia) / total) * 100);
+}
+
+// Timestamp mas reciente entre TODOS los registros de TODOS los ejercicios medibles de
+// este día (cualquier serie, cualquier unidad) -- "cuando se tocó por última vez este
+// día", usado por dayStatus() para decidir si ya pasó a Incompleto. null si nunca se
+// cargó nada para este día.
+function dayLastActivityAt(dia: RoutineDetail["semanas"][number]["dias"][number]): string | null {
+  let latest: string | null = null;
+  dia.ejercicios
+    .filter((e) => e.es_medible)
+    .forEach((e) => {
+      latestWeights.get(e.id)?.forEach((entries) => {
+        entries.forEach((entry) => {
+          if (!latest || entry.createdAt > latest) latest = entry.createdAt;
+        });
+      });
+    });
+  return latest;
+}
+
+type DayStatus = "done" | "pending" | "incomplete";
+
+const INCOMPLETE_AFTER_HOURS = 24;
+
+/**
+ * "Pendiente": todavía no se completó y sigue siendo una sesión vigente/futura -- nunca se
+ * tocó, o se tocó hace menos de 24hs y no se empezó después otro día de la misma semana.
+ * "Incompleto": quedó a medias en el pasado -- pasaron más de 24hs desde el último toque,
+ * o ya se empezó (más reciente) otro día de la misma semana, así que no se va a completar.
+ */
+function dayStatus(semana: RoutineDetail["semanas"][number], dia: RoutineDetail["semanas"][number]["dias"][number]): DayStatus {
+  if (dayProgress(dia) >= 100) return "done";
+
+  const lastActivity = dayLastActivityAt(dia);
+  if (!lastActivity) return "pending";
+
+  const hoursSinceActivity = (Date.now() - new Date(lastActivity).getTime()) / 3_600_000;
+  if (hoursSinceActivity > INCOMPLETE_AFTER_HOURS) return "incomplete";
+
+  const startedOtherDayAfter = semana.dias.some((otherDia) => {
+    if (otherDia === dia) return false;
+    const otherActivity = dayLastActivityAt(otherDia);
+    return otherActivity !== null && otherActivity > lastActivity;
+  });
+  return startedOtherDayAfter ? "incomplete" : "pending";
 }
 
 function routineProgress(): number {
@@ -304,10 +581,8 @@ function routineProgress(): number {
   let done = 0;
   routine!.semanas.forEach((semana) => {
     semana.dias.forEach((dia) => {
-      dia.ejercicios.forEach((e) => {
-        total++;
-        if (isExerciseDone(e)) done++;
-      });
+      total += dayTotalSeries(dia);
+      done += dayDoneSeries(dia);
     });
   });
   return total === 0 ? 0 : Math.round((done / total) * 100);
@@ -318,10 +593,8 @@ function weekProgress(weekIndex: number): number {
   let total = 0;
   let done = 0;
   semana.dias.forEach((dia) => {
-    dia.ejercicios.forEach((e) => {
-      total++;
-      if (isExerciseDone(e)) done++;
-    });
+    total += dayTotalSeries(dia);
+    done += dayDoneSeries(dia);
   });
   return total === 0 ? 0 : Math.round((done / total) * 100);
 }
@@ -352,19 +625,21 @@ function renderWeek(weekIndex: number) {
   weekContent.dataset.week = String(weekIndex);
   renderWeekStatus(weekIndex);
 
+  const STATUS_LABELS: Record<DayStatus, string> = { done: "Completo", pending: "Pendiente", incomplete: "Incompleto" };
+
   weekContent.innerHTML = semana.dias
     .map((dia, diaIndex) => {
       const pct = dayProgress(dia);
-      const done = pct >= 100;
+      const status = dayStatus(semana, dia);
       const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
       const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
       const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
 
       return `
-        <button class="day-row reveal ${done ? "done" : ""}" type="button" data-dia="${diaIndex}">
+        <button class="day-row reveal ${status}" type="button" data-dia="${diaIndex}">
           ${ringMarkup(pct)}
           <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
-          <span class="day-row-status ${done ? "done" : "pending"}">${done ? "Completo" : "Pendiente"}</span>
+          <span class="day-row-status ${status}">${STATUS_LABELS[status]}</span>
           <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
       `;
@@ -379,6 +654,8 @@ function renderWeek(weekIndex: number) {
 function backToWeek(weekIndex: number) {
   (document.getElementById("weekPicker") as HTMLElement).style.display = "";
   (document.getElementById("weekStatus") as HTMLElement).style.display = "";
+  activeDraftWeek = null;
+  activeDraftDia = null;
   renderWeek(weekIndex);
 }
 
@@ -423,6 +700,8 @@ function openDay(weekIndex: number, diaIndex: number) {
   const weekContent = document.getElementById("weekContent")!;
   (document.getElementById("weekPicker") as HTMLElement).style.display = "none";
   (document.getElementById("weekStatus") as HTMLElement).style.display = "none";
+  activeDraftWeek = weekIndex;
+  activeDraftDia = diaIndex;
 
   const trackable = dia.ejercicios.filter((e) => e.es_medible);
 
@@ -458,14 +737,21 @@ function openDay(weekIndex: number, diaIndex: number) {
 
           const rowsMarkup = rows
             .map(({ setIndex, subLabel }) => {
-              const today = todayEntry(last?.get(setIndex));
+              const lastEntries = last?.get(setIndex);
+              const today = todayEntry(lastEntries);
               const historyEntries = history?.get(setIndex);
-              const repeValue = today ? today.repe ?? exc.repe : exc.repe;
+              // Si hoy todavia no se cargo nada para esta serie, se precarga el campo con lo
+              // ultimo que se cargo para esta misma ocurrencia (este dia/semana puntual), no
+              // con el historial de otros dias donde aparezca el mismo ejercicio: un ejercicio
+              // que todavia esta pendiente en este dia (nunca se cargo aca) tiene que arrancar
+              // vacio, aunque el mismo ejercicio ya se haya cargado en otro dia de la rutina.
+              const prefill = today ?? lastEntries?.[0] ?? null;
+              const repeValue = prefill ? prefill.repe ?? exc.repe : exc.repe;
               return `
         <div class="weight-field-serie">
           <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
           <div class="weight-field-inputs">
-            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${today ? today.peso : ""}">
+            <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${prefill ? prefill.peso : ""}">
             <span class="weight-field-x">x</span>
             <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
           </div>
@@ -497,10 +783,12 @@ function openDay(weekIndex: number, diaIndex: number) {
     </div>
   `;
 
+  restoreWeightDraft(weekIndex, diaIndex);
+
   weekContent.querySelectorAll<HTMLButtonElement>(".exc-info-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const exc = trackable[Number(btn.dataset.excIdx)];
-      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
+      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url, targetUserId, exc.exercise_id);
     });
   });
 
@@ -566,7 +854,7 @@ function openDay(weekIndex: number, diaIndex: number) {
 async function saveWeights(weekIndex: number, diaIndex: number) {
   const alertMessage = document.getElementById("alert_message")!;
   const inputs = document.querySelectorAll<HTMLInputElement>(".weightInput");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
 
   const entries: { routine_exercise_id: string; exercise_id: string; fecha: string; peso: number; serie: number; repe: number; unidad: WeightUnit }[] = [];
   let error = false;
@@ -578,7 +866,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
     const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
     const repeValue = repInput?.value.trim() ?? "";
     const repe = repeValue === "" ? NaN : Number(repeValue);
-    if (Number.isNaN(peso) || peso <= 0 || Number.isNaN(repe) || repe <= 0) {
+    if (Number.isNaN(peso) || peso < 0 || Number.isNaN(repe) || repe <= 0) {
       error = true;
       return;
     }
@@ -595,7 +883,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
   });
 
   if (error) {
-    alertMessage.innerHTML = "<p>Ingresá solo números mayores a 0.</p>";
+    alertMessage.innerHTML = "<p>El peso no puede ser negativo y las repeticiones tienen que ser mayores a 0.</p>";
     return;
   }
   if (entries.length === 0) {
@@ -609,6 +897,7 @@ async function saveWeights(weekIndex: number, diaIndex: number) {
 
   try {
     await insertWeightLogs(targetUserId, entries);
+    clearWeightDraft(weekIndex, diaIndex); // ya quedo guardado remoto, el borrador local no hace mas falta
     loaderBody.innerHTML = `
       <div class="success-check-container">
         <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
@@ -636,6 +925,8 @@ async function init() {
     document.getElementById("weekStatus")?.remove();
     return;
   }
+
+  await autoUploadStaleDrafts();
 
   allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
   allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
