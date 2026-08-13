@@ -500,7 +500,7 @@ function openDay(weekIndex: number, diaIndex: number) {
   weekContent.querySelectorAll<HTMLButtonElement>(".exc-info-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const exc = trackable[Number(btn.dataset.excIdx)];
-      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
+      openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url, targetUserId, exc.exercise_id);
     });
   });
 

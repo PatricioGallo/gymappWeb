@@ -3563,6 +3563,22 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   }
 }
 
+/* Modal de descripcion del ejercicio (ver exerciseModal.ts): mismo criterio que el
+   buscador de arriba, a pantalla completa en celular para que la imagen, la nota del
+   entrenador y las dos cajas de peso entren comodas sin sentirse amontonadas. */
+@media (max-width: 639px) {
+  .exc-modal-overlay { padding: 0; }
+  .exc-modal-card {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    padding: 24px 20px;
+    overflow-y: auto;
+  }
+}
+
 .modal-card h2 { margin: 0 0 4px; font-size: 20px; }
 .modal-card .hero-badge { display: inline-block; margin-bottom: 14px; }
 .exc-modal-image {
@@ -3575,6 +3591,33 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   margin-bottom: 16px;
 }
 .modal-card .subtitle { margin: 0 0 22px; font-size: 13.5px; color: var(--text-muted); }
+
+/* Promedio/maximo del ejercicio en el modal de descripcion (ver exerciseModal.ts): arranca
+   con un spinner mientras llega el fetch, .exc-modal-stat-empty si nunca cargo nada. */
+.exc-modal-stats { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 0; }
+/* El "Cerrar" quedaba pegado justo debajo de la ultima caja de stats (.modal-actions
+   solo trae 4px de margin-top por default, pensado para cuando lo de arriba ya viene con
+   su propio margen inferior) -- mas aire solo aca, sin afectar al resto de los modales
+   que comparten .modal-actions. */
+.exc-modal-card .modal-actions { margin-top: 22px; }
+.exc-modal-stats .modern-spinner { width: 22px; height: 22px; margin: 4px 0; }
+/* Label arriba, valor abajo (en vez de lado a lado): con "Peso máximo" + fecha al lado
+   quedaba mas ancho que "Peso promedio" solo, y las dos cajas no quedaban de la misma
+   altura/forma. Apiladas, ambas miden lo mismo pase lo que pase con el largo del valor. */
+.exc-modal-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+.exc-modal-stat-label { color: var(--text-muted); }
+.exc-modal-stat-value { font-weight: 700; font-size: 15px; }
+.exc-modal-stat-date { font-weight: 400; color: var(--text-muted); font-size: 12.5px; }
+.exc-modal-stat-empty { margin: 14px 0 0; font-size: 13px; color: var(--text-muted); }
+
 .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .modal-actions .btn { flex: 1; }
 
