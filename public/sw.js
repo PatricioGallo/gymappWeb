@@ -21,11 +21,19 @@ self.addEventListener("push", (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "Gym Social", {
-      body: data.body || "",
-      icon: data.icon || "/images/icon-192.png",
-      badge: "/images/icon-192.png",
-      data: { url: data.url || "/pages/notifications.html" },
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Si ya está mirando la webapp (pestaña al frente y con foco), no hace falta la
+      // notificación del sistema -- lo que llega por push ya se refleja en vivo adentro
+      // (badge, mensajes nuevos, etc. via realtime). Si la tiene abierta pero de fondo
+      // (otra pestaña/app encima), igual le mostramos la notificación.
+      if (clients.some((c) => c.focused)) return;
+
+      return self.registration.showNotification(data.title || "Gym Social", {
+        body: data.body || "",
+        icon: data.icon || "/images/icon-192.png",
+        badge: "/images/icon-192.png",
+        data: { url: data.url || "/pages/notifications.html" },
+      });
     })
   );
 });
