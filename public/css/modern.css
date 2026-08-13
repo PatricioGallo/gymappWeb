@@ -4665,6 +4665,19 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-feed-sentinel .modern-spinner { width: 26px; height: 26px; }
 .post-feed-list-compact { gap: 10px; }
 
+/* Pull-to-refresh (solo mobile, ver feed.ts): arranca en 0 y feed.ts anima su altura
+   a mano en cada pointermove mientras se arrastra (sin transition, sigue al dedo 1 a
+   1), y con transition solo al soltar (para el snap-back o quedarse en la altura fija
+   mientras carga). overscroll-behavior-y en .feed-main evita que el pull nativo del
+   navegador (que recarga toda la pagina) compita con este gesto. */
+.pull-refresh-indicator { display: flex; align-items: center; justify-content: center; height: 0; overflow: hidden; }
+.pull-refresh-indicator.pull-refresh-animate { transition: height 0.25s ease; }
+.pull-refresh-indicator .modern-spinner { width: 24px; height: 24px; flex-shrink: 0; }
+
+@media (max-width: 859px) {
+  .feed-main { overscroll-behavior-y: contain; }
+}
+
 .post-card {
   background: var(--surface);
   border: 1px solid var(--border);

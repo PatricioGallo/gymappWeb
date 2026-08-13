@@ -286,6 +286,17 @@ function appendFeedPosts(newPosts: FeedPost[]): void {
   while (temp.firstChild) listEl.appendChild(temp.firstChild);
 }
 
+// Mismo criterio que appendFeedPosts pero al principio (pull-to-refresh, ver mas abajo):
+// no hace falta preservar scroll aca porque este gesto solo dispara estando ya arriba
+// del todo, asi que los Reps nuevos aparecen justo donde esta mirando el usuario.
+function prependFeedPosts(newPosts: FeedPost[]): void {
+  listEl.querySelector(".exc-pick-empty")?.remove();
+  const temp = document.createElement("div");
+  temp.innerHTML = newPosts.map((p) => renderPostCard(p, userId)).join("");
+  wirePostCard(temp, newPosts, postCardHandlers);
+  while (temp.lastChild) listEl.insertBefore(temp.lastChild, listEl.firstChild);
+}
+
 // Cuenta solo lo que ya trajo el server (no la lista local, que puede tener
 // Reps propios agregados adelante al publicar/citar) -- el orden prioriza la
 // fecha pero no es puramente cronologico (algoritmo + variedad aleatoria en
@@ -352,6 +363,99 @@ const feedObserver = new IntersectionObserver(
   { rootMargin: "600px 0px" }
 );
 feedObserver.observe(sentinel);
+
+// ---------------------------------------------------------------------------
+// Pull-to-refresh (solo mobile, gesto táctil): arrastrar hacia abajo estando ya
+// arriba del todo del feed pide Reps nuevos y los mete al principio, sin tocar
+// los que ya se venían mostrando (mismo shownPostIds que usa loadMore() para no
+// repetir nada, ahora también contra ese lado).
+// ---------------------------------------------------------------------------
+
+const pullIndicator = document.getElementById("pullRefreshIndicator") as HTMLDivElement;
+const PULL_THRESHOLD = 70;
+const PULL_MAX = 110;
+const PULL_LOADING_HEIGHT = 56;
+
+let pullDragging = false;
+let pullActive = false; // true una vez que se movio hacia abajo lo suficiente como para contar como "pull" y no un scroll comun
+let pullStartY = 0;
+let isRefreshing = false;
+
+function isMobileFeedLayout(): boolean {
+  return window.matchMedia("(max-width: 859px)").matches;
+}
+
+// En mobile el que scrollea es la ventana (ver comentario del IntersectionObserver
+// arriba); en desktop es .feed-main, pero el gesto de pull solo esta pensado para touch
+// en mobile, asi que alcanza con mirar el scroll de la ventana.
+function isAtTop(): boolean {
+  return (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+}
+
+function setPullHeight(px: number, animated: boolean): void {
+  pullIndicator.classList.toggle("pull-refresh-animate", animated);
+  pullIndicator.style.height = `${px}px`;
+}
+
+async function refreshFeed(): Promise<void> {
+  isRefreshing = true;
+  setPullHeight(PULL_LOADING_HEIGHT, true);
+  try {
+    const fresh = await getPersonalizedFeed(0, FEED_PAGE_SIZE, crypto.randomUUID());
+    const newOnes = fresh.filter((p) => !shownPostIds.has(p.id));
+    newOnes.forEach((p) => shownPostIds.add(p.id));
+    if (newOnes.length > 0) {
+      posts = [...newOnes, ...posts];
+      prependFeedPosts(newOnes);
+    }
+  } catch {
+    // silencioso: un pull-to-refresh fallido no tiene mucho mas que mostrar que "no paso nada"
+  } finally {
+    setPullHeight(0, true);
+    isRefreshing = false;
+  }
+}
+
+document.addEventListener(
+  "touchstart",
+  (e) => {
+    if (isRefreshing || !isMobileFeedLayout() || !isAtTop()) return;
+    pullDragging = true;
+    pullActive = false;
+    pullStartY = e.touches[0].clientY;
+  },
+  { passive: true }
+);
+
+document.addEventListener(
+  "touchmove",
+  (e) => {
+    if (!pullDragging) return;
+    const deltaY = e.touches[0].clientY - pullStartY;
+    if (deltaY <= 0 || !isAtTop()) {
+      pullDragging = false;
+      if (pullActive) setPullHeight(0, true);
+      pullActive = false;
+      return;
+    }
+    pullActive = true;
+    e.preventDefault(); // corta el rebote/pull-to-refresh nativo mientras dura el gesto propio
+    setPullHeight(Math.min(deltaY * 0.5, PULL_MAX), false);
+  },
+  { passive: false }
+);
+
+function onPullEnd(): void {
+  if (!pullDragging) return;
+  pullDragging = false;
+  if (!pullActive) return;
+  pullActive = false;
+  const reached = pullIndicator.getBoundingClientRect().height >= PULL_THRESHOLD;
+  if (reached) void refreshFeed();
+  else setPullHeight(0, true);
+}
+document.addEventListener("touchend", onPullEnd);
+document.addEventListener("touchcancel", onPullEnd);
 
 posts = await getPersonalizedFeed(0, FEED_PAGE_SIZE, feedSeed);
 posts.forEach((p) => shownPostIds.add(p.id));
