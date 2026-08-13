@@ -20,6 +20,7 @@ import {
   type ChatMessage,
 } from "../services/chat.service";
 import { refreshChatBadge } from "../lib/chat";
+import { watchPeerOnline } from "../lib/presence";
 
 setupNavToggle();
 setupRevealObserver();
@@ -116,7 +117,20 @@ requestBannerName.textContent = conversation.other_username ?? "";
 // permite mostrarla; readReceiptsEnabled gatea el "visto azul" de cada tick.
 const peerMeta = await getConversationPeerMeta(conversation.other_user_id);
 readReceiptsEnabled = peerMeta.readReceiptsEnabled;
-statusEl.textContent = peerMeta.lastSeenAt ? lastSeenLabel(peerMeta.lastSeenAt) : "";
+let peerLastSeenAt = peerMeta.lastSeenAt;
+let peerOnline = false;
+statusEl.textContent = peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
+
+// "En línea" respeta la misma privacidad reciproca que ya gatea last_seen_at server-side:
+// si vino null es que ninguno de los dos quiere mostrar su actividad, y no tendria sentido
+// revelar presencia en vivo cuando ni el ultimo visto se muestra.
+if (peerLastSeenAt) {
+  watchPeerOnline(conversation.other_user_id, (online) => {
+    if (!online && peerOnline) peerLastSeenAt = new Date().toISOString(); // se acaba de desconectar
+    peerOnline = online;
+    statusEl.textContent = online ? "En línea" : peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
+  });
+}
 
 function renderBanners(): void {
   requestBanner.hidden = !(conversationStatus === "pending" && !isInitiator);

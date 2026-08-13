@@ -13,6 +13,7 @@ import { getUnreadUserReportCount } from "../services/userReport.service";
 import { getPendingVerificationRequestCount } from "../services/verification.service";
 import { touchLastSeen } from "../services/profile.service";
 import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner } from "./pwaBanners";
+import { trackPresence } from "./presence";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -227,5 +228,6 @@ export async function requireAuth(): Promise<string> {
   }
   // Heartbeat simple de "última conexión": una vez por carga de página autenticada.
   void touchLastSeen();
+  trackPresence(userId);
   return userId;
 }
