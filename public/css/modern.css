@@ -28,7 +28,13 @@
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
 }
+/* Oculta la barra de scroll de la pagina (Chrome/Edge/Safari) sin perder el scroll en
+   si -- pedido especificamente para que no se vea en perfil/feed, pero al ser el html
+   general de toda la web aplica en cualquier pagina que scrollee la ventana. Los paneles
+   con scroll propio (ej. .chat-messages) tienen su propia barra fina, sin tocar. */
+html::-webkit-scrollbar { display: none; }
 
 body {
   margin: 0;
