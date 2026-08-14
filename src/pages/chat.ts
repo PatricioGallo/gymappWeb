@@ -714,6 +714,22 @@ composerInput.addEventListener("input", () => {
   updateSendState();
 });
 
+// En mobile, cuando aparece el teclado el visualViewport se achica pero el
+// layout (100dvh) no siempre lo hace, asi que el padding extra de abajo del
+// composer le come espacio de pantalla al teclado. Lo detectamos comparando
+// el alto del visualViewport contra el de window y achicamos ese padding
+// mientras el teclado esta abierto (clase sacada al perder foco).
+const viewport = window.visualViewport;
+if (viewport) {
+  const KEYBOARD_THRESHOLD_PX = 150;
+  const onViewportResize = (): void => {
+    const keyboardOpen = window.innerHeight - viewport.height > KEYBOARD_THRESHOLD_PX;
+    document.body.classList.toggle("keyboard-open", keyboardOpen);
+  };
+  viewport.addEventListener("resize", onViewportResize);
+  composerInput.addEventListener("blur", () => document.body.classList.remove("keyboard-open"));
+}
+
 // Enter envía el mensaje; Shift+Enter agrega un salto de línea.
 composerInput.addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || e.shiftKey) return;

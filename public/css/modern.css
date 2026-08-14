@@ -4211,6 +4211,13 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   padding-bottom: 42px;
 }
 
+/* Con el teclado del celular abierto, el visualViewport se achica y ese
+   padding extra de abajo pasa a comerle espacio de pantalla al chat -- lo
+   reducimos casi a la altura del teclado (ver detección en chat.ts). */
+body.keyboard-open .chat-thread-container {
+  padding-bottom: 10px;
+}
+
 .chat-thread-header {
   display: flex;
   align-items: center;
