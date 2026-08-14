@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, ensureServiceWorkerRegistered } from "./pushNotifications";
+import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, ensurePushSubscription, ensureServiceWorkerRegistered } from "./pushNotifications";
 import { todayLocalISO } from "./dias";
 
 const INSTALL_SNOOZE_KEY = "gs_install_banner_snooze_until";
@@ -211,6 +211,14 @@ function openIosInstallTutorial(): void {
 export async function setupPushReminderBanner(userId: string): Promise<void> {
   if (!isStandalone() || !isPushSupported() || isIosNonStandalone()) return;
   if (Notification.permission === "denied") return;
+
+  if (Notification.permission === "granted") {
+    // El permiso del sistema ya esta dado: si la suscripcion se perdio (ver ensurePushSubscription,
+    // pasa en iOS al cerrar del todo la PWA), la recreamos sola antes de considerar mostrar el
+    // banner -- si no, alguien que ya activo las notificaciones las volveria a ver pedidas.
+    if (await ensurePushSubscription(userId)) return;
+  }
+
   const enabled = await isPushEnabledForUser(userId);
   if (enabled) return;
 

@@ -22,7 +22,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
-  return (await navigator.serviceWorker.getRegistration(SW_PATH)) ?? (await navigator.serviceWorker.register(SW_PATH));
+  // "ready" espera a que el service worker realmente este activo y controlando la pagina --
+  // getRegistration()/register() a secas pueden devolver un registro todavia "installing" recien
+  // abierta la PWA (sobre todo en iOS al reabrirla despues de cerrarla del todo), y ahi
+  // pushManager.getSubscription() puede devolver null aunque la suscripcion siga viva.
+  await navigator.serviceWorker.register(SW_PATH);
+  return navigator.serviceWorker.ready;
 }
 
 /**
@@ -52,13 +57,9 @@ export async function isPushEnabledForUser(userId: string): Promise<boolean> {
   return hasStoredPushSubscription(userId, subscription.endpoint);
 }
 
-export async function enablePushNotifications(userId: string): Promise<{ error?: string }> {
-  if (!isPushSupported()) return { error: "Este navegador no soporta notificaciones push." };
+async function subscribeAndStore(userId: string): Promise<{ error?: string }> {
   const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
   if (!vapidPublicKey) return { error: "Falta configurar la clave pública de push." };
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return { error: "No diste permiso para las notificaciones." };
 
   try {
     const registration = await getRegistration();
@@ -73,6 +74,28 @@ export async function enablePushNotifications(userId: string): Promise<{ error?:
   } catch {
     return { error: "No se pudo activar las notificaciones. Probá de nuevo." };
   }
+}
+
+export async function enablePushNotifications(userId: string): Promise<{ error?: string }> {
+  if (!isPushSupported()) return { error: "Este navegador no soporta notificaciones push." };
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return { error: "No diste permiso para las notificaciones." };
+
+  return subscribeAndStore(userId);
+}
+
+/**
+ * En iOS, cerrar del todo la PWA (deslizar para sacarla del selector de apps) y volver a abrirla
+ * a veces invalida la suscripcion push que ya estaba activa (bug conocido de WebKit) -- sin esto,
+ * isPushEnabledForUser() la ve como "no activada" y el banner de "Activá las notificaciones"
+ * reaparece aunque el usuario ya le haya dado que si. Como el permiso del sistema ya esta
+ * otorgado, no hace falta volver a pedirlo: se re-suscribe solo, en silencio.
+ */
+export async function ensurePushSubscription(userId: string): Promise<boolean> {
+  if (!isPushSupported() || Notification.permission !== "granted") return false;
+  const { error } = await subscribeAndStore(userId);
+  return !error;
 }
 
 export async function disablePushNotifications(): Promise<void> {
