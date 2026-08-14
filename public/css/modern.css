@@ -4719,7 +4719,6 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-composer-preview-uploading {
   position: absolute;
   inset: 0;
-  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -4729,6 +4728,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   font-size: 13px;
   font-weight: 600;
 }
+.post-composer-preview-uploading:not([hidden]) { display: flex; }
 .post-composer-preview-remove {
   position: absolute;
   top: 6px;
