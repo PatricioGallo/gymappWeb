@@ -89,13 +89,13 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
 }
 
 /** Últimos mensajes de una conversación (mas recientes primero). Pasá beforeIso (created_at del más viejo cargado) para paginar hacia atrás. */
-export async function listMessages(conversationId: string, beforeIso?: string): Promise<ChatMessage[]> {
+export async function listMessages(conversationId: string, beforeIso?: string, limit = MESSAGES_PAGE_SIZE): Promise<ChatMessage[]> {
   let query = supabase
     .from("messages")
     .select("*")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
-    .limit(MESSAGES_PAGE_SIZE);
+    .limit(limit);
   if (beforeIso) query = query.lt("created_at", beforeIso);
 
   const { data, error } = await query;

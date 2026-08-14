@@ -21,6 +21,7 @@ import {
 } from "../services/chat.service";
 import { refreshChatBadge } from "../lib/chat";
 import { watchPeerOnline } from "../lib/presence";
+import { getCachedMessages, cacheMessages } from "../lib/chatDb";
 
 setupNavToggle();
 setupRevealObserver();
@@ -351,7 +352,22 @@ function observeLoadSentinel(): void {
 }
 
 async function renderInitialMessages(): Promise<void> {
-  messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
+  // Pintado instantaneo desde IndexedDB si este chat ya fue precargado (ver
+  // prefetchRecentThreads en chats.ts) o visitado antes -- evita el spinner de
+  // entrada en el caso comun. Igual se reconcilia siempre contra el servidor
+  // abajo, este primer pintado es solo para no hacer esperar a la red.
+  const cached = await getCachedMessages(conversationId!);
+  if (cached.length > 0) {
+    messages = cached;
+    messages.forEach((m) => renderedIds.add(m.id));
+    await hydrateSharedPosts(messages);
+    messagesEl.innerHTML = buildMessagesHtml(messages);
+    await hydrateImages();
+    scrollToBottom("instant");
+  } else {
+    messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
+  }
+
   const page = await listMessages(conversationId!);
   messages = page.slice().reverse();
   messages.forEach((m) => renderedIds.add(m.id));
@@ -363,6 +379,7 @@ async function renderInitialMessages(): Promise<void> {
   await hydrateImages();
   scrollToBottom("instant"); // abre directo posicionado ahi, sin animar el salto
   if (!olderExhausted) observeLoadSentinel();
+  void cacheMessages(conversationId!, page);
 
   const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
   if (hasUnreadFromOther) void markReadAndRefreshBadge();

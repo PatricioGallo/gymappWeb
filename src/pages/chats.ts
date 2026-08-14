@@ -4,11 +4,14 @@ import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { listFollowers, listFollowing, type FollowListRow } from "../services/follow.service";
 import {
   listConversations,
+  listMessages,
+  MESSAGES_PAGE_SIZE,
   acceptMessageRequest,
   declineMessageRequest,
   getOrCreateConversation,
   type ConversationSummary,
 } from "../services/chat.service";
+import { cacheMessages } from "../lib/chatDb";
 
 setupNavToggle();
 setupRevealObserver();
@@ -280,6 +283,29 @@ tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
   });
 });
 
+const PREFETCH_CONVERSATIONS_COUNT = 30;
+const PREFETCH_MESSAGES_PER_CHAT = MESSAGES_PAGE_SIZE;
+
+/**
+ * Al entrar a la lista, precarga en IndexedDB los primeros mensajes de los chats
+ * mas recientes -- asi cuando se abren (ver chat.ts) se pintan al instante desde
+ * ese cache en vez de esperar a la red. No bloquea el render de la lista.
+ */
+async function prefetchRecentThreads(): Promise<void> {
+  const targets = conversations.filter((c) => c.status === "accepted" || c.is_initiator).slice(0, PREFETCH_CONVERSATIONS_COUNT);
+  await Promise.all(
+    targets.map(async (c) => {
+      try {
+        const page = await listMessages(c.conversation_id, undefined, PREFETCH_MESSAGES_PER_CHAT);
+        await cacheMessages(c.conversation_id, page);
+      } catch {
+        // si falla el prefetch de un chat puntual no importa, chat.ts igual carga desde la red al abrirlo
+      }
+    })
+  );
+}
+
 conversations = await listConversations();
 renderRequests();
 renderList();
+void prefetchRecentThreads();
