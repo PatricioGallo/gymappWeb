@@ -806,6 +806,15 @@ recordCancelBtn.addEventListener("click", () => {
   updateSendState();
 });
 
+// Sin esto, tocar "enviar" con el teclado abierto le saca el foco al textarea
+// antes de que el click llegue a dispararse: el teclado se cierra, el layout se
+// corre (vuelve el padding grande de .chat-thread-container) y el dedo ya no
+// queda sobre el boton, asi que hace falta un segundo toque para que registre.
+// Evitando el foco por defecto en touchstart/mousedown el teclado se queda
+// abierto y el primer toque ya alcanza para enviar.
+sendBtn.addEventListener("mousedown", (e) => e.preventDefault());
+sendBtn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+
 sendBtn.addEventListener("click", () => {
   if (!sendBtn.disabled) void handleSend();
 });
