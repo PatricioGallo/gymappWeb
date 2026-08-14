@@ -45,26 +45,34 @@ export function authorLineHtml(author: PostAuthor, badgeSize = 14): string {
   return `${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, badgeSize)}`;
 }
 
-const URL_MATCH_RE = /https?:\/\/[^\s]+/gi;
+// URL o @usuario (mismo charset que valida el username al registrarse, ver USERNAME_RE en auth.service.ts).
+const URL_OR_MENTION_RE = /(https?:\/\/[^\s]+)|@([a-z0-9_]{3,30})/gi;
 const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]}'"]+$/;
 
 // El preview de abajo (linkPreviewHtml/youtubeEmbedHtml) es solo un adelanto: el
 // texto del Rep puede traer la URL tal cual la pegó el usuario, y esa tiene que
 // seguir siendo un link de verdad al que se le pueda hacer click y te lleve ahi.
+// De paso, un @usuario etiquetado se convierte en link a su perfil (no valida que exista:
+// mismo criterio "best effort" que ya usa la URL de arriba).
 function linkifyHtml(text: string): string {
   let html = "";
   let lastIndex = 0;
-  for (const match of text.matchAll(URL_MATCH_RE)) {
+  for (const match of text.matchAll(URL_OR_MENTION_RE)) {
     const start = match.index ?? 0;
-    let url = match[0];
-    const trailingMatch = url.match(URL_TRAILING_PUNCT_RE);
-    const trailing = trailingMatch ? trailingMatch[0] : "";
-    if (trailing) url = url.slice(0, -trailing.length);
-
     html += escapeHtml(text.slice(lastIndex, start)).replace(/\n/g, "<br>");
-    html += `<a class="post-card-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
-    html += escapeHtml(trailing);
-    lastIndex = start + match[0].length;
+
+    const [full, urlMatch, mentionMatch] = match;
+    if (urlMatch) {
+      let url = urlMatch;
+      const trailingMatch = url.match(URL_TRAILING_PUNCT_RE);
+      const trailing = trailingMatch ? trailingMatch[0] : "";
+      if (trailing) url = url.slice(0, -trailing.length);
+      html += `<a class="post-card-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+      html += escapeHtml(trailing);
+    } else {
+      html += `<a class="post-card-mention" href="profile.html?u=${encodeURIComponent(mentionMatch)}">@${escapeHtml(mentionMatch)}</a>`;
+    }
+    lastIndex = start + full.length;
   }
   html += escapeHtml(text.slice(lastIndex)).replace(/\n/g, "<br>");
   return html;

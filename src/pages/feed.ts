@@ -23,6 +23,8 @@ import { getSuggestedProfiles, type SuggestedProfile } from "../services/search.
 import { followUser } from "../services/follow.service";
 import { resultAvatar, resultFullName } from "../lib/search";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
+import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
+import { makeMentionEditable } from "../lib/mentionEditor";
 
 setupNavToggle();
 setupRevealObserver();
@@ -193,6 +195,7 @@ composerInput.addEventListener("input", () => {
   updateYoutubePreview();
 });
 updateComposerState();
+attachMentionAutocomplete(makeMentionEditable(composerInput));
 
 composerForm.addEventListener("submit", (e) => {
   e.preventDefault();

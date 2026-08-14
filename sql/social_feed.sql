@@ -304,7 +304,7 @@ alter table public.notifications add constraint notifications_type_check
     'follow'::text, 'follow_request'::text, 'follow_accepted'::text, 'follow_rejected'::text,
     'verification_approved'::text, 'verification_rejected'::text,
     'subscription_request'::text, 'subscription_accepted'::text, 'subscription_rejected'::text,
-    'like'::text, 'comment'::text, 'repost'::text, 'quote'::text
+    'like'::text, 'comment'::text, 'repost'::text, 'quote'::text, 'mention'::text
   ]));
 
 alter table public.profiles
@@ -468,6 +468,71 @@ $$;
 create trigger posts_notify_quote
 after insert on public.posts
 for each row execute function public.notify_post_quote();
+
+-- ---------------------------------------------------------------------------
+-- 5b. Etiquetar usuarios con @usuario en un Rep (post.service.ts parsea el texto
+-- y resuelve los @usuario contra profiles_public; el trigger de abajo notifica).
+-- ---------------------------------------------------------------------------
+
+create table public.post_mentions (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  mentioned_user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (post_id, mentioned_user_id)
+);
+
+create index post_mentions_user_idx on public.post_mentions(mentioned_user_id);
+
+alter table public.post_mentions enable row level security;
+
+create policy post_mentions_select on public.post_mentions
+  for select using (
+    exists (select 1 from public.posts p where p.id = post_mentions.post_id and public.is_profile_public(p.author_id))
+  );
+
+create policy post_mentions_insert on public.post_mentions
+  for insert with check (
+    exists (select 1 from public.posts p where p.id = post_id and p.author_id = auth.uid())
+  );
+
+create or replace function public.notify_post_mention()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_author_id uuid;
+  v_author_username text;
+  v_notify boolean;
+begin
+  select author_id into v_author_id from public.posts where id = new.post_id;
+  if v_author_id is null or v_author_id = new.mentioned_user_id then
+    return new;
+  end if;
+
+  select coalesce((notification_prefs->>'mentions')::boolean, true) into v_notify
+    from public.profiles where id = new.mentioned_user_id;
+  if not coalesce(v_notify, true) then
+    return new;
+  end if;
+
+  select username into v_author_username from public.profiles where id = v_author_id;
+
+  insert into public.notifications (user_id, type, title, body, link, actor_id)
+  values (
+    new.mentioned_user_id, 'mention', 'Te etiquetaron',
+    coalesce(v_author_username, 'Alguien') || ' te etiquetó en un Rep',
+    'post.html?id=' || new.post_id, v_author_id
+  );
+  return new;
+end;
+$$;
+
+create trigger post_mentions_notify
+after insert on public.post_mentions
+for each row execute function public.notify_post_mention();
 
 -- ---------------------------------------------------------------------------
 -- 6. Storage: bucket publico para media de Reps (imagen o video)
