@@ -609,7 +609,10 @@ function withUploadTimeout<T>(promise: Promise<T>, fileSize: number): Promise<T>
   });
 }
 
-export async function uploadPostMedia(authorId: string, file: File): Promise<{ url?: string; mediaType?: "image" | "video"; error?: string }> {
+export async function uploadPostMedia(
+  authorId: string,
+  file: File
+): Promise<{ url?: string; path?: string; mediaType?: "image" | "video"; error?: string }> {
   const isImage = POST_IMAGE_TYPES.includes(file.type);
   const isVideo = POST_VIDEO_TYPES.includes(file.type);
   if (!isImage && !isVideo) return { error: "Formato no soportado. Usá JPG, PNG, WEBP, MP4, MOV, WEBM, 3GP, AVI, MKV, MPEG u OGG." };
@@ -626,7 +629,14 @@ export async function uploadPostMedia(authorId: string, file: File): Promise<{ u
   }
 
   const { data } = supabase.storage.from("post-media").getPublicUrl(path);
-  return { url: data.publicUrl, mediaType: isVideo ? "video" : "image" };
+  return { url: data.publicUrl, path, mediaType: isVideo ? "video" : "image" };
+}
+
+// El composer sube el archivo apenas se elige (no espera a Publicar, ver feed.ts).
+// Si el usuario saca el adjunto o publica sin el, este archivo ya subido queda
+// huerfano en el bucket -- se llama a esto para borrarlo y no dejar basura.
+export async function deletePostMedia(path: string): Promise<void> {
+  await supabase.storage.from("post-media").remove([path]);
 }
 
 function readVideoDurationSeconds(file: File): Promise<number> {

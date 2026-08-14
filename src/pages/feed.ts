@@ -10,6 +10,7 @@ import {
   validatePostContent,
   validatePostVideoDuration,
   uploadPostMedia,
+  deletePostMedia,
   extractFirstUrl,
   extractYouTubeVideoId,
   recordPostView,
@@ -51,19 +52,40 @@ const uploadingOverlay = document.getElementById("postComposerUploadingOverlay")
 
 let posts: FeedPost[] = [];
 
-type PendingMedia = { file: File; previewUrl: string; kind: "image" | "video" };
+type PendingMedia = {
+  file: File;
+  previewUrl: string;
+  kind: "image" | "video";
+  status: "uploading" | "ready" | "error";
+  uploadedUrl?: string;
+  uploadedPath?: string;
+  uploadedType?: "image" | "video";
+};
 let pendingMedia: PendingMedia | null = null;
+// Se incrementa cada vez que se descarta el adjunto actual (remove, nuevo archivo
+// elegido, o al publicar). La subida en curso lo chequea al terminar para no pisar
+// un pendingMedia que ya no es el suyo (el usuario cambio o saco el archivo mientras subia).
+let mediaUploadToken = 0;
 
 // keepBlobUrl=true cuando el blob local se reutiliza para el Rep recien publicado
 // (ver handlePublish): no lo revocamos aca, se revoca solo despues con un delay.
-function clearPendingMedia(keepBlobUrl = false): void {
+// keepUploadedFile=true cuando el archivo ya subido se va a usar igual (post recien
+// publicado): en cualquier otro caso (sacar el adjunto, cambiarlo) hay que borrarlo
+// del bucket para no dejarlo huerfano, porque la subida ocurre apenas se elige el
+// archivo y no recien al publicar (ver handleMediaSelected).
+function clearPendingMedia(keepBlobUrl = false, keepUploadedFile = false): void {
+  mediaUploadToken++;
   if (pendingMedia && !keepBlobUrl) URL.revokeObjectURL(pendingMedia.previewUrl);
+  if (pendingMedia?.status === "ready" && pendingMedia.uploadedPath && !keepUploadedFile) {
+    void deletePostMedia(pendingMedia.uploadedPath);
+  }
   pendingMedia = null;
   previewWrap.hidden = true;
   previewImg.hidden = true;
   previewVideo.hidden = true;
   previewImg.src = "";
   previewVideo.src = "";
+  uploadingOverlay.hidden = true;
   updateComposerState();
   updateYoutubePreview();
 }
@@ -92,6 +114,7 @@ function showMediaPreview(): void {
   previewVideo.hidden = pendingMedia.kind !== "video";
   if (pendingMedia.kind === "image") previewImg.src = pendingMedia.previewUrl;
   else previewVideo.src = pendingMedia.previewUrl;
+  uploadingOverlay.hidden = pendingMedia.status !== "uploading";
   updateComposerState();
   updateYoutubePreview();
 }
@@ -100,6 +123,9 @@ mediaInput.addEventListener("change", () => {
   void handleMediaSelected();
 });
 
+// Sube el archivo a Supabase Storage apenas se elige, no cuando se publica: asi
+// el spinner de "Subiendo..." refleja la subida real y el usuario puede ver el
+// archivo ya confirmado antes de tocar Publicar (ver post-composer-preview-uploading).
 async function handleMediaSelected(): Promise<void> {
   const file = mediaInput.files?.[0];
   mediaInput.value = "";
@@ -113,8 +139,30 @@ async function handleMediaSelected(): Promise<void> {
   }
 
   clearPendingMedia();
-  pendingMedia = { file, previewUrl: URL.createObjectURL(file), kind: file.type.startsWith("video") ? "video" : "image" };
+  const token = ++mediaUploadToken;
+  const kind: "image" | "video" = file.type.startsWith("video") ? "video" : "image";
+  pendingMedia = { file, previewUrl: URL.createObjectURL(file), kind, status: "uploading" };
   showMediaPreview();
+
+  const { url, path, mediaType, error } = await uploadPostMedia(userId, file);
+  if (token !== mediaUploadToken || !pendingMedia) {
+    // Se saco o cambio el adjunto mientras subia: si igual se termino de subir, no
+    // quedo referenciado por nada, hay que borrarlo para no dejarlo huerfano.
+    if (path) void deletePostMedia(path);
+    return;
+  }
+
+  if (error || !url) {
+    pendingMedia.status = "error";
+    composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
+  } else {
+    pendingMedia.status = "ready";
+    pendingMedia.uploadedUrl = url;
+    pendingMedia.uploadedPath = path;
+    pendingMedia.uploadedType = mediaType;
+  }
+  uploadingOverlay.hidden = true;
+  updateComposerState();
 }
 
 removeMediaBtn.addEventListener("click", () => clearPendingMedia());
@@ -123,7 +171,8 @@ function updateComposerState(): void {
   const len = composerInput.value.length;
   composerCounter.textContent = String(POST_MAX - len);
   composerCounter.classList.toggle("post-composer-counter-over", len > POST_MAX);
-  composerSubmit.disabled = (len === 0 && !pendingMedia) || len > POST_MAX;
+  const mediaBlocking = pendingMedia?.status === "uploading" || pendingMedia?.status === "error";
+  composerSubmit.disabled = (len === 0 && !pendingMedia) || len > POST_MAX || mediaBlocking;
 }
 composerInput.addEventListener("input", () => {
   updateComposerState();
@@ -141,7 +190,6 @@ function setPublishing(publishing: boolean): void {
   composerSubmit.innerHTML = publishing ? `<span class="btn-spinner"></span> Publicando...` : "Publicar";
   removeMediaBtn.disabled = publishing;
   mediaInput.disabled = publishing;
-  if (pendingMedia) uploadingOverlay.hidden = !publishing;
 }
 
 async function handlePublish(): Promise<void> {
@@ -152,30 +200,23 @@ async function handlePublish(): Promise<void> {
     composerAlert.innerHTML = `<p>${escapeHtml(validationError)}</p>`;
     return;
   }
+  // El submit ya deberia estar disabled mientras sube o si fallo (ver
+  // updateComposerState), esto es solo un resguardo.
+  if (pendingMedia && pendingMedia.status !== "ready") return;
 
   setPublishing(true);
-  // Se guarda antes de subir: si el post sale bien, esto se reusa para mostrar
+  // Se guarda antes de publicar: si el post sale bien, esto se reusa para mostrar
   // el Rep recien publicado al toque (ver mas abajo) en vez del media_url
   // remoto, que recien subido tarda en volver a bajar de la red.
   const localPreviewUrl = pendingMedia?.previewUrl;
   const localPreviewKind = pendingMedia?.kind;
+  const mediaUrl = pendingMedia?.uploadedUrl;
+  const mediaType = pendingMedia?.uploadedType;
 
   // try/finally: si algo de aca adentro tira una excepcion no prevista (red,
   // render, lo que sea), el composer no puede quedar pegado en "Publicando..."
   // para siempre -- setPublishing(false) tiene que correr siempre.
   try {
-    let mediaUrl: string | undefined;
-    let mediaType: "image" | "video" | undefined;
-    if (pendingMedia) {
-      const { url, mediaType: type, error } = await uploadPostMedia(userId, pendingMedia.file);
-      if (error || !url) {
-        composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
-        return;
-      }
-      mediaUrl = url;
-      mediaType = type;
-    }
-
     const { post, error } = await createPost(userId, content, mediaUrl, mediaType);
     if (error || !post) {
       composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo publicar el Rep.")}</p>`;
@@ -193,7 +234,9 @@ async function handlePublish(): Promise<void> {
     }
 
     composerInput.value = "";
-    clearPendingMedia(!!localPreviewUrl);
+    // keepUploadedFile=true: el archivo ya subido es el que acaba de quedar
+    // referenciado por el Rep recien publicado, no hay que borrarlo del bucket.
+    clearPendingMedia(!!localPreviewUrl, true);
   } catch (err) {
     console.error("[feed] error publicando Rep:", err);
     composerAlert.innerHTML = `<p>No se pudo publicar el Rep. Probá de nuevo.</p>`;
