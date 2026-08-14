@@ -24,6 +24,7 @@ import { followUser } from "../services/follow.service";
 import { resultAvatar, resultFullName } from "../lib/search";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
+import { getCachedFeed, cacheFeed } from "../lib/feedDb";
 import { makeMentionEditable } from "../lib/mentionEditor";
 
 setupNavToggle();
@@ -408,6 +409,11 @@ function prependFeedPosts(newPosts: FeedPost[]): void {
 let feedOffset = 0;
 let isLoadingMore = false;
 let feedExhausted = false;
+// Antes de esto no hay nada real cargado todavia (puede haber solo el pintado optimista del
+// cache, ver mas abajo): sin esta traba, un scroll rapido apenas entra a la pagina podria
+// disparar el sentinel y pedir loadMore() con feedOffset todavia en 0, en paralelo con la carga
+// inicial real.
+let initialLoadDone = false;
 
 // Un seed fijo por carga de pagina (no por request): se lo mandamos a CADA
 // llamada de getPersonalizedFeed (la inicial y todos los loadMore) para que el
@@ -419,7 +425,7 @@ const feedSeed = crypto.randomUUID();
 const shownPostIds = new Set<string>();
 
 async function loadMore(): Promise<void> {
-  if (isLoadingMore || feedExhausted) return;
+  if (isLoadingMore || feedExhausted || !initialLoadDone) return;
   isLoadingMore = true;
   sentinelSpinner.hidden = false;
   const older = await getPersonalizedFeed(feedOffset, FEED_PAGE_SIZE, feedSeed);
@@ -560,14 +566,24 @@ function onPullEnd(): void {
 document.addEventListener("touchend", onPullEnd);
 document.addEventListener("touchcancel", onPullEnd);
 
+// Pintado optimista: lo que se vio la ultima vez en este dispositivo, mientras se espera la
+// respuesta real de la red (que abajo pisa todo igual, nunca se confia solo en el cache).
+const cachedPosts = await getCachedFeed(userId);
+if (cachedPosts.length > 0) {
+  posts = cachedPosts;
+  renderFeed();
+}
+
 posts = await getPersonalizedFeed(0, FEED_PAGE_SIZE, feedSeed);
 posts.forEach((p) => shownPostIds.add(p.id));
 feedOffset = posts.length;
 renderFeed();
+initialLoadDone = true;
 if (posts.length < FEED_PAGE_SIZE) {
   feedExhausted = true;
   feedObserver.disconnect();
 }
+void cacheFeed(userId, posts);
 
 // ---------------------------------------------------------------------------
 // Sidebar derecha: "a quién seguir" (solo desktop, ver .feed-side-right en CSS)

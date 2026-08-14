@@ -21,6 +21,7 @@ import {
   type RoutineWithCounts,
   type WeightLogEntry,
 } from "../services/profile.service";
+import { getCachedProfileById, getCachedProfileByUsername, cacheProfile } from "../lib/profileDb";
 import { setRoutinePublic } from "../services/routine.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
@@ -232,8 +233,11 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   const roleEl = document.getElementById("profileRole");
   if (roleEl) {
     const label = getUserTypeLabel(userType, isVerified);
+    // hidden en vez de remove(): esto puede pintarse dos veces en la misma carga (primero desde
+    // el cache local, ver paintCachedProfile, despues con el dato real de la red) -- si sacamos
+    // el nodo del DOM la primera vez, la segunda pasada ya no tiene donde escribir el label real.
+    roleEl.hidden = !label;
     if (label) roleEl.textContent = label;
-    else roleEl.remove();
   }
 }
 
@@ -264,10 +268,14 @@ async function renderProfileStats(userId: string, username: string, canViewLists
 function renderProfileBio(bio: string | null) {
   const bioEl = document.getElementById("profileBio");
   if (!bioEl) return;
-  if (!bio) {
-    bioEl.remove();
-    return;
-  }
+  // Por si esto ya se pinto una vez en esta carga (cache local primero, dato real de la red
+  // despues, ver paintCachedProfile): sacamos el toggle viejo para no duplicarlo, y no usamos
+  // remove() sobre bioEl -- si el cache no tenia bio pero el dato real si, necesitamos que el
+  // nodo siga ahi para la segunda pasada.
+  document.querySelector(".profile-bio-toggle")?.remove();
+  bioEl.classList.remove("profile-bio-expanded");
+  bioEl.hidden = !bio;
+  if (!bio) return;
   bioEl.textContent = bio;
 
   // El clamp a 3 renglones viene puesto en el HTML (profile-bio-clamped); acá solo
@@ -290,10 +298,11 @@ function renderProfileBio(bio: string | null) {
 function renderProfileLinks(links: ProfileLink[]) {
   const linksEl = document.getElementById("profileLinks");
   if (!linksEl) return;
-  if (links.length === 0) {
-    linksEl.remove();
-    return;
-  }
+  // hidden en vez de remove(): puede pintarse dos veces en la misma carga (cache local primero,
+  // dato real despues, ver paintCachedProfile) -- si el cache no tenia links pero el dato real
+  // si, el nodo tiene que seguir ahi para la segunda pasada.
+  linksEl.hidden = links.length === 0;
+  if (links.length === 0) return;
   linksEl.innerHTML = links
     .map((l) => {
       const platform = getPlatform(l.platform);
@@ -1671,7 +1680,22 @@ function openReactivateModal(routineId: string) {
 
 // ---------- Armado de la pagina ----------
 
+/** Pinta foto/nombre/bio/links al toque desde lo que se tenga cacheado de una visita anterior a
+ * este mismo perfil (ver profileDb.ts), mientras se espera la respuesta real de la red -- misma
+ * idea que ya usa chat.ts con los mensajes. Los mismos render*() de siempre se vuelven a llamar
+ * mas abajo con el dato real apenas llega, así que esto es puramente un adelanto optimista. */
+function paintCachedProfile(cached: ProfileBasic): void {
+  renderProfileIdentity(cached.username ?? "", cached.nombre ?? "Este usuario", cached.apellido ?? "", cached.user_type ?? "usuario", cached.is_verified ?? false);
+  const avatarImg = document.getElementById("avatarImg") as HTMLImageElement | null;
+  if (avatarImg && cached.avatar_url) avatarImg.src = cached.avatar_url;
+  renderProfileBio(cached.bio ?? null);
+  renderProfileLinks(parseProfileLinks(cached.links ?? []));
+}
+
 async function main() {
+  const cachedProfile = usernameParam ? await getCachedProfileByUsername(usernameParam) : myId ? await getCachedProfileById(myId) : null;
+  if (cachedProfile) paintCachedProfile(cachedProfile);
+
   // getProfile trae la fila completa (incluye mail): solo la ven el dueño, un
   // admin o un entrenador con rutinas asignadas al usuario, via RLS. Si no hay
   // acceso completo, caemos a la vista publica (sin mail) para el resto de casos.
@@ -1693,6 +1717,23 @@ async function main() {
     document.getElementById("profileTop")?.remove();
     return;
   }
+
+  // Solo los campos "publicos" (nunca el mail ni otra cosa privada que pueda traer la fila
+  // completa que ve el dueño) -- para la proxima visita a este perfil, ver paintCachedProfile.
+  void cacheProfile({
+    id: displayProfile.id,
+    username: displayProfile.username,
+    nombre: displayProfile.nombre,
+    apellido: displayProfile.apellido,
+    avatar_url: displayProfile.avatar_url,
+    bio: displayProfile.bio,
+    links: displayProfile.links,
+    nacionalidad: displayProfile.nacionalidad,
+    fecha_nacimiento: displayProfile.fecha_nacimiento,
+    is_public: displayProfile.is_public,
+    is_verified: displayProfile.is_verified,
+    user_type: displayProfile.user_type,
+  });
 
   const isOwner = displayProfile.id === myId;
   const nombre = displayProfile.nombre ?? "Este usuario";
