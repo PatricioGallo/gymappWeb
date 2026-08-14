@@ -62,7 +62,6 @@ const bannerDeclineBtn = document.getElementById("chatBannerDecline") as HTMLBut
 const pendingNote = document.getElementById("chatPendingNote") as HTMLParagraphElement;
 const messagesEl = document.getElementById("chatMessages") as HTMLDivElement;
 const scrollBottomBtn = document.getElementById("chatScrollBottomBtn") as HTMLButtonElement;
-const composerForm = document.getElementById("chatComposer") as HTMLFormElement;
 const composerInput = document.getElementById("chatComposerInput") as HTMLTextAreaElement;
 const imageInput = document.getElementById("chatImageInput") as HTMLInputElement;
 const micBtn = document.getElementById("chatMicBtn") as HTMLButtonElement;
@@ -714,21 +713,14 @@ composerInput.addEventListener("input", () => {
   updateSendState();
 });
 
-// En mobile, cuando aparece el teclado el visualViewport se achica pero el
-// layout (100dvh) no siempre lo hace, asi que el padding extra de abajo del
-// composer le come espacio de pantalla al teclado. Lo detectamos comparando
-// el alto del visualViewport contra el de window y achicamos ese padding
-// mientras el teclado esta abierto (clase sacada al perder foco).
-const viewport = window.visualViewport;
-if (viewport) {
-  const KEYBOARD_THRESHOLD_PX = 150;
-  const onViewportResize = (): void => {
-    const keyboardOpen = window.innerHeight - viewport.height > KEYBOARD_THRESHOLD_PX;
-    document.body.classList.toggle("keyboard-open", keyboardOpen);
-  };
-  viewport.addEventListener("resize", onViewportResize);
-  composerInput.addEventListener("blur", () => document.body.classList.remove("keyboard-open"));
-}
+// En mobile, cuando aparece el teclado el layout (100dvh) no siempre se achica,
+// asi que el padding extra de abajo del composer le come espacio de pantalla
+// al teclado. Lo reducimos apenas se enfoca el textarea (y lo restauramos al
+// perder el foco) -- enganchado a focus/blur en vez de a un resize del
+// visualViewport porque ese evento compite con la animacion nativa del
+// teclado y en iOS provoca parpadeos (el teclado a veces ni llega a abrirse).
+composerInput.addEventListener("focus", () => document.body.classList.add("keyboard-open"));
+composerInput.addEventListener("blur", () => document.body.classList.remove("keyboard-open"));
 
 // Enter envía el mensaje; Shift+Enter agrega un salto de línea.
 composerInput.addEventListener("keydown", (e) => {
@@ -797,9 +789,8 @@ recordCancelBtn.addEventListener("click", () => {
   updateSendState();
 });
 
-composerForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  void handleSend();
+sendBtn.addEventListener("click", () => {
+  if (!sendBtn.disabled) void handleSend();
 });
 
 async function handleSend(): Promise<void> {
