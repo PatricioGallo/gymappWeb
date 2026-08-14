@@ -810,10 +810,22 @@ recordCancelBtn.addEventListener("click", () => {
 // antes de que el click llegue a dispararse: el teclado se cierra, el layout se
 // corre (vuelve el padding grande de .chat-thread-container) y el dedo ya no
 // queda sobre el boton, asi que hace falta un segundo toque para que registre.
-// Evitando el foco por defecto en touchstart/mousedown el teclado se queda
-// abierto y el primer toque ya alcanza para enviar.
+// mousedown.preventDefault() alcanza para mouse (evita el foco sin afectar al
+// click de despues), pero en touch NO: cancelar touchstart tambien suprime el
+// click sintetico que el navegador dispara despues (asi evita duplicar eventos
+// mouse+touch), asi que ahi mandamos el mensaje directo desde el touchstart en
+// vez de esperar un click que la mayoria de las veces no iba a llegar. handleSend
+// ya se protege solo contra doble ejecucion (ver "sending" mas arriba) por si
+// algun navegador igual llega a disparar el click.
 sendBtn.addEventListener("mousedown", (e) => e.preventDefault());
-sendBtn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+sendBtn.addEventListener(
+  "touchstart",
+  (e) => {
+    e.preventDefault();
+    if (!sendBtn.disabled) void handleSend();
+  },
+  { passive: false }
+);
 
 sendBtn.addEventListener("click", () => {
   if (!sendBtn.disabled) void handleSend();
