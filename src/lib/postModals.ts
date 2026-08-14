@@ -16,6 +16,8 @@ import {
 import { getOrCreateConversation, sendMessage } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
 import { actionsHtml, authorLineHtml, contentHtml, type PostCardHandlers } from "./postCard";
+import { attachMentionAutocomplete } from "./mentionAutocomplete";
+import { makeMentionEditable } from "./mentionEditor";
 
 const QUOTE_MAX = 240;
 const COMMENT_MODAL_MAX = 240;
@@ -277,7 +279,7 @@ export function openQuoteModal(post: FeedPost, authorId: string, onCreated: (cre
         <h2>Citar Rep</h2>
         <p class="subtitle">@${escapeHtml(post.author.username)}: ${escapeHtml(preview)}</p>
         <div class="field">
-          <textarea id="quoteComposerInput" rows="3" maxlength="${QUOTE_MAX}" placeholder="Agregá un comentario..."></textarea>
+          <textarea id="quoteComposerInput" class="quote-composer-input" rows="3" maxlength="${QUOTE_MAX}" placeholder="Agregá un comentario..."></textarea>
         </div>
         <p class="post-composer-counter" id="quoteComposerCounter">${QUOTE_MAX}</p>
         <div class="alert_message" id="quoteAlert"></div>
@@ -300,6 +302,7 @@ export function openQuoteModal(post: FeedPost, authorId: string, onCreated: (cre
   }
   input.addEventListener("input", updateCounter);
   updateCounter();
+  attachMentionAutocomplete(makeMentionEditable(input));
 
   document.getElementById("quoteCancel")?.addEventListener("click", closeOverlay);
 

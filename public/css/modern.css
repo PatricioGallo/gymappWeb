@@ -600,6 +600,65 @@ button:focus-visible {
 .search-recent-item { cursor: pointer; }
 .search-recent-item .search-result-body { flex: 1; min-width: 0; }
 
+/* ---------- Sugerencias de @usuario al escribir en el composer de un Rep ---------- */
+.mention-suggest-panel {
+  position: fixed;
+  z-index: 1200;
+  max-width: calc(100vw - 24px);
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+}
+.mention-suggest-panel[hidden] { display: none; }
+.mention-suggest-panel .notif-empty { margin: 0; padding: 10px 8px; }
+.mention-suggest-item {
+  width: 100%;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mention-suggest-item.active,
+.mention-suggest-item:hover { background: var(--accent-soft); }
+
+/* ---------- Editor de un Rep/cita con menciones (div contenteditable, ver mentionEditor.ts) ---------- */
+.mention-editor {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  outline: none;
+  cursor: text;
+}
+.mention-editor-empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.8;
+  pointer-events: none;
+}
+/* El @usuario ya etiquetado: mismo trato que un link normal del texto (ver .post-card-link/.post-card-mention). */
+.mention-chip { color: var(--accent-2); font-weight: 600; text-decoration: none; }
+.mention-chip:hover { text-decoration: underline; }
+
+/* El textarea de citar un Rep no tenia clase propia (dependia del selector generico ".field
+   textarea"), que no matchea un <div>: repetimos ese mismo look aca explicitamente. */
+.quote-composer-input {
+  width: 100%;
+  min-height: 72px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 14.5px;
+  font-family: inherit;
+  line-height: 1.45;
+}
+.quote-composer-input:focus { border-color: var(--accent-2); }
+
 .search-suggestion-item { cursor: pointer; }
 .search-suggestion-item .follow-suggestion-btn { flex-shrink: 0; }
 
@@ -4943,6 +5002,8 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .post-card-link { color: var(--accent-2); text-decoration: none; }
 .post-card-link:hover { text-decoration: underline; }
+.post-card-mention { color: var(--accent-2); text-decoration: none; font-weight: 600; }
+.post-card-mention:hover { text-decoration: underline; }
 
 /* max-width/max-height + width/height:auto (en vez de width:100% + object-fit:cover):
    un video/foto vertical grabado en celular respeta su relacion de aspecto real y se

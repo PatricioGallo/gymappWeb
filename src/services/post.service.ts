@@ -45,6 +45,8 @@ const POST_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/3
 
 const URL_RE = /https?:\/\/[^\s]+/i;
 const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+// Mismo charset que valida el username al registrarse (ver USERNAME_RE en auth.service.ts).
+const MENTION_RE = /@([a-z0-9_]{3,30})/gi;
 
 /** Primera URL http(s) encontrada en el texto del Rep, o null si no hay ninguna. */
 export function extractFirstUrl(content: string): string | null {
@@ -52,6 +54,31 @@ export function extractFirstUrl(content: string): string | null {
   if (!match) return null;
   // Sacamos puntuacion de cierre pegada al final ("mirá esto: https://x.com." o "(https://x.com)").
   return match[0].replace(/[.,;:!?)\]}'"]+$/, "");
+}
+
+/** @usuarios unicos (en minuscula, sin el "@") mencionados en el texto de un Rep. No valida que existan. */
+function extractMentionedUsernames(content: string): string[] {
+  const usernames = [...content.matchAll(MENTION_RE)].map((m) => m[1].toLowerCase());
+  return [...new Set(usernames)];
+}
+
+/**
+ * Resuelve los @usuario del texto contra perfiles reales y crea una fila en post_mentions por
+ * cada uno (dispara la notificacion "te etiquetaron" via trigger SQL, ver notify_post_mention).
+ * Se llama sin esperar el resultado desde createPost/createQuote: si falla, el Rep ya se publico
+ * igual, etiquetar es un plus y no puede tumbar la publicacion.
+ */
+async function tagMentionedUsers(postId: string, authorId: string, content: string): Promise<void> {
+  const usernames = extractMentionedUsernames(content);
+  if (usernames.length === 0) return;
+
+  const { data: profiles } = await supabase.from("profiles_public").select("id, username").in("username", usernames);
+  const mentionedIds = (profiles ?? []).map((p) => p.id).filter((id): id is string => !!id && id !== authorId);
+  if (mentionedIds.length === 0) return;
+
+  await supabase
+    .from("post_mentions")
+    .insert(mentionedIds.map((mentionedUserId) => ({ post_id: postId, mentioned_user_id: mentionedUserId })));
 }
 
 /** Id del video si la URL es de YouTube (watch/youtu.be/embed/shorts), o null. No pega a la red: es solo un parseo. */
@@ -430,6 +457,7 @@ export async function createPost(
     .select("*")
     .single();
   if (error) return { error: friendlyError(error, "No se pudo publicar el Rep. Probá de nuevo.") };
+  if (trimmed) void tagMentionedUsers(data.id, authorId, trimmed);
   return { post: data };
 }
 
@@ -447,6 +475,7 @@ export async function createQuote(authorId: string, quotedPostId: string, conten
     if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
     return { error: friendlyError(error, "No se pudo citar el Rep. Probá de nuevo.") };
   }
+  if (trimmed) void tagMentionedUsers(data.id, authorId, trimmed);
   return { post: data };
 }
 

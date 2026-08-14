@@ -14,7 +14,8 @@ export type NotificationType =
   | "like"
   | "comment"
   | "repost"
-  | "quote";
+  | "quote"
+  | "mention";
 
 const RECENT_LIMIT = 8;
 const FULL_LIST_LIMIT = 200;
