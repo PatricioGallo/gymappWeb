@@ -4793,7 +4793,6 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   padding: 14px 16px;
   cursor: pointer;
 }
-.post-card:hover { border-color: var(--accent-2); }
 
 .post-card-reposted-by {
   display: flex;
