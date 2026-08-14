@@ -1,3 +1,4 @@
+import { supabase } from "./supabaseClient";
 import { escapeHtml } from "./dom";
 import { formatFechaCorta } from "./dias";
 import {
@@ -7,6 +8,9 @@ import {
   markAllNotificationsRead,
   type AppNotification,
 } from "../services/notification.service";
+
+/** Evento global disparado cuando llega (via realtime) una notificacion nueva, para que el toast in-app la muestre sin abrir una suscripcion propia. */
+export const NEW_NOTIFICATION_EVENT = "gs:new-notification";
 
 // Mismo breakpoint que .user-menu-toggle/.site-nav en modern.css (860px).
 const MOBILE_QUERY = "(max-width: 859px)";
@@ -37,7 +41,7 @@ function relativeTime(iso: string): string {
 }
 
 /** Campana de notificaciones del header. No-op en paginas sin el markup (ej. marketing). */
-export function setupNotificationBell(): void {
+export function setupNotificationBell(userId: string): void {
   const bellBtn = document.getElementById("notifBellBtn");
   const badge = document.getElementById("notifBadge");
   const dropdown = document.getElementById("notifDropdown");
@@ -164,4 +168,18 @@ export function setupNotificationBell(): void {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refreshUnreadCount();
   });
+
+  // El poll de arriba cubre el caso general, pero para que la campana (y el toast in-app)
+  // reaccionen al instante ante una notificacion nueva, escuchamos tambien el insert por realtime.
+  supabase
+    .channel(`notif-bell-${userId}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
+      const notif = payload.new as AppNotification;
+      recent = [notif, ...recent].slice(0, 8);
+      unread += 1;
+      renderBadge();
+      if (loaded) renderList();
+      window.dispatchEvent(new CustomEvent<AppNotification>(NEW_NOTIFICATION_EVENT, { detail: notif }));
+    })
+    .subscribe();
 }

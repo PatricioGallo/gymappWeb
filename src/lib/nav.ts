@@ -14,6 +14,7 @@ import { getPendingVerificationRequestCount } from "../services/verification.ser
 import { touchLastSeen } from "../services/profile.service";
 import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner } from "./pwaBanners";
 import { trackPresence } from "./presence";
+import { setupInAppNotificationToast } from "./inAppNotificationToast";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -88,8 +89,9 @@ async function populateUserMenuTrigger(): Promise<void> {
     void refreshSubscriptionRequestsBadge(userId);
   }
 
-  setupNotificationBell();
+  setupNotificationBell(userId);
   setupChatBadge(userId);
+  setupInAppNotificationToast();
   void applyZoomPreference(userId);
   void refreshFollowRequestsBadge(userId);
 }
