@@ -8,6 +8,7 @@ import {
   toggleLike,
   toggleRepost,
   validatePostContent,
+  validatePostVideoDuration,
   uploadPostMedia,
   extractFirstUrl,
   extractYouTubeVideoId,
@@ -96,13 +97,25 @@ function showMediaPreview(): void {
 }
 
 mediaInput.addEventListener("change", () => {
+  void handleMediaSelected();
+});
+
+async function handleMediaSelected(): Promise<void> {
   const file = mediaInput.files?.[0];
   mediaInput.value = "";
   if (!file) return;
+  composerAlert.innerHTML = "";
+
+  const durationError = await validatePostVideoDuration(file);
+  if (durationError) {
+    composerAlert.innerHTML = `<p>${escapeHtml(durationError)}</p>`;
+    return;
+  }
+
   clearPendingMedia();
   pendingMedia = { file, previewUrl: URL.createObjectURL(file), kind: file.type.startsWith("video") ? "video" : "image" };
   showMediaPreview();
-});
+}
 
 removeMediaBtn.addEventListener("click", () => clearPendingMedia());
 

@@ -473,17 +473,21 @@ for each row execute function public.notify_post_quote();
 -- 6. Storage: bucket publico para media de Reps (imagen o video)
 -- ---------------------------------------------------------------------------
 -- Mismo patron carpeta-por-usuario que avatars/exercise-images, extendido a
--- imagen+video y 50MB (ningun bucket existente mezclaba ambos formatos).
+-- imagen+video. Limite de 300MB pensado para videos de hasta 2 min (validados
+-- en el cliente, ver validatePostVideoDuration en post.service.ts) en buena
+-- calidad, para que el peso del archivo no termine siendo la traba.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'post-media',
   'post-media',
   true,
-  52428800,
-  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime', 'video/3gpp', 'video/x-msvideo', 'video/x-matroska']
+  314572800,
+  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime', 'video/3gpp', 'video/x-msvideo', 'video/x-matroska', 'video/mpeg', 'video/ogg']
 )
-on conflict (id) do nothing;
+on conflict (id) do update set
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create policy post_media_own_select on storage.objects
   for select using (
