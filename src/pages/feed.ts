@@ -34,6 +34,26 @@ const userId = await requireAuth();
 // Coincide con el limite por pagina que usa getPersonalizedFeed() por defecto en post.service.ts.
 const FEED_PAGE_SIZE = 20;
 const POST_MAX = 240;
+const DRAFT_KEY = "gs_rep_draft";
+
+// Guarda el texto del composer para no perderlo si el usuario navega a otra pagina de la web (esto
+// no es una SPA: salir de feed.html descarta todo el estado en memoria) y despues vuelve. Solo el
+// texto -- no la imagen/video adjunto, que no se puede guardar asi de simple en localStorage.
+function loadDraft(): string {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+function saveDraft(value: string): void {
+  try {
+    if (value) localStorage.setItem(DRAFT_KEY, value);
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // localStorage puede fallar (modo privado, cuota llena, etc.): el borrador simplemente no persiste.
+  }
+}
 
 const listEl = document.getElementById("postFeedList")!;
 const sentinel = document.getElementById("postFeedSentinel")!;
@@ -190,11 +210,14 @@ function updateComposerState(): void {
   const mediaBlocking = pendingMedia?.status === "uploading" || pendingMedia?.status === "error";
   composerSubmit.disabled = (len === 0 && !pendingMedia) || len > POST_MAX || mediaBlocking;
 }
+composerInput.value = loadDraft();
 composerInput.addEventListener("input", () => {
   updateComposerState();
   updateYoutubePreview();
+  saveDraft(composerInput.value);
 });
 updateComposerState();
+updateYoutubePreview();
 attachMentionAutocomplete(makeMentionEditable(composerInput));
 
 composerForm.addEventListener("submit", (e) => {
@@ -251,6 +274,7 @@ async function handlePublish(): Promise<void> {
     }
 
     composerInput.value = "";
+    saveDraft("");
     // keepUploadedFile=true: el archivo ya subido es el que acaba de quedar
     // referenciado por el Rep recien publicado, no hay que borrarlo del bucket.
     clearPendingMedia(!!localPreviewUrl, true);
