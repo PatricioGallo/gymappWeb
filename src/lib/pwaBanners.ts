@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications } from "./pushNotifications";
+import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, ensureServiceWorkerRegistered } from "./pushNotifications";
 import { todayLocalISO } from "./dias";
 
 const INSTALL_SNOOZE_KEY = "gs_install_banner_snooze_until";
@@ -24,6 +24,11 @@ window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredInstallPrompt = e as typeof deferredInstallPrompt;
 });
+
+// El registro del SW tiene que pasar apenas carga la pagina, no recien cuando el
+// usuario activa push (ver ensureServiceWorkerRegistered): Chrome/Android no dispara
+// "beforeinstallprompt" de arriba sin un service worker ya registrado bajo el scope.
+ensureServiceWorkerRegistered();
 
 /** Guarda en el perfil si este dispositivo corre la web instalada como app (una vez por dia, para no pegarle a la base en cada pagina que visita). */
 export async function trackPwaInstallStatus(userId: string): Promise<void> {

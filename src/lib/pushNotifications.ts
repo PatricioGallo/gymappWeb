@@ -25,6 +25,19 @@ async function getRegistration(): Promise<ServiceWorkerRegistration> {
   return (await navigator.serviceWorker.getRegistration(SW_PATH)) ?? (await navigator.serviceWorker.register(SW_PATH));
 }
 
+/**
+ * Registra el service worker apenas carga la página, sin esperar a que el usuario
+ * active las notificaciones push. Antes solo se registraba dentro de
+ * enablePushNotifications, que a su vez solo se ofrece con la PWA ya instalada
+ * (ver setupPushReminderBanner) -- así nadie en una pestaña normal de Chrome/Android
+ * llegaba a tener un service worker registrado, y sin eso el navegador nunca considera
+ * el sitio instalable: "beforeinstallprompt" no se dispara y el botón "Instalar" del
+ * banner (ver pwaBanners.ts) se queda sin nada que hacer.
+ */
+export function ensureServiceWorkerRegistered(): void {
+  if (isPushSupported()) void navigator.serviceWorker.register(SW_PATH);
+}
+
 /** Suscripción activa en este navegador (si el usuario ya activó las push antes acá). */
 export async function getActivePushSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null;
