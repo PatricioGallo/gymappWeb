@@ -2441,6 +2441,8 @@ a.profile-stat:hover { color: var(--accent-2); }
   margin-top: 12px;
   max-width: 100%;
 }
+/* [hidden] pierde contra el display:flex de arriba sin esto (mismo motivo que .post-feed-list[hidden]). */
+.profile-links[hidden] { display: none; }
 
 .profile-link-item {
   display: inline-flex;
