@@ -119,6 +119,13 @@ function showMediaPreview(): void {
   updateYoutubePreview();
 }
 
+// Algunos WebViews moviles (Android/iOS, sobre todo dentro de la PWA instalada)
+// disparan el evento "change" del input de archivo dos veces para una sola
+// seleccion. Sin esta traba, cada disparo arrancaba su propia subida en paralelo
+// -- de ahi el archivo subiendose dos veces y el spinner tardando una eternidad
+// (dos uploads pesados compitiendo por el mismo ancho de banda del celular).
+let handlingMediaSelection = false;
+
 mediaInput.addEventListener("change", () => {
   void handleMediaSelected();
 });
@@ -127,42 +134,49 @@ mediaInput.addEventListener("change", () => {
 // el spinner de "Subiendo..." refleja la subida real y el usuario puede ver el
 // archivo ya confirmado antes de tocar Publicar (ver post-composer-preview-uploading).
 async function handleMediaSelected(): Promise<void> {
+  if (handlingMediaSelection) return; // ya hay una seleccion/subida en curso, ignorar el disparo duplicado
   const file = mediaInput.files?.[0];
   mediaInput.value = "";
   if (!file) return;
-  composerAlert.innerHTML = "";
 
-  const durationError = await validatePostVideoDuration(file);
-  if (durationError) {
-    composerAlert.innerHTML = `<p>${escapeHtml(durationError)}</p>`;
-    return;
+  handlingMediaSelection = true;
+  try {
+    composerAlert.innerHTML = "";
+
+    const durationError = await validatePostVideoDuration(file);
+    if (durationError) {
+      composerAlert.innerHTML = `<p>${escapeHtml(durationError)}</p>`;
+      return;
+    }
+
+    clearPendingMedia();
+    const token = ++mediaUploadToken;
+    const kind: "image" | "video" = file.type.startsWith("video") ? "video" : "image";
+    pendingMedia = { file, previewUrl: URL.createObjectURL(file), kind, status: "uploading" };
+    showMediaPreview();
+
+    const { url, path, mediaType, error } = await uploadPostMedia(userId, file);
+    if (token !== mediaUploadToken || !pendingMedia) {
+      // Se saco o cambio el adjunto mientras subia: si igual se termino de subir, no
+      // quedo referenciado por nada, hay que borrarlo para no dejarlo huerfano.
+      if (path) void deletePostMedia(path);
+      return;
+    }
+
+    if (error || !url) {
+      pendingMedia.status = "error";
+      composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
+    } else {
+      pendingMedia.status = "ready";
+      pendingMedia.uploadedUrl = url;
+      pendingMedia.uploadedPath = path;
+      pendingMedia.uploadedType = mediaType;
+    }
+    uploadingOverlay.hidden = true;
+    updateComposerState();
+  } finally {
+    handlingMediaSelection = false;
   }
-
-  clearPendingMedia();
-  const token = ++mediaUploadToken;
-  const kind: "image" | "video" = file.type.startsWith("video") ? "video" : "image";
-  pendingMedia = { file, previewUrl: URL.createObjectURL(file), kind, status: "uploading" };
-  showMediaPreview();
-
-  const { url, path, mediaType, error } = await uploadPostMedia(userId, file);
-  if (token !== mediaUploadToken || !pendingMedia) {
-    // Se saco o cambio el adjunto mientras subia: si igual se termino de subir, no
-    // quedo referenciado por nada, hay que borrarlo para no dejarlo huerfano.
-    if (path) void deletePostMedia(path);
-    return;
-  }
-
-  if (error || !url) {
-    pendingMedia.status = "error";
-    composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
-  } else {
-    pendingMedia.status = "ready";
-    pendingMedia.uploadedUrl = url;
-    pendingMedia.uploadedPath = path;
-    pendingMedia.uploadedType = mediaType;
-  }
-  uploadingOverlay.hidden = true;
-  updateComposerState();
 }
 
 removeMediaBtn.addEventListener("click", () => clearPendingMedia());
