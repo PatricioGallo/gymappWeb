@@ -4213,9 +4213,14 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 /* Con el teclado del celular abierto ese padding extra de abajo pasa a
    comerle espacio de pantalla al chat -- lo reducimos casi a la altura del
-   teclado (clase agregada/sacada en focus/blur del textarea, ver chat.ts). */
-body.keyboard-open .chat-thread-container {
-  padding-bottom: 10px;
+   teclado (clase agregada/sacada en focus/blur del textarea, ver chat.ts).
+   Solo aplica en mobile: en desktop no hay teclado en pantalla que tape nada,
+   asi que sin este media query el foco corria el cuadro de texto para abajo
+   sin motivo. */
+@media (max-width: 859px) {
+  body.keyboard-open .chat-thread-container {
+    padding-bottom: 10px;
+  }
 }
 
 .chat-thread-header {

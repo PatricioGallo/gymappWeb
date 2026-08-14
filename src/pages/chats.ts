@@ -12,6 +12,7 @@ import {
   type ConversationSummary,
 } from "../services/chat.service";
 import { cacheMessages } from "../lib/chatDb";
+import { supabase } from "../lib/supabaseClient";
 
 setupNavToggle();
 setupRevealObserver();
@@ -309,3 +310,30 @@ conversations = await listConversations();
 renderRequests();
 renderList();
 void prefetchRecentThreads();
+
+// Sin esto la lista se queda con el ultimo mensaje viejo hasta recargar: en
+// desktop mandar un mensaje pasa en el iframe del panel derecho, un contexto
+// de JS aparte que nunca le avisa a esta pagina, y en mobile el boton/gesto
+// de volver a veces restaura esta pagina desde el bfcache del navegador (el
+// snapshot congelado de antes de entrar al chat) en vez de re-ejecutar este
+// script. send_message ya actualiza last_message_at/preview en "conversations"
+// (ver chat.sql) asi que alcanza con escuchar esa tabla y volver a pedir la
+// lista completa para que ambos casos queden resueltos.
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleConversationsRefresh(): void {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    conversations = await listConversations();
+    renderRequests();
+    renderList();
+  }, 150);
+}
+
+supabase
+  .channel("chats-list-conversations")
+  .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, scheduleConversationsRefresh)
+  .subscribe();
+
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) scheduleConversationsRefresh();
+});
