@@ -33,10 +33,15 @@ export interface FeedComment extends PostComment {
 const FEED_PAGE_SIZE = 20;
 const POST_CONTENT_MAX = 240;
 const COMMENT_CONTENT_MAX = 240;
-const POST_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+const POST_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+// 2 min de video en buena calidad (incluso 4K) entra comodo en 300MB, asi el
+// peso no termina siendo la traba para un clip que ya cumple el limite de duracion.
+const POST_VIDEO_MAX_BYTES = 300 * 1024 * 1024;
+const POST_VIDEO_MAX_DURATION_SEC = 120;
 const POST_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-// quicktime = .mov (formato nativo de iPhone), 3gpp = Android viejo, x-msvideo = .avi, x-matroska = .mkv.
-const POST_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/3gpp", "video/x-msvideo", "video/x-matroska"];
+// quicktime = .mov (formato nativo de iPhone), 3gpp = Android viejo, x-msvideo = .avi,
+// x-matroska = .mkv, mpeg/ogg = formatos legacy de descargas. Cubre la gran mayoria de clips.
+const POST_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/3gpp", "video/x-msvideo", "video/x-matroska", "video/mpeg", "video/ogg"];
 
 const URL_RE = /https?:\/\/[^\s]+/i;
 const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -585,17 +590,70 @@ export async function deleteComment(commentId: string): Promise<{ error?: string
   return {};
 }
 
+// Los videos pueden pesar varias decenas de MB: en una conexion movil lenta o
+// que se corta a mitad de subida, el fetch de supabase-js puede quedar colgado
+// sin nunca resolver ni rechazar, dejando el spinner de "Subiendo..." girando
+// para siempre. Este timeout (escalado por tamano de archivo) le pone un techo
+// para que el usuario siempre termine viendo un error accionable.
+const UPLOAD_TIMEOUT_MIN_MS = 30_000;
+const UPLOAD_TIMEOUT_BYTES_PER_SEC = 150 * 1024; // ~150KB/s, conexion movil lenta
+
+function withUploadTimeout<T>(promise: Promise<T>, fileSize: number): Promise<T> {
+  const timeoutMs = Math.max(UPLOAD_TIMEOUT_MIN_MS, Math.ceil((fileSize / UPLOAD_TIMEOUT_BYTES_PER_SEC) * 1000));
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("upload-timeout")), timeoutMs);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 export async function uploadPostMedia(authorId: string, file: File): Promise<{ url?: string; mediaType?: "image" | "video"; error?: string }> {
   const isImage = POST_IMAGE_TYPES.includes(file.type);
   const isVideo = POST_VIDEO_TYPES.includes(file.type);
-  if (!isImage && !isVideo) return { error: "Formato no soportado. Usá JPG, PNG, WEBP, MP4, MOV, WEBM, 3GP, AVI o MKV." };
-  if (file.size > POST_MEDIA_MAX_BYTES) return { error: "El archivo es muy pesado. Máximo 50MB." };
+  if (!isImage && !isVideo) return { error: "Formato no soportado. Usá JPG, PNG, WEBP, MP4, MOV, WEBM, 3GP, AVI, MKV, MPEG u OGG." };
+  if (isImage && file.size > POST_IMAGE_MAX_BYTES) return { error: "La imagen es muy pesada. Máximo 20MB." };
+  if (isVideo && file.size > POST_VIDEO_MAX_BYTES) return { error: "El video es muy pesado. Máximo 300MB." };
 
   const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
   const path = `${authorId}/${crypto.randomUUID()}.${ext}`;
-  const { error: uploadError } = await supabase.storage.from("post-media").upload(path, file);
-  if (uploadError) return { error: "No se pudo subir el archivo. Probá de nuevo." };
+  try {
+    const { error: uploadError } = await withUploadTimeout(supabase.storage.from("post-media").upload(path, file), file.size);
+    if (uploadError) return { error: "No se pudo subir el archivo. Probá de nuevo." };
+  } catch {
+    return { error: "La subida tardó demasiado. Revisá tu conexión y probá de nuevo." };
+  }
 
   const { data } = supabase.storage.from("post-media").getPublicUrl(path);
   return { url: data.publicUrl, mediaType: isVideo ? "video" : "image" };
+}
+
+function readVideoDurationSeconds(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo leer el video."));
+    };
+    video.src = url;
+  });
+}
+
+/** Rechaza videos de mas de 2 minutos antes de subirlos. Null = duracion valida (o no se pudo determinar, se deja pasar). */
+export async function validatePostVideoDuration(file: File): Promise<string | null> {
+  if (!POST_VIDEO_TYPES.includes(file.type)) return null;
+  try {
+    const duration = await readVideoDurationSeconds(file);
+    if (duration > POST_VIDEO_MAX_DURATION_SEC) return "El video no puede durar más de 2 minutos.";
+    return null;
+  } catch {
+    return null; // no se pudo leer metadata (formato raro/navegador viejo): no bloqueamos, el backend igual valida peso
+  }
 }
