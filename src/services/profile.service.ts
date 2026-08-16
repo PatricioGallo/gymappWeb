@@ -106,11 +106,13 @@ export async function updatePassword(password: string): Promise<{ error?: string
   return {};
 }
 
-const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+// Mismo limite que ya se usa para imagenes de Reps/chat (20MB) -- 2MB se quedaba corto para
+// fotos de camara modernas.
+const AVATAR_MAX_BYTES = 20 * 1024 * 1024;
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export async function uploadAvatar(userId: string, file: File): Promise<{ url?: string; error?: string }> {
-  if (file.size > AVATAR_MAX_BYTES) return { error: "La imagen es muy pesada. Elegí una de menos de 2MB." };
+  if (file.size > AVATAR_MAX_BYTES) return { error: "La imagen es muy pesada. Elegí una de menos de 20MB." };
   if (!AVATAR_ALLOWED_TYPES.includes(file.type)) return { error: "Formato no soportado. Usá JPG, PNG o WEBP." };
 
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
