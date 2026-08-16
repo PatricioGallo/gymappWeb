@@ -21,6 +21,7 @@ create table public.conversations (
   last_message_type text check (last_message_type in ('text', 'image', 'audio')),
   last_message_sender_id uuid references public.profiles(id),
   created_at timestamptz not null default now(),
+  pinned_message_id uuid,
   constraint conversations_distinct_users check (user1_id <> user2_id),
   constraint conversations_user_order check (user1_id < user2_id),
   constraint conversations_unique_pair unique (user1_id, user2_id)
@@ -39,11 +40,19 @@ create table public.messages (
   attachment_duration_seconds integer,
   created_at timestamptz not null default now(),
   read_at timestamptz,
-  constraint messages_has_content check (content is not null or attachment_path is not null)
+  shared_post_id uuid references public.posts(id) on delete set null,
+  reply_to_message_id uuid references public.messages(id) on delete set null,
+  is_forwarded boolean not null default false,
+  constraint messages_has_content check (content is not null or attachment_path is not null or shared_post_id is not null)
 );
 
 create index messages_conversation_created_idx on public.messages(conversation_id, created_at);
 create index messages_unread_idx on public.messages(conversation_id, sender_id) where read_at is null;
+create index messages_reply_to_idx on public.messages(reply_to_message_id) where reply_to_message_id is not null;
+
+-- pinned_message_id de conversations referencia messages, que recien se acaba de crear.
+alter table public.conversations
+  add constraint conversations_pinned_message_fkey foreign key (pinned_message_id) references public.messages(id) on delete set null;
 
 -- ---------------------------------------------------------------------------
 -- 2. Row Level Security
@@ -133,14 +142,18 @@ begin
 end;
 $$;
 
--- Inserta un mensaje (texto y/o adjunto), bumpea la conversacion y, si quien
--- responde es el destinatario de una solicitud pendiente, la auto-acepta.
+-- Inserta un mensaje (texto, adjunto y/o Rep compartido; opcionalmente respondiendo
+-- a otro o marcado como reenviado), bumpea la conversacion y, si quien responde es
+-- el destinatario de una solicitud pendiente, la auto-acepta.
 create or replace function public.send_message(
   p_conversation_id uuid,
   p_content text default null,
   p_attachment_path text default null,
   p_attachment_type text default null,
-  p_attachment_duration_seconds integer default null
+  p_attachment_duration_seconds integer default null,
+  p_shared_post_id uuid default null,
+  p_reply_to_message_id uuid default null,
+  p_is_forwarded boolean default false
 )
 returns public.messages
 language plpgsql
@@ -158,8 +171,13 @@ begin
   if v_me is null then
     raise exception 'No autenticado';
   end if;
-  if coalesce(trim(p_content), '') = '' and p_attachment_path is null then
+  if coalesce(trim(p_content), '') = '' and p_attachment_path is null and p_shared_post_id is null then
     raise exception 'El mensaje está vacío';
+  end if;
+  if p_shared_post_id is not null and not exists (
+    select 1 from public.posts p where p.id = p_shared_post_id and public.is_profile_public(p.author_id)
+  ) then
+    raise exception 'No podés compartir este Rep';
   end if;
 
   select * into v_conv from public.conversations where id = p_conversation_id for update;
@@ -170,19 +188,26 @@ begin
     raise exception 'No participás de esta conversación';
   end if;
 
+  if p_reply_to_message_id is not null and not exists (
+    select 1 from public.messages m where m.id = p_reply_to_message_id and m.conversation_id = p_conversation_id
+  ) then
+    raise exception 'El mensaje al que respondés no existe';
+  end if;
+
   v_other := case when v_conv.user1_id = v_me then v_conv.user2_id else v_conv.user1_id end;
   select get_block_status(v_other) into v_block_status;
   if v_block_status <> 'none' then
     raise exception 'No podés enviarle mensajes a este usuario';
   end if;
 
-  insert into public.messages (conversation_id, sender_id, content, attachment_path, attachment_type, attachment_duration_seconds)
-  values (p_conversation_id, v_me, nullif(trim(p_content), ''), p_attachment_path, p_attachment_type, p_attachment_duration_seconds)
+  insert into public.messages (conversation_id, sender_id, content, attachment_path, attachment_type, attachment_duration_seconds, shared_post_id, reply_to_message_id, is_forwarded)
+  values (p_conversation_id, v_me, nullif(trim(p_content), ''), p_attachment_path, p_attachment_type, p_attachment_duration_seconds, p_shared_post_id, p_reply_to_message_id, coalesce(p_is_forwarded, false))
   returning * into v_msg;
 
   v_preview := case
     when p_attachment_type = 'image' then '📷 Foto'
     when p_attachment_type = 'audio' then '🎤 Audio'
+    when p_shared_post_id is not null then '🔁 Rep compartido'
     else v_msg.content
   end;
 
@@ -195,6 +220,56 @@ begin
   where id = p_conversation_id;
 
   return v_msg;
+end;
+$$;
+
+-- Ancla/desancla un mensaje de la conversacion (uno solo a la vez, visible para ambos).
+create or replace function public.pin_message(p_conversation_id uuid, p_message_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_me uuid := auth.uid();
+begin
+  if v_me is null then
+    raise exception 'No autenticado';
+  end if;
+
+  update public.conversations
+  set pinned_message_id = p_message_id
+  where id = p_conversation_id
+    and (user1_id = v_me or user2_id = v_me)
+    and exists (select 1 from public.messages m where m.id = p_message_id and m.conversation_id = p_conversation_id);
+
+  if not found then
+    raise exception 'No se pudo anclar el mensaje';
+  end if;
+end;
+$$;
+
+create or replace function public.unpin_message(p_conversation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_me uuid := auth.uid();
+begin
+  if v_me is null then
+    raise exception 'No autenticado';
+  end if;
+
+  update public.conversations
+  set pinned_message_id = null
+  where id = p_conversation_id
+    and (user1_id = v_me or user2_id = v_me);
+
+  if not found then
+    raise exception 'No se pudo desanclar el mensaje';
+  end if;
 end;
 $$;
 
@@ -353,12 +428,14 @@ as $$
 $$;
 
 grant execute on function public.get_or_create_conversation(uuid) to authenticated;
-grant execute on function public.send_message(uuid, text, text, text, integer) to authenticated;
+grant execute on function public.send_message(uuid, text, text, text, integer, uuid, uuid, boolean) to authenticated;
 grant execute on function public.accept_message_request(uuid) to authenticated;
 grant execute on function public.decline_message_request(uuid) to authenticated;
 grant execute on function public.mark_conversation_read(uuid) to authenticated;
 grant execute on function public.list_conversations() to authenticated;
 grant execute on function public.get_unread_conversation_count() to authenticated;
+grant execute on function public.pin_message(uuid, uuid) to authenticated;
+grant execute on function public.unpin_message(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 4. Storage: bucket privado para fotos/audios del chat

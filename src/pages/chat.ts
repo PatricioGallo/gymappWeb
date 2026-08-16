@@ -15,10 +15,17 @@ import {
   uploadChatAudio,
   getChatAttachmentUrl,
   getConversationPeerMeta,
+  getOrCreateConversation,
+  pinMessage,
+  unpinMessage,
+  getConversationPinnedMessageId,
+  getMessageById,
+  copyChatAttachment,
   MESSAGES_PAGE_SIZE,
   AUDIO_MAX_SECONDS,
   type ChatMessage,
 } from "../services/chat.service";
+import { listFollowers, type FollowListRow } from "../services/follow.service";
 import { refreshChatBadge } from "../lib/chat";
 import { watchPeerOnline } from "../lib/presence";
 import { getCachedMessages, cacheMessages } from "../lib/chatDb";
@@ -89,6 +96,14 @@ const previewImg = document.getElementById("chatPreviewImg") as HTMLImageElement
 const previewAudioLabel = document.getElementById("chatPreviewAudioLabel") as HTMLSpanElement;
 const previewAudioDuration = document.getElementById("chatPreviewAudioDuration")!;
 const previewCancelBtn = document.getElementById("chatPreviewCancel") as HTMLButtonElement;
+const pinnedBanner = document.getElementById("chatPinnedBanner") as HTMLDivElement;
+const pinnedBannerText = document.getElementById("chatPinnedBannerText")!;
+const pinnedBannerMain = document.getElementById("chatPinnedBannerMain") as HTMLButtonElement;
+const pinnedBannerUnpin = document.getElementById("chatPinnedBannerUnpin") as HTMLButtonElement;
+const replyBar = document.getElementById("chatReplyBar") as HTMLDivElement;
+const replyBarName = document.getElementById("chatReplyBarName")!;
+const replyBarText = document.getElementById("chatReplyBarText")!;
+const replyBarCancelBtn = document.getElementById("chatReplyBarCancel") as HTMLButtonElement;
 
 let messages: ChatMessage[] = [];
 const renderedIds = new Set<string>();
@@ -105,6 +120,12 @@ let currentlyPlayingId: string | null = null;
 let isInitiator = false;
 let conversationStatus: "pending" | "accepted" = "pending";
 let readReceiptsEnabled = true;
+let pinnedMessageId: string | null = null;
+let replyTarget: ChatMessage | null = null;
+// Mensajes citados (respuesta o anclado) que no estan en `messages` (pagina vieja
+// todavia no cargada): se resuelven una sola vez contra el server y quedan aca,
+// null si ya se confirmo que no existen (mensaje borrado, conversacion invalida, etc).
+const quotedMessageCache = new Map<string, ChatMessage | null>();
 
 // ---------------------------------------------------------------------------
 // Carga inicial: encuentro la conversación en mi propia lista (ya trae el
@@ -181,6 +202,82 @@ bannerDeclineBtn.addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Mensaje anclado
+// ---------------------------------------------------------------------------
+
+/** Trae (con cache) el mensaje anclado aunque no este en `messages` -- pasa seguido,
+ * es comun anclar algo de mas arriba en el historial de lo que esta cargado. */
+async function renderPinnedBanner(): Promise<void> {
+  if (!pinnedMessageId) {
+    pinnedBanner.hidden = true;
+    return;
+  }
+  if (!quotedMessageCache.has(pinnedMessageId)) {
+    const local = messages.find((m) => m.id === pinnedMessageId) ?? null;
+    quotedMessageCache.set(pinnedMessageId, local ?? (await getMessageById(pinnedMessageId)));
+  }
+  const pinned = quotedMessageCache.get(pinnedMessageId!) ?? null;
+  if (!pinned) {
+    pinnedBanner.hidden = true;
+    return;
+  }
+  pinnedBannerText.textContent = `${senderLabel(pinned)}: ${messageSnippet(pinned)}`;
+  pinnedBanner.hidden = false;
+}
+
+pinnedBannerMain.addEventListener("click", () => {
+  if (pinnedMessageId) scrollToMessage(pinnedMessageId);
+});
+
+pinnedBannerUnpin.addEventListener("click", async () => {
+  const prev = pinnedMessageId;
+  pinnedMessageId = null;
+  pinnedBanner.hidden = true;
+  const { error } = await unpinMessage(conversationId!);
+  if (error) {
+    pinnedMessageId = prev;
+    alert(error);
+    void renderPinnedBanner();
+  }
+});
+
+async function togglePin(message: ChatMessage): Promise<void> {
+  const prev = pinnedMessageId;
+  if (pinnedMessageId === message.id) {
+    pinnedMessageId = null;
+    await renderPinnedBanner();
+    const { error } = await unpinMessage(conversationId!);
+    if (error) {
+      pinnedMessageId = prev;
+      alert(error);
+      void renderPinnedBanner();
+    }
+  } else {
+    pinnedMessageId = message.id;
+    quotedMessageCache.set(message.id, message);
+    await renderPinnedBanner();
+    const { error } = await pinMessage(conversationId!, message.id);
+    if (error) {
+      pinnedMessageId = prev;
+      alert(error);
+      void renderPinnedBanner();
+    }
+  }
+  refreshPinnedBubbleClass();
+}
+
+/** El resaltado ".is-pinned" se decide al armar el html de la burbuja (bubbleHtml lee
+ * pinnedMessageId), asi que al cambiar el anclado hay que refrescarlo a mano sin
+ * reconstruir toda la lista. */
+function refreshPinnedBubbleClass(): void {
+  messagesEl.querySelectorAll(".chat-bubble.is-pinned").forEach((el) => el.classList.remove("is-pinned"));
+  if (pinnedMessageId) messagesEl.querySelector(`.chat-bubble[data-id="${pinnedMessageId}"]`)?.classList.add("is-pinned");
+}
+
+pinnedMessageId = await getConversationPinnedMessageId(conversationId!);
+void renderPinnedBanner();
+
+// ---------------------------------------------------------------------------
 // Mensajes
 // ---------------------------------------------------------------------------
 
@@ -248,6 +345,38 @@ function sharedPostPreviewHtml(postId: string): string {
   `;
 }
 
+/** Texto corto para representar un mensaje en una cita (respuesta), el banner de anclado o el modal de reenvío. */
+function messageSnippet(m: ChatMessage): string {
+  if (m.content) return m.content;
+  if (m.shared_post_id) return "🔁 Rep compartido";
+  if (m.attachment_type === "image") return "📷 Foto";
+  if (m.attachment_type === "audio") return "🎤 Audio";
+  return "Mensaje";
+}
+
+function senderLabel(m: ChatMessage): string {
+  return m.sender_id === userId ? "Vos" : (conversation!.other_username ?? "");
+}
+
+/** Bloque citado dentro de una burbuja (respuesta a otro mensaje). Si el original todavia
+ * no esta en `messages` (pagina vieja sin cargar) se pinta un placeholder y se resuelve
+ * despues via hydrateMissingQuotes, igual que hydrateImages con los adjuntos. */
+function replyQuoteHtml(m: ChatMessage): string {
+  if (!m.reply_to_message_id) return "";
+  const original = messages.find((x) => x.id === m.reply_to_message_id) ?? quotedMessageCache.get(m.reply_to_message_id);
+  if (!original) {
+    return `<button type="button" class="chat-bubble-quote chat-bubble-quote-missing" data-quote-id="${escapeHtml(m.reply_to_message_id)}">
+      <span class="chat-bubble-quote-text">Cargando…</span>
+    </button>`;
+  }
+  return `
+    <button type="button" class="chat-bubble-quote" data-quote-id="${escapeHtml(original.id)}">
+      <span class="chat-bubble-quote-name">${escapeHtml(senderLabel(original))}</span>
+      <span class="chat-bubble-quote-text">${escapeHtml(messageSnippet(original))}</span>
+    </button>
+  `;
+}
+
 function bubbleHtml(m: ChatMessage, isMe: boolean): string {
   let mediaHtml = "";
   if (m.shared_post_id) {
@@ -271,8 +400,11 @@ function bubbleHtml(m: ChatMessage, isMe: boolean): string {
     `;
   }
   const textHtml = m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
+  const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
   return `
-    <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}" data-id="${m.id}">
+    <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${m.id === pinnedMessageId ? " is-pinned" : ""}" data-id="${m.id}">
+      ${forwardedHtml}
+      ${replyQuoteHtml(m)}
       ${mediaHtml}
       ${textHtml}
       <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe ? ticksHtml(m) : ""}</span>
@@ -314,6 +446,29 @@ async function hydrateImages(): Promise<void> {
   );
 }
 
+/** Resuelve las citas de respuesta cuyo mensaje original no estaba en `messages` al pintarse
+ * (ver replyQuoteHtml) contra el servidor, una sola vez por id gracias a quotedMessageCache. */
+async function hydrateMissingQuotes(): Promise<void> {
+  const nodes = messagesEl.querySelectorAll<HTMLButtonElement>(".chat-bubble-quote-missing[data-quote-id]");
+  await Promise.all(
+    Array.from(new Set(Array.from(nodes).map((el) => el.dataset.quoteId!))).map(async (id) => {
+      if (!quotedMessageCache.has(id)) quotedMessageCache.set(id, await getMessageById(id));
+      const original = quotedMessageCache.get(id);
+      messagesEl.querySelectorAll<HTMLButtonElement>(`.chat-bubble-quote-missing[data-quote-id="${id}"]`).forEach((el) => {
+        if (!original) {
+          el.innerHTML = `<span class="chat-bubble-quote-text">Mensaje no disponible</span>`;
+          return;
+        }
+        el.classList.remove("chat-bubble-quote-missing");
+        el.innerHTML = `
+          <span class="chat-bubble-quote-name">${escapeHtml(senderLabel(original))}</span>
+          <span class="chat-bubble-quote-text">${escapeHtml(messageSnippet(original))}</span>
+        `;
+      });
+    })
+  );
+}
+
 function refreshBubbleTicks(m: ChatMessage): void {
   if (m.sender_id !== userId) return;
   const timeEl = messagesEl.querySelector<HTMLElement>(`.chat-bubble[data-id="${m.id}"] .chat-bubble-time`);
@@ -328,6 +483,17 @@ function refreshBubbleTicks(m: ChatMessage): void {
 // tienen que animarse (abrir la conversacion, cargar mensajes viejos arriba).
 function scrollToBottom(behavior: ScrollBehavior = "smooth"): void {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, left: 0, behavior });
+}
+
+/** Salta a un mensaje ya renderizado (cita de respuesta o banner de anclado) y lo resalta
+ * un instante. Si todavia no esta cargado (pagina vieja sin traer) no hace nada -- misma
+ * limitación que tiene, p.ej., abrir un link a un mensaje viejo en WhatsApp Web. */
+function scrollToMessage(id: string): void {
+  const bubble = messagesEl.querySelector<HTMLElement>(`.chat-bubble[data-id="${id}"]`);
+  if (!bubble) return;
+  bubble.scrollIntoView({ block: "center", behavior: "smooth" });
+  bubble.classList.add("chat-bubble-flash");
+  setTimeout(() => bubble.classList.remove("chat-bubble-flash"), 1200);
 }
 
 // Aparece si te alejaste bastante del final (mismo umbral que "wasNearBottom" en
@@ -376,6 +542,7 @@ async function renderInitialMessages(): Promise<void> {
     await hydrateSharedPosts(messages);
     messagesEl.innerHTML = buildMessagesHtml(messages);
     await hydrateImages();
+    void hydrateMissingQuotes();
     scrollToBottom("instant");
   } else {
     messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
@@ -390,6 +557,7 @@ async function renderInitialMessages(): Promise<void> {
     ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
     : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
   await hydrateImages();
+  void hydrateMissingQuotes();
   scrollToBottom("instant"); // abre directo posicionado ahi, sin animar el salto
   if (!olderExhausted) observeLoadSentinel();
   void cacheMessages(conversationId!, page);
@@ -422,6 +590,7 @@ async function prependOlderMessages(): Promise<void> {
   const prevScrollHeight = messagesEl.scrollHeight;
   messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
   await hydrateImages();
+  void hydrateMissingQuotes();
   messagesEl.scrollTo({ top: messagesEl.scrollHeight - prevScrollHeight, left: 0, behavior: "instant" });
   if (olderExhausted) olderMessagesObserver.disconnect();
   else observeLoadSentinel();
@@ -444,6 +613,7 @@ async function appendMessage(m: ChatMessage): Promise<void> {
   html += bubbleHtml(m, m.sender_id === userId);
   messagesEl.insertAdjacentHTML("beforeend", html);
   void hydrateImages();
+  void hydrateMissingQuotes();
   if (wasNearBottom) scrollToBottom();
   else updateScrollBottomBtn(); // el mensaje nuevo alejo aun mas el final, sin disparar "scroll"
 }
@@ -472,6 +642,14 @@ supabase
     const idx = messages.findIndex((m) => m.id === updated.id);
     if (idx !== -1) messages[idx] = updated;
     refreshBubbleTicks(updated);
+  })
+  // Anclado/desanclado: puede venir del otro participante o de este mismo usuario en otra pestaña.
+  .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` }, (payload) => {
+    const updatedConversation = payload.new as { pinned_message_id: string | null };
+    if (updatedConversation.pinned_message_id === pinnedMessageId) return;
+    pinnedMessageId = updatedConversation.pinned_message_id;
+    void renderPinnedBanner();
+    refreshPinnedBubbleClass();
   })
   .subscribe();
 
@@ -635,8 +813,227 @@ messagesEl.addEventListener("click", (e) => {
     return;
   }
   const audioBtn = target.closest<HTMLButtonElement>(".chat-audio-toggle");
-  if (audioBtn) void toggleAudioMessage(audioBtn);
+  if (audioBtn) {
+    void toggleAudioMessage(audioBtn);
+    return;
+  }
+  const quoteBtn = target.closest<HTMLButtonElement>(".chat-bubble-quote:not(.chat-bubble-quote-missing)");
+  if (quoteBtn?.dataset.quoteId) {
+    scrollToMessage(quoteBtn.dataset.quoteId);
+    return;
+  }
+  // Un Rep compartido es un <a> a post.html: dejarlo navegar normal, no abrir el menu encima.
+  if (target.closest(".chat-shared-post")) return;
+  // Tocar cualquier otra parte del mensaje (texto, o el margen de fotos/audios que ya
+  // tienen su propia accion en el boton/imagen especifico de arriba) abre el menu.
+  const bubble = target.closest<HTMLElement>(".chat-bubble");
+  if (bubble?.dataset.id) {
+    const message = messages.find((m) => m.id === bubble.dataset.id);
+    if (message) openMessageMenu(message, bubble);
+  }
 });
+
+// ---------------------------------------------------------------------------
+// Menú de mensaje: responder / reenviar / anclar
+// ---------------------------------------------------------------------------
+
+let closeOpenMessageMenu: (() => void) | null = null;
+
+function openMessageMenu(message: ChatMessage, anchor: HTMLElement): void {
+  closeOpenMessageMenu?.();
+
+  const isMe = message.sender_id === userId;
+  const isPinned = pinnedMessageId === message.id;
+  const menu = document.createElement("div");
+  menu.className = "chat-msg-menu";
+  menu.innerHTML = `
+    <button type="button" data-action="reply">Responder</button>
+    <button type="button" data-action="forward">Reenviar</button>
+    ${message.content ? `<button type="button" data-action="copy">Copiar</button>` : ""}
+    <button type="button" data-action="pin">${isPinned ? "Desanclar" : "Anclar"}</button>
+  `;
+  document.body.appendChild(menu);
+
+  const rect = anchor.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  let top = rect.bottom + 6;
+  let left = isMe ? rect.right - menuRect.width : rect.left;
+  left = Math.min(Math.max(8, left), window.innerWidth - menuRect.width - 8);
+  if (top + menuRect.height > window.innerHeight - 8) top = rect.top - menuRect.height - 6;
+  menu.style.top = `${Math.max(8, top)}px`;
+  menu.style.left = `${left}px`;
+
+  function onMenuClick(e: MouseEvent): void {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === "copy") {
+      // Se deja el menu abierto un instante con la confirmacion en vez de cerrarlo de
+      // una -- asi queda claro que el copiado funciono antes de que desaparezca.
+      navigator.clipboard.writeText(message.content ?? "").catch(() => {});
+      btn.textContent = "¡Copiado!";
+      btn.disabled = true;
+      setTimeout(() => closeOpenMessageMenu?.(), 700);
+      return;
+    }
+    closeOpenMessageMenu?.();
+    if (action === "reply") startReply(message);
+    else if (action === "forward") void openForwardModal(message);
+    else if (action === "pin") void togglePin(message);
+  }
+  function onDocClick(e: MouseEvent): void {
+    if (!menu.contains(e.target as Node)) closeOpenMessageMenu?.();
+  }
+  function onKeydown(e: KeyboardEvent): void {
+    if (e.key === "Escape") closeOpenMessageMenu?.();
+  }
+
+  function onScroll(): void {
+    closeOpenMessageMenu?.();
+  }
+
+  menu.addEventListener("click", onMenuClick);
+  // setTimeout: si no, el mismo click que abrio el menu (burbujea hasta document) lo cierra al toque.
+  setTimeout(() => document.addEventListener("click", onDocClick), 0);
+  document.addEventListener("keydown", onKeydown);
+  messagesEl.addEventListener("scroll", onScroll);
+
+  closeOpenMessageMenu = () => {
+    menu.remove();
+    document.removeEventListener("click", onDocClick);
+    document.removeEventListener("keydown", onKeydown);
+    messagesEl.removeEventListener("scroll", onScroll);
+    closeOpenMessageMenu = null;
+  };
+}
+
+function startReply(message: ChatMessage): void {
+  replyTarget = message;
+  replyBarName.textContent = senderLabel(message);
+  replyBarText.textContent = messageSnippet(message);
+  replyBar.hidden = false;
+  composerInput.focus();
+}
+
+replyBarCancelBtn.addEventListener("click", () => {
+  replyTarget = null;
+  replyBar.hidden = true;
+});
+
+/** Modal para reenviar un mensaje (texto, adjunto o Rep compartido) a un seguidor,
+ * calcado del que usa el feed para compartir un Rep por chat (ver openShareToChatModal
+ * en postModals.ts) pero local a esta pagina porque solo aplica a mensajes de chat. */
+async function openForwardModal(message: ChatMessage): Promise<void> {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Reenviar mensaje</h2>
+        <p class="subtitle">Elegí a quién enviárselo.</p>
+        <p class="chat-forward-preview">${escapeHtml(messageSnippet(message))}</p>
+        <div class="field">
+          <input type="text" id="chatForwardSearch" placeholder="Buscar entre tus seguidores...">
+        </div>
+        <div class="post-share-list" id="chatForwardList"><p class="exc-pick-empty">Cargando...</p></div>
+        <div class="alert_message" id="chatForwardAlert"></div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="chatForwardCancel" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const close = () => (loaderBody.innerHTML = "");
+  document.getElementById("chatForwardCancel")?.addEventListener("click", close);
+
+  const listEl = document.getElementById("chatForwardList")!;
+  const searchInput = document.getElementById("chatForwardSearch") as HTMLInputElement;
+
+  function renderRows(rows: FollowListRow[]): void {
+    listEl.innerHTML = rows.length
+      ? rows
+          .map(
+            (r) => `
+    <button type="button" class="post-share-row" data-id="${r.id}">
+      <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" class="chat-avatar" alt="">
+      <span class="post-share-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
+    </button>
+  `
+          )
+          .join("")
+      : `<p class="exc-pick-empty">No se encontraron seguidores.</p>`;
+
+    listEl.querySelectorAll<HTMLButtonElement>(".post-share-row").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const rowButtons = listEl.querySelectorAll<HTMLButtonElement>(".post-share-row");
+        rowButtons.forEach((b) => (b.disabled = true));
+        const alertBox = document.getElementById("chatForwardAlert")!;
+        alertBox.innerHTML = "";
+
+        const { id: targetConversationId, error: convError } = await getOrCreateConversation(btn.dataset.id!);
+        if (convError || !targetConversationId) {
+          alertBox.innerHTML = `<p>${escapeHtml(convError || "No se pudo abrir la conversación.")}</p>`;
+          rowButtons.forEach((b) => (b.disabled = false));
+          return;
+        }
+
+        let attachmentPath: string | undefined;
+        if (message.attachment_path) {
+          const { path, error } = await copyChatAttachment(message.attachment_path, targetConversationId);
+          if (error || !path) {
+            alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo reenviar el adjunto.")}</p>`;
+            rowButtons.forEach((b) => (b.disabled = false));
+            return;
+          }
+          attachmentPath = path;
+        }
+
+        const { error } = await sendMessage(targetConversationId, {
+          content: message.content ?? undefined,
+          attachmentPath,
+          attachmentType: (message.attachment_type as "image" | "audio" | null) ?? undefined,
+          attachmentDurationSeconds: message.attachment_duration_seconds ?? undefined,
+          sharedPostId: message.shared_post_id ?? undefined,
+          isForwarded: true,
+        });
+        if (error) {
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          rowButtons.forEach((b) => (b.disabled = false));
+          return;
+        }
+        loaderBody!.innerHTML = `
+          <div class="success-check-container">
+            <div class="success-icon">
+              <svg viewBox="0 0 52 52" class="success-svg">
+                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+              </svg>
+            </div>
+            <p>¡Mensaje reenviado!</p>
+          </div>
+        `;
+        setTimeout(close, 1400);
+      });
+    });
+  }
+
+  async function runSearch(search: string): Promise<void> {
+    try {
+      renderRows(await listFollowers(userId, search));
+    } catch {
+      listEl.innerHTML = `<p class="exc-pick-empty">No se pudo cargar tus seguidores.</p>`;
+    }
+  }
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => void runSearch(searchInput.value.trim()), 250);
+  });
+
+  await runSearch("");
+}
 
 // ---------------------------------------------------------------------------
 // Composer: texto, foto y grabación de audio
@@ -893,6 +1290,7 @@ async function handleSend(): Promise<void> {
     attachmentPath,
     attachmentType,
     attachmentDurationSeconds,
+    replyToMessageId: replyTarget?.id,
   });
 
   sending = false;
@@ -906,6 +1304,8 @@ async function handleSend(): Promise<void> {
   composerInput.value = "";
   composerInput.style.height = "auto";
   clearPendingAttachment();
+  replyTarget = null;
+  replyBar.hidden = true;
   void appendMessage(message);
 
   if (conversationStatus === "pending" && isInitiator === false) {

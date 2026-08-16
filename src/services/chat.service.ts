@@ -73,6 +73,8 @@ export interface SendMessageInput {
   attachmentType?: "image" | "audio";
   attachmentDurationSeconds?: number;
   sharedPostId?: string;
+  replyToMessageId?: string;
+  isForwarded?: boolean;
 }
 
 export async function sendMessage(conversationId: string, input: SendMessageInput): Promise<{ message?: ChatMessage; error?: string }> {
@@ -83,9 +85,45 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_attachment_type: input.attachmentType,
     p_attachment_duration_seconds: input.attachmentDurationSeconds,
     p_shared_post_id: input.sharedPostId,
+    p_reply_to_message_id: input.replyToMessageId,
+    p_is_forwarded: input.isForwarded,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };
+}
+
+/** Ancla (o reemplaza el anclado) o desancla el mensaje destacado de la conversación, visible para ambos participantes. */
+export async function pinMessage(conversationId: string, messageId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("pin_message", { p_conversation_id: conversationId, p_message_id: messageId });
+  if (error) return { error: friendlyError(error, "No se pudo anclar el mensaje.") };
+  return {};
+}
+
+export async function unpinMessage(conversationId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("unpin_message", { p_conversation_id: conversationId });
+  if (error) return { error: friendlyError(error, "No se pudo desanclar el mensaje.") };
+  return {};
+}
+
+export async function getConversationPinnedMessageId(conversationId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("conversations").select("pinned_message_id").eq("id", conversationId).single();
+  if (error || !data) return null;
+  return data.pinned_message_id;
+}
+
+export async function getMessageById(messageId: string): Promise<ChatMessage | null> {
+  const { data, error } = await supabase.from("messages").select("*").eq("id", messageId).maybeSingle();
+  if (error) return null;
+  return data;
+}
+
+/** Copia un adjunto ya subido a la carpeta de otra conversación, para poder reenviar el mensaje que lo trae. */
+export async function copyChatAttachment(sourcePath: string, targetConversationId: string): Promise<{ path?: string; error?: string }> {
+  const ext = sourcePath.includes(".") ? sourcePath.slice(sourcePath.lastIndexOf(".")) : "";
+  const targetPath = `${targetConversationId}/${crypto.randomUUID()}${ext}`;
+  const { error } = await supabase.storage.from(BUCKET).copy(sourcePath, targetPath);
+  if (error) return { error: "No se pudo reenviar el adjunto." };
+  return { path: targetPath };
 }
 
 /** Últimos mensajes de una conversación (mas recientes primero). Pasá beforeIso (created_at del más viejo cargado) para paginar hacia atrás. */
