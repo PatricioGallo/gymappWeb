@@ -21,6 +21,10 @@
   --bubble-me-text: #16181c;
   --bubble-other: #ffddb0;
   --bubble-other-text: #2b1a05;
+  /* El sitio es 100% oscuro (sin modo claro), pero sin esto el navegador sigue dibujando los
+     controles nativos (el popup de un <select>, su scrollbar, checkboxes) en modo claro por
+     default -- se nota feo sobre todo en los <select> largos (dia con 31 opciones, año con 100). */
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -1313,6 +1317,29 @@ button:focus-visible {
 .field input::placeholder { color: var(--text-muted); opacity: 0.7; }
 .field input:focus { outline: none; border-color: var(--accent-2); }
 
+.password-field { position: relative; }
+.password-field input { padding-right: 44px; }
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.password-toggle:hover { color: var(--text); }
+.password-toggle svg { width: 18px; height: 18px; stroke: currentColor; }
+/* [hidden] no alcanza para ocultar un <svg> (los navegadores no siempre le aplican el
+   display:none del atributo, a diferencia de un div/span comun) -- mismo motivo que ya
+   documentan .dropzone-empty[hidden]/.post-feed-list[hidden] mas abajo en este archivo. */
+.password-toggle svg[hidden] { display: none; }
+
 .field textarea {
   width: 100%;
   background: var(--surface-2);
@@ -1343,6 +1370,74 @@ button:focus-visible {
 .field select:focus { outline: none; border-color: var(--accent-2); }
 .field-narrow { max-width: 280px; margin: 0 auto 32px; }
 .field-hint { font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
+
+/* ---------- Dia/Mes/Año de la fecha de nacimiento: dropdowns propios, no <select> nativos ----------
+   Un <select> con 31/100 opciones no deja limitar cuantas se ven antes de scrollear, ni sacarle
+   la scrollbar en todos los navegadores (el popup es del sistema operativo en Firefox/Safari, el
+   CSS no llega ahi). Con una lista propia si se puede: 5 opciones visibles, el resto scrollea. */
+.birthdate-select-row { display: flex; gap: 8px; }
+
+.birthdate-picker { position: relative; flex: 1; min-width: 0; }
+
+.birthdate-picker-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px 12px 14px;
+  color: var(--text);
+  font-size: 14.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.birthdate-picker-btn:focus { outline: none; border-color: var(--accent-2); }
+.birthdate-picker.open .birthdate-picker-btn { border-color: var(--accent-2); }
+
+.birthdate-picker-value.placeholder { color: var(--text-muted); opacity: 0.7; }
+
+.birthdate-picker-caret { width: 14px; height: 14px; stroke: var(--text-muted); flex-shrink: 0; transition: transform 0.15s ease; }
+.birthdate-picker.open .birthdate-picker-caret { transform: rotate(180deg); }
+
+.birthdate-picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  /* 5 opciones de 34px (ver .birthdate-picker-option) + el padding propio de la lista (6px arriba y abajo). */
+  max-height: 182px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  scrollbar-width: none;
+}
+.birthdate-picker-list[hidden] { display: none; }
+.birthdate-picker-list::-webkit-scrollbar { display: none; }
+
+.birthdate-picker-option {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.birthdate-picker-option.highlight,
+.birthdate-picker-option:hover { background: var(--accent-soft); }
+.birthdate-picker-option.active { color: var(--accent-2); font-weight: 700; }
 
 .dropzone {
   position: relative;

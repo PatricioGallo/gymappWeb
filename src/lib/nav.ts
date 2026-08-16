@@ -15,11 +15,15 @@ import { touchLastSeen } from "../services/profile.service";
 import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner } from "./pwaBanners";
 import { trackPresence } from "./presence";
 import { setupInAppNotificationToast } from "./inAppNotificationToast";
+import { setupPasswordToggles } from "./passwordToggle";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
 // administracion no depende de tocar cada pagina una por una.
 void logVisitOncePerSession();
+// Mismo motivo: asi el ojito de "ver contraseña" (login/registro) no depende de que cada
+// pagina se acuerde de llamarlo.
+setupPasswordToggles();
 
 export function setupNavToggle(): void {
   const navToggle = document.getElementById("navToggle");

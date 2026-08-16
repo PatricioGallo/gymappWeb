@@ -5,6 +5,7 @@ import { escapeHtml } from "../lib/dom";
 import { supabase } from "../lib/supabaseClient";
 import { calcularEdad } from "../lib/age";
 import { COUNTRIES } from "../lib/countries";
+import { birthdateFieldHtml, setupBirthdatePicker } from "../lib/birthdatePicker";
 
 setupNavToggle();
 setupRevealObserver();
@@ -19,6 +20,13 @@ if (nationalitySelect) {
   nationalitySelect.innerHTML =
     `<option value="">Elegí tu nacionalidad</option>` +
     COUNTRIES.map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join("");
+}
+
+const BIRTHDATE_IDS = { dayId: "birthdateDay", monthId: "birthdateMonth", yearId: "birthdateYear", hiddenId: "birthdate" };
+const birthdateWrap = document.getElementById("birthdateFieldWrap");
+if (birthdateWrap) {
+  birthdateWrap.innerHTML = birthdateFieldHtml(BIRTHDATE_IDS);
+  setupBirthdatePicker(BIRTHDATE_IDS);
 }
 
 let selectedRole: "usuario" | "entrenador" = "usuario";
