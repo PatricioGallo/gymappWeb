@@ -5522,3 +5522,30 @@ body.feed-page .site-footer { display: none; }
   .feed-side-footer .footer-links { display: flex; gap: 12px; margin-bottom: 10px; }
   .feed-side-footer-copy { display: block; color: var(--text-muted); font-size: 12px; }
 }
+
+/* ---------- Bloqueo de horizontal en celular (iOS y Android) ----------
+   La Screen Orientation API (screen.orientation.lock) no la soporta Safari/iOS ni siquiera
+   instalada como PWA, asi que un "lock" real no es confiable en los dos sistemas a la vez. Esto
+   es 100% CSS: al girar el telefono, tapa toda la pantalla con un aviso -- nada de lo de abajo
+   es clickeable ni se ve, "no pasa nada" hasta que lo vuelvan a poner vertical. max-width acota
+   esto a telefonos (hasta el mas grande, iPhone Pro Max ronda 930px de ancho en horizontal); un
+   monitor de escritorio en horizontal (que es casi siempre) queda casi siempre por encima y no
+   se ve afectado. */
+@media (orientation: landscape) and (max-width: 960px) {
+  body::after {
+    content: "📱 Girá tu teléfono para seguir usando Gym Social";
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+}
