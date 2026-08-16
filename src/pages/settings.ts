@@ -2,6 +2,7 @@ import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { COUNTRIES } from "../lib/countries";
 import { calcularEdad } from "../lib/age";
+import { birthdateFieldHtml, setupBirthdatePicker } from "../lib/birthdatePicker";
 import {
   getProfile,
   updateProfileFields,
@@ -120,6 +121,8 @@ function setupTabs() {
 
 // ---------- Editar perfil ----------
 
+const EDIT_BIRTHDATE_IDS = { dayId: "editBirthdateDay", monthId: "editBirthdateMonth", yearId: "editBirthdateYear", hiddenId: "editBirthdate" };
+
 function renderEditTab() {
   const editTab = document.getElementById("editTab")!;
   const initialLinks = parseProfileLinks(profile!.links);
@@ -131,7 +134,10 @@ function renderEditTab() {
         <div class="field"><label for="editApellido">Apellido</label><input type="text" id="editApellido" value="${escapeHtml(profile!.apellido)}"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label for="editBirthdate">Fecha de nacimiento</label><input type="date" id="editBirthdate" value="${profile!.fecha_nacimiento}"></div>
+        <div class="field">
+          <label for="editBirthdateDay">Fecha de nacimiento</label>
+          ${birthdateFieldHtml(EDIT_BIRTHDATE_IDS, profile!.fecha_nacimiento)}
+        </div>
         <div class="field">
           <label for="editNationality">Nacionalidad</label>
           <select id="editNationality">
@@ -174,6 +180,8 @@ function renderEditTab() {
       <div class="settings-actions"><button class="btn btn-primary btn-sm" id="saveEditBtn" type="button">Guardar cambios</button></div>
     </div>
   `;
+
+  setupBirthdatePicker(EDIT_BIRTHDATE_IDS);
 
   const bioField = document.getElementById("editBio") as HTMLTextAreaElement;
   const bioCounter = document.getElementById("bioCounter")!;

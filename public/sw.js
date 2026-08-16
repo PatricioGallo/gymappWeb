@@ -12,6 +12,36 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Android (Chrome/PWA instalada) muestra el "icon" de la notificación tal cual, sin
+// redondearlo -- a diferencia de WhatsApp, que recorta la foto de perfil en un círculo.
+// Como acá el icon suele ser una foto de perfil (ver actor_id / avatar_url en
+// send-web-push), la recortamos nosotros mismos antes de mostrar la notificación. Si
+// falla algo (CORS, sin OffscreenCanvas, etc.) devolvemos la url original tal cual.
+async function roundIcon(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    const size = 192;
+    const canvas = new OffscreenCanvas(size, size);
+    const ctx = canvas.getContext("2d");
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    const scale = Math.max(size / bitmap.width, size / bitmap.height);
+    const w = bitmap.width * scale;
+    const h = bitmap.height * scale;
+    ctx.drawImage(bitmap, (size - w) / 2, (size - h) / 2, w, h);
+
+    const outBlob = await canvas.convertToBlob({ type: "image/png" });
+    return URL.createObjectURL(outBlob);
+  } catch {
+    return url;
+  }
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -21,20 +51,25 @@ self.addEventListener("push", (event) => {
   }
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       // Si ya está mirando la webapp (pestaña al frente y con foco), no hace falta la
       // notificación del sistema -- lo que llega por push ya se refleja en vivo adentro
       // (badge, mensajes nuevos, etc. via realtime). Si la tiene abierta pero de fondo
       // (otra pestaña/app encima), igual le mostramos la notificación.
       if (clients.some((c) => c.focused)) return;
 
+      // El logo por defecto (avisos del sistema, sin actor) ya viene diseñado cuadrado,
+      // así que solo redondeamos cuando el icon es una foto de perfil real.
+      const icon = data.icon ? await roundIcon(data.icon) : "/images/icon-192.png";
+
       return self.registration.showNotification(data.title || "Gym Social", {
         body: data.body || "",
-        icon: data.icon || "/images/icon-192.png",
+        icon,
         badge: "/images/icon-192.png",
         data: { url: data.url || "/pages/notifications.html" },
       });
-    })
+    })()
   );
 });
 

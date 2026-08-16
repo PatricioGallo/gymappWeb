@@ -2,9 +2,28 @@ import { supabase } from "./supabaseClient";
 import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, ensurePushSubscription, ensureServiceWorkerRegistered } from "./pushNotifications";
 import { todayLocalISO } from "./dias";
 
-const INSTALL_SNOOZE_KEY = "gs_install_banner_snooze_until";
-const INSTALL_SNOOZE_DAYS = 7;
+// Insistente a propósito (pedido explícito): en vez de un snooze largo al cerrarlo, el banner de
+// instalar vuelve a aparecer en cada página hasta INSTALL_MAX_PER_DAY veces por día, y arranca de
+// nuevo al día siguiente -- sigue viéndolo hasta que instale, sin ser eterno en un mismo día.
+const INSTALL_DAILY_KEY = "gs_install_banner_daily";
+const INSTALL_MAX_PER_DAY = 3;
 const PWA_TRACK_KEY = "gs_pwa_track_date";
+
+interface InstallBannerDailyState {
+  date: string;
+  count: number;
+}
+
+function readInstallBannerDailyState(): InstallBannerDailyState {
+  const today = todayLocalISO();
+  try {
+    const raw = JSON.parse(localStorage.getItem(INSTALL_DAILY_KEY) || "null") as InstallBannerDailyState | null;
+    if (raw?.date === today) return raw;
+  } catch {
+    // localStorage corrupto/no disponible: arrancamos de cero como si fuera la primera vez hoy
+  }
+  return { date: today, count: 0 };
+}
 
 export function isStandalone(): boolean {
   return (navigator as { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
@@ -46,6 +65,10 @@ const CLOSE_ICON_PATH = `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6
 const IOS_SHARE_ICON_PATH = `<rect x="5" y="9" width="14" height="12" rx="2"/><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>`;
 /** Icono "Añadir a inicio": cuadrado redondeado con un "+", como el que Safari muestra en esa fila del share sheet. */
 const IOS_ADD_HOME_ICON_PATH = `<rect x="4" y="4" width="16" height="16" rx="5"/><path d="M12 8v8M8 12h8"/>`;
+/** Menu de "los 3 puntitos" de Chrome/Android (⋮), arriba a la derecha del navegador. Fill fijo
+ * (no currentColor): a diferencia de los iconos share/add-home de iOS, este va relleno, no
+ * trazado, asi que necesita su propio color en vez de heredar el "stroke" que usa .ios-tut-icon-active. */
+const ANDROID_MENU_ICON_PATH = `<circle cx="12" cy="5" r="1.6" fill="var(--accent-2)" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="var(--accent-2)" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="var(--accent-2)" stroke="none"/>`;
 
 function buildBanner(iconPath: string, title: string, body: string): HTMLDivElement {
   const banner = document.createElement("div");
@@ -86,11 +109,12 @@ function mountBanner(banner: HTMLDivElement): void {
   document.body.classList.add("has-app-banner");
 }
 
-/** Banner "instalá la app" para quien todavía la usa desde el navegador. Postergable 7 días. */
+/** Banner "instalá la app" para quien todavía la usa desde el navegador. Reaparece hasta
+ * INSTALL_MAX_PER_DAY veces por día (insistente a propósito, ver comentario en INSTALL_DAILY_KEY). */
 export function setupInstallBanner(): void {
   if (isStandalone() || !isMobileDevice()) return;
-  const snoozeUntil = Number(localStorage.getItem(INSTALL_SNOOZE_KEY) || 0);
-  if (Date.now() < snoozeUntil) return;
+  const dailyState = readInstallBannerDailyState();
+  if (dailyState.count >= INSTALL_MAX_PER_DAY) return;
 
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const body = isIos
@@ -127,11 +151,22 @@ export function setupInstallBanner(): void {
     actions.appendChild(howBtn);
   }
 
-  addCloseButton(banner, () => {
-    localStorage.setItem(INSTALL_SNOOZE_KEY, String(Date.now() + INSTALL_SNOOZE_DAYS * 86400000));
-  });
+  // En Android tambien ofrecemos el paso a paso manual (menu ⋮ > Instalar app), ademas del
+  // boton "Instalar" de arriba cuando esta disponible: no todos los navegadores Android disparan
+  // "beforeinstallprompt" (ej. si ya se descarto una vez, o navegadores que no sean Chrome), y
+  // sin esto esos casos se quedaban sin ninguna forma de instalar desde el banner.
+  if (!isIos && isMobileDevice()) {
+    const howBtn = document.createElement("button");
+    howBtn.type = "button";
+    howBtn.className = "app-banner-cta";
+    howBtn.textContent = "Ver cómo";
+    howBtn.addEventListener("click", openAndroidInstallTutorial);
+    actions.appendChild(howBtn);
+  }
 
+  addCloseButton(banner);
   mountBanner(banner);
+  localStorage.setItem(INSTALL_DAILY_KEY, JSON.stringify({ date: dailyState.date, count: dailyState.count + 1 }));
 }
 
 function iosTutorialStep(num: number, visualHtml: string, textHtml: string): string {
@@ -199,6 +234,67 @@ function openIosInstallTutorial(): void {
   `;
 
   document.getElementById("iosTutClose")?.addEventListener("click", () => {
+    loaderBody.innerHTML = "";
+  });
+}
+
+/**
+ * Modal con el paso a paso ilustrado para instalar en Android a mano (menú ⋮ del navegador),
+ * mismo formato que openIosInstallTutorial. Sirve tanto de alternativa para quien prefiere el
+ * paso a paso como de único camino cuando el navegador no disparó "beforeinstallprompt" (no todos
+ * lo hacen -- ver el comentario en setupInstallBanner).
+ */
+function openAndroidInstallTutorial(): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+
+  const menuIcon = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ANDROID_MENU_ICON_PATH}</svg>`;
+  const installIcon = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${DOWNLOAD_ICON_PATH}</svg>`;
+
+  const step1Visual = `
+    <div class="ios-tut-toolbar">
+      <span class="ios-tut-icon-dot"></span>
+      <span class="ios-tut-icon-dot"></span>
+      <span class="ios-tut-icon ios-tut-icon-active">${menuIcon}</span>
+    </div>
+  `;
+  const step2Visual = `
+    <div class="ios-tut-sheet">
+      <div class="ios-tut-sheet-row"><span class="ios-tut-row-dot"></span><span class="ios-tut-row-line"></span></div>
+      <div class="ios-tut-sheet-row"><span class="ios-tut-row-dot"></span><span class="ios-tut-row-line"></span></div>
+      <div class="ios-tut-sheet-row ios-tut-sheet-row-active">${installIcon}<span>Instalar app</span></div>
+    </div>
+  `;
+  const step3Visual = `
+    <div class="ios-tut-dialog">
+      <div class="ios-tut-dialog-head">
+        <span class="ios-tut-dialog-confirm">Instalar</span>
+      </div>
+      <div class="ios-tut-dialog-body">
+        <span class="ios-tut-app-icon"></span>
+        <span class="ios-tut-app-name">Gym Social</span>
+      </div>
+    </div>
+  `;
+
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card ios-tut-card">
+        <h2>Instalá Gym Social</h2>
+        <p class="subtitle">En Android se instala desde el navegador en 3 pasos.</p>
+        <div class="ios-tut-list">
+          ${iosTutorialStep(1, step1Visual, "Tocá los <strong>tres puntos</strong> (⋮) arriba a la derecha del navegador.")}
+          ${iosTutorialStep(2, step2Visual, "Elegí <strong>\"Instalar app\"</strong> (o \"Añadir a pantalla de inicio\", según el navegador).")}
+          ${iosTutorialStep(3, step3Visual, "Confirmá tocando <strong>\"Instalar\"</strong>.")}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="androidTutClose" type="button">Entendido</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("androidTutClose")?.addEventListener("click", () => {
     loaderBody.innerHTML = "";
   });
 }
