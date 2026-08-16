@@ -25,6 +25,19 @@ import { getCachedMessages, cacheMessages } from "../lib/chatDb";
 
 setupNavToggle();
 setupRevealObserver();
+
+// Fallback para el bug de Chrome en la app instalada de Android (WebAPK): ahi
+// 100dvh a veces no descuenta la barra de navegacion del sistema y el composer
+// queda tapado hasta hacer un pequeño scroll. window.innerHeight si refleja el
+// alto real visible, asi que lo exponemos como variable CSS (ver .chat-thread-page
+// en modern.css) y lo recalculamos si cambia el tamaño de la ventana o rota el celular.
+function setAppViewportHeight(): void {
+  document.documentElement.style.setProperty("--app-vh", `${window.innerHeight * 0.01}px`);
+}
+setAppViewportHeight();
+window.addEventListener("resize", setAppViewportHeight);
+window.addEventListener("orientationchange", setAppViewportHeight);
+
 const userId = await requireAuth();
 
 const urlParams = new URLSearchParams(window.location.search);

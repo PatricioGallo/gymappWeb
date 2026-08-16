@@ -4423,6 +4423,13 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   body.chat-page .chat-thread-page {
     height: 100vh;
     height: 100dvh;
+    /* La app instalada en Android (WebAPK) tiene un bug conocido de Chrome donde
+       100dvh no descuenta la barra de navegación del sistema en modo standalone,
+       asi que el composer quedaba tapado y habia que scrollear un poco para verlo
+       (no pasa en iOS instalado ni en mobile web, ahi dvh ya es correcto). Como
+       fallback usamos window.innerHeight (que si refleja el alto real visible),
+       expuesto por chat.ts como --app-vh. */
+    height: calc(var(--app-vh, 1vh) * 100);
   }
 }
 
