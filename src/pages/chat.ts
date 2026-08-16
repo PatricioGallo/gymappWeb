@@ -26,6 +26,7 @@ import {
   type ChatMessage,
 } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
+import { openMediaLightbox } from "../lib/mediaLightbox";
 import { refreshChatBadge } from "../lib/chat";
 import { watchPeerOnline } from "../lib/presence";
 import { getCachedMessages, cacheMessages } from "../lib/chatDb";
@@ -787,21 +788,16 @@ async function toggleAudioMessage(btn: HTMLButtonElement): Promise<void> {
   }
 }
 
+// Mismo visor a pantalla completa que usan los Reps (ver mediaLightbox.ts): overlay
+// oscuro, deslizar hacia abajo para cerrar, Escape, click en el fondo. Sin pie -- las
+// fotos/audios del chat no tienen acciones tipo me gusta/comentar como los Reps.
 async function openLightbox(path: string): Promise<void> {
   const url = await resolveAttachmentUrl(path);
   if (!url) return;
-  const loaderBody = document.getElementById("loaderBody");
-  if (!loaderBody) return;
-  loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="chat-lightbox">
-        <img src="${escapeHtml(url)}" alt="Foto">
-        <button type="button" class="btn btn-outline" id="closeChatLightbox">Cerrar</button>
-      </div>
-    </div>
-  `;
-  document.getElementById("closeChatLightbox")?.addEventListener("click", () => {
-    loaderBody.innerHTML = "";
+  openMediaLightbox({
+    queue: [{ url }],
+    startIndex: 0,
+    getMedia: (item) => ({ url: item.url, kind: "image" }),
   });
 }
 
