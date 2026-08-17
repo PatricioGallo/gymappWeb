@@ -4796,7 +4796,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .chat-bubble-img-el {
   width: 100%;
-  min-height: 120px;
+  height: 200px;
   object-fit: cover;
   background: rgba(0, 0, 0, 0.15);
   display: block;
