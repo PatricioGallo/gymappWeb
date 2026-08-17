@@ -12,6 +12,7 @@ import { modExcView } from "../pages/modExc";
 import { showExcView } from "../pages/showExc";
 import { postView } from "../pages/post";
 import { alumnosView } from "../pages/alumnos";
+import { progressView } from "../pages/progress";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -82,6 +83,11 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/alumnos.html") ? new URLSearchParams() : null),
     view: alumnosView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/progress.html") ? new URLSearchParams() : null),
+    view: progressView,
     auth: "required",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --

@@ -1,4 +1,4 @@
-import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
+import type { ViewModule } from "../shell/router";
 import { escapeHtml } from "../lib/dom";
 import { formatFechaCorta, dayDisplayLabel } from "../lib/dias";
 import { formatRepe } from "../lib/reps";
@@ -7,35 +7,13 @@ import { getRoutineDetail, type RoutineDetail, type RoutineExerciseWithAuthor } 
 import { getLatestWeights, type LatestWeightsMap, type LatestWeightEntry } from "../services/weightLog.service";
 import { listCommentsForExercises } from "../services/comment.service";
 import type { Tables } from "../types/database";
+import type { Chart as ChartInstance } from "chart.js";
+import { loadChart } from "../lib/chartLoader";
 
 type ExerciseComment = Tables<"exercise_comments">;
 
-declare const Chart: any;
-
-setupNavToggle();
-setupRevealObserver();
-const myId = await requireAuth();
-
-const params = new URLSearchParams(window.location.search);
-const targetUserId = params.get("uid") ?? myId;
-
-// El unico flujo que trae ?uid= de otro usuario es "Tus alumnos" (entrenador viendo el
-// progreso de un suscriptor aceptado); la propia tarjeta "Progreso completo" del perfil
-// nunca pasa el uid de otra persona. Viendo el progreso propio (o el "?uid=" de uno
-// mismo) el link vuelve al perfil en vez de a la lista de alumnos.
-if (targetUserId !== myId) {
-  document.getElementById("backToAlumnos")?.removeAttribute("hidden");
-  document.getElementById("backToProfile")?.setAttribute("hidden", "");
-}
-
 const RECENT_WINDOW = 5;
 const PROJECTION_DAYS = 28;
-
-let lineChartInstance: any = null;
-let sessionChartInstance: any = null;
-let volumeChartInstance: any = null;
-let topMaxChartInstance: any = null;
-let topProgressChartInstance: any = null;
 
 interface ExerciseGroup {
   id: string;
@@ -43,6 +21,51 @@ interface ExerciseGroup {
   authorName: string;
   entries: (WeightLogEntry & { date: Date })[];
 }
+
+const VIEW_MARKUP = `
+  <section class="page-hero">
+    <div class="container">
+      <a href="profile.html" class="back-link" id="backToProfile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
+      <a href="alumnos.html" class="back-link" id="backToAlumnos" hidden><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver a tus alumnos</a>
+      <span class="eyebrow">Progreso</span>
+      <h1 id="pageTitle">Tu progreso</h1>
+      <p id="pageSubtitle">Un resumen de tus mejores marcas y el detalle de cómo evolucionó cada ejercicio.</p>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="routine-tabs" id="progressTabs">
+        <button class="routine-tab active" data-tab="active" type="button">Rutina activa</button>
+        <button class="routine-tab" data-tab="overview" type="button">Resumen</button>
+        <button class="routine-tab" data-tab="detail" type="button">Detalle por ejercicio</button>
+      </div>
+
+      <div id="tabPanelActive">
+        <div id="activeRoutineContent"></div>
+      </div>
+
+      <div id="tabPanelOverview" hidden>
+        <div id="overviewContent"></div>
+      </div>
+
+      <div id="tabPanelDetail" hidden>
+        <div class="section-head reveal" id="detailHead">
+          <span class="eyebrow">Detalle</span>
+          <h2>Progreso por ejercicio</h2>
+          <p>Elegí un ejercicio para ver su evolución en detalle.</p>
+        </div>
+
+        <div class="field field-narrow" id="excPicker">
+          <label for="excSelect">Ejercicio</label>
+          <select id="excSelect"></select>
+        </div>
+
+        <div id="progressContent"></div>
+      </div>
+    </div>
+  </section>
+`;
 
 function parseFechaISO(fecha: string): Date {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -98,25 +121,6 @@ function projectWeight(points: ExerciseGroup["entries"], daysAhead: number): num
   return Math.round(slope * projX + intercept);
 }
 
-function barChart(canvasId: string, labels: string[], data: number[], color: string) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas || typeof Chart === "undefined") return null;
-  return new Chart(canvas, {
-    type: "bar",
-    data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 6, maxBarThickness: 28 }] },
-    options: {
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { beginAtZero: true, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } },
-        y: { ticks: { color: "#9aa1ac" }, grid: { display: false } },
-      },
-    },
-  });
-}
-
 function statsEmptyMarkup(): string {
   return `
     <div class="empty-state reveal">
@@ -126,207 +130,6 @@ function statsEmptyMarkup(): string {
       <a href="profile.html" class="btn btn-primary btn-sm">Volver al perfil</a>
     </div>
   `;
-}
-
-// Caso de borde (uid invalido/perfil no encontrado): saca las pestañas, no tiene
-// sentido navegar entre secciones vacias.
-function showProfileNotFound() {
-  document.getElementById("progressTabs")?.remove();
-  document.getElementById("tabPanelOverview")?.remove();
-  document.getElementById("tabPanelDetail")?.remove();
-  const panel = document.getElementById("tabPanelActive");
-  if (panel) panel.innerHTML = statsEmptyMarkup();
-}
-
-function renderOverviewTab(groups: ExerciseGroup[]) {
-  if (groups.length === 0) {
-    document.getElementById("overviewContent")!.innerHTML = statsEmptyMarkup();
-    return;
-  }
-  renderOverview(groups);
-}
-
-function renderOverview(groups: ExerciseGroup[]) {
-  const overviewContent = document.getElementById("overviewContent")!;
-  const data = groups.map((g) => {
-    const weights = g.entries.map((p) => p.peso);
-    const max = Math.max(...weights);
-    const delta = g.entries[g.entries.length - 1].peso - g.entries[0].peso;
-    return { name: g.name, max, delta, entries: g.entries.length };
-  });
-
-  const topByMax = [...data].sort((a, b) => b.max - a.max).slice(0, 5);
-  const topByProgress = data
-    .filter((d) => d.entries >= 2 && d.delta > 0)
-    .sort((a, b) => b.delta - a.delta)
-    .slice(0, 5);
-
-  overviewContent.innerHTML = `
-    <div class="section-head reveal">
-      <span class="eyebrow">Resumen</span>
-      <h2>Tus mejores ejercicios</h2>
-      <p>En cuáles levantás más peso y en cuáles progresaste más desde tu primer registro.</p>
-    </div>
-    <div class="chart-grid">
-      <div class="chart-card reveal">
-        <h3>Mejores ejercicios</h3>
-        <p class="chart-sub">Por peso máximo levantado.</p>
-        <div class="chart-wrap"><canvas id="topMaxChart"></canvas></div>
-      </div>
-      <div class="chart-card reveal">
-        <h3>Mayor progreso</h3>
-        ${
-          topByProgress.length === 0
-            ? `<p class="chart-sub">Todavía no hay suficientes registros para comparar progreso.</p>`
-            : `<p class="chart-sub">Kilos ganados desde tu primer registro.</p><div class="chart-wrap"><canvas id="topProgressChart"></canvas></div>`
-        }
-      </div>
-    </div>
-  `;
-
-  topMaxChartInstance?.destroy();
-  topProgressChartInstance?.destroy();
-  topMaxChartInstance = barChart(
-    "topMaxChart",
-    topByMax.map((d) => d.name),
-    topByMax.map((d) => d.max),
-    "#ff8a3d"
-  );
-  if (topByProgress.length > 0) {
-    topProgressChartInstance = barChart(
-      "topProgressChart",
-      topByProgress.map((d) => d.name),
-      topByProgress.map((d) => d.delta),
-      "#2fd971"
-    );
-  }
-}
-
-function renderDetailTab(groups: ExerciseGroup[]) {
-  const detailHead = document.getElementById("detailHead");
-  const excPicker = document.getElementById("excPicker");
-  const progressContent = document.getElementById("progressContent")!;
-
-  if (groups.length === 0) {
-    detailHead?.remove();
-    excPicker?.remove();
-    progressContent.innerHTML = statsEmptyMarkup();
-    return;
-  }
-
-  const select = document.getElementById("excSelect") as HTMLSelectElement;
-  select.innerHTML = groups.map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join("");
-  select.addEventListener("change", () => {
-    const chosen = groups.find((g) => g.id === select.value);
-    if (chosen) renderExercise(chosen);
-  });
-
-  renderExercise(groups[0]);
-}
-
-function renderExercise(group: ExerciseGroup) {
-  const points = group.entries;
-  const weights = points.map((p) => p.peso);
-
-  const max = Math.max(...weights);
-  const maxEntry = points.find((p) => p.peso === max)!;
-  const min = Math.min(...weights);
-
-  const recent = points.slice(-RECENT_WINDOW);
-  const recentAvg = Math.round(recent.reduce((a, p) => a + p.peso, 0) / recent.length);
-
-  const first = points[0];
-  const last = points[points.length - 1];
-  const delta = last.peso - first.peso;
-  const deltaPct = first.peso > 0 ? Math.round((delta / first.peso) * 100) : 0;
-
-  const rm = bestOneRepMax(points);
-  const projected = projectWeight(points, PROJECTION_DAYS);
-
-  const volumePoints = points.filter((p) => p.serie && p.repe).map((p) => ({ fecha: p.fecha, volumen: p.serie! * p.repe! * p.peso }));
-
-  const progressContent = document.getElementById("progressContent")!;
-  progressContent.innerHTML = `
-    <div class="card-grid">
-      <div class="stat-card reveal"><div class="label">Peso máximo</div><div class="value">${max} kg<small>${escapeHtml(formatFechaCorta(maxEntry.fecha))}</small></div></div>
-      <div class="stat-card reveal"><div class="label">1RM estimado</div><div class="value">${rm ? `${rm.rm} kg` : "—"}<small>${rm ? "Fórmula de Epley" : "Cargá repeticiones para calcularlo"}</small></div></div>
-      <div class="stat-card reveal"><div class="label">Promedio últimas ${sesionesLabel(recent.length)}</div><div class="value">${recentAvg} kg</div></div>
-      <div class="stat-card reveal"><div class="label">Peso proyectado (4 semanas)</div><div class="value">${projected !== null ? `${projected} kg` : "—"}<small>${projected !== null ? "Según tu ritmo de progreso" : "Necesitás más registros"}</small></div></div>
-      <div class="stat-card reveal"><div class="label">Progreso total</div><div class="value">${points.length >= 2 ? `${delta >= 0 ? "+" : ""}${delta} kg<small>${deltaPct >= 0 ? "+" : ""}${deltaPct}% desde el primer registro</small>` : `—<small>Necesitás al menos 2 registros</small>`}</div></div>
-      <div class="stat-card reveal"><div class="label">Veces entrenado</div><div class="value">${points.length}<small>Mínimo registrado: ${min} kg</small></div></div>
-    </div>
-
-    <div class="chart-card reveal">
-      <h3>${escapeHtml(group.name)}</h3>
-      <p class="chart-sub">Ejercicio de ${escapeHtml(group.authorName)} · evolución del peso a lo largo del tiempo</p>
-      <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
-    </div>
-
-    <div class="chart-card reveal">
-      <h3>Peso por sesión</h3>
-      <p class="chart-sub">${ultimasSesionesLabel(Math.min(points.length, 10))}.</p>
-      <div class="chart-wrap"><canvas id="sessionChart"></canvas></div>
-    </div>
-
-    ${
-      volumePoints.length >= 2
-        ? `<div class="chart-card reveal"><h3>Volumen por sesión</h3><p class="chart-sub">Series × repeticiones × peso, últimas ${sesionesLabel(Math.min(volumePoints.length, 10))}.</p><div class="chart-wrap"><canvas id="volumeChart"></canvas></div></div>`
-        : ""
-    }
-  `;
-
-  lineChartInstance?.destroy();
-  sessionChartInstance?.destroy();
-  volumeChartInstance?.destroy();
-
-  const lineCanvas = document.getElementById("progressChart");
-  if (lineCanvas && typeof Chart !== "undefined") {
-    lineChartInstance = new Chart(lineCanvas, {
-      type: "line",
-      data: {
-        labels: points.map((p) => formatFechaCorta(p.fecha)),
-        datasets: [{ label: "Peso (kg)", data: weights, borderColor: "#ff8a3d", backgroundColor: "rgba(255, 138, 61, 0.18)", borderWidth: 2, tension: 0.3, fill: true, pointBackgroundColor: "#ff8a3d" }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } }, x: { ticks: { color: "#9aa1ac" }, grid: { display: false } } },
-      },
-    });
-  }
-
-  const recentSessions = points.slice(-10);
-  const sessionCanvas = document.getElementById("sessionChart");
-  if (sessionCanvas && typeof Chart !== "undefined") {
-    sessionChartInstance = new Chart(sessionCanvas, {
-      type: "bar",
-      data: { labels: recentSessions.map((p) => formatFechaCorta(p.fecha)), datasets: [{ data: recentSessions.map((p) => p.peso), backgroundColor: "#ff4d4d", borderRadius: 6, maxBarThickness: 34 }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } }, x: { ticks: { color: "#9aa1ac" }, grid: { display: false } } },
-      },
-    });
-  }
-
-  if (volumePoints.length >= 2) {
-    const recentVolume = volumePoints.slice(-10);
-    const volumeCanvas = document.getElementById("volumeChart");
-    if (volumeCanvas && typeof Chart !== "undefined") {
-      volumeChartInstance = new Chart(volumeCanvas, {
-        type: "bar",
-        data: { labels: recentVolume.map((p) => formatFechaCorta(p.fecha)), datasets: [{ data: recentVolume.map((p) => p.volumen), backgroundColor: "#2fd971", borderRadius: 6, maxBarThickness: 34 }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } }, x: { ticks: { color: "#9aa1ac" }, grid: { display: false } } },
-        },
-      });
-    }
-  }
 }
 
 // ---------- Rutina activa: detalle completo semana por semana ----------
@@ -481,101 +284,376 @@ function activeRoutineEmptyMarkup(): string {
   `;
 }
 
-function wireActiveRoutineAccordion(container: HTMLElement) {
-  container.querySelectorAll<HTMLButtonElement>(".day-row").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const accordion = btn.closest(".day-accordion");
-      const detail = accordion?.querySelector<HTMLElement>(".day-detail");
-      if (!accordion || !detail) return;
-      const isOpen = accordion.classList.toggle("open");
-      detail.hidden = !isOpen;
-    });
-  });
-}
-
-async function renderActiveRoutineSection(userId: string) {
-  const container = document.getElementById("activeRoutineContent");
-  if (!container) return;
-  try {
-    const [activeRoutine] = await listRoutines(userId, "active");
-    const routine = activeRoutine ? await getRoutineDetail(activeRoutine.id) : null;
-    if (!routine) {
-      container.innerHTML = activeRoutineEmptyMarkup();
-      return;
-    }
-
-    const exerciseIds = routine.semanas.flatMap((w) => w.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
-    const [latestWeights, comments] = await Promise.all([getLatestWeights(exerciseIds), listCommentsForExercises(exerciseIds)]);
-
-    container.innerHTML = activeRoutineMarkup(routine, latestWeights, comments);
-    wireActiveRoutineAccordion(container);
-  } catch {
-    container.innerHTML = `<p class="chart-sub">No se pudo cargar el detalle de la rutina activa.</p>`;
-  }
-}
-
-// ---------- Pestañas: Rutina activa / Resumen / Detalle por ejercicio ----------
-// Cada pestaña se carga (y sus graficos de Chart.js se instancian) recien la primera
-// vez que se abre, con el panel ya visible en el DOM -- crear un Chart sobre un canvas
-// oculto (display:none) lo deja con tamaño 0 y rompe el render.
-
 type ProgressTab = "active" | "overview" | "detail";
 const TAB_PANELS: Record<ProgressTab, string> = { active: "tabPanelActive", overview: "tabPanelOverview", detail: "tabPanelDetail" };
 
-let currentTab: ProgressTab = "active";
-const loadedTabs = new Set<ProgressTab>();
-let groupsPromise: Promise<ExerciseGroup[]> | null = null;
+// mount() define render() (arma el DOM entero desde cero para cada ?uid= -- no hay estado fino
+// que preservar entre perfiles distintos) y la deja referenciada aca para que update() la reuse.
+let updateHandler: ((params: URLSearchParams) => void) | null = null;
 
-function ensureGroups(): Promise<ExerciseGroup[]> {
-  if (!groupsPromise) groupsPromise = listWeightLogsWithContext(targetUserId).then(groupByExercise);
-  return groupsPromise;
-}
+export const progressView: ViewModule = {
+  async mount(container, params, ctx, authUserId) {
+    const myId = authUserId!; // la ruta se registra con requiresAuth:true
 
-async function loadTab(tab: ProgressTab) {
-  if (loadedTabs.has(tab)) return;
-  loadedTabs.add(tab);
-  if (tab === "active") {
-    await renderActiveRoutineSection(targetUserId);
-  } else {
-    const groups = await ensureGroups();
-    if (tab === "overview") renderOverviewTab(groups);
-    else renderDetailTab(groups);
-  }
-}
+    async function render(p: URLSearchParams): Promise<void> {
+      container.innerHTML = VIEW_MARKUP;
 
-function switchTab(tab: ProgressTab) {
-  currentTab = tab;
-  (Object.keys(TAB_PANELS) as ProgressTab[]).forEach((t) => {
-    const panel = document.getElementById(TAB_PANELS[t]);
-    if (panel) panel.hidden = t !== tab;
-  });
-  document.querySelectorAll<HTMLButtonElement>("#progressTabs .routine-tab").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.tab === tab);
-  });
-  void loadTab(tab);
-}
+      const targetUserId = p.get("uid") ?? myId;
 
-function wireTabs() {
-  document.querySelectorAll<HTMLButtonElement>("#progressTabs .routine-tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tab = btn.dataset.tab as ProgressTab;
-      if (tab !== currentTab) switchTab(tab);
+      // El unico flujo que trae ?uid= de otro usuario es "Tus alumnos" (entrenador viendo el
+      // progreso de un suscriptor aceptado); la propia tarjeta "Progreso completo" del perfil
+      // nunca pasa el uid de otra persona. Viendo el progreso propio (o el "?uid=" de uno
+      // mismo) el link vuelve al perfil en vez de a la lista de alumnos.
+      if (targetUserId !== myId) {
+        container.querySelector("#backToAlumnos")?.removeAttribute("hidden");
+        container.querySelector("#backToProfile")?.setAttribute("hidden", "");
+      }
+
+      let lineChartInstance: ChartInstance | null = null;
+      let sessionChartInstance: ChartInstance | null = null;
+      let volumeChartInstance: ChartInstance | null = null;
+      let topMaxChartInstance: ChartInstance | null = null;
+      let topProgressChartInstance: ChartInstance | null = null;
+      ctx.addCleanup(() => {
+        lineChartInstance?.destroy();
+        sessionChartInstance?.destroy();
+        volumeChartInstance?.destroy();
+        topMaxChartInstance?.destroy();
+        topProgressChartInstance?.destroy();
+      });
+
+      async function barChart(canvasId: string, labels: string[], data: number[], color: string): Promise<ChartInstance | null> {
+        const canvas = container.querySelector(`#${canvasId}`) as HTMLCanvasElement | null;
+        if (!canvas) return null;
+        const Chart = await loadChart();
+        return new Chart(canvas, {
+          type: "bar",
+          data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 6, maxBarThickness: 28 }] },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { beginAtZero: true, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } },
+              y: { ticks: { color: "#9aa1ac" }, grid: { display: false } },
+            },
+          },
+        });
+      }
+
+      // Caso de borde (uid invalido/perfil no encontrado): saca las pestañas, no tiene
+      // sentido navegar entre secciones vacias.
+      function showProfileNotFound(): void {
+        container.querySelector("#progressTabs")?.remove();
+        container.querySelector("#tabPanelOverview")?.remove();
+        container.querySelector("#tabPanelDetail")?.remove();
+        const panel = container.querySelector("#tabPanelActive");
+        if (panel) panel.innerHTML = statsEmptyMarkup();
+      }
+
+      async function renderOverviewTab(groups: ExerciseGroup[]): Promise<void> {
+        if (groups.length === 0) {
+          container.querySelector("#overviewContent")!.innerHTML = statsEmptyMarkup();
+          return;
+        }
+        await renderOverview(groups);
+      }
+
+      async function renderOverview(groups: ExerciseGroup[]): Promise<void> {
+        const overviewContent = container.querySelector("#overviewContent")!;
+        const data = groups.map((g) => {
+          const weights = g.entries.map((p) => p.peso);
+          const max = Math.max(...weights);
+          const delta = g.entries[g.entries.length - 1].peso - g.entries[0].peso;
+          return { name: g.name, max, delta, entries: g.entries.length };
+        });
+
+        const topByMax = [...data].sort((a, b) => b.max - a.max).slice(0, 5);
+        const topByProgress = data
+          .filter((d) => d.entries >= 2 && d.delta > 0)
+          .sort((a, b) => b.delta - a.delta)
+          .slice(0, 5);
+
+        overviewContent.innerHTML = `
+          <div class="section-head reveal">
+            <span class="eyebrow">Resumen</span>
+            <h2>Tus mejores ejercicios</h2>
+            <p>En cuáles levantás más peso y en cuáles progresaste más desde tu primer registro.</p>
+          </div>
+          <div class="chart-grid">
+            <div class="chart-card reveal">
+              <h3>Mejores ejercicios</h3>
+              <p class="chart-sub">Por peso máximo levantado.</p>
+              <div class="chart-wrap"><canvas id="topMaxChart"></canvas></div>
+            </div>
+            <div class="chart-card reveal">
+              <h3>Mayor progreso</h3>
+              ${
+                topByProgress.length === 0
+                  ? `<p class="chart-sub">Todavía no hay suficientes registros para comparar progreso.</p>`
+                  : `<p class="chart-sub">Kilos ganados desde tu primer registro.</p><div class="chart-wrap"><canvas id="topProgressChart"></canvas></div>`
+              }
+            </div>
+          </div>
+        `;
+
+        topMaxChartInstance?.destroy();
+        topProgressChartInstance?.destroy();
+        topMaxChartInstance = await barChart(
+          "topMaxChart",
+          topByMax.map((d) => d.name),
+          topByMax.map((d) => d.max),
+          "#ff8a3d"
+        );
+        if (topByProgress.length > 0) {
+          topProgressChartInstance = await barChart(
+            "topProgressChart",
+            topByProgress.map((d) => d.name),
+            topByProgress.map((d) => d.delta),
+            "#2fd971"
+          );
+        }
+      }
+
+      async function renderDetailTab(groups: ExerciseGroup[]): Promise<void> {
+        const detailHead = container.querySelector("#detailHead");
+        const excPicker = container.querySelector("#excPicker");
+        const progressContent = container.querySelector("#progressContent")!;
+
+        if (groups.length === 0) {
+          detailHead?.remove();
+          excPicker?.remove();
+          progressContent.innerHTML = statsEmptyMarkup();
+          return;
+        }
+
+        const select = container.querySelector("#excSelect") as HTMLSelectElement;
+        select.innerHTML = groups.map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join("");
+        select.addEventListener(
+          "change",
+          () => {
+            const chosen = groups.find((g) => g.id === select.value);
+            if (chosen) void renderExercise(chosen);
+          },
+          { signal: ctx.signal }
+        );
+
+        await renderExercise(groups[0]);
+      }
+
+      async function renderExercise(group: ExerciseGroup): Promise<void> {
+        const points = group.entries;
+        const weights = points.map((p) => p.peso);
+
+        const max = Math.max(...weights);
+        const maxEntry = points.find((p) => p.peso === max)!;
+        const min = Math.min(...weights);
+
+        const recent = points.slice(-RECENT_WINDOW);
+        const recentAvg = Math.round(recent.reduce((a, p) => a + p.peso, 0) / recent.length);
+
+        const first = points[0];
+        const last = points[points.length - 1];
+        const delta = last.peso - first.peso;
+        const deltaPct = first.peso > 0 ? Math.round((delta / first.peso) * 100) : 0;
+
+        const rm = bestOneRepMax(points);
+        const projected = projectWeight(points, PROJECTION_DAYS);
+
+        const volumePoints = points.filter((p) => p.serie && p.repe).map((p) => ({ fecha: p.fecha, volumen: p.serie! * p.repe! * p.peso }));
+
+        const progressContent = container.querySelector("#progressContent")!;
+        progressContent.innerHTML = `
+          <div class="card-grid">
+            <div class="stat-card reveal"><div class="label">Peso máximo</div><div class="value">${max} kg<small>${escapeHtml(formatFechaCorta(maxEntry.fecha))}</small></div></div>
+            <div class="stat-card reveal"><div class="label">1RM estimado</div><div class="value">${rm ? `${rm.rm} kg` : "—"}<small>${rm ? "Fórmula de Epley" : "Cargá repeticiones para calcularlo"}</small></div></div>
+            <div class="stat-card reveal"><div class="label">Promedio últimas ${sesionesLabel(recent.length)}</div><div class="value">${recentAvg} kg</div></div>
+            <div class="stat-card reveal"><div class="label">Peso proyectado (4 semanas)</div><div class="value">${projected !== null ? `${projected} kg` : "—"}<small>${projected !== null ? "Según tu ritmo de progreso" : "Necesitás más registros"}</small></div></div>
+            <div class="stat-card reveal"><div class="label">Progreso total</div><div class="value">${points.length >= 2 ? `${delta >= 0 ? "+" : ""}${delta} kg<small>${deltaPct >= 0 ? "+" : ""}${deltaPct}% desde el primer registro</small>` : `—<small>Necesitás al menos 2 registros</small>`}</div></div>
+            <div class="stat-card reveal"><div class="label">Veces entrenado</div><div class="value">${points.length}<small>Mínimo registrado: ${min} kg</small></div></div>
+          </div>
+
+          <div class="chart-card reveal">
+            <h3>${escapeHtml(group.name)}</h3>
+            <p class="chart-sub">Ejercicio de ${escapeHtml(group.authorName)} · evolución del peso a lo largo del tiempo</p>
+            <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
+          </div>
+
+          <div class="chart-card reveal">
+            <h3>Peso por sesión</h3>
+            <p class="chart-sub">${ultimasSesionesLabel(Math.min(points.length, 10))}.</p>
+            <div class="chart-wrap"><canvas id="sessionChart"></canvas></div>
+          </div>
+
+          ${
+            volumePoints.length >= 2
+              ? `<div class="chart-card reveal"><h3>Volumen por sesión</h3><p class="chart-sub">Series × repeticiones × peso, últimas ${sesionesLabel(Math.min(volumePoints.length, 10))}.</p><div class="chart-wrap"><canvas id="volumeChart"></canvas></div></div>`
+              : ""
+          }
+        `;
+
+        lineChartInstance?.destroy();
+        sessionChartInstance?.destroy();
+        volumeChartInstance?.destroy();
+
+        const Chart = await loadChart();
+
+        const lineCanvas = container.querySelector("#progressChart") as HTMLCanvasElement | null;
+        if (lineCanvas) {
+          lineChartInstance = new Chart(lineCanvas, {
+            type: "line",
+            data: {
+              labels: points.map((p) => formatFechaCorta(p.fecha)),
+              datasets: [{ label: "Peso (kg)", data: weights, borderColor: "#ff8a3d", backgroundColor: "rgba(255, 138, 61, 0.18)", borderWidth: 2, tension: 0.3, fill: true, pointBackgroundColor: "#ff8a3d" }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: { y: { ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } }, x: { ticks: { color: "#9aa1ac" }, grid: { display: false } } },
+            },
+          });
+        }
+
+        const recentSessions = points.slice(-10);
+        const sessionCanvas = container.querySelector("#sessionChart") as HTMLCanvasElement | null;
+        if (sessionCanvas) {
+          sessionChartInstance = new Chart(sessionCanvas, {
+            type: "bar",
+            data: { labels: recentSessions.map((p) => formatFechaCorta(p.fecha)), datasets: [{ data: recentSessions.map((p) => p.peso), backgroundColor: "#ff4d4d", borderRadius: 6, maxBarThickness: 34 }] },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: { y: { beginAtZero: true, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } }, x: { ticks: { color: "#9aa1ac" }, grid: { display: false } } },
+            },
+          });
+        }
+
+        if (volumePoints.length >= 2) {
+          const recentVolume = volumePoints.slice(-10);
+          const volumeCanvas = container.querySelector("#volumeChart") as HTMLCanvasElement | null;
+          if (volumeCanvas) {
+            volumeChartInstance = new Chart(volumeCanvas, {
+              type: "bar",
+              data: { labels: recentVolume.map((p) => formatFechaCorta(p.fecha)), datasets: [{ data: recentVolume.map((p) => p.volumen), backgroundColor: "#2fd971", borderRadius: 6, maxBarThickness: 34 }] },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } }, x: { ticks: { color: "#9aa1ac" }, grid: { display: false } } },
+              },
+            });
+          }
+        }
+      }
+
+      function wireActiveRoutineAccordion(root: HTMLElement): void {
+        root.querySelectorAll<HTMLButtonElement>(".day-row").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const accordion = btn.closest(".day-accordion");
+            const detail = accordion?.querySelector<HTMLElement>(".day-detail");
+            if (!accordion || !detail) return;
+            const isOpen = accordion.classList.toggle("open");
+            detail.hidden = !isOpen;
+          });
+        });
+      }
+
+      async function renderActiveRoutineSection(userId: string): Promise<void> {
+        const activeContainer = container.querySelector("#activeRoutineContent");
+        if (!activeContainer) return;
+        try {
+          const [activeRoutine] = await listRoutines(userId, "active");
+          const routine = activeRoutine ? await getRoutineDetail(activeRoutine.id) : null;
+          if (!routine) {
+            activeContainer.innerHTML = activeRoutineEmptyMarkup();
+            return;
+          }
+
+          const exerciseIds = routine.semanas.flatMap((w) => w.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
+          const [latestWeights, comments] = await Promise.all([getLatestWeights(exerciseIds), listCommentsForExercises(exerciseIds)]);
+
+          activeContainer.innerHTML = activeRoutineMarkup(routine, latestWeights, comments);
+          wireActiveRoutineAccordion(activeContainer as HTMLElement);
+        } catch {
+          activeContainer.innerHTML = `<p class="chart-sub">No se pudo cargar el detalle de la rutina activa.</p>`;
+        }
+      }
+
+      // ---------- Pestañas: Rutina activa / Resumen / Detalle por ejercicio ----------
+      // Cada pestaña se carga (y sus graficos de Chart.js se instancian) recien la primera
+      // vez que se abre, con el panel ya visible en el DOM -- crear un Chart sobre un canvas
+      // oculto (display:none) lo deja con tamaño 0 y rompe el render.
+
+      let currentTab: ProgressTab = "active";
+      const loadedTabs = new Set<ProgressTab>();
+      let groupsPromise: Promise<ExerciseGroup[]> | null = null;
+
+      function ensureGroups(): Promise<ExerciseGroup[]> {
+        if (!groupsPromise) groupsPromise = listWeightLogsWithContext(targetUserId).then(groupByExercise);
+        return groupsPromise;
+      }
+
+      async function loadTab(tab: ProgressTab): Promise<void> {
+        if (loadedTabs.has(tab)) return;
+        loadedTabs.add(tab);
+        if (tab === "active") {
+          await renderActiveRoutineSection(targetUserId);
+        } else {
+          const groups = await ensureGroups();
+          if (tab === "overview") await renderOverviewTab(groups);
+          else await renderDetailTab(groups);
+        }
+      }
+
+      function switchTab(tab: ProgressTab): void {
+        currentTab = tab;
+        (Object.keys(TAB_PANELS) as ProgressTab[]).forEach((t) => {
+          const panel = container.querySelector(`#${TAB_PANELS[t]}`) as HTMLElement | null;
+          if (panel) panel.hidden = t !== tab;
+        });
+        container.querySelectorAll<HTMLButtonElement>("#progressTabs .routine-tab").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.tab === tab);
+        });
+        void loadTab(tab);
+      }
+
+      function wireTabs(): void {
+        container.querySelectorAll<HTMLButtonElement>("#progressTabs .routine-tab").forEach((btn) => {
+          btn.addEventListener(
+            "click",
+            () => {
+              const tab = btn.dataset.tab as ProgressTab;
+              if (tab !== currentTab) switchTab(tab);
+            },
+            { signal: ctx.signal }
+          );
+        });
+      }
+
+      const profile = await getProfile(targetUserId);
+      if (!profile) {
+        showProfileNotFound();
+        return;
+      }
+
+      const title = container.querySelector("#pageTitle");
+      if (title) title.textContent = `Progreso de ${escapeHtml(profile.nombre)}`;
+
+      wireTabs();
+      void loadTab(currentTab);
+    }
+
+    await render(params);
+
+    updateHandler = (nextParams) => void render(nextParams);
+    ctx.addCleanup(() => {
+      updateHandler = null;
     });
-  });
-}
-
-async function init() {
-  const profile = await getProfile(targetUserId);
-  if (!profile) {
-    showProfileNotFound();
-    return;
-  }
-
-  const title = document.getElementById("pageTitle");
-  if (title) title.textContent = `Progreso de ${escapeHtml(profile.nombre)}`;
-
-  wireTabs();
-  void loadTab(currentTab);
-}
-
-init();
+  },
+  update(params) {
+    updateHandler?.(params);
+  },
+};

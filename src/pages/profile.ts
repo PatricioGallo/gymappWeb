@@ -57,7 +57,8 @@ import {
   type PostAuthor,
 } from "../services/post.service";
 
-declare const Chart: any;
+import type { Chart as ChartInstance } from "chart.js";
+import { loadChart } from "../lib/chartLoader";
 
 // Estado que hoy se calculaba una sola vez a nivel de modulo (MPA: cada carga de pagina es un
 // modulo nuevo). Con el shell, este mismo modulo puede quedar cargado en memoria durante varias
@@ -67,26 +68,8 @@ declare const Chart: any;
 // todas dentro de mount().
 let myId: string | null = null;
 let usernameParam: string | null = null;
-let freqChartInstance: any = null;
-let progressChartInstance: any = null;
-
-let chartJsPromise: Promise<void> | null = null;
-/** Chart.js se carga con un <script> clasico (no es dependencia de npm) -- pages/profile.html
- * y 404.html lo incluyen de entrada, pero si se llega a este perfil navegando client-side desde
- * otra vista migrada (que no lo tiene en su HTML) hay que injectarlo a mano antes de graficar. */
-function ensureChartJs(): Promise<void> {
-  if (typeof Chart !== "undefined") return Promise.resolve();
-  if (!chartJsPromise) {
-    chartJsPromise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/chart.js";
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("No se pudo cargar Chart.js"));
-      document.head.appendChild(script);
-    });
-  }
-  return chartJsPromise;
-}
+let freqChartInstance: ChartInstance | null = null;
+let progressChartInstance: ChartInstance | null = null;
 
 function parseFechaISO(fecha: string): Date {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -838,14 +821,14 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
     }
   `;
 
-  await ensureChartJs().catch(() => {});
-  renderFreqChart(computeDailyFrequency(logs));
-  if (dailyProgress.length >= 2) renderProgressChart(dailyProgress);
+  await renderFreqChart(computeDailyFrequency(logs));
+  if (dailyProgress.length >= 2) await renderProgressChart(dailyProgress);
 }
 
-function renderFreqChart(buckets: { label: string; count: number }[]) {
-  const canvas = document.getElementById("freqChart");
-  if (!canvas || typeof Chart === "undefined") return;
+async function renderFreqChart(buckets: { label: string; count: number }[]) {
+  const canvas = document.getElementById("freqChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const Chart = await loadChart();
   freqChartInstance?.destroy();
   freqChartInstance = new Chart(canvas, {
     type: "bar",
@@ -865,9 +848,10 @@ function renderFreqChart(buckets: { label: string; count: number }[]) {
   });
 }
 
-function renderProgressChart(entries: { fecha: string; peso: number }[]) {
-  const canvas = document.getElementById("progressChart");
-  if (!canvas || typeof Chart === "undefined") return;
+async function renderProgressChart(entries: { fecha: string; peso: number }[]) {
+  const canvas = document.getElementById("progressChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const Chart = await loadChart();
   progressChartInstance?.destroy();
   progressChartInstance = new Chart(canvas, {
     type: "line",
