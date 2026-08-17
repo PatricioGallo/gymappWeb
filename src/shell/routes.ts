@@ -11,6 +11,7 @@ import { followersView } from "../pages/followers";
 import { modExcView } from "../pages/modExc";
 import { showExcView } from "../pages/showExc";
 import { postView } from "../pages/post";
+import { alumnosView } from "../pages/alumnos";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -76,6 +77,11 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/post.html") ? new URLSearchParams() : null),
     view: postView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/alumnos.html") ? new URLSearchParams() : null),
+    view: alumnosView,
     auth: "required",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --

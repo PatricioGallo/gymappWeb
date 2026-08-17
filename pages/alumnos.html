@@ -72,28 +72,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
-    <div class="container">
-      <a href="profile.html" class="back-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
-      <span class="eyebrow">Entrenador</span>
-      <h1>Tus alumnos</h1>
-      <p>Rutina activa, progreso y comentarios de cada suscriptor aceptado.</p>
-    </div>
-  </section>
-
-  <section class="features">
-    <div class="container">
-      <div class="routine-tabs" id="alumnosTabs">
-        <button class="routine-tab active" data-tab="current" type="button">Actuales</button>
-        <button class="routine-tab" data-tab="historic" type="button">Históricas</button>
-      </div>
-      <form class="search-page-form" id="alumnosSearchForm">
-        <input type="search" id="alumnosSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
-      </form>
-      <p class="chart-sub" id="alumnosSummary">Cargando...</p>
-      <div class="search-page-list" id="alumnosList"></div>
-    </div>
-  </section>
+  <div id="view-root"></div>
 
   <footer class="site-footer">
     <div class="container">
@@ -116,6 +95,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/alumnos.ts"></script>
+  <script type="module" src="/src/pages/alumnos.entry.ts"></script>
 </body>
 </html>
