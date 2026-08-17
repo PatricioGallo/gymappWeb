@@ -110,7 +110,16 @@ function evictOldest(view: ViewModule, max: number): void {
   }
 }
 
+// Cada llamada a renderCurrentLocation() se identifica con un numero de generacion creciente.
+// mount()/requireAuth() son async: si el usuario navega de nuevo antes de que una llamada
+// anterior termine de resolver (ej. clickea otro link mientras la vista todavia esta cargando),
+// sin esto la llamada vieja terminaria llamando a su propio onShow() DESPUES de que la nueva ya
+// tomo el control -- pisando el estado (clases de <body>, etc.) que la vista nueva ya dejo bien
+// puesto. Los puntos de chequeo van justo despues de cada await, antes de tocar nada mas.
+let renderGeneration = 0;
+
 async function renderCurrentLocation(): Promise<void> {
+  const myGeneration = ++renderGeneration;
   if (!viewRoot) return;
   const url = new URL(location.href);
   const match = resolve(url.pathname);
@@ -143,9 +152,11 @@ async function renderCurrentLocation(): Promise<void> {
   if (!cached) {
     if (match.route.auth === "required") {
       userId = await requireAuth().catch(() => null);
+      if (myGeneration !== renderGeneration) return; // una navegacion mas nueva ya tomo el control
       if (!userId) return; // requireAuth ya redirigio a login.html
     } else if (match.route.auth === "optional") {
       userId = await getOptionalAuth().catch(() => null);
+      if (myGeneration !== renderGeneration) return;
     }
   }
 
@@ -177,6 +188,7 @@ async function renderCurrentLocation(): Promise<void> {
   instances.set(key, { el, ctx, lastUsed: Date.now() });
   active = { view, key };
   await view.mount(el, params, ctx, userId);
+  if (myGeneration !== renderGeneration) return; // una navegacion mas nueva ya tomo el control
   view.onShow?.();
 }
 

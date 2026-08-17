@@ -1894,7 +1894,7 @@ export const profileView: ViewModule = {
 
     container.innerHTML = VIEW_MARKUP;
 
-    setupAutoHideHeader();
+    setupAutoHideHeader(ctx);
     setupProfileMenuToggle(ctx);
     setupRoutineMenuOutsideClick(ctx);
 
