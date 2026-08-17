@@ -2,6 +2,7 @@ import { escapeHtml } from "./dom";
 import { searchProfiles, type ProfileSearchResult } from "../services/search.service";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches, type RecentSearchEntry } from "./recentSearches";
+import { smartNavigate } from "../shell/router";
 
 // Mismo breakpoint que .user-menu-toggle/.notif-dropdown en modern.css (860px).
 const MOBILE_QUERY = "(max-width: 859px)";
@@ -86,7 +87,7 @@ export function setupHeaderSearch(): void {
 
     results!.querySelectorAll<HTMLDivElement>(".search-recent-item").forEach((item) => {
       item.addEventListener("click", () => {
-        window.location.href = `profile.html?u=${item.dataset.username}`;
+        smartNavigate(`profile.html?u=${item.dataset.username}`);
       });
     });
     results!.querySelectorAll<HTMLButtonElement>(".search-recent-remove").forEach((btn) => {
@@ -160,7 +161,7 @@ export function setupHeaderSearch(): void {
   btn.addEventListener("click", () => {
     // En mobile no entra comodo un panel flotante: mandamos directo a la pagina de busqueda.
     if (window.matchMedia(MOBILE_QUERY).matches) {
-      window.location.href = "search.html";
+      smartNavigate("search.html");
       return;
     }
     if (panel.hidden) openPanel();

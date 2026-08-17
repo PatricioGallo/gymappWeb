@@ -237,3 +237,15 @@ export async function requireAuth(): Promise<string> {
   trackPresence(userId);
   return userId;
 }
+
+/** Para paginas que aceptan visitantes anonimos (ej. perfil publico): devuelve el user id si
+ * hay sesion, o null si no -- a diferencia de requireAuth(), nunca redirige. */
+export async function getOptionalAuth(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id ?? null;
+  if (userId) {
+    void touchLastSeen();
+    trackPresence(userId);
+  }
+  return userId;
+}

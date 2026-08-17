@@ -4501,7 +4501,11 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   width: 38px;
   height: 38px;
   border-radius: 50%;
+  background: none;
+  border: none;
+  padding: 0;
   color: var(--text);
+  cursor: pointer;
   flex-shrink: 0;
 }
 
@@ -5891,5 +5895,63 @@ body.feed-page .site-footer { display: none; }
     font-size: 18px;
     font-weight: 700;
     line-height: 1.5;
+  }
+}
+
+/* ---------- Hilo de chat fusionado dentro de chats.html (Fase 4 de la migracion a SPA) ----------
+   Reemplaza al iframe de chat.html que habia antes: el hilo (chatThread.ts) se monta directo
+   adentro de #chatThreadContent, dentro de .chat-thread-pane. En desktop ese panel ya es
+   flex:1 dentro de .chat-split (ver mas arriba); en mobile, por defecto .chat-thread-pane sigue
+   con display:none (regla ya definida arriba) y solo se muestra a pantalla completa, superpuesto
+   a la lista, cuando chats.ts le agrega "chats-thread-open" a <body> -- nunca se destruye el
+   DOM al "volver", solo se oculta, asi que reabrir la misma conversacion no vuelve a cargar nada. */
+.chat-thread-pane .chat-thread-page { width: 100%; }
+
+/* Cada conversacion abierta en la sesion tiene su propia .chat-thread-instance dentro de
+   #chatThreadContent (chats.ts las va creando y las oculta/muestra, nunca las destruye) -- por
+   eso hace falta ganarle en especificidad al [hidden] de la hoja de estilo del navegador, si
+   no el display:flex de esta clase lo pisaria y las conversaciones ocultas seguirian visibles. */
+.chat-thread-instance {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.chat-thread-instance[hidden] { display: none; }
+
+@media (min-width: 860px) {
+  .chat-thread-pane .chat-thread-page { height: 100%; }
+  .chat-thread-back { display: none; }
+}
+
+@media (max-width: 859px) {
+  body.chats-thread-open .site-header,
+  body.chats-thread-open .chat-list-pane,
+  body.chats-thread-open .chat-list-toolbar,
+  body.chats-thread-open #chatSearchPeople,
+  body.chats-thread-open #chatTabs {
+    display: none;
+  }
+
+  /* Sin el header (48px+ de --header-h), .features ya no debe descontarlo -- si no, queda
+     ese hueco vacio arriba del panel del hilo a pantalla completa. */
+  body.chats-thread-open.chats-page .features {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  body.chats-thread-open .chat-thread-pane {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: var(--bg);
+  }
+
+  body.chats-thread-open .chat-thread-page {
+    height: 100vh;
+    height: 100dvh;
+    height: calc(var(--app-vh, 1vh) * 100);
   }
 }

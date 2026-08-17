@@ -10,7 +10,7 @@ const IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AUDIO_MAX_BYTES = 15 * 1024 * 1024;
 export const AUDIO_MAX_SECONDS = 120;
 export const MESSAGES_PAGE_SIZE = 50;
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
+export const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 function friendlyError(error: { message?: string } | null, fallback: string): string {
   return error?.message?.trim() || fallback;

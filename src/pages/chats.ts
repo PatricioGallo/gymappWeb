@@ -1,4 +1,3 @@
-import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { listFollowers, listFollowing, type FollowListRow } from "../services/follow.service";
@@ -13,10 +12,10 @@ import {
 } from "../services/chat.service";
 import { cacheMessages } from "../lib/chatDb";
 import { supabase } from "../lib/supabaseClient";
-
-setupNavToggle();
-setupRevealObserver();
-const userId = await requireAuth();
+import type { ViewModule } from "../shell/router";
+import { navigate } from "../shell/router";
+import { createViewContext, type ViewContext } from "../shell/viewContext";
+import { mountThread } from "./chatThread";
 
 function relativeTime(iso: string): string {
   const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -38,302 +37,427 @@ function previewText(c: ConversationSummary): string {
   return escapeHtml(`${prefix}${c.last_message_preview ?? "Empezá la conversación"}`);
 }
 
-let conversations: ConversationSummary[] = [];
-let searchQuery = "";
-
-const listEl = document.getElementById("chatList")!;
-const tabsWrap = document.getElementById("chatTabs")!;
-const messagesPanel = document.getElementById("chatMessagesPanel") as HTMLDivElement;
-const requestsCountEl = document.getElementById("chatRequestsCount")!;
-const requestsListEl = document.getElementById("chatRequestsList") as HTMLDivElement;
-const searchInput = document.getElementById("chatSearchInput") as HTMLInputElement;
-const peopleEl = document.getElementById("chatSearchPeople") as HTMLDivElement;
-const threadPane = document.getElementById("chatThreadPane") as HTMLDivElement;
-const threadPlaceholder = document.getElementById("chatThreadPlaceholder") as HTMLDivElement;
-
-let activeConversationId: string | null = null;
-let threadFrame: HTMLIFrameElement | null = null;
-
-// El breakpoint desktop del proyecto (mismo que usa .site-nav para pasar de
-// menu hamburguesa a nav horizontal). Solo en ese ancho tiene sentido el
-// panel dividido estilo WhatsApp Web; en mobile se sigue navegando de pagina.
-function isDesktopChatLayout(): boolean {
-  return window.matchMedia("(min-width: 860px)").matches;
+// Fallback para el bug de Chrome en la app instalada de Android (WebAPK): ver misma nota
+// que tenia chat.ts -- 100dvh a veces no descuenta la barra de navegacion del sistema.
+function setAppViewportHeight(): void {
+  document.documentElement.style.setProperty("--app-vh", `${window.innerHeight * 0.01}px`);
 }
 
-function matchesQuery(c: ConversationSummary): boolean {
-  if (!searchQuery) return true;
-  const q = searchQuery.toLowerCase();
-  return (
-    (c.other_username ?? "").toLowerCase().includes(q) ||
-    (c.other_nombre ?? "").toLowerCase().includes(q) ||
-    (c.other_apellido ?? "").toLowerCase().includes(q)
-  );
-}
+const VIEW_MARKUP = `
+  <div class="routine-tabs" id="chatTabs">
+    <button class="routine-tab active" data-tab="messages" type="button">Tus mensajes</button>
+    <button class="routine-tab" data-tab="requests" type="button">Solicitudes<span class="notif-badge" id="chatRequestsCount" hidden>0</span></button>
+  </div>
 
-function renderRequests() {
-  const pending = conversations.filter((c) => c.status === "pending" && !c.is_initiator);
-  requestsCountEl.hidden = pending.length === 0;
-  requestsCountEl.textContent = String(pending.length);
+  <div id="chatMessagesPanel">
+    <div class="chat-split">
+      <div class="chat-list-pane">
+        <div class="chat-list-toolbar">
+          <div class="chat-list-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
+          </div>
+        </div>
 
-  requestsListEl.innerHTML = pending.length
-    ? pending
-        .map(
-          (c) => `
-    <div class="chat-request-row" data-id="${c.conversation_id}">
-      <button type="button" class="chat-request-open" data-id="${c.conversation_id}">
-        <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
-        <span class="chat-request-body">
-          <span class="chat-row-name">${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}</span>
-          <span class="chat-row-preview">${previewText(c)}</span>
-        </span>
-      </button>
-      <span class="chat-request-actions">
-        <button type="button" class="btn btn-primary btn-sm accept-btn" data-id="${c.conversation_id}">Aceptar</button>
-        <button type="button" class="btn btn-outline btn-sm reject-btn" data-id="${c.conversation_id}">Rechazar</button>
-      </span>
+        <div id="chatSearchPeople" hidden></div>
+
+        <div class="chat-list" id="chatList"></div>
+      </div>
+
+      <div class="chat-thread-pane" id="chatThreadPane">
+        <div class="chat-thread-placeholder" id="chatThreadPlaceholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <p>Elegí una conversación para empezar a chatear</p>
+        </div>
+        <section class="chat-thread-page" id="chatThreadPage" hidden>
+          <div class="container chat-thread-container" id="chatThreadContent"></div>
+        </section>
+      </div>
     </div>
-  `
-        )
-        .join("")
-    : `<p class="notif-empty">No tenés solicitudes de mensaje pendientes.</p>`;
+  </div>
 
-  requestsListEl.querySelectorAll<HTMLButtonElement>(".chat-request-open").forEach((btn) => {
-    btn.addEventListener("click", () => openThread(btn.dataset.id!));
-  });
-  requestsListEl.querySelectorAll<HTMLButtonElement>(".accept-btn").forEach((btn) => {
-    btn.addEventListener("click", () => void handleRequestAction(btn.dataset.id!, "accept"));
-  });
-  requestsListEl.querySelectorAll<HTMLButtonElement>(".reject-btn").forEach((btn) => {
-    btn.addEventListener("click", () => void handleRequestAction(btn.dataset.id!, "decline"));
-  });
-}
+  <div class="chat-requests-list" id="chatRequestsList" hidden></div>
+`;
 
-function renderList() {
-  const main = conversations.filter((c) => (c.status === "accepted" || c.is_initiator) && matchesQuery(c));
+// mount() la arma cada vez que se monta la vista; se referencia desde el objeto exportado
+// (que el router necesita tener siempre definido, incluso antes del primer mount) para poder
+// delegarle los cambios de ?c=ID sin desmontar toda la vista de chats.
+let updateHandler: ((params: URLSearchParams) => void) | null = null;
+// Reflejado por openThread/closeThread -- onShow lo usa para restaurar la clase de <body> que
+// pone en pantalla completa el hilo en mobile, si justo eso era lo que se estaba viendo antes
+// de que esta vista pasara a segundo plano (ver onHide, que siempre la saca al ocultarse).
+let isThreadOpen = false;
 
-  listEl.innerHTML =
-    main
-      .map((c) => {
-        const seenBadge =
-          c.unread_count > 0
-            ? `<span class="notif-badge">${c.unread_count > 9 ? "9+" : c.unread_count}</span>`
-            : c.last_message_sender_is_me && c.last_message_read
-              ? `<span class="chat-seen">Visto</span>`
-              : "";
-        return `
-      <button type="button" class="chat-row ${c.unread_count > 0 ? "unread" : ""}" data-id="${c.conversation_id}">
-        <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
-        <span class="chat-row-body">
-          <span class="chat-row-top">
-            <span class="chat-row-name">${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}</span>
-            <span class="chat-row-time">${relativeTime(c.last_message_at)}</span>
-          </span>
-          <span class="chat-row-bottom">
-            <span class="chat-row-preview">${previewText(c)}${c.status === "pending" ? " · Pendiente de aceptar" : ""}</span>
-            ${seenBadge}
-          </span>
-        </span>
-      </button>
-    `;
-      })
-      .join("") ||
-    `<p class="notif-empty">${searchQuery ? "No encontramos conversaciones con ese nombre." : "Todavía no tenés mensajes. Buscá a alguien arriba para escribirle."}</p>`;
+export const chatsView: ViewModule = {
+  async mount(container, params, ctx, authUserId) {
+    const userId = authUserId!; // la ruta se registra con requiresAuth:true
+    container.innerHTML = VIEW_MARKUP;
 
-  listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((btn) => {
-    btn.addEventListener("click", () => openThread(btn.dataset.id!));
-  });
+    setAppViewportHeight();
+    window.addEventListener("resize", setAppViewportHeight, { signal: ctx.signal });
+    window.addEventListener("orientationchange", setAppViewportHeight, { signal: ctx.signal });
 
-  highlightActiveRow();
-}
+    let conversations: ConversationSummary[] = [];
+    let searchQuery = "";
 
-function highlightActiveRow(): void {
-  listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((row) => {
-    row.classList.toggle("active", row.dataset.id === activeConversationId);
-  });
-}
+    const listEl = container.querySelector("#chatList")!;
+    const tabsWrap = container.querySelector("#chatTabs")!;
+    const messagesPanel = container.querySelector("#chatMessagesPanel") as HTMLDivElement;
+    const requestsCountEl = container.querySelector("#chatRequestsCount") as HTMLElement;
+    const requestsListEl = container.querySelector("#chatRequestsList") as HTMLDivElement;
+    const searchInput = container.querySelector("#chatSearchInput") as HTMLInputElement;
+    const peopleEl = container.querySelector("#chatSearchPeople") as HTMLDivElement;
+    const threadPlaceholder = container.querySelector("#chatThreadPlaceholder") as HTMLDivElement;
+    const threadPage = container.querySelector("#chatThreadPage") as HTMLElement;
+    const threadContentEl = container.querySelector("#chatThreadContent") as HTMLDivElement;
 
-function openThread(conversationId: string): void {
-  if (!isDesktopChatLayout()) {
-    window.location.href = `chat.html?c=${conversationId}`;
-    return;
-  }
-
-  activeConversationId = conversationId;
-  threadPlaceholder.hidden = true;
-  if (!threadFrame) {
-    threadFrame = document.createElement("iframe");
-    threadFrame.className = "chat-thread-frame";
-    threadPane.appendChild(threadFrame);
-  }
-  threadFrame.src = `chat.html?c=${conversationId}&embed=1`;
-  highlightActiveRow();
-}
-
-async function handleRequestAction(id: string, action: "accept" | "decline"): Promise<void> {
-  if (action === "decline" && !confirm("¿Rechazar esta solicitud de mensaje?")) return;
-
-  const row = requestsListEl.querySelector<HTMLElement>(`.chat-request-row[data-id="${id}"]`);
-  row?.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.disabled = true));
-
-  const { error } = action === "accept" ? await acceptMessageRequest(id) : await declineMessageRequest(id);
-  if (error) {
-    alert(error);
-    row?.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.disabled = false));
-    return;
-  }
-
-  if (action === "accept") {
-    // En desktop ya no navegamos a otra pagina al abrir el hilo, asi que si no
-    // actualizamos el estado local la solicitud aceptada queda mostrada como
-    // pendiente en la pestaña "Solicitudes" mientras el chat se abre a la
-    // derecha. La pasamos a la pestaña de mensajes para que quede coherente.
-    const convo = conversations.find((c) => c.conversation_id === id);
-    if (convo) convo.status = "accepted";
-    renderRequests();
-    renderList();
-    tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "messages"));
-    messagesPanel.hidden = false;
-    requestsListEl.hidden = true;
-    openThread(id);
-    return;
-  }
-
-  conversations = conversations.filter((c) => c.conversation_id !== id);
-  renderRequests();
-  renderList();
-}
-
-let peopleRequestId = 0;
-async function runPeopleSearch(query: string): Promise<void> {
-  const myRequestId = ++peopleRequestId;
-  if (query.length < 2) {
-    peopleEl.hidden = true;
-    peopleEl.innerHTML = "";
-    return;
-  }
-
-  try {
-    // El buscador de "nuevo mensaje" solo debe ofrecer gente con la que ya hay
-    // relacion de seguimiento (en cualquier direccion), no cualquier perfil publico.
-    const [followers, following] = await Promise.all([listFollowers(userId, query, 8), listFollowing(userId, query, 8)]);
-    if (myRequestId !== peopleRequestId) return;
-
-    const merged = new Map<string, FollowListRow>();
-    for (const r of [...followers, ...following]) {
-      if (r.id !== userId) merged.set(r.id, r);
-    }
-    const results = [...merged.values()].slice(0, 6);
-
-    const existingIds = new Set(conversations.map((c) => c.other_user_id));
-    peopleEl.hidden = results.length === 0;
-    peopleEl.innerHTML = results.length
-      ? `<p class="search-recent-header"><span>Personas</span></p>` +
-        results
-          .map(
-            (r) => `
-      <button type="button" class="search-result-item chat-person-row" data-id="${escapeHtml(r.id)}">
-        <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
-        <span class="search-result-body">
-          <span class="search-result-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
-          <span class="search-result-username">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}</span>
-        </span>
-        <span class="chat-person-cta">${existingIds.has(r.id) ? "Ver chat" : "Mensaje"}</span>
-      </button>
-    `
-          )
-          .join("")
-      : "";
-
-    peopleEl.querySelectorAll<HTMLButtonElement>(".chat-person-row").forEach((btn) => {
-      btn.addEventListener("click", () => void startConversationWith(btn.dataset.id!));
+    let activeConversationId: string | null = null;
+    // Una instancia de DOM por conversacion abierta en esta sesion -- nunca se destruye al
+    // cambiar de conversacion o cerrar el hilo, solo se oculta. Reabrirla despues es
+    // instantaneo (mismos <img>, mismo scroll, ningun re-render) en vez de volver a montar
+    // todo de cero como con el iframe de antes.
+    const threadInstances = new Map<string, { el: HTMLDivElement; ctx: ViewContext; scrollTop: number }>();
+    ctx.addCleanup(() => {
+      threadInstances.forEach((instance) => instance.ctx.dispose());
+      threadInstances.clear();
     });
-  } catch {
-    // silencioso: la busqueda de personas simplemente no se actualiza en este ciclo
-  }
-}
 
-async function startConversationWith(otherUserId: string): Promise<void> {
-  const existing = conversations.find((c) => c.other_user_id === otherUserId);
-  if (existing) {
-    openThread(existing.conversation_id);
-    return;
-  }
-  const { id, error } = await getOrCreateConversation(otherUserId);
-  if (error || !id) {
-    alert(error || "No se pudo iniciar la conversación.");
-    return;
-  }
-  openThread(id);
-}
+    function hideActiveInstance(): void {
+      if (!activeConversationId) return;
+      const instance = threadInstances.get(activeConversationId);
+      if (!instance) return;
+      const messagesEl = instance.el.querySelector<HTMLElement>(".chat-messages");
+      instance.scrollTop = messagesEl?.scrollTop ?? 0;
+      instance.el.hidden = true;
+    }
 
-let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-searchInput.addEventListener("input", () => {
-  searchQuery = searchInput.value.trim();
-  renderList();
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => void runPeopleSearch(searchQuery), 250);
-});
+    function matchesQuery(c: ConversationSummary): boolean {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (c.other_username ?? "").toLowerCase().includes(q) ||
+        (c.other_nombre ?? "").toLowerCase().includes(q) ||
+        (c.other_apellido ?? "").toLowerCase().includes(q)
+      );
+    }
 
-tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const tab = btn.dataset.tab;
-    tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b === btn));
-    messagesPanel.hidden = tab !== "messages";
-    requestsListEl.hidden = tab !== "requests";
-  });
-});
+    function renderRequests(): void {
+      const pending = conversations.filter((c) => c.status === "pending" && !c.is_initiator);
+      requestsCountEl.hidden = pending.length === 0;
+      requestsCountEl.textContent = String(pending.length);
 
-const PREFETCH_CONVERSATIONS_COUNT = 30;
-const PREFETCH_MESSAGES_PER_CHAT = MESSAGES_PAGE_SIZE;
+      requestsListEl.innerHTML = pending.length
+        ? pending
+            .map(
+              (c) => `
+        <div class="chat-request-row" data-id="${c.conversation_id}">
+          <button type="button" class="chat-request-open" data-id="${c.conversation_id}">
+            <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
+            <span class="chat-request-body">
+              <span class="chat-row-name">${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}</span>
+              <span class="chat-row-preview">${previewText(c)}</span>
+            </span>
+          </button>
+          <span class="chat-request-actions">
+            <button type="button" class="btn btn-primary btn-sm accept-btn" data-id="${c.conversation_id}">Aceptar</button>
+            <button type="button" class="btn btn-outline btn-sm reject-btn" data-id="${c.conversation_id}">Rechazar</button>
+          </span>
+        </div>
+      `
+            )
+            .join("")
+        : `<p class="notif-empty">No tenés solicitudes de mensaje pendientes.</p>`;
 
-/**
- * Al entrar a la lista, precarga en IndexedDB los primeros mensajes de los chats
- * mas recientes -- asi cuando se abren (ver chat.ts) se pintan al instante desde
- * ese cache en vez de esperar a la red. No bloquea el render de la lista.
- */
-async function prefetchRecentThreads(): Promise<void> {
-  const targets = conversations.filter((c) => c.status === "accepted" || c.is_initiator).slice(0, PREFETCH_CONVERSATIONS_COUNT);
-  await Promise.all(
-    targets.map(async (c) => {
-      try {
-        const page = await listMessages(c.conversation_id, undefined, PREFETCH_MESSAGES_PER_CHAT);
-        await cacheMessages(c.conversation_id, page);
-      } catch {
-        // si falla el prefetch de un chat puntual no importa, chat.ts igual carga desde la red al abrirlo
+      requestsListEl.querySelectorAll<HTMLButtonElement>(".chat-request-open").forEach((btn) => {
+        btn.addEventListener("click", () => openThread(btn.dataset.id!, { pushHistory: true }));
+      });
+      requestsListEl.querySelectorAll<HTMLButtonElement>(".accept-btn").forEach((btn) => {
+        btn.addEventListener("click", () => void handleRequestAction(btn.dataset.id!, "accept"));
+      });
+      requestsListEl.querySelectorAll<HTMLButtonElement>(".reject-btn").forEach((btn) => {
+        btn.addEventListener("click", () => void handleRequestAction(btn.dataset.id!, "decline"));
+      });
+    }
+
+    function renderList(): void {
+      const main = conversations.filter((c) => (c.status === "accepted" || c.is_initiator) && matchesQuery(c));
+
+      listEl.innerHTML =
+        main
+          .map((c) => {
+            const seenBadge =
+              c.unread_count > 0
+                ? `<span class="notif-badge">${c.unread_count > 9 ? "9+" : c.unread_count}</span>`
+                : c.last_message_sender_is_me && c.last_message_read
+                  ? `<span class="chat-seen">Visto</span>`
+                  : "";
+            return `
+          <button type="button" class="chat-row ${c.unread_count > 0 ? "unread" : ""}" data-id="${c.conversation_id}">
+            <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
+            <span class="chat-row-body">
+              <span class="chat-row-top">
+                <span class="chat-row-name">${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}</span>
+                <span class="chat-row-time">${relativeTime(c.last_message_at)}</span>
+              </span>
+              <span class="chat-row-bottom">
+                <span class="chat-row-preview">${previewText(c)}${c.status === "pending" ? " · Pendiente de aceptar" : ""}</span>
+                ${seenBadge}
+              </span>
+            </span>
+          </button>
+        `;
+          })
+          .join("") ||
+        `<p class="notif-empty">${searchQuery ? "No encontramos conversaciones con ese nombre." : "Todavía no tenés mensajes. Buscá a alguien arriba para escribirle."}</p>`;
+
+      listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((btn) => {
+        btn.addEventListener("click", () => openThread(btn.dataset.id!, { pushHistory: true }));
+      });
+
+      highlightActiveRow();
+    }
+
+    function highlightActiveRow(): void {
+      listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((row) => {
+        row.classList.toggle("active", row.dataset.id === activeConversationId);
+      });
+    }
+
+    function openThread(conversationId: string, opts: { pushHistory: boolean }): void {
+      if (conversationId === activeConversationId) return;
+
+      hideActiveInstance();
+      activeConversationId = conversationId;
+      highlightActiveRow();
+      threadPlaceholder.hidden = true;
+      threadPage.hidden = false;
+      isThreadOpen = true;
+      document.body.classList.add("chats-thread-open");
+
+      if (opts.pushHistory) navigate(`chats.html?c=${conversationId}`);
+      else history.replaceState(null, "", `chats.html?c=${conversationId}`);
+
+      const existing = threadInstances.get(conversationId);
+      if (existing) {
+        // Ya se habia abierto en esta sesion: el DOM entero (mensajes, imagenes, composer)
+        // sigue intacto tal cual quedo, solo hay que mostrarlo y devolver el scroll.
+        existing.el.hidden = false;
+        const messagesEl = existing.el.querySelector<HTMLElement>(".chat-messages");
+        if (messagesEl) messagesEl.scrollTop = existing.scrollTop;
+        return;
       }
-    })
-  );
-}
 
-conversations = await listConversations();
-renderRequests();
-renderList();
-void prefetchRecentThreads();
+      const el = document.createElement("div");
+      el.className = "chat-thread-instance";
+      threadContentEl.appendChild(el);
+      const threadCtx: ViewContext = createViewContext();
+      threadInstances.set(conversationId, { el, ctx: threadCtx, scrollTop: 0 });
+      void mountThread(el, conversationId, userId, threadCtx, {
+        onMissingConversation: () => {
+          threadInstances.delete(conversationId);
+          threadCtx.dispose();
+          el.remove();
+          closeThread({ updateUrl: true });
+        },
+        onBack: () => navigate("chats.html"),
+      });
+    }
 
-// Sin esto la lista se queda con el ultimo mensaje viejo hasta recargar: en
-// desktop mandar un mensaje pasa en el iframe del panel derecho, un contexto
-// de JS aparte que nunca le avisa a esta pagina, y en mobile el boton/gesto
-// de volver a veces restaura esta pagina desde el bfcache del navegador (el
-// snapshot congelado de antes de entrar al chat) en vez de re-ejecutar este
-// script. send_message ya actualiza last_message_at/preview en "conversations"
-// (ver chat.sql) asi que alcanza con escuchar esa tabla y volver a pedir la
-// lista completa para que ambos casos queden resueltos.
-let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-function scheduleConversationsRefresh(): void {
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(async () => {
+    function closeThread(opts: { updateUrl: boolean }): void {
+      hideActiveInstance();
+      activeConversationId = null;
+      highlightActiveRow();
+      threadPlaceholder.hidden = false;
+      threadPage.hidden = true;
+      isThreadOpen = false;
+      document.body.classList.remove("chats-thread-open");
+      if (opts.updateUrl) navigate("chats.html", { replace: true });
+    }
+
+    async function handleRequestAction(id: string, action: "accept" | "decline"): Promise<void> {
+      if (action === "decline" && !confirm("¿Rechazar esta solicitud de mensaje?")) return;
+
+      const row = requestsListEl.querySelector<HTMLElement>(`.chat-request-row[data-id="${id}"]`);
+      row?.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.disabled = true));
+
+      const { error } = action === "accept" ? await acceptMessageRequest(id) : await declineMessageRequest(id);
+      if (error) {
+        alert(error);
+        row?.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.disabled = false));
+        return;
+      }
+
+      if (action === "accept") {
+        const convo = conversations.find((c) => c.conversation_id === id);
+        if (convo) convo.status = "accepted";
+        renderRequests();
+        renderList();
+        tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "messages"));
+        messagesPanel.hidden = false;
+        requestsListEl.hidden = true;
+        openThread(id, { pushHistory: true });
+        return;
+      }
+
+      conversations = conversations.filter((c) => c.conversation_id !== id);
+      renderRequests();
+      renderList();
+    }
+
+    let peopleRequestId = 0;
+    async function runPeopleSearch(query: string): Promise<void> {
+      const myRequestId = ++peopleRequestId;
+      if (query.length < 2) {
+        peopleEl.hidden = true;
+        peopleEl.innerHTML = "";
+        return;
+      }
+
+      try {
+        const [followers, following] = await Promise.all([listFollowers(userId, query, 8), listFollowing(userId, query, 8)]);
+        if (myRequestId !== peopleRequestId) return;
+
+        const merged = new Map<string, FollowListRow>();
+        for (const r of [...followers, ...following]) {
+          if (r.id !== userId) merged.set(r.id, r);
+        }
+        const results = [...merged.values()].slice(0, 6);
+
+        const existingIds = new Set(conversations.map((c) => c.other_user_id));
+        peopleEl.hidden = results.length === 0;
+        peopleEl.innerHTML = results.length
+          ? `<p class="search-recent-header"><span>Personas</span></p>` +
+            results
+              .map(
+                (r) => `
+          <button type="button" class="search-result-item chat-person-row" data-id="${escapeHtml(r.id)}">
+            <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+            <span class="search-result-body">
+              <span class="search-result-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
+              <span class="search-result-username">${escapeHtml(`${r.nombre} ${r.apellido}`.trim())}</span>
+            </span>
+            <span class="chat-person-cta">${existingIds.has(r.id) ? "Ver chat" : "Mensaje"}</span>
+          </button>
+        `
+              )
+              .join("")
+          : "";
+
+        peopleEl.querySelectorAll<HTMLButtonElement>(".chat-person-row").forEach((btn) => {
+          btn.addEventListener("click", () => void startConversationWith(btn.dataset.id!));
+        });
+      } catch {
+        // silencioso: la busqueda de personas simplemente no se actualiza en este ciclo
+      }
+    }
+
+    async function startConversationWith(otherUserId: string): Promise<void> {
+      const existing = conversations.find((c) => c.other_user_id === otherUserId);
+      if (existing) {
+        openThread(existing.conversation_id, { pushHistory: true });
+        return;
+      }
+      const { id, error } = await getOrCreateConversation(otherUserId);
+      if (error || !id) {
+        alert(error || "No se pudo iniciar la conversación.");
+        return;
+      }
+      openThread(id, { pushHistory: true });
+    }
+
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    ctx.addCleanup(() => clearTimeout(debounceTimer));
+    searchInput.addEventListener(
+      "input",
+      () => {
+        searchQuery = searchInput.value.trim();
+        renderList();
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => void runPeopleSearch(searchQuery), 250);
+      },
+      { signal: ctx.signal }
+    );
+
+    tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
+      btn.addEventListener(
+        "click",
+        () => {
+          const tab = btn.dataset.tab;
+          tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b === btn));
+          messagesPanel.hidden = tab !== "messages";
+          requestsListEl.hidden = tab !== "requests";
+        },
+        { signal: ctx.signal }
+      );
+    });
+
+    const PREFETCH_CONVERSATIONS_COUNT = 30;
+    const PREFETCH_MESSAGES_PER_CHAT = MESSAGES_PAGE_SIZE;
+
+    async function prefetchRecentThreads(): Promise<void> {
+      const targets = conversations.filter((c) => c.status === "accepted" || c.is_initiator).slice(0, PREFETCH_CONVERSATIONS_COUNT);
+      await Promise.all(
+        targets.map(async (c) => {
+          try {
+            const page = await listMessages(c.conversation_id, undefined, PREFETCH_MESSAGES_PER_CHAT);
+            await cacheMessages(c.conversation_id, page);
+          } catch {
+            // si falla el prefetch de un chat puntual no importa, mountThread igual carga desde la red al abrirlo
+          }
+        })
+      );
+    }
+
     conversations = await listConversations();
     renderRequests();
     renderList();
-  }, 150);
-}
+    void prefetchRecentThreads();
 
-supabase
-  .channel("chats-list-conversations")
-  .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, scheduleConversationsRefresh)
-  .subscribe();
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    ctx.addCleanup(() => clearTimeout(refreshTimer));
+    function scheduleConversationsRefresh(): void {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        conversations = await listConversations();
+        renderRequests();
+        renderList();
+      }, 150);
+    }
 
-window.addEventListener("pageshow", (e) => {
-  if (e.persisted) scheduleConversationsRefresh();
-});
+    const conversationsChannel = supabase
+      .channel("chats-list-conversations")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, scheduleConversationsRefresh)
+      .subscribe();
+    ctx.addCleanup(() => void supabase.removeChannel(conversationsChannel));
+
+    window.addEventListener(
+      "pageshow",
+      (e) => {
+        if (e.persisted) scheduleConversationsRefresh();
+      },
+      { signal: ctx.signal }
+    );
+
+    const initialId = params.get("c");
+    if (initialId) openThread(initialId, { pushHistory: false });
+
+    updateHandler = (nextParams: URLSearchParams) => {
+      const id = nextParams.get("c");
+      if (id) openThread(id, { pushHistory: false });
+      else closeThread({ updateUrl: false });
+    };
+    ctx.addCleanup(() => {
+      updateHandler = null;
+    });
+  },
+  update(params) {
+    updateHandler?.(params);
+  },
+  onShow() {
+    document.body.classList.add("chats-page");
+    if (isThreadOpen) document.body.classList.add("chats-thread-open");
+  },
+  onHide() {
+    document.body.classList.remove("chats-page", "chats-thread-open");
+  },
+};

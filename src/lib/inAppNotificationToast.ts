@@ -3,27 +3,28 @@ import { escapeHtml } from "./dom";
 import { markNotificationRead, type AppNotification } from "../services/notification.service";
 import { NEW_MESSAGE_EVENT, type NewMessageEventDetail } from "./chat";
 import { NEW_NOTIFICATION_EVENT } from "./notifications";
+import { smartNavigate } from "../shell/router";
 
 const AUTO_DISMISS_MS = 5000;
 
 let activeToast: HTMLDivElement | null = null;
 let dismissTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** En desktop chat.html puede correr embebido en un iframe dentro de chats.html (ver chats.ts). Ahi
- * no tiene sentido montar el toast: quedaria atrapado en el panel angosto en vez de la pantalla
- * entera, asi que ese contexto no se engancha en absoluto (ver setupInAppNotificationToast). */
+/** Guarda vestigial de cuando chat.html corria embebido en un iframe dentro de chats.html
+ * (reemplazado por la vista fusionada, ver chats.ts) -- se deja por si en el futuro algo
+ * vuelve a embeber una pagina en un iframe, para no montar el toast ahi adentro. */
 function isEmbeddedFrame(): boolean {
   return window.self !== window.top;
 }
 
-/** El usuario esta "viendo la webapp" ahora mismo (misma señal que usan chat.ts/notifications.ts). */
+/** El usuario esta "viendo la webapp" ahora mismo (misma señal que usan chatThread.ts/notifications.ts). */
 function isActivelyViewing(): boolean {
   return document.visibilityState === "visible";
 }
 
-/** Ya esta adentro de esta conversacion puntual (chat.html?c=<id>): no tiene sentido avisarle de un mensaje que ya esta viendo. */
+/** Ya esta adentro de esta conversacion puntual (chats.html?c=<id>): no tiene sentido avisarle de un mensaje que ya esta viendo. */
 function isViewingConversation(conversationId: string): boolean {
-  if (!location.pathname.endsWith("chat.html")) return false;
+  if (!location.pathname.endsWith("chats.html")) return false;
   return new URLSearchParams(location.search).get("c") === conversationId;
 }
 
@@ -139,7 +140,7 @@ async function handleNewMessage(detail: NewMessageEventDetail): Promise<void> {
       </div>
     `,
     () => {
-      window.location.href = `chat.html?c=${detail.conversationId}`;
+      smartNavigate(`chats.html?c=${detail.conversationId}`);
     }
   );
 }
@@ -157,7 +158,7 @@ function handleNewNotification(notif: AppNotification): void {
     `,
     () => {
       void markNotificationRead(notif.id);
-      if (notif.link) window.location.href = notif.link;
+      if (notif.link) smartNavigate(notif.link);
     }
   );
 }
