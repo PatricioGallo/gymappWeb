@@ -4236,43 +4236,58 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .chat-split {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .chat-thread-pane { display: none; }
 
+/* Chats no tiene footer y no scrollea de a pagina: alto fijo = viewport menos
+   el header, con overflow:hidden, y solo la lista de chats (o de solicitudes)
+   scrollea adentro. Vale para mobile y desktop, no solo desktop como antes. */
+body.chats-page .site-footer { display: none; }
+
+body.chats-page .features {
+  padding: 0;
+  height: calc(100vh - var(--header-h));
+  height: calc(100dvh - var(--header-h));
+  overflow: hidden;
+  display: flex;
+}
+
+.chat-page-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+#chatTabs { flex-shrink: 0; margin-top: 0; }
+
+#chatMessagesPanel,
+#chatRequestsList {
+  flex: 1;
+  min-height: 0;
+}
+
+#chatMessagesPanel { display: flex; flex-direction: column; }
+
+.chat-requests-list { overflow-y: auto; }
+
+.chat-list-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 @media (min-width: 860px) {
   /* Chats ocupa mas ancho que el resto de las paginas (que usan --max-width:
-     1140px), y a pantalla completa sin scroll de pagina — mismo truco que
-     .chat-thread-page usa en mobile: alto fijo = viewport menos el header,
-     con overflow:hidden, y solo los paneles internos (lista / hilo) scrollean. */
-  body.chats-page .features {
-    padding: 0;
-    height: calc(100vh - var(--header-h));
-    height: calc(100dvh - var(--header-h));
-    overflow: hidden;
-    display: flex;
-  }
-
-  body.chats-page .site-footer { display: none; }
-
+     1140px). */
   .chat-page-container {
     max-width: 90vw;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
     padding-top: 20px;
     padding-bottom: 20px;
   }
-
-  #chatTabs { flex-shrink: 0; margin-top: 0; }
-
-  #chatMessagesPanel,
-  #chatRequestsList {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .chat-requests-list { overflow-y: auto; }
 
   .chat-split {
     flex-direction: row;
@@ -4286,7 +4301,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .chat-list-pane {
     width: 360px;
     flex-shrink: 0;
-    overflow-y: auto;
     padding: 14px;
     border-right: 1px solid var(--border);
   }
@@ -4547,6 +4561,58 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   text-align: center;
 }
 
+.chat-pinned-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.chat-pinned-banner[hidden] { display: none; }
+
+.chat-pinned-banner-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chat-pinned-banner-main svg { width: 16px; height: 16px; stroke: var(--accent-2); flex-shrink: 0; }
+
+.chat-pinned-banner-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.chat-pinned-banner-unpin {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chat-pinned-banner-unpin:hover { color: var(--text); background: var(--surface); }
+
 .chat-load-more {
   display: block;
   margin: 0 auto 12px;
@@ -4665,10 +4731,12 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .chat-bubble {
+  position: relative;
   max-width: 74%;
   padding: 9px 13px 7px;
   border-radius: 16px;
   margin-bottom: 2px;
+  cursor: pointer;
 }
 
 .chat-bubble-me {
@@ -4834,6 +4902,150 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .chat-preview-bar span:not(.chat-preview-cancel) { flex: 1; }
 
+.chat-reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.chat-reply-bar[hidden] { display: none; }
+
+.chat-reply-bar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.chat-reply-bar-name { font-size: 12.5px; font-weight: 700; color: var(--accent-2); }
+
+.chat-reply-bar-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-reply-bar-cancel {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chat-reply-bar-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+
+/* Cita de respuesta dentro de una burbuja (ver replyQuoteHtml en chat.ts): mismo fondo
+   semitransparente en ambos tipos de burbuja, para que se lea como "incrustado" sin
+   depender del color de fondo de cada una. */
+.chat-bubble-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.08);
+  border: none;
+  border-left: 3px solid var(--accent-2);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 5px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chat-bubble-quote-name { font-size: 11.5px; font-weight: 700; color: var(--accent-2); }
+.chat-bubble-quote-text {
+  font-size: 12.5px;
+  color: inherit;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-bubble-quote-missing { cursor: default; }
+
+.chat-bubble-forwarded {
+  display: block;
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.65;
+  margin-bottom: 3px;
+}
+
+/* Sticker: sin el recuadro de burbuja de siempre, solo el emoji grande -- misma idea que
+   WhatsApp/Telegram, para que se lea como una reaccion y no como un mensaje de texto. */
+.chat-bubble-me.chat-bubble-sticker-wrap,
+.chat-bubble-other.chat-bubble-sticker-wrap {
+  background: none;
+  padding: 0;
+  max-width: 150px;
+}
+
+.chat-bubble-sticker {
+  display: block;
+  font-size: 72px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.chat-bubble.is-pinned { box-shadow: 0 0 0 1.5px var(--accent-2); }
+
+@keyframes chat-bubble-flash {
+  0%, 100% { box-shadow: none; }
+  30% { box-shadow: 0 0 0 3px var(--accent-2); }
+}
+
+.chat-bubble-flash { animation: chat-bubble-flash 1.2s ease; }
+
+.chat-msg-menu {
+  position: fixed;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.chat-msg-menu button {
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chat-msg-menu button:hover { background: var(--surface-2); }
+.chat-msg-menu button:disabled { cursor: default; color: var(--text-muted); }
+
+.chat-forward-preview {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-height: 80px;
+  overflow-y: auto;
+}
+
 .chat-composer {
   display: flex;
   align-items: flex-end;
@@ -4862,6 +5074,47 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .chat-composer-btn:hover { background: var(--surface-2); color: var(--text); }
 .chat-composer-btn svg { width: 20px; height: 20px; stroke: currentColor; }
+
+.chat-sticker-wrap { position: relative; flex-shrink: 0; }
+
+#chatStickerBtn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+
+.chat-sticker-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  width: 260px;
+  max-width: calc(100vw - 40px);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  padding: 8px;
+}
+
+.chat-sticker-panel[hidden] { display: none; }
+
+.chat-sticker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-sticker-item:hover { background: var(--surface-2); }
 
 .chat-composer-input {
   flex: 1;
@@ -4901,21 +5154,6 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   background: var(--surface-2);
   color: var(--text-muted);
   cursor: default;
-}
-
-.chat-lightbox {
-  max-width: min(90vw, 640px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.chat-lightbox img {
-  max-width: 100%;
-  max-height: 74vh;
-  border-radius: 12px;
-  object-fit: contain;
 }
 
 @media (max-width: 639px) {
@@ -5251,7 +5489,11 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   max-height: 100%;
   object-fit: contain;
   border-radius: var(--radius-sm);
+  touch-action: none;
+  cursor: zoom-in;
 }
+
+.media-lightbox-media.is-zoomed { cursor: grab; }
 
 @media (max-width: 859px) {
   .media-lightbox-media-wrap { padding: 0; }

@@ -111,6 +111,7 @@ export type Database = {
           last_message_preview: string | null
           last_message_sender_id: string | null
           last_message_type: string | null
+          pinned_message_id: string | null
           status: string
           user1_id: string
           user2_id: string
@@ -123,6 +124,7 @@ export type Database = {
           last_message_preview?: string | null
           last_message_sender_id?: string | null
           last_message_type?: string | null
+          pinned_message_id?: string | null
           status?: string
           user1_id: string
           user2_id: string
@@ -135,6 +137,7 @@ export type Database = {
           last_message_preview?: string | null
           last_message_sender_id?: string | null
           last_message_type?: string | null
+          pinned_message_id?: string | null
           status?: string
           user1_id?: string
           user2_id?: string
@@ -166,6 +169,13 @@ export type Database = {
             columns: ["last_message_sender_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_pinned_message_id_fkey"
+            columns: ["pinned_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
@@ -479,7 +489,9 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          is_forwarded: boolean
           read_at: string | null
+          reply_to_message_id: string | null
           sender_id: string
           shared_post_id: string | null
         }
@@ -491,7 +503,9 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          is_forwarded?: boolean
           read_at?: string | null
+          reply_to_message_id?: string | null
           sender_id: string
           shared_post_id?: string | null
         }
@@ -503,7 +517,9 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          is_forwarded?: boolean
           read_at?: string | null
+          reply_to_message_id?: string | null
           sender_id?: string
           shared_post_id?: string | null
         }
@@ -513,6 +529,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
@@ -1684,6 +1707,42 @@ export type Database = {
           },
         ]
       }
+      user_stickers: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stickers_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_stickers_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       verification_requests: {
         Row: {
           admin_note: string | null
@@ -2108,6 +2167,10 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      pin_message: {
+        Args: { p_conversation_id: string; p_message_id: string }
+        Returns: undefined
+      }
       request_subscription: {
         Args: { p_trainer_id: string }
         Returns: {
@@ -2147,6 +2210,8 @@ export type Database = {
           p_attachment_type?: string
           p_content?: string
           p_conversation_id: string
+          p_is_forwarded?: boolean
+          p_reply_to_message_id?: string
           p_shared_post_id?: string
         }
         Returns: {
@@ -2157,7 +2222,9 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          is_forwarded: boolean
           read_at: string | null
+          reply_to_message_id: string | null
           sender_id: string
           shared_post_id: string | null
         }
@@ -2190,6 +2257,7 @@ export type Database = {
         Args: { p_visited_id: string }
         Returns: undefined
       }
+      unpin_message: { Args: { p_conversation_id: string }; Returns: undefined }
     }
     Enums: {
       exercise_category:
