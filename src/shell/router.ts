@@ -129,6 +129,12 @@ async function renderCurrentLocation(): Promise<void> {
     return;
   }
 
+  // #loaderBody es chrome global (spinners, modales tipo el selector de ejercicios, checks de
+  // exito) que vive fuera del container de cualquier vista -- ocultar/descartar una instancia no
+  // lo toca. Sin esto, un overlay que quedo abierto en la vista anterior (spinner de guardado,
+  // modal sin cerrar) se queda pegado en pantalla encima de la vista nueva.
+  document.getElementById("loaderBody")?.replaceChildren();
+
   const instances = instancesFor(view);
   const cached = instances.get(key);
 

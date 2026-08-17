@@ -1,9 +1,17 @@
 import { escapeHtml } from "./dom";
 import { CATEGORY_LABELS, EXERCISE_CATEGORIES, listExercises, type Exercise, type ExerciseCategory } from "../services/exercise.service";
+import type { ViewContext } from "../shell/viewContext";
 
 const DUMBBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg>`;
 
-export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise) => void): void {
+/**
+ * ctx es opcional (llamadores no migrados al shell todavia no lo tienen), pero si se pasa,
+ * los listeners globales de focus/visibilitychange se atan a ctx.signal -- si la vista que
+ * abrio el picker se desmonta/oculta sin que el usuario lo cierre, no quedan escuchando
+ * indefinidamente en segundo plano (ademas el router ya limpia visualmente #loaderBody al
+ * navegar, asi que esto es solo para no dejar el listener colgado).
+ */
+export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise) => void, ctx?: ViewContext): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
 
@@ -111,8 +119,8 @@ export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise
   // "focus"/"visibilitychange" cubren la vuelta desde la pestaña de creación,
   // pero no son 100% consistentes entre navegadores: el botón de al lado del
   // buscador es el respaldo manual.
-  window.addEventListener("focus", refreshCatalog);
-  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", refreshCatalog, ctx ? { signal: ctx.signal } : undefined);
+  document.addEventListener("visibilitychange", onVisible, ctx ? { signal: ctx.signal } : undefined);
   document.getElementById("excPickerRefresh")?.addEventListener("click", refreshCatalog);
 
   function closePicker(): void {

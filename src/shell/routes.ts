@@ -8,6 +8,8 @@ import { subscriptionRequestsView } from "../pages/subscriptionRequests";
 import { deleteRutinsView } from "../pages/deleteRutins";
 import { addExcView } from "../pages/addExc";
 import { followersView } from "../pages/followers";
+import { modExcView } from "../pages/modExc";
+import { showExcView } from "../pages/showExc";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -59,6 +61,16 @@ export function registerShellRoutes(): void {
     match: (pathname) => (pathname.endsWith("/pages/followers.html") ? new URLSearchParams() : null),
     view: followersView,
     auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/excView.html") ? new URLSearchParams() : null),
+    view: modExcView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/showExc.html") ? new URLSearchParams() : null),
+    view: showExcView,
+    auth: "optional",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --
   // sin esto todas las visitas a perfil compartirian una sola instancia y volver a tu propio
