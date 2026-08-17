@@ -4258,7 +4258,7 @@ body.chats-page .features {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding-top: 12px;
+  padding-top: 20px;
   padding-bottom: 12px;
 }
 
@@ -4271,6 +4271,7 @@ body.chats-page .features {
 }
 
 #chatMessagesPanel { display: flex; flex-direction: column; }
+#chatMessagesPanel[hidden] { display: none; }
 
 .chat-requests-list { overflow-y: auto; }
 
@@ -4285,7 +4286,7 @@ body.chats-page .features {
      1140px). */
   .chat-page-container {
     max-width: 90vw;
-    padding-top: 20px;
+    padding-top: 28px;
     padding-bottom: 20px;
   }
 
@@ -4299,8 +4300,7 @@ body.chats-page .features {
   }
 
   .chat-list-pane {
-    width: 360px;
-    flex-shrink: 0;
+    flex: 0 0 360px;
     padding: 14px;
     border-right: 1px solid var(--border);
   }
