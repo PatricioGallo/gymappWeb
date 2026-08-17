@@ -3,6 +3,11 @@ import { notificationsView } from "../pages/notifications";
 import { searchView } from "../pages/search";
 import { chatsView } from "../pages/chats";
 import { profileView } from "../pages/profile";
+import { followRequestsView } from "../pages/followRequests";
+import { subscriptionRequestsView } from "../pages/subscriptionRequests";
+import { deleteRutinsView } from "../pages/deleteRutins";
+import { addExcView } from "../pages/addExc";
+import { followersView } from "../pages/followers";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -28,6 +33,31 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/chats.html") ? new URLSearchParams() : null),
     view: chatsView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/followRequests.html") ? new URLSearchParams() : null),
+    view: followRequestsView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/subscriptionRequests.html") ? new URLSearchParams() : null),
+    view: subscriptionRequestsView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/deleteRutins.html") ? new URLSearchParams() : null),
+    view: deleteRutinsView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/addExc.html") ? new URLSearchParams() : null),
+    view: addExcView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/followers.html") ? new URLSearchParams() : null),
+    view: followersView,
     auth: "required",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --
