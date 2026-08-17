@@ -74,33 +74,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
-    <div class="container">
-      <span class="eyebrow">Tu cuenta</span>
-      <h1>Configuración</h1>
-      <p>Editá tu perfil, tu privacidad y tus preferencias.</p>
-    </div>
-  </section>
-
-  <section class="features">
-    <div class="container">
-      <div class="routine-tabs" id="settingsTabs">
-        <button class="routine-tab active" data-tab="edit" type="button">Editar perfil</button>
-        <button class="routine-tab" data-tab="privacy" type="button">Privacidad</button>
-        <button class="routine-tab" data-tab="notifications" type="button">Notificaciones</button>
-        <button class="routine-tab" data-tab="personalization" type="button">Personalización</button>
-        <button class="routine-tab" data-tab="blocked" type="button">Bloqueados</button>
-        <button class="routine-tab" data-tab="verification" type="button" id="verificationTabBtn" hidden>Verificación</button>
-      </div>
-
-      <div id="editTab"></div>
-      <div id="privacyTab" hidden></div>
-      <div id="notificationsTab" hidden></div>
-      <div id="personalizationTab" hidden></div>
-      <div id="blockedTab" hidden></div>
-      <div id="verificationTab" hidden></div>
-    </div>
-  </section>
+  <div id="view-root"></div>
 
   <footer class="site-footer">
     <div class="container">
@@ -123,6 +97,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/settings.ts"></script>
+  <script type="module" src="/src/pages/settings.entry.ts"></script>
 </body>
 </html>
