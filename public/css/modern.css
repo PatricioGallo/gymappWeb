@@ -4982,6 +4982,22 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   margin-bottom: 3px;
 }
 
+/* Sticker: sin el recuadro de burbuja de siempre, solo el emoji grande -- misma idea que
+   WhatsApp/Telegram, para que se lea como una reaccion y no como un mensaje de texto. */
+.chat-bubble-me.chat-bubble-sticker-wrap,
+.chat-bubble-other.chat-bubble-sticker-wrap {
+  background: none;
+  padding: 0;
+  max-width: 150px;
+}
+
+.chat-bubble-sticker {
+  display: block;
+  font-size: 72px;
+  line-height: 1.1;
+  text-align: center;
+}
+
 .chat-bubble.is-pinned { box-shadow: 0 0 0 1.5px var(--accent-2); }
 
 @keyframes chat-bubble-flash {
@@ -5058,6 +5074,47 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .chat-composer-btn:hover { background: var(--surface-2); color: var(--text); }
 .chat-composer-btn svg { width: 20px; height: 20px; stroke: currentColor; }
+
+.chat-sticker-wrap { position: relative; flex-shrink: 0; }
+
+#chatStickerBtn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+
+.chat-sticker-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  width: 260px;
+  max-width: calc(100vw - 40px);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  padding: 8px;
+}
+
+.chat-sticker-panel[hidden] { display: none; }
+
+.chat-sticker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-sticker-item:hover { background: var(--surface-2); }
 
 .chat-composer-input {
   flex: 1;

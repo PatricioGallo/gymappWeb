@@ -97,6 +97,8 @@ const previewImg = document.getElementById("chatPreviewImg") as HTMLImageElement
 const previewAudioLabel = document.getElementById("chatPreviewAudioLabel") as HTMLSpanElement;
 const previewAudioDuration = document.getElementById("chatPreviewAudioDuration")!;
 const previewCancelBtn = document.getElementById("chatPreviewCancel") as HTMLButtonElement;
+const stickerBtn = document.getElementById("chatStickerBtn") as HTMLButtonElement;
+const stickerPanel = document.getElementById("chatStickerPanel") as HTMLDivElement;
 const pinnedBanner = document.getElementById("chatPinnedBanner") as HTMLDivElement;
 const pinnedBannerText = document.getElementById("chatPinnedBannerText")!;
 const pinnedBannerMain = document.getElementById("chatPinnedBannerMain") as HTMLButtonElement;
@@ -348,6 +350,7 @@ function sharedPostPreviewHtml(postId: string): string {
 
 /** Texto corto para representar un mensaje en una cita (respuesta), el banner de anclado o el modal de reenvío. */
 function messageSnippet(m: ChatMessage): string {
+  if (m.attachment_type === "sticker") return `${m.content ?? ""} Sticker`;
   if (m.content) return m.content;
   if (m.shared_post_id) return "🔁 Rep compartido";
   if (m.attachment_type === "image") return "📷 Foto";
@@ -400,13 +403,16 @@ function bubbleHtml(m: ChatMessage, isMe: boolean): string {
       </div>
     `;
   }
-  const textHtml = m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
+  const isSticker = m.attachment_type === "sticker";
+  const stickerHtml = isSticker ? `<span class="chat-bubble-sticker">${escapeHtml(m.content ?? "")}</span>` : "";
+  const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
   const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
   return `
-    <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${m.id === pinnedMessageId ? " is-pinned" : ""}" data-id="${m.id}">
+    <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${isSticker ? " chat-bubble-sticker-wrap" : ""}${m.id === pinnedMessageId ? " is-pinned" : ""}" data-id="${m.id}">
       ${forwardedHtml}
       ${replyQuoteHtml(m)}
       ${mediaHtml}
+      ${stickerHtml}
       ${textHtml}
       <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe ? ticksHtml(m) : ""}</span>
     </div>
@@ -988,7 +994,7 @@ async function openForwardModal(message: ChatMessage): Promise<void> {
         const { error } = await sendMessage(targetConversationId, {
           content: message.content ?? undefined,
           attachmentPath,
-          attachmentType: (message.attachment_type as "image" | "audio" | null) ?? undefined,
+          attachmentType: (message.attachment_type as "image" | "audio" | "sticker" | null) ?? undefined,
           attachmentDurationSeconds: message.attachment_duration_seconds ?? undefined,
           sharedPostId: message.shared_post_id ?? undefined,
           isForwarded: true,
@@ -1162,6 +1168,68 @@ imageInput.addEventListener("change", () => {
 });
 
 previewCancelBtn.addEventListener("click", clearPendingAttachment);
+
+// ---------------------------------------------------------------------------
+// Stickers: se mandan al toque, sin pasar por el composer ni por el estado de
+// adjunto pendiente -- un tap en el panel y listo, como reaccionar con un emoji.
+// ---------------------------------------------------------------------------
+
+function closeStickerPanel(): void {
+  stickerPanel.hidden = true;
+  stickerBtn.setAttribute("aria-expanded", "false");
+}
+
+function toggleStickerPanel(): void {
+  stickerPanel.hidden = !stickerPanel.hidden;
+  stickerBtn.setAttribute("aria-expanded", String(!stickerPanel.hidden));
+}
+
+stickerBtn.addEventListener("click", toggleStickerPanel);
+
+document.addEventListener("click", (e) => {
+  if (stickerPanel.hidden) return;
+  const target = e.target as Node;
+  if (stickerPanel.contains(target) || stickerBtn.contains(target)) return;
+  closeStickerPanel();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !stickerPanel.hidden) closeStickerPanel();
+});
+
+async function sendSticker(emoji: string): Promise<void> {
+  if (sending) return;
+  sending = true;
+  closeStickerPanel();
+
+  const { message, error } = await sendMessage(conversationId!, {
+    content: emoji,
+    attachmentType: "sticker",
+    replyToMessageId: replyTarget?.id,
+  });
+
+  sending = false;
+  updateSendState();
+
+  if (error || !message) {
+    alert(error || "No se pudo enviar el sticker.");
+    return;
+  }
+
+  replyTarget = null;
+  replyBar.hidden = true;
+  void appendMessage(message);
+
+  if (conversationStatus === "pending" && isInitiator === false) {
+    conversationStatus = "accepted";
+    renderBanners();
+  }
+}
+
+stickerPanel.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".chat-sticker-item");
+  if (btn?.dataset.emoji) void sendSticker(btn.dataset.emoji);
+});
 
 /** Corta la grabación en curso y devuelve el adjunto resultante (o null si duró menos de 1s). */
 async function stopRecording(): Promise<PendingAttachment | null> {

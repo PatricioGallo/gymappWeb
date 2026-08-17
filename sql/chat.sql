@@ -18,7 +18,7 @@ create table public.conversations (
   status text not null default 'pending' check (status in ('pending', 'accepted')),
   last_message_at timestamptz not null default now(),
   last_message_preview text,
-  last_message_type text check (last_message_type in ('text', 'image', 'audio')),
+  last_message_type text check (last_message_type in ('text', 'image', 'audio', 'sticker')),
   last_message_sender_id uuid references public.profiles(id),
   created_at timestamptz not null default now(),
   pinned_message_id uuid,
@@ -36,7 +36,7 @@ create table public.messages (
   sender_id uuid not null references public.profiles(id) on delete cascade,
   content text,
   attachment_path text,
-  attachment_type text check (attachment_type in ('image', 'audio')),
+  attachment_type text check (attachment_type in ('image', 'audio', 'sticker')),
   attachment_duration_seconds integer,
   created_at timestamptz not null default now(),
   read_at timestamptz,
@@ -207,6 +207,7 @@ begin
   v_preview := case
     when p_attachment_type = 'image' then '📷 Foto'
     when p_attachment_type = 'audio' then '🎤 Audio'
+    when p_attachment_type = 'sticker' then coalesce(v_msg.content, '') || ' Sticker'
     when p_shared_post_id is not null then '🔁 Rep compartido'
     else v_msg.content
   end;
@@ -463,6 +464,70 @@ create policy chat_attachments_insert on storage.objects
       where c.id = ((storage.foldername(name))[1])::uuid
         and (c.user1_id = auth.uid() or c.user2_id = auth.uid())
     )
+  );
+
+-- ---------------------------------------------------------------------------
+-- 4b. Stickers propios: coleccion personal (como el creador de stickers de
+-- WhatsApp), reutilizable en cualquier chat -- no van organizados por
+-- conversacion como las fotos, sino guardados por dueno.
+-- ---------------------------------------------------------------------------
+
+create table public.user_stickers (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  storage_path text not null,
+  created_at timestamptz not null default now()
+);
+
+create index user_stickers_owner_idx on public.user_stickers(owner_id, created_at desc);
+
+alter table public.user_stickers enable row level security;
+
+-- Solo el dueno gestiona (ve/agrega/borra) su propia coleccion. Quien RECIBE un
+-- sticker en un chat no necesita leer esta tabla -- solo necesita poder cargar
+-- el archivo (ver policy de storage abajo), la fila de messages ya le llega
+-- con el path via realtime/select.
+create policy user_stickers_select on public.user_stickers
+  for select using (owner_id = auth.uid());
+
+create policy user_stickers_insert on public.user_stickers
+  for insert with check (owner_id = auth.uid());
+
+create policy user_stickers_delete on public.user_stickers
+  for delete using (owner_id = auth.uid());
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('chat-stickers', 'chat-stickers', false, 20971520)
+on conflict (id) do nothing;
+
+-- El dueno gestiona los suyos (carpeta = su propio user id). Ademas, cualquiera
+-- que participe de una conversacion con un mensaje que referencie ese path
+-- puede verlo -- asi el que RECIBE el sticker en el chat tambien puede
+-- cargarlo, no solo quien lo subio.
+create policy chat_stickers_select on storage.objects
+  for select using (
+    bucket_id = 'chat-stickers'
+    and (
+      (storage.foldername(name))[1] = auth.uid()::text
+      or exists (
+        select 1 from public.messages m
+        join public.conversations c on c.id = m.conversation_id
+        where m.attachment_path = name
+          and (c.user1_id = auth.uid() or c.user2_id = auth.uid())
+      )
+    )
+  );
+
+create policy chat_stickers_insert on storage.objects
+  for insert with check (
+    bucket_id = 'chat-stickers'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy chat_stickers_delete on storage.objects
+  for delete using (
+    bucket_id = 'chat-stickers'
+    and (storage.foldername(name))[1] = auth.uid()::text
   );
 
 -- ---------------------------------------------------------------------------

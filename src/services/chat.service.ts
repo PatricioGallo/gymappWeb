@@ -70,7 +70,7 @@ export async function getConversationPeerMeta(otherUserId: string): Promise<Conv
 export interface SendMessageInput {
   content?: string;
   attachmentPath?: string;
-  attachmentType?: "image" | "audio";
+  attachmentType?: "image" | "audio" | "sticker";
   attachmentDurationSeconds?: number;
   sharedPostId?: string;
   replyToMessageId?: string;

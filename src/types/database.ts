@@ -1707,6 +1707,42 @@ export type Database = {
           },
         ]
       }
+      user_stickers: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stickers_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_stickers_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       verification_requests: {
         Row: {
           admin_note: string | null
@@ -2167,69 +2203,38 @@ export type Database = {
           username: string
         }[]
       }
-      send_message:
-        | {
-            Args: {
-              p_attachment_duration_seconds?: number
-              p_attachment_path?: string
-              p_attachment_type?: string
-              p_content?: string
-              p_conversation_id: string
-              p_shared_post_id?: string
-            }
-            Returns: {
-              attachment_duration_seconds: number | null
-              attachment_path: string | null
-              attachment_type: string | null
-              content: string | null
-              conversation_id: string
-              created_at: string
-              id: string
-              is_forwarded: boolean
-              read_at: string | null
-              reply_to_message_id: string | null
-              sender_id: string
-              shared_post_id: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "messages"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_attachment_duration_seconds?: number
-              p_attachment_path?: string
-              p_attachment_type?: string
-              p_content?: string
-              p_conversation_id: string
-              p_is_forwarded?: boolean
-              p_reply_to_message_id?: string
-              p_shared_post_id?: string
-            }
-            Returns: {
-              attachment_duration_seconds: number | null
-              attachment_path: string | null
-              attachment_type: string | null
-              content: string | null
-              conversation_id: string
-              created_at: string
-              id: string
-              is_forwarded: boolean
-              read_at: string | null
-              reply_to_message_id: string | null
-              sender_id: string
-              shared_post_id: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "messages"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      send_message: {
+        Args: {
+          p_attachment_duration_seconds?: number
+          p_attachment_path?: string
+          p_attachment_type?: string
+          p_content?: string
+          p_conversation_id: string
+          p_is_forwarded?: boolean
+          p_reply_to_message_id?: string
+          p_shared_post_id?: string
+        }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          is_forwarded: boolean
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          shared_post_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_routine_finished: {
         Args: { p_finished: boolean; p_routine_id: string }
         Returns: undefined

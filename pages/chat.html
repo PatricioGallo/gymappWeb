@@ -139,6 +139,37 @@
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
         </label>
         <textarea id="chatComposerInput" class="chat-composer-input" placeholder="Escribí un mensaje..." rows="1"></textarea>
+        <div class="chat-sticker-wrap">
+          <button type="button" class="chat-composer-btn" id="chatStickerBtn" title="Enviar un sticker" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></svg>
+          </button>
+          <div class="chat-sticker-panel" id="chatStickerPanel" hidden>
+              <button type="button" class="chat-sticker-item" data-emoji="💪">💪</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🔥">🔥</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🏆">🏆</button>
+              <button type="button" class="chat-sticker-item" data-emoji="👏">👏</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🎉">🎉</button>
+              <button type="button" class="chat-sticker-item" data-emoji="❤️">❤️</button>
+              <button type="button" class="chat-sticker-item" data-emoji="👍">👍</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🙌">🙌</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🥵">🥵</button>
+              <button type="button" class="chat-sticker-item" data-emoji="😮‍💨">😮‍💨</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🚀">🚀</button>
+              <button type="button" class="chat-sticker-item" data-emoji="✅">✅</button>
+              <button type="button" class="chat-sticker-item" data-emoji="💯">💯</button>
+              <button type="button" class="chat-sticker-item" data-emoji="😂">😂</button>
+              <button type="button" class="chat-sticker-item" data-emoji="😅">😅</button>
+              <button type="button" class="chat-sticker-item" data-emoji="😢">😢</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🥳">🥳</button>
+              <button type="button" class="chat-sticker-item" data-emoji="👀">👀</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🤝">🤝</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🫡">🫡</button>
+              <button type="button" class="chat-sticker-item" data-emoji="😴">😴</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🤯">🤯</button>
+              <button type="button" class="chat-sticker-item" data-emoji="🙏">🙏</button>
+              <button type="button" class="chat-sticker-item" data-emoji="⚡">⚡</button>
+          </div>
+        </div>
         <button type="button" class="chat-composer-btn" id="chatMicBtn" title="Grabar audio">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
         </button>
