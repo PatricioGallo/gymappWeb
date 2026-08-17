@@ -13,6 +13,7 @@ import { showExcView } from "../pages/showExc";
 import { postView } from "../pages/post";
 import { alumnosView } from "../pages/alumnos";
 import { progressView } from "../pages/progress";
+import { rutinsView } from "../pages/rutins";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -88,6 +89,11 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/progress.html") ? new URLSearchParams() : null),
     view: progressView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/rutinsView.html") ? new URLSearchParams() : null),
+    view: rutinsView,
     auth: "required",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --

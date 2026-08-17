@@ -122,18 +122,19 @@ async function renderCurrentLocation(): Promise<void> {
   const key = match.route.keyFor ? match.route.keyFor(params) : "__default__";
   const view = match.route.view;
 
+  // #loaderBody es chrome global (spinners, modales tipo el selector de ejercicios, checks de
+  // exito) que vive fuera del container de cualquier vista -- ni ocultar/descartar una instancia
+  // ni un update() dentro de la misma instancia lo tocan por su cuenta. Sin esto, un overlay que
+  // quedo abierto (spinner de guardado, modal sin cerrar) se queda pegado en pantalla al navegar,
+  // incluso volviendo a la misma ruta con otros params (ej. reabrir rutinsView.html).
+  document.getElementById("loaderBody")?.replaceChildren();
+
   // Misma instancia ya activa: no hay nada que mostrar/ocultar, solo avisarle que
   // cambiaron los params (ej. otro ?c=ID dentro del mismo chat ya abierto).
   if (active?.view === view && active.key === key) {
     view.update?.(params);
     return;
   }
-
-  // #loaderBody es chrome global (spinners, modales tipo el selector de ejercicios, checks de
-  // exito) que vive fuera del container de cualquier vista -- ocultar/descartar una instancia no
-  // lo toca. Sin esto, un overlay que quedo abierto en la vista anterior (spinner de guardado,
-  // modal sin cerrar) se queda pegado en pantalla encima de la vista nueva.
-  document.getElementById("loaderBody")?.replaceChildren();
 
   const instances = instancesFor(view);
   const cached = instances.get(key);
