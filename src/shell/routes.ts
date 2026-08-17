@@ -17,6 +17,7 @@ import { rutinsView } from "../pages/rutins";
 import { feedView } from "../pages/feed";
 import { pesosView } from "../pages/pesos";
 import { settingsView } from "../pages/settings";
+import { adminView } from "../pages/admin";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -112,6 +113,11 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/settings.html") ? new URLSearchParams() : null),
     view: settingsView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/admin.html") ? new URLSearchParams() : null),
+    view: adminView,
     auth: "required",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --
