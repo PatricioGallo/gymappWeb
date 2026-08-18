@@ -229,20 +229,37 @@ export interface WeightLogEntry {
   diaSemana: number | null;
 }
 
+// PostgREST corta cualquier select sin paginar en db-max-rows (1000 en este proyecto) y lo
+// devuelve como 200/206 sin marcar error -- un usuario con mucho historial (o una cuenta de
+// prueba con series de test) pierde silenciosamente todo lo que quede despues de esa fila.
+// Como se ordena ascendente por fecha, lo que se pierde es siempre lo mas reciente (ver
+// "Ultimo entrenamiento" en profile.ts). Se pagina en paginas de PAGE_SIZE hasta traer todo.
+const WEIGHT_LOGS_PAGE_SIZE = 1000;
+
 export async function listWeightLogsWithContext(userId: string): Promise<WeightLogEntry[]> {
-  const { data, error } = await supabase
-    .from("weight_logs")
-    .select(
-      `fecha, peso, serie, repe, unidad, exercise_id,
-       exercises ( name, is_builtin, profiles ( nombre, apellido ) ),
-       routine_exercises ( id, routine_days ( dia_semana, routine_weeks ( routine_id, numero ) ) )`
-    )
-    .eq("user_id", userId)
-    .order("fecha", { ascending: true });
+  const rows: any[] = [];
+  let from = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await supabase
+      .from("weight_logs")
+      .select(
+        `fecha, peso, serie, repe, unidad, exercise_id,
+         exercises ( name, is_builtin, profiles ( nombre, apellido ) ),
+         routine_exercises ( id, routine_days ( dia_semana, routine_weeks ( routine_id, numero ) ) )`
+      )
+      .eq("user_id", userId)
+      .order("fecha", { ascending: true })
+      .range(from, from + WEIGHT_LOGS_PAGE_SIZE - 1);
 
-  if (error) throw error;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < WEIGHT_LOGS_PAGE_SIZE) break;
+    from += WEIGHT_LOGS_PAGE_SIZE;
+  }
 
-  return (data ?? []).map((row: any) => ({
+  return rows.map((row: any) => ({
     fecha: row.fecha,
     peso: row.peso,
     serie: row.serie,
