@@ -390,7 +390,7 @@ export const alumnosView: ViewModule = {
           <div class="modal-card modal-card-lg">
             <h2>Asignarle una rutina a ${escapeHtml(nombre)}</h2>
             <p class="subtitle">Elegí una de tus rutinas guardadas. Se crea una rutina nueva para ${escapeHtml(nombre)}; la plantilla queda igual para volver a usarla.</p>
-            <div id="assignRoutineModalBody"><p class="chart-sub">Cargando tus rutinas guardadas...</p></div>
+            <div id="assignRoutineModalBody" class="modal-list"><p class="chart-sub">Cargando tus rutinas guardadas...</p></div>
             <div class="modal-actions">
               <button type="button" class="btn btn-outline" id="assignRoutineCancel">Cancelar</button>
             </div>
@@ -427,7 +427,7 @@ export const alumnosView: ViewModule = {
           <div class="modal-card modal-card-lg">
             <h2>Rutinas históricas de ${escapeHtml(nombre)}</h2>
             <p class="subtitle">${canReassign ? "Rutinas que le asignaste y ya finalizó. Podés volver a asignarle cualquiera." : "Rutinas que le asignaste mientras fue tu alumno."}</p>
-            <div id="historicRoutinesModalBody"><p class="chart-sub">Cargando...</p></div>
+            <div id="historicRoutinesModalBody" class="modal-list"><p class="chart-sub">Cargando...</p></div>
             <div class="modal-actions">
               <button type="button" class="btn btn-outline" id="historicRoutinesCancel">Cerrar</button>
             </div>

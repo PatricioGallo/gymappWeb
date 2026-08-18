@@ -1570,7 +1570,7 @@ async function openAssignModal(routineId: string, nombre: string) {
         <p class="subtitle">Elegí a quién se la asignás: un suscriptor tuyo, o vos mismo. Se crea una rutina nueva; esta plantilla queda igual acá.</p>
         <div id="assignSelfRow">${selfAssignRowMarkup()}</div>
         <input type="search" id="assignSearchInput" class="header-search-input" placeholder="Buscar suscriptor por nombre o usuario..." hidden>
-        <div id="assignModalBody"><p class="chart-sub">Cargando tus suscriptores...</p></div>
+        <div id="assignModalBody" class="modal-list"><p class="chart-sub">Cargando tus suscriptores...</p></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-outline" id="assignCancel">Cancelar</button>
         </div>

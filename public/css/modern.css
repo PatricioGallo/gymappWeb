@@ -707,6 +707,12 @@ button:focus-visible {
   flex-shrink: 0;
 }
 
+.modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* ---------- Pagina completa de busqueda ---------- */
 
 .search-page-form { display: flex; gap: 10px; margin-bottom: 20px; }
