@@ -1,4 +1,5 @@
-import { setupNavToggle, setupRevealObserver, requireAuth } from "../lib/nav";
+import type { ViewModule } from "../shell/router";
+import { navigate } from "../shell/router";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
 import { listExercises, type Exercise } from "../services/exercise.service";
@@ -14,17 +15,34 @@ import {
 import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
 
-setupNavToggle();
-setupRevealObserver();
-const myId = await requireAuth();
+const VIEW_MARKUP = `
+  <section class="page-hero">
+    <div class="container">
+      <span class="eyebrow">Modificar rutina</span>
+      <h1 id="routineTitle">Cargando...</h1>
+      <div id="routineOwnerBanner"></div>
+      <p id="routineSubtitle"></p>
+    </div>
+  </section>
 
-const params = new URLSearchParams(window.location.search);
-const routineId = params.get("rid");
+  <section class="features">
+    <div class="container">
+      <div class="field field-narrow" id="weekPicker">
+        <label for="weekSelect">Semana</label>
+        <select id="weekSelect"></select>
+      </div>
 
-let excCatalog: Exercise[] = [];
-let routine: RoutineDetail | null = null;
+      <div id="weekContent"></div>
 
-function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
+      <div class="alert_message alert_message-center" id="alert_message"></div>
+      <div class="auth-trust" id="saveWrap">
+        <button class="btn btn-primary" id="saveChanges" type="button">Guardar cambios</button>
+      </div>
+    </div>
+  </section>
+`;
+
+function excBlockMarkup(routine: RoutineDetail, exc?: RoutineExerciseWithAuthor): string {
   const isNoWeight = exc ? !exc.es_medible : false;
   const selectedLabel = exc ? escapeHtml(exc.nombre_snapshot) : "Elegir ejercicio";
   return `
@@ -39,7 +57,7 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
       </div>
       ${
-        exc && routine!.semanas.length > 1
+        exc && routine.semanas.length > 1
           ? `<label class="exc-apply-all"><input type="checkbox" class="applyAllWeeksCheck"> Aplicar este cambio a este mismo ejercicio en todas las semanas</label>`
           : ""
       }
@@ -76,278 +94,306 @@ function updateMoveButtons(list: Element): void {
   });
 }
 
-function renderWeek(weekIndex: number) {
-  const semana = routine!.semanas[weekIndex];
-  const weekContent = document.getElementById("weekContent")!;
-  weekContent.dataset.week = String(weekIndex);
+// mount() define render() (arma el DOM entero desde cero para cada ?rid= -- no hay estado fino
+// que preservar entre rutinas distintas) y la deja referenciada aca para que update() la reuse.
+let updateHandler: ((params: URLSearchParams) => void) | null = null;
 
-  weekContent.innerHTML = semana.dias
-    .map(
-      (dia) => `
-    <div class="day-card reveal" data-day-id="${dia.id}">
-      <h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3>
-      <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(exc)).join("")}</div>
-      <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
-    </div>
-  `
-    )
-    .join("");
+export const modExcView: ViewModule = {
+  async mount(container, params, ctx, authUserId) {
+    const myId = authUserId!; // la ruta se registra con requiresAuth:true
 
-  weekContent.querySelectorAll(".exc-list").forEach((list) => updateMoveButtons(list));
-}
+    async function render(p: URLSearchParams): Promise<void> {
+      container.innerHTML = VIEW_MARKUP;
 
-async function saveChanges() {
-  const alertMessage = document.getElementById("alert_message")!;
-  const weekContent = document.getElementById("weekContent")!;
-  const weekIndex = Number(weekContent.dataset.week);
-  const semana = routine!.semanas[weekIndex];
-  const dayCards = weekContent.querySelectorAll<HTMLElement>(".day-card");
-  let error = "";
+      const routineId = p.get("rid");
+      let excCatalog: Exercise[] = await listExercises();
+      excCatalog.sort((a, b) => a.name.localeCompare(b.name));
 
-  interface PendingRow {
-    exercise_id: string;
-    nombre_snapshot: string;
-    info_snapshot: string;
-    serie: number;
-    repe: number;
-    repe_max: number | null;
-    nota: string;
-    es_medible: boolean;
-    mismo_peso: boolean;
-    orden: number;
-  }
-  interface PendingDay {
-    dayId: string;
-    keepIds: Set<string>;
-    updates: (PendingRow & { id: string })[];
-    inserts: PendingRow[];
-  }
-  const pending: PendingDay[] = [];
+      const routine: RoutineDetail | null = routineId ? await getRoutineDetail(routineId) : null;
 
-  // Ejercicios editados con el tilde "aplicar a todas las semanas" tildado: se buscan por
-  // exercise_id ORIGINAL (antes de esta edicion) dentro del mismo dia en las demas semanas,
-  // y se les pisa el contenido con esta misma fila -- asi tambien sirve para "reemplazar"
-  // un ejercicio por otro en todas las semanas, no solo para ajustar series/repe/nota.
-  interface ApplyAllRequest {
-    diaIndex: number;
-    originalExerciseId: string;
-    row: PendingRow;
-  }
-  const applyAllRequests: ApplyAllRequest[] = [];
-
-  dayCards.forEach((dayCard, diaIndex) => {
-    const dayId = dayCard.dataset.dayId!;
-    const keepIds = new Set<string>();
-    const updates: PendingDay["updates"] = [];
-    const inserts: PendingDay["inserts"] = [];
-
-    const diaLabelText = dayCard.querySelector("h3")?.textContent ?? "este día";
-
-    dayCard.querySelectorAll<HTMLElement>(".exc-block").forEach((block, orden) => {
-      if (error) return;
-      const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
-      const serie = parseInt((block.querySelector(".serieInput") as HTMLInputElement).value, 10);
-      const repe = parseInt((block.querySelector(".repeInput") as HTMLInputElement).value, 10);
-      const repeMaxRaw = (block.querySelector(".repeMaxInput") as HTMLInputElement).value;
-      const repeMax = repeMaxRaw ? parseInt(repeMaxRaw, 10) : null;
-      const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
-      const mismoPeso = (block.querySelector(".mismoPesoCheck") as HTMLInputElement).checked;
-      const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
-      const existingId = block.dataset.existingId;
-      const ubicacion = `${diaLabelText}, ejercicio ${orden + 1}`;
-
-      if (!excId) {
-        error = `Te falta elegir un ejercicio (${ubicacion}). Tocá "Elegir ejercicio" para buscarlo en el catálogo.`;
-        return;
-      }
-      if (!serie || serie < 1 || serie > 10) {
-        error = `Revisá las series en ${ubicacion}: tienen que ser un número entre 1 y 10.`;
-        return;
-      }
-      if (!repe || repe < 1 || repe > 30) {
-        error = `Revisá las repeticiones en ${ubicacion}: tienen que ser un número entre 1 y 30.`;
-        return;
-      }
-      if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
-        error = `Revisá el "hasta" en ${ubicacion}: tiene que ser mayor o igual a las repeticiones y como máximo 30.`;
-        return;
-      }
-      if (nota.length > 140) {
-        error = `La nota en ${ubicacion} es muy larga: dejala en 140 caracteres o menos.`;
+      if (!routine) {
+        const title = container.querySelector("#routineTitle");
+        if (title) title.textContent = "No se encontró esta rutina.";
+        container.querySelector("#weekPicker")?.remove();
+        container.querySelector("#saveWrap")?.remove();
         return;
       }
 
-      const excDef = excCatalog.find((e) => e.id === excId)!;
-      const row: PendingRow = {
-        exercise_id: excDef.id,
-        nombre_snapshot: excDef.name,
-        info_snapshot: excDef.info,
-        serie,
-        repe,
-        repe_max: repeMax,
-        nota,
-        es_medible: !noWeight,
-        mismo_peso: mismoPeso,
-        orden,
-      };
-
-      if (existingId) {
-        keepIds.add(existingId);
-        updates.push({ id: existingId, ...row });
-
-        const applyAll = (block.querySelector(".applyAllWeeksCheck") as HTMLInputElement | null)?.checked ?? false;
-        const originalExerciseId = semana.dias[diaIndex]?.ejercicios.find((e) => e.id === existingId)?.exercise_id;
-        if (applyAll && originalExerciseId) applyAllRequests.push({ diaIndex, originalExerciseId, row });
-      } else {
-        inserts.push(row);
+      // Una rutina asignada y privada es del que la asigno: quien la recibe no la
+      // puede modificar (ver migracion student_routine_permission_lockdown). Se
+      // corta aca con un mensaje claro en vez de dejar completar el formulario y
+      // que despues falle en silencio contra la RLS al guardar.
+      const isOwner = routine.user_id === myId;
+      const isAssigner = routine.assigned_by === myId;
+      const canEdit = isAssigner || (isOwner && (!routine.assigned_by || routine.is_public)) || (await getProfileBasicById(myId).catch(() => null))?.user_type === "admin";
+      if (!canEdit) {
+        const title = container.querySelector("#routineTitle");
+        const subtitle = container.querySelector("#routineSubtitle");
+        if (title) title.textContent = routine.nombre;
+        if (subtitle) subtitle.textContent = "Esta rutina te la asignó tu entrenador y es privada: no la podés modificar, solo entrenarla y mirarla.";
+        container.querySelector("#weekPicker")?.remove();
+        container.querySelector("#saveWrap")?.remove();
+        container.querySelector("#weekContent")?.remove();
+        return;
       }
+
+      const title = container.querySelector("#routineTitle");
+      const subtitle = container.querySelector("#routineSubtitle");
+      const ownerBanner = container.querySelector("#routineOwnerBanner");
+      if (title) title.textContent = routine.nombre;
+      if (subtitle) subtitle.textContent = "Elegí la semana, agregá o quitá ejercicios y editá series, repeticiones o notas de cada día.";
+      if (ownerBanner) {
+        const profiles = await getProfilesBasicByIds([routine.user_id, routine.assigned_by]);
+        ownerBanner.innerHTML = routineOwnerLineMarkup(profiles.get(routine.user_id), routine.assigned_by ? profiles.get(routine.assigned_by) : null);
+      }
+
+      function renderWeek(weekIndex: number): void {
+        const semana = routine!.semanas[weekIndex];
+        const weekContent = container.querySelector("#weekContent") as HTMLElement;
+        weekContent.dataset.week = String(weekIndex);
+
+        weekContent.innerHTML = semana.dias
+          .map(
+            (dia) => `
+          <div class="day-card reveal" data-day-id="${dia.id}">
+            <h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3>
+            <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(routine!, exc)).join("")}</div>
+            <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
+          </div>
+        `
+          )
+          .join("");
+
+        weekContent.querySelectorAll(".exc-list").forEach((list) => updateMoveButtons(list));
+      }
+
+      async function saveChanges(): Promise<void> {
+        const alertMessage = container.querySelector("#alert_message")!;
+        const weekContent = container.querySelector("#weekContent") as HTMLElement;
+        const weekIndex = Number(weekContent.dataset.week);
+        const semana = routine!.semanas[weekIndex];
+        const dayCards = weekContent.querySelectorAll<HTMLElement>(".day-card");
+        let error = "";
+
+        interface PendingRow {
+          exercise_id: string;
+          nombre_snapshot: string;
+          info_snapshot: string;
+          serie: number;
+          repe: number;
+          repe_max: number | null;
+          nota: string;
+          es_medible: boolean;
+          mismo_peso: boolean;
+          orden: number;
+        }
+        interface PendingDay {
+          dayId: string;
+          keepIds: Set<string>;
+          updates: (PendingRow & { id: string })[];
+          inserts: PendingRow[];
+        }
+        const pending: PendingDay[] = [];
+
+        // Ejercicios editados con el tilde "aplicar a todas las semanas" tildado: se buscan por
+        // exercise_id ORIGINAL (antes de esta edicion) dentro del mismo dia en las demas semanas,
+        // y se les pisa el contenido con esta misma fila -- asi tambien sirve para "reemplazar"
+        // un ejercicio por otro en todas las semanas, no solo para ajustar series/repe/nota.
+        interface ApplyAllRequest {
+          diaIndex: number;
+          originalExerciseId: string;
+          row: PendingRow;
+        }
+        const applyAllRequests: ApplyAllRequest[] = [];
+
+        dayCards.forEach((dayCard, diaIndex) => {
+          const dayId = dayCard.dataset.dayId!;
+          const keepIds = new Set<string>();
+          const updates: PendingDay["updates"] = [];
+          const inserts: PendingDay["inserts"] = [];
+
+          const diaLabelText = dayCard.querySelector("h3")?.textContent ?? "este día";
+
+          dayCard.querySelectorAll<HTMLElement>(".exc-block").forEach((block, orden) => {
+            if (error) return;
+            const excId = (block.querySelector(".excSelectInput") as HTMLInputElement).value;
+            const serie = parseInt((block.querySelector(".serieInput") as HTMLInputElement).value, 10);
+            const repe = parseInt((block.querySelector(".repeInput") as HTMLInputElement).value, 10);
+            const repeMaxRaw = (block.querySelector(".repeMaxInput") as HTMLInputElement).value;
+            const repeMax = repeMaxRaw ? parseInt(repeMaxRaw, 10) : null;
+            const noWeight = (block.querySelector(".noWeightCheck") as HTMLInputElement).checked;
+            const mismoPeso = (block.querySelector(".mismoPesoCheck") as HTMLInputElement).checked;
+            const nota = (block.querySelector(".notaInput") as HTMLInputElement).value.trim();
+            const existingId = block.dataset.existingId;
+            const ubicacion = `${diaLabelText}, ejercicio ${orden + 1}`;
+
+            if (!excId) {
+              error = `Te falta elegir un ejercicio (${ubicacion}). Tocá "Elegir ejercicio" para buscarlo en el catálogo.`;
+              return;
+            }
+            if (!serie || serie < 1 || serie > 10) {
+              error = `Revisá las series en ${ubicacion}: tienen que ser un número entre 1 y 10.`;
+              return;
+            }
+            if (!repe || repe < 1 || repe > 30) {
+              error = `Revisá las repeticiones en ${ubicacion}: tienen que ser un número entre 1 y 30.`;
+              return;
+            }
+            if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
+              error = `Revisá el "hasta" en ${ubicacion}: tiene que ser mayor o igual a las repeticiones y como máximo 30.`;
+              return;
+            }
+            if (nota.length > 140) {
+              error = `La nota en ${ubicacion} es muy larga: dejala en 140 caracteres o menos.`;
+              return;
+            }
+
+            const excDef = excCatalog.find((e) => e.id === excId)!;
+            const row: PendingRow = {
+              exercise_id: excDef.id,
+              nombre_snapshot: excDef.name,
+              info_snapshot: excDef.info,
+              serie,
+              repe,
+              repe_max: repeMax,
+              nota,
+              es_medible: !noWeight,
+              mismo_peso: mismoPeso,
+              orden,
+            };
+
+            if (existingId) {
+              keepIds.add(existingId);
+              updates.push({ id: existingId, ...row });
+
+              const applyAll = (block.querySelector(".applyAllWeeksCheck") as HTMLInputElement | null)?.checked ?? false;
+              const originalExerciseId = semana.dias[diaIndex]?.ejercicios.find((e) => e.id === existingId)?.exercise_id;
+              if (applyAll && originalExerciseId) applyAllRequests.push({ diaIndex, originalExerciseId, row });
+            } else {
+              inserts.push(row);
+            }
+          });
+
+          if (!error && dayCard.querySelectorAll(".exc-block").length === 0) error = `Agregá al menos un ejercicio en ${diaLabelText}.`;
+          pending.push({ dayId, keepIds, updates, inserts });
+        });
+
+        if (error) {
+          alertMessage.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          alertMessage.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+
+        alertMessage.innerHTML = "";
+        const loaderBody = document.getElementById("loaderBody")!;
+        loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Actualizando rutina...</p></div>`;
+
+        try {
+          for (let i = 0; i < pending.length; i++) {
+            const { dayId, keepIds, updates, inserts } = pending[i];
+            const original = semana.dias[i];
+            const toDelete = original.ejercicios.filter((e) => !keepIds.has(e.id));
+
+            await Promise.all([
+              ...updates.map((u) => updateRoutineExercise(u.id, u)),
+              ...inserts.map((row) => addRoutineExercise(dayId, row)),
+              ...toDelete.map((e) => deleteRoutineExercise(e.id)),
+            ]);
+          }
+
+          // Semanas no visitadas en esta sesion (routine.semanas sigue con los datos originales):
+          // para cada pedido de "aplicar a todas las semanas" se busca, en el mismo dia de cada
+          // otra semana, la fila que tenia el exercise_id original y se le pisa el contenido. Si
+          // esa semana no tiene mas ese ejercicio en ese dia, se la deja como esta.
+          await Promise.all(
+            applyAllRequests.flatMap((req) =>
+              routine!.semanas
+                .filter((_, wIdx) => wIdx !== weekIndex)
+                .map((otherSemana) => otherSemana.dias[req.diaIndex]?.ejercicios.find((e) => e.exercise_id === req.originalExerciseId))
+                .filter((match): match is RoutineExerciseWithAuthor => !!match)
+                .map((match) => updateRoutineExercise(match.id, { ...req.row, orden: match.orden }))
+            )
+          );
+
+          loaderBody.innerHTML = `
+            <div class="success-check-container">
+              <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+              <p>¡Rutina actualizada con éxito! Espere, será redirigido.</p>
+            </div>
+          `;
+          const t = setTimeout(() => navigate("profile.html"), 2000);
+          ctx.addCleanup(() => clearTimeout(t));
+        } catch {
+          loaderBody.innerHTML = "";
+          alertMessage.innerHTML = "<p>ERROR! No se pudo actualizar la rutina.</p>";
+        }
+      }
+
+      const weekSelect = container.querySelector("#weekSelect") as HTMLSelectElement;
+      weekSelect.innerHTML = routine.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join("");
+      weekSelect.addEventListener("change", () => renderWeek(Number(weekSelect.value)), { signal: ctx.signal });
+      renderWeek(0);
+
+      container.querySelector("#weekContent")?.addEventListener(
+        "click",
+        (event) => {
+          const target = event.target as HTMLElement;
+          if (target.classList.contains("day-add-btn")) {
+            const list = target.previousElementSibling;
+            list?.insertAdjacentHTML("beforeend", excBlockMarkup(routine!));
+            if (list) updateMoveButtons(list);
+          }
+          if (target.classList.contains("exc-remove")) {
+            const block = target.closest(".exc-block");
+            const list = block?.parentElement;
+            if (list && list.children.length > 1) {
+              block?.remove();
+              updateMoveButtons(list);
+            }
+          }
+          if (target.classList.contains("exc-move-up")) {
+            const block = target.closest(".exc-block");
+            const prev = block?.previousElementSibling;
+            if (block && prev) {
+              block.parentElement!.insertBefore(block, prev);
+              updateMoveButtons(block.parentElement!);
+            }
+          }
+          if (target.classList.contains("exc-move-down")) {
+            const block = target.closest(".exc-block");
+            const next = block?.nextElementSibling;
+            if (block && next) {
+              block.parentElement!.insertBefore(next, block);
+              updateMoveButtons(block.parentElement!);
+            }
+          }
+          if (target.classList.contains("exc-picker-btn")) {
+            const block = target.closest<HTMLElement>(".exc-block")!;
+            openExercisePicker(
+              excCatalog,
+              (exc) => {
+                if (!excCatalog.some((e) => e.id === exc.id)) excCatalog.push(exc);
+                target.textContent = exc.name;
+                block.querySelector<HTMLInputElement>(".excSelectInput")!.value = exc.id;
+              },
+              ctx
+            );
+          }
+        },
+        { signal: ctx.signal }
+      );
+
+      container.querySelector("#saveChanges")?.addEventListener("click", () => void saveChanges(), { signal: ctx.signal });
+    }
+
+    await render(params);
+
+    updateHandler = (nextParams) => void render(nextParams);
+    ctx.addCleanup(() => {
+      updateHandler = null;
     });
-
-    if (!error && dayCard.querySelectorAll(".exc-block").length === 0) error = `Agregá al menos un ejercicio en ${diaLabelText}.`;
-    pending.push({ dayId, keepIds, updates, inserts });
-  });
-
-  if (error) {
-    alertMessage.innerHTML = `<p>${escapeHtml(error)}</p>`;
-    alertMessage.scrollIntoView({ behavior: "smooth", block: "center" });
-    return;
-  }
-
-  alertMessage.innerHTML = "";
-  const loaderBody = document.getElementById("loaderBody")!;
-  loaderBody.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Actualizando rutina...</p></div>`;
-
-  try {
-    for (let i = 0; i < pending.length; i++) {
-      const { dayId, keepIds, updates, inserts } = pending[i];
-      const original = semana.dias[i];
-      const toDelete = original.ejercicios.filter((e) => !keepIds.has(e.id));
-
-      await Promise.all([
-        ...updates.map((u) => updateRoutineExercise(u.id, u)),
-        ...inserts.map((row) => addRoutineExercise(dayId, row)),
-        ...toDelete.map((e) => deleteRoutineExercise(e.id)),
-      ]);
-    }
-
-    // Semanas no visitadas en esta sesion (routine.semanas sigue con los datos originales):
-    // para cada pedido de "aplicar a todas las semanas" se busca, en el mismo dia de cada
-    // otra semana, la fila que tenia el exercise_id original y se le pisa el contenido. Si
-    // esa semana no tiene mas ese ejercicio en ese dia, se la deja como esta.
-    await Promise.all(
-      applyAllRequests.flatMap((req) =>
-        routine!.semanas
-          .filter((_, wIdx) => wIdx !== weekIndex)
-          .map((otherSemana) => otherSemana.dias[req.diaIndex]?.ejercicios.find((e) => e.exercise_id === req.originalExerciseId))
-          .filter((match): match is RoutineExerciseWithAuthor => !!match)
-          .map((match) => updateRoutineExercise(match.id, { ...req.row, orden: match.orden }))
-      )
-    );
-
-    loaderBody.innerHTML = `
-      <div class="success-check-container">
-        <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
-        <p>¡Rutina actualizada con éxito! Espere, será redirigido.</p>
-      </div>
-    `;
-    setTimeout(() => {
-      window.location.href = "profile.html";
-    }, 2000);
-  } catch {
-    loaderBody.innerHTML = "";
-    alertMessage.innerHTML = "<p>ERROR! No se pudo actualizar la rutina.</p>";
-  }
-}
-
-async function init() {
-  excCatalog = await listExercises();
-  excCatalog.sort((a, b) => a.name.localeCompare(b.name));
-
-  routine = routineId ? await getRoutineDetail(routineId) : null;
-
-  if (!routine) {
-    const title = document.getElementById("routineTitle");
-    if (title) title.textContent = "No se encontró esta rutina.";
-    document.getElementById("weekPicker")?.remove();
-    document.getElementById("saveWrap")?.remove();
-    return;
-  }
-
-  // Una rutina asignada y privada es del que la asigno: quien la recibe no la
-  // puede modificar (ver migracion student_routine_permission_lockdown). Se
-  // corta aca con un mensaje claro en vez de dejar completar el formulario y
-  // que despues falle en silencio contra la RLS al guardar.
-  const isOwner = routine.user_id === myId;
-  const isAssigner = routine.assigned_by === myId;
-  const canEdit = isAssigner || (isOwner && (!routine.assigned_by || routine.is_public)) || (await getProfileBasicById(myId).catch(() => null))?.user_type === "admin";
-  if (!canEdit) {
-    const title = document.getElementById("routineTitle");
-    const subtitle = document.getElementById("routineSubtitle");
-    if (title) title.textContent = routine.nombre;
-    if (subtitle) subtitle.textContent = "Esta rutina te la asignó tu entrenador y es privada: no la podés modificar, solo entrenarla y mirarla.";
-    document.getElementById("weekPicker")?.remove();
-    document.getElementById("saveWrap")?.remove();
-    document.getElementById("weekContent")?.remove();
-    return;
-  }
-
-  const title = document.getElementById("routineTitle");
-  const subtitle = document.getElementById("routineSubtitle");
-  const ownerBanner = document.getElementById("routineOwnerBanner");
-  if (title) title.textContent = routine.nombre;
-  if (subtitle) subtitle.textContent = "Elegí la semana, agregá o quitá ejercicios y editá series, repeticiones o notas de cada día.";
-  if (ownerBanner) {
-    const profiles = await getProfilesBasicByIds([routine.user_id, routine.assigned_by]);
-    ownerBanner.innerHTML = routineOwnerLineMarkup(profiles.get(routine.user_id), routine.assigned_by ? profiles.get(routine.assigned_by) : null);
-  }
-
-  const weekSelect = document.getElementById("weekSelect") as HTMLSelectElement;
-  weekSelect.innerHTML = routine.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join("");
-  weekSelect.addEventListener("change", () => renderWeek(Number(weekSelect.value)));
-  renderWeek(0);
-
-  document.getElementById("weekContent")?.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains("day-add-btn")) {
-      const list = target.previousElementSibling;
-      list?.insertAdjacentHTML("beforeend", excBlockMarkup());
-      if (list) updateMoveButtons(list);
-    }
-    if (target.classList.contains("exc-remove")) {
-      const block = target.closest(".exc-block");
-      const list = block?.parentElement;
-      if (list && list.children.length > 1) {
-        block?.remove();
-        updateMoveButtons(list);
-      }
-    }
-    if (target.classList.contains("exc-move-up")) {
-      const block = target.closest(".exc-block");
-      const prev = block?.previousElementSibling;
-      if (block && prev) {
-        block.parentElement!.insertBefore(block, prev);
-        updateMoveButtons(block.parentElement!);
-      }
-    }
-    if (target.classList.contains("exc-move-down")) {
-      const block = target.closest(".exc-block");
-      const next = block?.nextElementSibling;
-      if (block && next) {
-        block.parentElement!.insertBefore(next, block);
-        updateMoveButtons(block.parentElement!);
-      }
-    }
-    if (target.classList.contains("exc-picker-btn")) {
-      const block = target.closest<HTMLElement>(".exc-block")!;
-      openExercisePicker(excCatalog, (exc) => {
-        if (!excCatalog.some((e) => e.id === exc.id)) excCatalog.push(exc);
-        target.textContent = exc.name;
-        block.querySelector<HTMLInputElement>(".excSelectInput")!.value = exc.id;
-      });
-    }
-  });
-
-  document.getElementById("saveChanges")?.addEventListener("click", saveChanges);
-}
-
-init();
+  },
+  update(params) {
+    updateHandler?.(params);
+  },
+};

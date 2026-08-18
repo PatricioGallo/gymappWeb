@@ -1,5 +1,7 @@
-import { setupNavToggle, setupRevealObserver, setupAutoHideHeader } from "../lib/nav";
-import { supabase } from "../lib/supabaseClient";
+import { setupAutoHideHeader } from "../lib/nav";
+import { smartNavigate } from "../shell/router";
+import type { ViewModule } from "../shell/router";
+import type { ViewContext } from "../shell/viewContext";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
 import {
@@ -55,40 +57,19 @@ import {
   type PostAuthor,
 } from "../services/post.service";
 
-declare const Chart: any;
+import type { Chart as ChartInstance } from "chart.js";
+import { loadChart } from "../lib/chartLoader";
 
-setupNavToggle();
-setupRevealObserver();
-setupAutoHideHeader();
-setupProfileMenuToggle();
-setupRoutineMenuOutsideClick();
-
-const { data: sessionData } = await supabase.auth.getSession();
-const myId = sessionData.session?.user.id ?? null;
-
-const urlParams = new URLSearchParams(window.location.search);
-// pages/profile.html (nav "Perfil") es siempre TU perfil salvo que le pasen ?u=.
-// Cualquier otra ruta (gymsocial.com.ar/<username>) llega aca via 404.html:
-// GitHub Pages no tiene rewrites, asi que 404.html sirve este mismo script y
-// leemos el username directo del path en vez de la query.
-const onOwnProfilePage = window.location.pathname.endsWith("/pages/profile.html");
-const pathUsername = onOwnProfilePage ? null : window.location.pathname.replace(/^\/+|\/+$/g, "") || null;
-const usernameParam = urlParams.get("u") ?? pathUsername;
-
-if (!usernameParam && !myId) {
-  window.location.href = "login.html";
-  throw new Error("not authenticated");
-}
-
-// Un visitante sin sesion no tiene "su" perfil al que volver, ni "por que salir",
-// ni solicitudes de seguimiento propias.
-if (!myId) {
-  document.getElementById("navPerfil")?.remove();
-  document.getElementById("navSalir")?.remove();
-  document.getElementById("navFollowRequests")?.remove();
-  document.getElementById("footerPerfil")?.remove();
-  document.getElementById("footerSalir")?.remove();
-}
+// Estado que hoy se calculaba una sola vez a nivel de modulo (MPA: cada carga de pagina es un
+// modulo nuevo). Con el shell, este mismo modulo puede quedar cargado en memoria durante varias
+// visitas a distintos perfiles en la misma sesion -- mount() reasigna estas variables en cada
+// llamada, y como todas las funciones de mas abajo ya cierran sobre estos bindings (no sobre un
+// valor copiado), siguen viendo el estado correcto de la visita actual sin tener que anidarlas
+// todas dentro de mount().
+let myId: string | null = null;
+let usernameParam: string | null = null;
+let freqChartInstance: ChartInstance | null = null;
+let progressChartInstance: ChartInstance | null = null;
 
 function parseFechaISO(fecha: string): Date {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -219,7 +200,7 @@ function initMessageButton(targetId: string, buttonId = "messageBtn") {
       btn.disabled = false;
       return;
     }
-    window.location.href = `chat.html?c=${id}`;
+    smartNavigate(`chats.html?c=${id}`);
   });
 }
 
@@ -637,7 +618,7 @@ function openReportUserModal(targetId: string, username: string) {
   });
 }
 
-function setupProfileMenuToggle() {
+function setupProfileMenuToggle(ctx: ViewContext) {
   const btn = document.getElementById("profileMenuBtn");
   const panel = document.getElementById("profileMenuPanel");
   if (!btn || !panel) return;
@@ -649,30 +630,38 @@ function setupProfileMenuToggle() {
     btn.setAttribute("aria-expanded", String(willOpen));
   });
 
-  document.addEventListener("click", (e) => {
-    if (panel.hidden) return;
-    const target = e.target as Node;
-    if (panel.contains(target) || btn.contains(target)) return;
-    panel.hidden = true;
-    btn.classList.remove("open");
-    btn.setAttribute("aria-expanded", "false");
-  });
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (panel.hidden) return;
+      const target = e.target as Node;
+      if (panel.contains(target) || btn.contains(target)) return;
+      panel.hidden = true;
+      btn.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+    },
+    { signal: ctx.signal }
+  );
 }
 
 // ---------- Menu de tuerca por rutina (Mostrar / Modificar / Eliminar) ----------
 
 const ROUTINE_MENU_GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
 
-function setupRoutineMenuOutsideClick() {
-  document.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    if (target.closest(".routine-menu-wrap")) return;
-    document.querySelectorAll<HTMLElement>(".routine-menu-panel").forEach((p) => (p.hidden = true));
-    document.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((b) => {
-      b.classList.remove("open");
-      b.setAttribute("aria-expanded", "false");
-    });
-  });
+function setupRoutineMenuOutsideClick(ctx: ViewContext) {
+  document.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest(".routine-menu-wrap")) return;
+      document.querySelectorAll<HTMLElement>(".routine-menu-panel").forEach((p) => (p.hidden = true));
+      document.querySelectorAll<HTMLButtonElement>(".routine-menu-btn").forEach((b) => {
+        b.classList.remove("open");
+        b.setAttribute("aria-expanded", "false");
+      });
+    },
+    { signal: ctx.signal }
+  );
 }
 
 function wireRoutineMenus(container: HTMLElement) {
@@ -781,7 +770,7 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
 
 // ---------- Estadisticas ----------
 
-function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean) {
+async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean) {
   const statsContent = document.getElementById("statsContent");
   if (!statsContent) return;
 
@@ -832,14 +821,16 @@ function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerV
     }
   `;
 
-  renderFreqChart(computeDailyFrequency(logs));
-  if (dailyProgress.length >= 2) renderProgressChart(dailyProgress);
+  await renderFreqChart(computeDailyFrequency(logs));
+  if (dailyProgress.length >= 2) await renderProgressChart(dailyProgress);
 }
 
-function renderFreqChart(buckets: { label: string; count: number }[]) {
-  const canvas = document.getElementById("freqChart");
-  if (!canvas || typeof Chart === "undefined") return;
-  new Chart(canvas, {
+async function renderFreqChart(buckets: { label: string; count: number }[]) {
+  const canvas = document.getElementById("freqChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const Chart = await loadChart();
+  freqChartInstance?.destroy();
+  freqChartInstance = new Chart(canvas, {
     type: "bar",
     data: {
       labels: buckets.map((b) => b.label),
@@ -857,10 +848,12 @@ function renderFreqChart(buckets: { label: string; count: number }[]) {
   });
 }
 
-function renderProgressChart(entries: { fecha: string; peso: number }[]) {
-  const canvas = document.getElementById("progressChart");
-  if (!canvas || typeof Chart === "undefined") return;
-  new Chart(canvas, {
+async function renderProgressChart(entries: { fecha: string; peso: number }[]) {
+  const canvas = document.getElementById("progressChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const Chart = await loadChart();
+  progressChartInstance?.destroy();
+  progressChartInstance = new Chart(canvas, {
     type: "line",
     data: {
       labels: entries.map((e) => formatFechaCorta(e.fecha)),
@@ -943,14 +936,14 @@ function activitySubtitle(tab: Exclude<ActivityTab, "stats">, isOwner: boolean, 
 }
 
 function goToAuthorProfile(author: PostAuthor): void {
-  window.location.href = `profile.html?u=${encodeURIComponent(author.username)}`;
+  smartNavigate(`profile.html?u=${encodeURIComponent(author.username)}`);
 }
 
 function goToPost(postId: string): void {
-  window.location.href = `post.html?id=${encodeURIComponent(postId)}`;
+  smartNavigate(`post.html?id=${encodeURIComponent(postId)}`);
 }
 
-function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string): void {
+function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string, ctx: ViewContext): void {
   const tabsEl = document.getElementById("activityTabs");
   const statsContent = document.getElementById("statsContent");
   const listEl = document.getElementById("activityPostsList");
@@ -980,7 +973,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
 
   async function handleLikeToggle(post: FeedPost): Promise<void> {
     if (!myId) {
-      window.location.href = "login.html";
+      smartNavigate("login.html");
       return;
     }
     const wasLiked = post.likedByMe;
@@ -998,7 +991,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
 
   async function handleRepostToggle(post: FeedPost): Promise<void> {
     if (!myId) {
-      window.location.href = "login.html";
+      smartNavigate("login.html");
       return;
     }
     const wasReposted = post.repostedByMe;
@@ -1020,7 +1013,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
     onRepostToggle: (post) => void handleRepostToggle(post),
     onCommentClick: (post) => {
       if (!myId) {
-        window.location.href = "login.html";
+        smartNavigate("login.html");
         return;
       }
       openCommentModal(post, myId, () => {
@@ -1030,7 +1023,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
     },
     onQuoteClick: (post) => {
       if (!myId) {
-        window.location.href = "login.html";
+        smartNavigate("login.html");
         return;
       }
       openQuoteModal(post, myId, (created) => {
@@ -1047,7 +1040,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
     },
     onShareClick: (post) => {
       if (!myId) {
-        window.location.href = "login.html";
+        smartNavigate("login.html");
         return;
       }
       void openShareToChatModal(post, myId);
@@ -1077,6 +1070,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
     },
     { rootMargin: "600px 0px" }
   );
+  ctx.addCleanup(() => observer.disconnect());
 
   async function loadMore(): Promise<void> {
     if (activeTab === "stats" || loadingMore || exhausted) return;
@@ -1318,7 +1312,7 @@ function renderActiveRoutines(
   if (!ownerView) return;
 
   container.querySelectorAll<HTMLButtonElement>(".addPeso").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `pesos.html?rid=${btn.dataset.id}`));
+    btn.addEventListener("click", () => smartNavigate(`pesos.html?rid=${btn.dataset.id}`));
   });
   container.querySelectorAll<HTMLButtonElement>(".finishRoutine").forEach((btn) => {
     btn.addEventListener("click", () => confirmFinishRoutine(btn.dataset.id!, routines.find((r) => r.id === btn.dataset.id)!));
@@ -1386,7 +1380,7 @@ function renderHistoricRoutines(
     .join("");
 
   container.querySelectorAll<HTMLButtonElement>(".showExcHist").forEach((btn) => {
-    btn.addEventListener("click", () => (window.location.href = `showExc.html?rid=${btn.dataset.id}`));
+    btn.addEventListener("click", () => smartNavigate(`showExc.html?rid=${btn.dataset.id}`));
   });
   if (!ownerView) return;
 
@@ -1575,7 +1569,7 @@ async function openAssignModal(routineId: string, nombre: string) {
 function wireAssignButtons(routineId: string, container: HTMLElement) {
   container.querySelectorAll<HTMLButtonElement>(".assignToSubscriber").forEach((btn) => {
     btn.addEventListener("click", () => {
-      window.location.href = `rutinsView.html?uid=${encodeURIComponent(btn.dataset.id!)}&cloneFrom=${encodeURIComponent(routineId)}`;
+      smartNavigate(`rutinsView.html?uid=${encodeURIComponent(btn.dataset.id!)}&cloneFrom=${encodeURIComponent(routineId)}`);
     });
   });
 }
@@ -1692,7 +1686,7 @@ function paintCachedProfile(cached: ProfileBasic): void {
   renderProfileLinks(parseProfileLinks(cached.links ?? []));
 }
 
-async function main() {
+async function main(ctx: ViewContext) {
   const cachedProfile = usernameParam ? await getCachedProfileByUsername(usernameParam) : myId ? await getCachedProfileById(myId) : null;
   if (cachedProfile) paintCachedProfile(cachedProfile);
 
@@ -1708,6 +1702,12 @@ async function main() {
   } else {
     profile = await getProfile(myId!);
   }
+
+  // Si esta instancia se descarto (ej. maxInstances:1 del catch-all de perfil desalojo esta
+  // visita porque se abrio un tercer perfil distinto) mientras estos fetches estaban en vuelo,
+  // seguir pintando ahora corriria el riesgo de escribir sobre el DOM del perfil que la
+  // reemplazo (mismos ids, doc.getElementById encontraria el elemento equivocado).
+  if (ctx.signal.aborted) return;
 
   const displayProfile = profile ?? basicProfile;
 
@@ -1803,8 +1803,128 @@ async function main() {
   const logs = await listWeightLogsWithContext(displayProfile.id!);
   routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
-  renderStats(logs, activeCount ?? 0, isOwner);
-  setupActivityTabs(displayProfile.id!, isOwner, nombre);
+  void renderStats(logs, activeCount ?? 0, isOwner);
+  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx);
 }
 
-main();
+const VIEW_MARKUP = `
+  <section class="profile-hero">
+    <div class="container">
+      <div class="profile-top" id="profileTop">
+        <div class="avatar-wrap">
+          <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
+          <div class="avatar-uploading" id="avatarUploading" hidden><div class="modern-spinner"></div></div>
+          <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+            <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
+          </label>
+        </div>
+        <div class="profile-info">
+          <div class="profile-username-row">
+            <h1 class="profile-username" id="profileUsername">@usuario</h1>
+            <div class="profile-menu-wrap" id="profileMenuWrap" hidden>
+              <button class="profile-menu-btn" id="profileMenuBtn" type="button" aria-label="Más opciones" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+              </button>
+              <div class="profile-menu-panel" id="profileMenuPanel" hidden></div>
+            </div>
+          </div>
+          <p class="profile-fullname" id="profileFullname"></p>
+          <p class="profile-role" id="profileRole"></p>
+          <div class="profile-stats" id="profileStats"></div>
+          <p class="profile-bio profile-bio-clamped" id="profileBio"></p>
+          <div class="profile-links" id="profileLinks"></div>
+        </div>
+      </div>
+
+      <div class="profile-actions" id="profileActions"></div>
+    </div>
+  </section>
+
+  <section class="quick-actions" id="quickActionsSection">
+    <div class="container">
+      <div class="quick-grid" id="quickActions"></div>
+    </div>
+  </section>
+
+  <section class="steps" id="rutinas">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow" id="rutinasEyebrow">Tus rutinas</span>
+        <h2 id="routinesTitle">Rutinas activas</h2>
+      </div>
+      <div class="routine-tabs" id="routineTabs">
+        <button class="routine-tab active" data-tab="active" type="button">Activas</button>
+        <button class="routine-tab" data-tab="historic" type="button">Históricas</button>
+        <button class="routine-tab" data-tab="saved" type="button" id="savedTabBtn" hidden>Guardadas</button>
+      </div>
+      <div id="routinesContent"></div>
+    </div>
+  </section>
+
+  <section class="features" id="statsSection">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
+        <h2 id="activityTitle">Estadísticas</h2>
+        <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
+      </div>
+      <div class="routine-tabs" id="activityTabs">
+        <button class="routine-tab active" data-tab="stats" type="button">Estadísticas</button>
+        <button class="routine-tab" data-tab="reps" type="button">Reps</button>
+        <button class="routine-tab" data-tab="media" type="button">Multimedia</button>
+        <button class="routine-tab" data-tab="likes" type="button">Me gusta</button>
+      </div>
+      <div id="statsContent"></div>
+      <div class="post-feed-list post-feed-list-compact" id="activityPostsList" hidden></div>
+      <div class="post-feed-sentinel" id="activityPostsSentinel" hidden><div class="modern-spinner" id="activityPostsSpinner" hidden></div></div>
+    </div>
+  </section>
+`;
+
+export const profileView: ViewModule = {
+  async mount(container, params, ctx, authUserId) {
+    // Reset de estado que en MPA nacia limpio en cada carga de pagina -- este modulo puede
+    // quedar cargado en memoria mientras se navega entre varios perfiles en la misma sesion.
+    myId = authUserId;
+    activeRoutineTab = "active";
+    routinesCtx = null;
+    freqChartInstance = null;
+    progressChartInstance = null;
+
+    container.innerHTML = VIEW_MARKUP;
+
+    setupAutoHideHeader(ctx);
+    setupProfileMenuToggle(ctx);
+    setupRoutineMenuOutsideClick(ctx);
+
+    // pages/profile.html (nav "Perfil") es siempre TU perfil salvo que le pasen ?u=. La ruta
+    // catch-all (gymsocial.com.ar/<username>) manda el username ya extraido en pathUsername
+    // (ver routes.ts) -- 404.html llega ahi mismo via el fallback de hosting.
+    usernameParam = params.get("u") ?? params.get("pathUsername");
+
+    if (!usernameParam && !myId) {
+      smartNavigate("login.html");
+      return;
+    }
+
+    // Un visitante sin sesion no tiene "su" perfil al que volver, ni "por que salir", ni
+    // solicitudes de seguimiento propias. Actua sobre document (no container): estos links
+    // viven en el header/footer compartido, no en el contenido de esta vista.
+    if (!myId) {
+      document.getElementById("navPerfil")?.remove();
+      document.getElementById("navSalir")?.remove();
+      document.getElementById("navFollowRequests")?.remove();
+      document.getElementById("footerPerfil")?.remove();
+      document.getElementById("footerSalir")?.remove();
+    }
+
+    await main(ctx);
+  },
+  onShow() {
+    document.body.classList.add("profile-page", "header-autohide");
+  },
+  onHide() {
+    document.body.classList.remove("profile-page", "header-autohide");
+  },
+};

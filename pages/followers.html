@@ -72,29 +72,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
-    <div class="container">
-      <a href="#" class="back-link" id="backLink"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
-      <span class="eyebrow">Comunidad</span>
-      <h1 id="followListTitle">Seguidores</h1>
-      <p id="followListSubtitle"></p>
-    </div>
-  </section>
-
-  <section class="features">
-    <div class="container" id="followListBody">
-      <div class="routine-tabs" id="followListTabs">
-        <button class="routine-tab active" data-tab="followers" type="button">Seguidores</button>
-        <button class="routine-tab" data-tab="following" type="button">Seguidos</button>
-        <button class="routine-tab" data-tab="subscribers" type="button" id="subscribersTabBtn" hidden>Suscriptores</button>
-      </div>
-      <form class="search-page-form" id="followListSearchForm">
-        <input type="search" id="followListSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
-      </form>
-      <p class="chart-sub" id="followListSummary">Cargando...</p>
-      <div class="search-page-list" id="followListResults"></div>
-    </div>
-  </section>
+  <div id="view-root"></div>
 
   <footer class="site-footer">
     <div class="container">
@@ -117,6 +95,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/followers.ts"></script>
+  <script type="module" src="/src/pages/followers.entry.ts"></script>
 </body>
 </html>

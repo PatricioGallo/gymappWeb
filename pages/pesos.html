@@ -72,28 +72,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
-    <div class="container">
-      <a href="alumnos.html" class="back-link" id="backToAlumnos" hidden><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver a tus alumnos</a>
-      <span class="eyebrow">Entrenar</span>
-      <h1 id="routineTitle">Cargando...</h1>
-      <div id="routineOwnerBanner"></div>
-      <p id="routineSubtitle"></p>
-    </div>
-  </section>
-
-  <section class="features">
-    <div class="container">
-      <div class="week-status" id="weekStatus"></div>
-
-      <div class="field field-narrow" id="weekPicker">
-        <label for="weekSelect">Semana</label>
-        <select id="weekSelect"></select>
-      </div>
-
-      <div id="weekContent"></div>
-    </div>
-  </section>
+  <div id="view-root"></div>
 
   <footer class="site-footer">
     <div class="container">
@@ -116,6 +95,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/src/pages/pesos.ts"></script>
+  <script type="module" src="/src/pages/pesos.entry.ts"></script>
 </body>
 </html>

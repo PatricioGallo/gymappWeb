@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { escapeHtml } from "./dom";
 import { formatFechaCorta } from "./dias";
+import { smartNavigate } from "../shell/router";
 import {
   getUnreadNotificationCount,
   listRecentNotifications,
@@ -87,7 +88,7 @@ export function setupNotificationBell(userId: string): void {
       renderList();
       void markNotificationRead(id);
     }
-    if (notif.link) window.location.href = notif.link;
+    if (notif.link) smartNavigate(notif.link);
   }
 
   async function refreshUnreadCount() {
@@ -136,7 +137,7 @@ export function setupNotificationBell(userId: string): void {
 
     // En mobile el dropdown no entra comodo: mandamos directo a la pagina completa.
     if (window.matchMedia(MOBILE_QUERY).matches) {
-      window.location.href = "notifications.html";
+      smartNavigate("notifications.html");
       return;
     }
     if (dropdown!.hidden) openDropdown();

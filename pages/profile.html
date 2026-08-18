@@ -74,78 +74,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="profile-hero">
-    <div class="container">
-      <div class="profile-top" id="profileTop">
-        <div class="avatar-wrap">
-          <img src="/images/avatars/default.svg" alt="Foto de perfil" id="avatarImg">
-          <div class="avatar-uploading" id="avatarUploading" hidden><div class="modern-spinner"></div></div>
-          <label class="avatar-edit" id="avatarEditWrap" title="Cambiar foto de perfil">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
-            <input type="file" id="avatarInput" accept="image/*" aria-label="Cambiar foto de perfil">
-          </label>
-        </div>
-        <div class="profile-info">
-          <div class="profile-username-row">
-            <h1 class="profile-username" id="profileUsername">@usuario</h1>
-            <div class="profile-menu-wrap" id="profileMenuWrap" hidden>
-              <button class="profile-menu-btn" id="profileMenuBtn" type="button" aria-label="Más opciones" aria-expanded="false">
-                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-              </button>
-              <div class="profile-menu-panel" id="profileMenuPanel" hidden></div>
-            </div>
-          </div>
-          <p class="profile-fullname" id="profileFullname"></p>
-          <p class="profile-role" id="profileRole"></p>
-          <div class="profile-stats" id="profileStats"></div>
-          <p class="profile-bio profile-bio-clamped" id="profileBio"></p>
-          <div class="profile-links" id="profileLinks"></div>
-        </div>
-      </div>
-
-      <div class="profile-actions" id="profileActions"></div>
-    </div>
-  </section>
-
-  <section class="quick-actions" id="quickActionsSection">
-    <div class="container">
-      <div class="quick-grid" id="quickActions"></div>
-    </div>
-  </section>
-
-  <section class="steps" id="rutinas">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow" id="rutinasEyebrow">Tus rutinas</span>
-        <h2 id="routinesTitle">Rutinas activas</h2>
-      </div>
-      <div class="routine-tabs" id="routineTabs">
-        <button class="routine-tab active" data-tab="active" type="button">Activas</button>
-        <button class="routine-tab" data-tab="historic" type="button">Históricas</button>
-        <button class="routine-tab" data-tab="saved" type="button" id="savedTabBtn" hidden>Guardadas</button>
-      </div>
-      <div id="routinesContent"></div>
-    </div>
-  </section>
-
-  <section class="features" id="statsSection">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
-        <h2 id="activityTitle">Estadísticas</h2>
-        <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
-      </div>
-      <div class="routine-tabs" id="activityTabs">
-        <button class="routine-tab active" data-tab="stats" type="button">Estadísticas</button>
-        <button class="routine-tab" data-tab="reps" type="button">Reps</button>
-        <button class="routine-tab" data-tab="media" type="button">Multimedia</button>
-        <button class="routine-tab" data-tab="likes" type="button">Me gusta</button>
-      </div>
-      <div id="statsContent"></div>
-      <div class="post-feed-list post-feed-list-compact" id="activityPostsList" hidden></div>
-      <div class="post-feed-sentinel" id="activityPostsSentinel" hidden><div class="modern-spinner" id="activityPostsSpinner" hidden></div></div>
-    </div>
-  </section>
+  <div id="view-root"></div>
 
   <footer class="site-footer">
     <div class="container">
@@ -170,7 +99,6 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" src="/src/pages/profile.ts"></script>
+  <script type="module" src="/src/pages/profile.entry.ts"></script>
 </body>
 </html>

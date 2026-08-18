@@ -16,6 +16,7 @@ import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner } fr
 import { trackPresence } from "./presence";
 import { setupInAppNotificationToast } from "./inAppNotificationToast";
 import { setupPasswordToggles } from "./passwordToggle";
+import type { ViewContext } from "../shell/viewContext";
 
 // Se llama desde setupNavToggle porque esa funcion ya corre al inicio de
 // absolutamente todas las paginas; asi el conteo de visitas para el panel de
@@ -189,8 +190,18 @@ export function setupRevealObserver(): void {
   mutationObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-/** Header sticky que se esconde al scrollear para abajo y reaparece al scrollear para arriba, solo en mobile (ver .header-hidden en modern.css). Pensado para paginas de scroll largo como feed.html. */
-export function setupAutoHideHeader(): void {
+/**
+ * Header sticky que se esconde al scrollear para abajo y reaparece al scrollear para arriba,
+ * solo en mobile (ver .header-hidden en modern.css). Pensado para paginas de scroll largo como
+ * feed.html.
+ *
+ * ctx es opcional (llamadores no migrados al shell todavia no lo tienen), pero si se pasa, el
+ * listener de scroll se ata a ctx.signal -- sin esto, cada mount() de una vista que la llama
+ * agrega un listener de window mas que nunca se saca, ni siquiera cuando esa instancia se
+ * descarta del todo (ver profile.ts: visitar un tercer perfil distinto evict-ea la instancia
+ * vieja pero el listener de scroll de esa instancia seguia vivo para siempre).
+ */
+export function setupAutoHideHeader(ctx?: ViewContext): void {
   const header = document.querySelector<HTMLElement>(".site-header");
   if (!header) return;
 
@@ -213,7 +224,7 @@ export function setupAutoHideHeader(): void {
       header.classList.toggle("header-hidden", delta > 0 && y > header.offsetHeight);
       lastY = y;
     },
-    { passive: true }
+    ctx ? { passive: true, signal: ctx.signal } : { passive: true }
   );
 }
 
@@ -235,5 +246,17 @@ export async function requireAuth(): Promise<string> {
   // Heartbeat simple de "última conexión": una vez por carga de página autenticada.
   void touchLastSeen();
   trackPresence(userId);
+  return userId;
+}
+
+/** Para paginas que aceptan visitantes anonimos (ej. perfil publico): devuelve el user id si
+ * hay sesion, o null si no -- a diferencia de requireAuth(), nunca redirige. */
+export async function getOptionalAuth(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id ?? null;
+  if (userId) {
+    void touchLastSeen();
+    trackPresence(userId);
+  }
   return userId;
 }

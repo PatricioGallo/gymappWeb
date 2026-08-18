@@ -74,37 +74,7 @@
 
   <div id="loaderBody"></div>
 
-  <section class="page-hero">
-    <div class="container">
-      <span class="eyebrow">Panel de administración</span>
-      <h1>Administrar</h1>
-      <p>Estadísticas generales de Gym Social y control total sobre los usuarios registrados.</p>
-    </div>
-  </section>
-
-  <section class="features">
-    <div class="container">
-      <div class="routine-tabs" id="adminTabs">
-        <button class="routine-tab active" data-tab="stats" type="button">Estadísticas</button>
-        <button class="routine-tab" data-tab="users" type="button">Usuarios</button>
-        <button class="routine-tab" data-tab="exercises" type="button">Ejercicios</button>
-        <button class="routine-tab" data-tab="roadmap" type="button">Roadmap</button>
-        <button class="routine-tab" data-tab="issues" type="button">Issues</button>
-        <button class="routine-tab" data-tab="messages" type="button">Mensajes<span class="tab-dot" id="messagesTabDot" hidden></span></button>
-        <button class="routine-tab" data-tab="validation" type="button">Validación<span class="tab-dot" id="validationTabDot" hidden></span></button>
-        <button class="routine-tab" data-tab="notifs" type="button">Notificaciones</button>
-      </div>
-
-      <div id="statsTab"></div>
-      <div id="usersTab" hidden></div>
-      <div id="exercisesTab" hidden></div>
-      <div id="roadmapTab" hidden></div>
-      <div id="issuesTab" hidden></div>
-      <div id="messagesTab" hidden></div>
-      <div id="validationTab" hidden></div>
-      <div id="notifsTab" hidden></div>
-    </div>
-  </section>
+  <div id="view-root"></div>
 
   <footer class="site-footer">
     <div class="container">
@@ -127,7 +97,6 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" src="/src/pages/admin.ts"></script>
+  <script type="module" src="/src/pages/admin.entry.ts"></script>
 </body>
 </html>
