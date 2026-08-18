@@ -892,11 +892,22 @@ async function renderProgressChart(entries: { fecha: string; peso: number }[]) {
 // ---------- Rutinas ----------
 
 let activeRoutineTab: "active" | "historic" | "saved" = "active";
+// Que pestaña de "Tu actividad" esta visible ahora mismo (ver setupActivityTabs) -- vive a
+// nivel de modulo, no solo dentro del closure de esa funcion, para que
+// refreshCurrentRoutinesTab sepa si puede reconstruir los graficos de Estadisticas ahora
+// (canvas visible) o si tiene que dejarlos marcados como "atrasados" para cuando el usuario
+// vuelva a esa pestaña (ver statsDirty).
+let activeActivityTab: ActivityTab = "stats";
+let statsDirty = false;
 
 // Contexto guardado tras el primer render para poder refrescar la lista de
 // rutinas y el conteo de "Rutinas activas" in-place (sin recargar la pagina)
 // despues de finalizar/reactivar una rutina.
 let routinesCtx: { userId: string; ownerView: boolean; logs: WeightLogEntry[]; userType: Profile["user_type"]; ownerBasic: BasicNamedProfile } | null = null;
+// Idem para poder refrescar seguidores/seguidos/suscriptores/publicaciones al volver a esta
+// instancia (ver refreshCurrentRoutinesTab) -- a diferencia de routinesCtx, no depende de
+// weight_logs asi que no necesita cargar nada pesado, solo re-pedir los contadores.
+let profileStatsCtx: { userId: string; username: string; canViewLists: boolean; userType: Profile["user_type"] } | null = null;
 
 async function refreshRoutinesAndStats() {
   if (!routinesCtx) return;
@@ -906,18 +917,44 @@ async function refreshRoutinesAndStats() {
   if (statValue && count !== undefined) statValue.textContent = String(count);
 }
 
-// El shell mantiene esta vista viva en cache al navegar afuera (ej. a
-// excView.html a modificar una rutina) y volver: sin esto, la vuelta a
-// profile.html no vuelve a montar nada, asi que la pestaña de rutinas
-// quedaria mostrando datos viejos. A diferencia de refreshRoutinesAndStats
-// (pensada para finalizar/reactivar, siempre en la pestaña "Activas"), esta
-// respeta la pestaña que el usuario tenia seleccionada.
+// El shell mantiene esta vista viva en cache al navegar afuera (ej. a "Pesos semanales" a
+// cargar un entrenamiento, a seguir/dejar de seguir a alguien desde otro perfil, o a
+// excView.html a modificar una rutina) y volver: el router solo llama mount() una vez por
+// instancia (ver router.ts), asi que sin este refetch "Ultimo entrenamiento", el progreso de
+// cada rutina, los contadores de seguidores/seguidos/suscriptores/publicaciones y el resto
+// de las estadisticas quedarian pegados a lo que habia la primera vez que se monto el
+// perfil, por mas que haya pasado algo nuevo mientras tanto. A diferencia de
+// refreshRoutinesAndStats (pensada para finalizar/reactivar, siempre en la pestaña
+// "Activas"), esta respeta la pestaña de rutinas que el usuario tenia seleccionada.
 async function refreshCurrentRoutinesTab() {
   if (!routinesCtx) return;
-  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType, routinesCtx.ownerBasic);
+
+  if (profileStatsCtx) {
+    void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType);
+  }
+
+  const logs = await listWeightLogsWithContext(routinesCtx.userId).catch(() => routinesCtx!.logs);
+  routinesCtx.logs = logs;
+
+  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, logs, routinesCtx.userType, routinesCtx.ownerBasic);
+  let activeCount = count;
   if (activeRoutineTab === "active") {
     const statValue = document.getElementById("activeRoutinesStatValue");
     if (statValue && count !== undefined) statValue.textContent = String(count);
+  } else {
+    // "count" es el de la sub-pestaña de rutinas actualmente visible (historicas/guardadas),
+    // no el de activas -- para no pisar la tarjeta de Estadisticas con el numero equivocado,
+    // se usa el valor ya mostrado ahi (quedo bien puesto la ultima vez que se toco "Activas").
+    activeCount = Number(document.getElementById("activeRoutinesStatValue")?.textContent ?? 0);
+  }
+
+  // Los graficos de Chart.js no miden bien un canvas oculto (display:none) al crearse -- si
+  // la pestaña de Estadisticas no esta visible ahora mismo, se difiere la reconstruccion
+  // hasta que el usuario vuelva a ella (ver switchTab en setupActivityTabs).
+  if (activeActivityTab === "stats") {
+    void renderStats(logs, activeCount ?? 0, routinesCtx.ownerView);
+  } else {
+    statsDirty = true;
   }
 }
 
@@ -1120,6 +1157,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   async function switchTab(tab: ActivityTab): Promise<void> {
     if (tab === activeTab) return;
     activeTab = tab;
+    activeActivityTab = tab;
     observer.disconnect();
 
     tabsEl!.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
@@ -1132,6 +1170,14 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       sentinel!.hidden = true;
       if (titleEl) titleEl.textContent = "Estadísticas";
       if (subtitleEl) subtitleEl.textContent = statsSubtitleText;
+      // Si mientras esta pestaña estuvo oculta llego un refresh de logs (ver
+      // refreshCurrentRoutinesTab), el canvas recien ahora queda visible -- reconstruir los
+      // graficos con los datos frescos recien en este momento.
+      if (statsDirty && routinesCtx) {
+        statsDirty = false;
+        const activeCount = Number(document.getElementById("activeRoutinesStatValue")?.textContent ?? 0);
+        void renderStats(routinesCtx.logs, activeCount, routinesCtx.ownerView);
+      }
       return;
     }
 
@@ -1851,7 +1897,8 @@ async function main(ctx: ViewContext) {
   // El link a seguidores/seguidos usa la misma regla: si el perfil es privado
   // para este visitante, ni siquiera se muestra clickeable (la RPC tambien lo
   // bloquea server-side, pero evitamos el link muerto).
-  void renderProfileStats(displayProfile.id!, displayProfile.username ?? "", !isPrivateForViewer, targetUserType);
+  profileStatsCtx = { userId: displayProfile.id!, username: displayProfile.username ?? "", canViewLists: !isPrivateForViewer, userType: targetUserType };
+  void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType);
 
   if (isPrivateForViewer) {
     renderProfileBio(displayProfile.bio ?? null);
@@ -1974,7 +2021,10 @@ export const profileView: ViewModule = {
     // quedar cargado en memoria mientras se navega entre varios perfiles en la misma sesion.
     myId = authUserId;
     activeRoutineTab = "active";
+    activeActivityTab = "stats";
+    statsDirty = false;
     routinesCtx = null;
+    profileStatsCtx = null;
     freqChartInstance = null;
     progressChartInstance = null;
 
