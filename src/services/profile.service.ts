@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../types/database";
+import type { WeightUnit } from "./weightLog.service";
 
 export type Profile = Tables<"profiles">;
 export type Routine = Tables<"routines">;
@@ -218,6 +219,7 @@ export interface WeightLogEntry {
   peso: number;
   serie: number | null;
   repe: number | null;
+  unidad: WeightUnit;
   exerciseId: string;
   exerciseName: string;
   authorName: string;
@@ -231,7 +233,7 @@ export async function listWeightLogsWithContext(userId: string): Promise<WeightL
   const { data, error } = await supabase
     .from("weight_logs")
     .select(
-      `fecha, peso, serie, repe, exercise_id,
+      `fecha, peso, serie, repe, unidad, exercise_id,
        exercises ( name, is_builtin, profiles ( nombre, apellido ) ),
        routine_exercises ( id, routine_days ( dia_semana, routine_weeks ( routine_id, numero ) ) )`
     )
@@ -245,6 +247,7 @@ export async function listWeightLogsWithContext(userId: string): Promise<WeightL
     peso: row.peso,
     serie: row.serie,
     repe: row.repe,
+    unidad: row.unidad,
     exerciseId: row.exercise_id,
     exerciseName: row.exercises?.name ?? "Ejercicio",
     authorName: row.exercises?.is_builtin
