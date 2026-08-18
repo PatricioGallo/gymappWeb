@@ -201,6 +201,45 @@ export async function mountThread(
 
   backBtn.addEventListener("click", opts.onBack, { signal: ctx.signal });
 
+  // Gesto de swipe (izquierda a derecha) para volver al menu de chats, mismo destino que
+  // chatThreadBackBtn. Solo tiene sentido en mobile: en desktop las dos columnas ya estan
+  // visibles a la vez (chatThreadBackBtn tambien esta oculto ahi, ver .chat-thread-back en
+  // modern.css). No se activa si el gesto arranca en el composer -- ahi arrastrar es para
+  // seleccionar texto o mover el cursor, no para navegar.
+  const SWIPE_BACK_MIN_X = 70;
+  const SWIPE_BACK_MAX_Y = 60;
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeTracking = false;
+
+  container.addEventListener(
+    "touchstart",
+    (e) => {
+      swipeTracking = false;
+      if (!window.matchMedia("(max-width: 859px)").matches) return;
+      const target = e.target as HTMLElement;
+      if (target.closest("#chatComposerInput, #chatRecordBar")) return;
+      const touch = e.touches[0];
+      swipeStartX = touch.clientX;
+      swipeStartY = touch.clientY;
+      swipeTracking = true;
+    },
+    { passive: true, signal: ctx.signal }
+  );
+
+  container.addEventListener(
+    "touchend",
+    (e) => {
+      if (!swipeTracking) return;
+      swipeTracking = false;
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - swipeStartX;
+      const deltaY = Math.abs(touch.clientY - swipeStartY);
+      if (deltaX > SWIPE_BACK_MIN_X && deltaY < SWIPE_BACK_MAX_Y) opts.onBack();
+    },
+    { passive: true, signal: ctx.signal }
+  );
+
   let messages: ChatMessage[] = [];
   const renderedIds = new Set<string>();
   const sharedPostsCache = new Map<string, FeedPost>();
