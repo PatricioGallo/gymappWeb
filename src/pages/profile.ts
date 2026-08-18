@@ -171,18 +171,25 @@ function initShare(username: string, buttonId = "shareBtn") {
     // que lo abra sin sesion iniciada (window.location.href de "mi" perfil no
     // lleva ningun parametro).
     const url = `${window.location.origin}/${encodeURIComponent(username)}`;
-    try {
-      if (navigator.share) {
+    if (navigator.share) {
+      try {
         await navigator.share({ title: "Mi perfil de Gym Social", url });
         return;
+      } catch (err) {
+        // AbortError: el usuario cerro el panel nativo a proposito, no es un error real.
+        if ((err as Error).name === "AbortError") return;
+        // Cualquier otro motivo (sin apps de destino, permiso denegado, etc.): seguimos
+        // con el fallback de copiar el link en vez de dejar el boton sin ninguna respuesta.
       }
+    }
+    try {
       await navigator.clipboard.writeText(url);
       shareBtn.textContent = "¡Copiado!";
       setTimeout(() => {
         shareBtn.innerHTML = originalHTML;
       }, 2000);
     } catch {
-      // el usuario cancelo el share sheet, no es un error real
+      alert(`No se pudo compartir. Copiá el link:\n${url}`);
     }
   });
 }
