@@ -25,6 +25,10 @@ export function setupLinkInterceptor(): void {
       return;
     }
     if (url.origin !== location.origin) return;
+    // Ancla dentro de la misma pagina (ej. "Tus rutinas" -> #rutinas en el propio perfil): el
+    // router no maneja hashes, asi que hay que dejar que el navegador haga el scroll nativo en
+    // vez de interceptar y perder el hash en navigate().
+    if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
     if (!isRouteRegistered(url.pathname)) return;
 
     e.preventDefault();

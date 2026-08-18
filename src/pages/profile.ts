@@ -24,7 +24,7 @@ import {
   type WeightLogEntry,
 } from "../services/profile.service";
 import { getCachedProfileById, getCachedProfileByUsername, cacheProfile } from "../lib/profileDb";
-import { setRoutinePublic } from "../services/routine.service";
+import { setRoutinePublic, deleteRoutine } from "../services/routine.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
 import { getOrCreateConversation } from "../services/chat.service";
@@ -171,18 +171,25 @@ function initShare(username: string, buttonId = "shareBtn") {
     // que lo abra sin sesion iniciada (window.location.href de "mi" perfil no
     // lleva ningun parametro).
     const url = `${window.location.origin}/${encodeURIComponent(username)}`;
-    try {
-      if (navigator.share) {
+    if (navigator.share) {
+      try {
         await navigator.share({ title: "Mi perfil de Gym Social", url });
         return;
+      } catch (err) {
+        // AbortError: el usuario cerro el panel nativo a proposito, no es un error real.
+        if ((err as Error).name === "AbortError") return;
+        // Cualquier otro motivo (sin apps de destino, permiso denegado, etc.): seguimos
+        // con el fallback de copiar el link en vez de dejar el boton sin ninguna respuesta.
       }
+    }
+    try {
       await navigator.clipboard.writeText(url);
       shareBtn.textContent = "¡Copiado!";
       setTimeout(() => {
         shareBtn.innerHTML = originalHTML;
       }, 2000);
     } catch {
-      // el usuario cancelo el share sheet, no es un error real
+      alert(`No se pudo compartir. Copiá el link:\n${url}`);
     }
   });
 }
@@ -899,6 +906,21 @@ async function refreshRoutinesAndStats() {
   if (statValue && count !== undefined) statValue.textContent = String(count);
 }
 
+// El shell mantiene esta vista viva en cache al navegar afuera (ej. a
+// excView.html a modificar una rutina) y volver: sin esto, la vuelta a
+// profile.html no vuelve a montar nada, asi que la pestaña de rutinas
+// quedaria mostrando datos viejos. A diferencia de refreshRoutinesAndStats
+// (pensada para finalizar/reactivar, siempre en la pestaña "Activas"), esta
+// respeta la pestaña que el usuario tenia seleccionada.
+async function refreshCurrentRoutinesTab() {
+  if (!routinesCtx) return;
+  const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, routinesCtx.logs, routinesCtx.userType, routinesCtx.ownerBasic);
+  if (activeRoutineTab === "active") {
+    const statValue = document.getElementById("activeRoutinesStatValue");
+    if (statValue && count !== undefined) statValue.textContent = String(count);
+  }
+}
+
 // ---------- Actividad: Estadísticas / Tus Reps / Multimedia / Me gusta ----------
 // Selector debajo de "Tu actividad": por defecto las estadisticas (stats de
 // siempre), y 3 pestañas mas que muestran listas de Reps -- reemplaza a la
@@ -1270,7 +1292,7 @@ function renderActiveRoutines(
                  fullyOwned
                    ? `<a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
                <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
-               <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>`
+               <button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>`
                    : ""
                }
              </div>
@@ -1332,6 +1354,12 @@ function renderActiveRoutines(
       }
     });
   });
+  container.querySelectorAll<HTMLButtonElement>(".deleteRoutineBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (routine) confirmDeleteRoutineModal(routine);
+    });
+  });
 }
 
 function renderHistoricRoutines(
@@ -1356,7 +1384,7 @@ function renderHistoricRoutines(
              <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
              <div class="profile-menu-panel routine-menu-panel" hidden>
                <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
-               ${isFullyOwnedByViewer(r) ? `<a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>` : ""}
+               ${isFullyOwnedByViewer(r) ? `<button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>` : ""}
              </div>
            </div>`
         : "";
@@ -1388,6 +1416,12 @@ function renderHistoricRoutines(
 
   container.querySelectorAll<HTMLButtonElement>(".reactivateRoutine").forEach((btn) => {
     btn.addEventListener("click", () => openReactivateModal(btn.dataset.id!));
+  });
+  container.querySelectorAll<HTMLButtonElement>(".deleteRoutineBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (routine) confirmDeleteRoutineModal(routine);
+    });
   });
 }
 
@@ -1435,7 +1469,7 @@ function renderSavedRoutines(
             <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
             <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
             <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
-            <a class="profile-menu-item profile-menu-item-danger" href="deleteRutins.html?rid=${r.id}">Eliminar</a>
+            <button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>
           </div>
         </div>
         <span class="routine-started-tag">Plantilla</span>
@@ -1479,6 +1513,12 @@ function renderSavedRoutines(
         btn.disabled = false;
         alert("No se pudo cambiar la visibilidad. Probá de nuevo.");
       }
+    });
+  });
+  container.querySelectorAll<HTMLButtonElement>(".deleteRoutineBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (routine) confirmDeleteRoutineModal(routine);
     });
   });
 }
@@ -1530,7 +1570,7 @@ async function openAssignModal(routineId: string, nombre: string) {
         <p class="subtitle">Elegí a quién se la asignás: un suscriptor tuyo, o vos mismo. Se crea una rutina nueva; esta plantilla queda igual acá.</p>
         <div id="assignSelfRow">${selfAssignRowMarkup()}</div>
         <input type="search" id="assignSearchInput" class="header-search-input" placeholder="Buscar suscriptor por nombre o usuario..." hidden>
-        <div id="assignModalBody"><p class="chart-sub">Cargando tus suscriptores...</p></div>
+        <div id="assignModalBody" class="modal-list"><p class="chart-sub">Cargando tus suscriptores...</p></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-outline" id="assignCancel">Cancelar</button>
         </div>
@@ -1621,6 +1661,52 @@ function confirmFinishRoutine(routineId: string, routine: RoutineWithCounts) {
     setTimeout(() => {
       closeOverlay();
       void refreshRoutinesAndStats();
+    }, 1600);
+  });
+}
+
+function confirmDeleteRoutineModal(routine: RoutineWithCounts) {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Eliminar rutina</h2>
+        <p class="subtitle">¿Eliminar "${escapeHtml(routine.nombre)}"? Esta acción no se puede deshacer: vas a perder las semanas, días y pesos cargados en esta rutina.</p>
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="confirmDeleteRoutine">Eliminar rutina</button>
+          <button class="btn btn-outline" id="cancelDeleteRoutine">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("cancelDeleteRoutine")?.addEventListener("click", closeOverlay);
+  document.getElementById("confirmDeleteRoutine")?.addEventListener("click", async () => {
+    const confirmBtn = document.getElementById("confirmDeleteRoutine") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+    document.getElementById("cancelDeleteRoutine")?.setAttribute("disabled", "true");
+    try {
+      await deleteRoutine(routine.id);
+    } catch {
+      alert("No se pudo eliminar la rutina. Probá de nuevo.");
+      confirmBtn.disabled = false;
+      document.getElementById("cancelDeleteRoutine")?.removeAttribute("disabled");
+      return;
+    }
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>¡Rutina eliminada!</p>
+      </div>
+    `;
+    setTimeout(() => {
+      closeOverlay();
+      void refreshCurrentRoutinesTab();
     }, 1600);
   });
 }
@@ -1926,5 +2012,8 @@ export const profileView: ViewModule = {
   },
   onHide() {
     document.body.classList.remove("profile-page", "header-autohide");
+  },
+  update() {
+    void refreshCurrentRoutinesTab();
   },
 };
