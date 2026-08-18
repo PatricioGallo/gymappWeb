@@ -5,7 +5,6 @@ import { chatsView } from "../pages/chats";
 import { profileView } from "../pages/profile";
 import { followRequestsView } from "../pages/followRequests";
 import { subscriptionRequestsView } from "../pages/subscriptionRequests";
-import { deleteRutinsView } from "../pages/deleteRutins";
 import { addExcView } from "../pages/addExc";
 import { followersView } from "../pages/followers";
 import { modExcView } from "../pages/modExc";
@@ -53,11 +52,6 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/subscriptionRequests.html") ? new URLSearchParams() : null),
     view: subscriptionRequestsView,
-    auth: "required",
-  });
-  registerRoute({
-    match: (pathname) => (pathname.endsWith("/pages/deleteRutins.html") ? new URLSearchParams() : null),
-    view: deleteRutinsView,
     auth: "required",
   });
   registerRoute({
