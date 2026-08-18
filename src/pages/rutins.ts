@@ -828,6 +828,11 @@ export const rutinsView: ViewModule = {
             <p>${message}</p>
           </div>
         `;
+        // Igual que confirmCancelBuilder: deja la instancia cacheada de esta vista lista en
+        // el paso inicial (tapada por el overlay de exito, invisible para el usuario) para que
+        // una vuelta posterior a "Nueva rutina" (mismos params, ver el guard de lastParamsKey
+        // en render()) muestre el selector de siempre y no la rutina recien creada/guardada.
+        renderChooser();
         const t = setTimeout(() => {
           navigate(isAssigningToOther ? "alumnos.html" : "profile.html");
         }, 2000);
