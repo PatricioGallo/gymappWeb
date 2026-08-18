@@ -5923,6 +5923,11 @@ body.feed-page .site-footer { display: none; }
 @media (min-width: 860px) {
   .chat-thread-pane .chat-thread-page { height: 100%; }
   .chat-thread-back { display: none; }
+  /* El max-width:720px de .chat-thread-container (mas abajo) es para el chat a pantalla
+     completa en mobile. Adentro del panel del medio de chats.html en desktop, .chat-thread-pane
+     ya es flex:1 (ver mas arriba) y le sobra ancho: que lo llene entero, los bubbles siguen
+     acotados por su propio max-width:74% asi que no quedan gigantes ni pegados de punta a punta. */
+  .chat-thread-pane .chat-thread-container { max-width: none; }
 }
 
 @media (max-width: 859px) {
