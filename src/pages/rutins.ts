@@ -230,7 +230,18 @@ export const rutinsView: ViewModule = {
   async mount(container, params, ctx, authUserId) {
     const myId = authUserId!; // la ruta se registra con requiresAuth:true
 
+    // El router mantiene esta instancia viva (oculta) al navegar a otra vista, pero llama a
+    // update() -> render() de nuevo cada vez que se vuelve. Si los params son los mismos que la
+    // ultima vez, es solo "el usuario volvio a esta misma vista" (ej. entro a otra pagina y
+    // aprieto atras) -- reconstruir todo de cero ahi tiraria el dia/ejercicios que ya cargo. Solo
+    // reconstruimos cuando params realmente cambia (ej. otro ?cloneFrom=, otro ?uid=).
+    let lastParamsKey: string | null = null;
+
     async function render(p: URLSearchParams): Promise<void> {
+      const paramsKey = p.toString();
+      if (paramsKey === lastParamsKey) return;
+      lastParamsKey = paramsKey;
+
       container.innerHTML = VIEW_MARKUP;
       const contentEl = container.querySelector(".container") as HTMLElement;
 
@@ -645,7 +656,10 @@ export const rutinsView: ViewModule = {
           </div>
           <div id="dayCards">${dayCards}</div>
           <div class="alert_message" id="builderAlert"></div>
-          <div class="auth-trust"><button class="btn btn-primary" id="createRoutine" type="button">Crear rutina</button></div>
+          <div class="auth-trust">
+            <button class="btn btn-outline" id="cancelRoutineBtn" type="button">Cancelar</button>
+            <button class="btn btn-primary" id="createRoutine" type="button">Crear rutina</button>
+          </div>
         `;
 
         contentEl.querySelector("#builderHelpBtn")?.addEventListener("click", openBuilderHelp);
@@ -698,6 +712,33 @@ export const rutinsView: ViewModule = {
         });
 
         contentEl.querySelector("#createRoutine")?.addEventListener("click", () => void submitRoutine(name, weeks, isPublic));
+        contentEl.querySelector("#cancelRoutineBtn")?.addEventListener("click", confirmCancelBuilder);
+      }
+
+      function confirmCancelBuilder(): void {
+        const loaderBody = document.getElementById("loaderBody");
+        if (!loaderBody) return;
+        loaderBody.innerHTML = `
+          <div class="success-check-container">
+            <div class="modal-card">
+              <h2>¿Cancelar esta rutina?</h2>
+              <p class="subtitle">Vas a perder los días y ejercicios que ya cargaste. Esto no se puede deshacer.</p>
+              <div class="modal-actions">
+                <button type="button" class="btn btn-outline" id="dismissCancelBuilder">Seguir cargando</button>
+                <button type="button" class="btn btn-danger" id="confirmCancelBuilder">Sí, cancelar</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.getElementById("dismissCancelBuilder")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
+        document.getElementById("confirmCancelBuilder")?.addEventListener("click", () => {
+          loaderBody.innerHTML = "";
+          // Deja la instancia cacheada de esta vista lista en el paso inicial: si el router
+          // vuelve a mostrarla mas tarde (ver el guard de lastParamsKey arriba) no aparece la
+          // rutina abandonada a medio cargar.
+          renderChooser();
+          navigate(isAssigningToOther ? "alumnos.html" : "profile.html");
+        });
       }
 
       async function submitRoutine(name: string, weeks: number, isPublic: boolean): Promise<void> {
