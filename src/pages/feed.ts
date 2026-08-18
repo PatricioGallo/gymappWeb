@@ -619,7 +619,12 @@ export const feedView: ViewModule = {
     document.addEventListener(
       "touchstart",
       (e) => {
-        if (isRefreshing || !isMobileFeedLayout() || !isAtTop()) return;
+        // El router deja esta vista viva (solo hidden) al navegar a otra -- sin este chequeo,
+        // arrastrar hacia abajo en OTRA pagina (ej. la lista de mensajes de chats.html) via
+        // isAtTop()/window.scrollY, que en paginas con su propio scroll interno como chats se
+        // queda siempre en 0, terminaba disparando preventDefault() en touchmove y bloqueando
+        // el scroll ahi por completo.
+        if (isRefreshing || container.hidden || !isMobileFeedLayout() || !isAtTop()) return;
         pullDragging = true;
         pullActive = false;
         pullStartY = e.touches[0].clientY;
