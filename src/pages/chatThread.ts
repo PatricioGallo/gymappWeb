@@ -219,6 +219,16 @@ export async function mountThread(
     void refreshChatBadge();
   }
 
+  // document.visibilityState solo dice si la pestaña está en primer plano, no si ESTE hilo
+  // puntual es el que se está viendo -- chats.ts mantiene cada conversación abierta viva pero
+  // oculta en background (ver el comentario de REFRESH_MARGIN_MS más arriba). Sin este chequeo
+  // extra, un mensaje que llega en un hilo oculto mientras estás mirando otra vista (ej. el
+  // perfil, en la misma pestaña) se marcaba como leído al toque sin que lo hayas visto nunca,
+  // y el badge nunca llegaba a contarlo.
+  function isThreadOnScreen(): boolean {
+    return document.visibilityState === "visible" && container.offsetParent !== null;
+  }
+
   const conversations = await listConversations();
   const conversation = conversations.find((c) => c.conversation_id === conversationId);
   if (!conversation) {
@@ -703,7 +713,7 @@ export async function mountThread(
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
       const msg = payload.new as ChatMessage;
       void appendMessage(msg);
-      if (msg.sender_id !== userId && document.visibilityState === "visible") {
+      if (msg.sender_id !== userId && isThreadOnScreen()) {
         void markReadAndRefreshBadge();
       }
       if (msg.sender_id !== userId && conversationStatus === "pending" && isInitiator) {
@@ -730,7 +740,7 @@ export async function mountThread(
   document.addEventListener(
     "visibilitychange",
     () => {
-      if (document.visibilityState !== "visible") return;
+      if (!isThreadOnScreen()) return;
       const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
       if (hasUnreadFromOther) void markReadAndRefreshBadge();
     },

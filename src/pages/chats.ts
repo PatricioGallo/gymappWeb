@@ -8,9 +8,11 @@ import {
   acceptMessageRequest,
   declineMessageRequest,
   getOrCreateConversation,
+  markConversationRead,
   type ConversationSummary,
 } from "../services/chat.service";
 import { cacheMessages } from "../lib/chatDb";
+import { refreshChatBadge } from "../lib/chat";
 import { supabase } from "../lib/supabaseClient";
 import type { ViewModule } from "../shell/router";
 import { navigate } from "../shell/router";
@@ -250,10 +252,14 @@ export const chatsView: ViewModule = {
       const existing = threadInstances.get(conversationId);
       if (existing) {
         // Ya se habia abierto en esta sesion: el DOM entero (mensajes, imagenes, composer)
-        // sigue intacto tal cual quedo, solo hay que mostrarlo y devolver el scroll.
+        // sigue intacto tal cual quedo, solo hay que mostrarlo y devolver el scroll. Mientras
+        // estuvo oculto, chatThread.ts no marca como leidos los mensajes que llegan por
+        // realtime (a proposito, ver isThreadOnScreen ahi) -- reabrirlo es el momento en que
+        // realmente se estan viendo, asi que es responsabilidad de aca marcarlos leidos.
         existing.el.hidden = false;
         const messagesEl = existing.el.querySelector<HTMLElement>(".chat-messages");
         if (messagesEl) messagesEl.scrollTop = existing.scrollTop;
+        void markConversationRead(conversationId).then(() => refreshChatBadge());
         return;
       }
 
