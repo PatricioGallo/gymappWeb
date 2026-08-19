@@ -16,6 +16,19 @@ import {
   type ProfileLink,
 } from "../services/profile.service";
 import { listBlockedUsers, unblockUser, type BlockedUserRow } from "../services/block.service";
+import { listTrainedExercises, type TrainedExercise } from "../services/weightLog.service";
+import {
+  STAT_WIDGET_CATALOG,
+  MAX_BY_CATEGORY,
+  parseStatWidgets,
+  widgetLabel,
+  widgetKey,
+  exerciseIdOf,
+  isExerciseScopedType,
+  type StatWidget,
+  type StatWidgetType,
+  type StatWidgetCategory,
+} from "../lib/statsWidgets";
 import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, disablePushNotifications } from "../lib/pushNotifications";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
 import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
@@ -682,8 +695,104 @@ export const settingsView: ViewModule = {
 
     // ---------- Personalizacion ----------
 
-    function renderPersonalizationTab(): void {
+    // Nombres de los ejercicios que este usuario entreno alguna vez, para resolver el label
+    // de un widget "Progreso por ejercicio" con exerciseId puntual (tanto en la lista actual
+    // como en el selector de "+ Agregar") sin traer weight_logs completo -- ver
+    // list_trained_exercises (RPC dedicada, evita el limite de 1000 filas de una cuenta con
+    // mucho historial solo para sacar nombres unicos).
+    let trainedExercisesCache: TrainedExercise[] | null = null;
+    async function getTrainedExercises(): Promise<TrainedExercise[]> {
+      if (!trainedExercisesCache) trainedExercisesCache = await listTrainedExercises().catch(() => []);
+      return trainedExercisesCache;
+    }
+
+    const CATEGORY_LABEL: Record<StatWidgetCategory, string> = { card: "tarjeta", chart: "gráfico" };
+    const CATEGORY_LABEL_PLURAL: Record<StatWidgetCategory, string> = { card: "tarjetas", chart: "gráficos" };
+
+    async function renderPersonalizationTab(): Promise<void> {
       const personalizationTab = container.querySelector("#personalizationTab")!;
+
+      // Edicion en borrador: los cambios (toggle, agregar/sacar widgets) NO se guardan solos --
+      // se acumulan aca y recien se persisten con el boton "Guardar cambios" (pedido explicito
+      // del usuario: antes cada click pegaba a la base al toque). saved* es el ultimo estado
+      // confirmado contra la base, usado tanto para "Cancelar" como para decidir si mostrar la
+      // barra de guardado (ver isDirty).
+      let savedShowStats = profile!.show_stats;
+      let savedWidgets = parseStatWidgets(profile!.stats_widgets);
+      let showStatsDraft = savedShowStats;
+      let widgetsDraft = [...savedWidgets];
+
+      const trainedExercises = await getTrainedExercises();
+      const exerciseNameOf = (id: string | null): string | null => (id ? (trainedExercises.find((e) => e.id === id)?.name ?? "Ejercicio") : null);
+
+      function categoryWidgets(category: StatWidgetCategory): StatWidget[] {
+        return widgetsDraft.filter((w) => STAT_WIDGET_CATALOG.find((c) => c.type === w.type)!.category === category);
+      }
+
+      // No compara con JSON.stringify: jsonb en Postgres no garantiza mantener el orden de
+      // claves de cada objeto tal cual se escribio, asi que el mismo widget podria volver de
+      // la base con las claves en otro orden y disparar un falso "sucio". widgetKey da un
+      // string canonico por widget, insensible a eso.
+      function isDirty(): boolean {
+        if (showStatsDraft !== savedShowStats) return true;
+        const a = savedWidgets.map(widgetKey);
+        const b = widgetsDraft.map(widgetKey);
+        return a.length !== b.length || a.some((k, i) => k !== b[i]);
+      }
+
+      function widgetsListMarkup(category: StatWidgetCategory): string {
+        const items = categoryWidgets(category);
+        if (items.length === 0) return `<p class="exc-pick-empty">No tenés ${CATEGORY_LABEL_PLURAL[category]} seleccionadas.</p>`;
+        return items
+          .map((w) => {
+            const idx = widgetsDraft.indexOf(w);
+            return `
+          <div class="settings-blocked-row" data-index="${idx}">
+            <span><strong>${escapeHtml(widgetLabel(w, exerciseNameOf(exerciseIdOf(w) ?? null)))}</strong></span>
+            <button class="btn btn-outline btn-sm remove-widget-btn" data-index="${idx}" type="button">Quitar</button>
+          </div>
+        `;
+          })
+          .join("");
+      }
+
+      function addRowMarkup(category: StatWidgetCategory): string {
+        const items = categoryWidgets(category);
+        const max = MAX_BY_CATEGORY[category];
+        if (items.length >= max) return `<p class="chart-sub">Llegaste al máximo de ${max} ${CATEGORY_LABEL_PLURAL[category]}.</p>`;
+        const addableTypes = STAT_WIDGET_CATALOG.filter((c) => c.category === category && (c.allowMultiple || !widgetsDraft.some((w) => w.type === c.type)));
+        if (addableTypes.length === 0) return "";
+        // Cada categoria tiene a lo sumo un tipo "exercise-scoped" (progreso por ejercicio en
+        // graficos, peso maximo en tarjetas) -- el set de exclusion es por ESE tipo puntual, no
+        // por categoria entera: agregar "Peso máximo: Sentadilla" (tarjeta) no debe sacar
+        // "Sentadilla" del selector de "Progreso por ejercicio" (grafico), son widgets distintos.
+        const exerciseScopedType = addableTypes.find((c) => isExerciseScopedType(c.type))?.type;
+        const usedExerciseIds = new Set(exerciseScopedType ? widgetsDraft.filter((w) => w.type === exerciseScopedType).map((w) => exerciseIdOf(w)) : []);
+        const typeSelectId = category === "card" ? "addCardType" : "addChartType";
+        const excSelectId = category === "card" ? "addCardExercise" : "addChartExercise";
+        const confirmId = category === "card" ? "addCardConfirm" : "addChartConfirm";
+        return `
+          <div class="settings-add-widget">
+            <select id="${typeSelectId}" aria-label="Elegir ${CATEGORY_LABEL[category]} a agregar">
+              <option value="">+ Agregar ${CATEGORY_LABEL[category]}</option>
+              ${addableTypes.map((c) => `<option value="${c.type}">${escapeHtml(c.label)}</option>`).join("")}
+            </select>
+            ${
+              exerciseScopedType
+                ? `<select id="${excSelectId}" aria-label="Elegir ejercicio" hidden>
+              ${!usedExerciseIds.has(null) ? `<option value="">Automático (el más entrenado)</option>` : ""}
+              ${trainedExercises
+                .filter((e) => !usedExerciseIds.has(e.id))
+                .map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`)
+                .join("")}
+            </select>`
+                : ""
+            }
+            <button class="btn btn-primary btn-sm" id="${confirmId}" type="button" disabled>Agregar</button>
+          </div>
+        `;
+      }
+
       personalizationTab.innerHTML = `
         <div class="chart-card reveal">
           <h3>Personalización</h3>
@@ -698,6 +807,40 @@ export const settingsView: ViewModule = {
             </label>
           </div>
           <div class="alert_message" id="personalizationAlert"></div>
+        </div>
+
+        <div class="chart-card reveal">
+          <h3>Personalización del perfil</h3>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="switch-label">Mostrar estadísticas en tu perfil</span>
+              <p class="chart-sub" style="margin:4px 0 0;">Si lo apagás, en "Tu actividad" vas a ver directamente tus Reps en vez de la pestaña de Estadísticas (también para vos, no solo para las visitas).</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="showStatsToggle" ${showStatsDraft ? "checked" : ""}>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div id="statsWidgetsSection" ${showStatsDraft ? "" : "hidden"}>
+            <div class="settings-widget-group">
+              <h4>Tarjetas <span class="chart-sub">(máx. ${MAX_BY_CATEGORY.card})</span></h4>
+              <div id="statsCardsList">${widgetsListMarkup("card")}</div>
+              <div id="addCardWrap">${addRowMarkup("card")}</div>
+            </div>
+            <div class="settings-widget-group">
+              <h4>Gráficos <span class="chart-sub">(máx. ${MAX_BY_CATEGORY.chart})</span></h4>
+              <div id="statsChartsList">${widgetsListMarkup("chart")}</div>
+              <div id="addChartWrap">${addRowMarkup("chart")}</div>
+            </div>
+          </div>
+          <div class="settings-save-bar" id="statsSaveBar" hidden>
+            <span class="chart-sub">Tenés cambios sin guardar.</span>
+            <div class="settings-save-bar-actions">
+              <button class="btn btn-outline btn-sm" id="statsCancelBtn" type="button">Cancelar</button>
+              <button class="btn btn-primary btn-sm" id="statsSaveBtn" type="button">Guardar cambios</button>
+            </div>
+          </div>
+          <div class="alert_message" id="statsWidgetsAlert"></div>
         </div>
       `;
 
@@ -717,6 +860,102 @@ export const settingsView: ViewModule = {
         profile!.zoom_enabled = zoomEnabled;
         const viewport = document.querySelector('meta[name="viewport"]');
         if (viewport) viewport.setAttribute("content", zoomEnabled ? "width=device-width, initial-scale=1" : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
+      });
+
+      function syncSaveBar(): void {
+        const bar = container.querySelector("#statsSaveBar") as HTMLElement | null;
+        if (bar) bar.hidden = !isDirty();
+      }
+
+      function refreshWidgetsDom(): void {
+        const cardsList = container.querySelector("#statsCardsList");
+        if (cardsList) cardsList.innerHTML = widgetsListMarkup("card");
+        const addCardWrap = container.querySelector("#addCardWrap");
+        if (addCardWrap) addCardWrap.innerHTML = addRowMarkup("card");
+        const chartsList = container.querySelector("#statsChartsList");
+        if (chartsList) chartsList.innerHTML = widgetsListMarkup("chart");
+        const addChartWrap = container.querySelector("#addChartWrap");
+        if (addChartWrap) addChartWrap.innerHTML = addRowMarkup("chart");
+        wireDynamicControls();
+        syncSaveBar();
+      }
+
+      function wireAddRow(category: StatWidgetCategory): void {
+        const typeSelect = container.querySelector(category === "card" ? "#addCardType" : "#addChartType") as HTMLSelectElement | null;
+        const excSelect = container.querySelector(category === "card" ? "#addCardExercise" : "#addChartExercise") as HTMLSelectElement | null;
+        const confirmBtn = container.querySelector(category === "card" ? "#addCardConfirm" : "#addChartConfirm") as HTMLButtonElement | null;
+        if (!typeSelect || !confirmBtn) return;
+
+        function sync(): void {
+          const type = typeSelect!.value as StatWidgetType | "";
+          confirmBtn!.disabled = !type;
+          if (excSelect) excSelect.hidden = !type || !isExerciseScopedType(type);
+        }
+        sync();
+        typeSelect.addEventListener("change", sync);
+
+        confirmBtn.addEventListener("click", () => {
+          const type = typeSelect.value as StatWidgetType | "";
+          if (!type) return;
+          const newWidget: StatWidget = isExerciseScopedType(type) ? { type, exerciseId: excSelect?.value || null } : { type };
+          if (widgetsDraft.some((w) => widgetKey(w) === widgetKey(newWidget))) return;
+          widgetsDraft.push(newWidget);
+          refreshWidgetsDom();
+        });
+      }
+
+      function wireDynamicControls(): void {
+        container.querySelectorAll<HTMLButtonElement>(".remove-widget-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.index);
+            widgetsDraft.splice(idx, 1);
+            refreshWidgetsDom();
+          });
+        });
+        wireAddRow("card");
+        wireAddRow("chart");
+      }
+
+      wireDynamicControls();
+
+      container.querySelector("#showStatsToggle")?.addEventListener("change", (e) => {
+        showStatsDraft = (e.target as HTMLInputElement).checked;
+        const section = container.querySelector("#statsWidgetsSection") as HTMLElement | null;
+        if (section) section.hidden = !showStatsDraft;
+        syncSaveBar();
+      });
+
+      container.querySelector("#statsCancelBtn")?.addEventListener("click", () => {
+        showStatsDraft = savedShowStats;
+        widgetsDraft = [...savedWidgets];
+        const toggle = container.querySelector("#showStatsToggle") as HTMLInputElement | null;
+        if (toggle) toggle.checked = showStatsDraft;
+        const section = container.querySelector("#statsWidgetsSection") as HTMLElement | null;
+        if (section) section.hidden = !showStatsDraft;
+        container.querySelector("#statsWidgetsAlert")!.innerHTML = "";
+        refreshWidgetsDom();
+      });
+
+      container.querySelector("#statsSaveBtn")?.addEventListener("click", async () => {
+        const saveBtn = container.querySelector("#statsSaveBtn") as HTMLButtonElement | null;
+        const alertBox = container.querySelector("#statsWidgetsAlert")!;
+        alertBox.innerHTML = "";
+        if (saveBtn) saveBtn.disabled = true;
+        const { error } = await updateProfileFields(userId, {
+          show_stats: showStatsDraft,
+          stats_widgets: widgetsDraft as unknown as Profile["stats_widgets"],
+        });
+        if (saveBtn) saveBtn.disabled = false;
+        if (error) {
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        profile!.show_stats = showStatsDraft;
+        profile!.stats_widgets = widgetsDraft as unknown as Profile["stats_widgets"];
+        savedShowStats = showStatsDraft;
+        savedWidgets = [...widgetsDraft];
+        syncSaveBar();
+        showSavedAnimation();
       });
     }
 
@@ -1100,7 +1339,7 @@ export const settingsView: ViewModule = {
     renderEditTab();
     renderPrivacyTab();
     void renderNotificationsTab();
-    renderPersonalizationTab();
+    void renderPersonalizationTab();
 
     ctx.addCleanup(() => {
       selectTabHandler = null;

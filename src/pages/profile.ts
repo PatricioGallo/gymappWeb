@@ -59,6 +59,8 @@ import {
 
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
+import { parseStatWidgets, type StatWidget } from "../lib/statsWidgets";
+import type { WeightUnit } from "../services/weightLog.service";
 
 // Estado que hoy se calculaba una sola vez a nivel de modulo (MPA: cada carga de pagina es un
 // modulo nuevo). Con el shell, este mismo modulo puede quedar cargado en memoria durante varias
@@ -69,7 +71,9 @@ import { loadChart } from "../lib/chartLoader";
 let myId: string | null = null;
 let usernameParam: string | null = null;
 let freqChartInstance: ChartInstance | null = null;
-let progressChartInstance: ChartInstance | null = null;
+// Con el picker de widgets puede haber mas de un grafico "Progreso por ejercicio" a la vez
+// (uno por ejercicio elegido) -- por eso es un array y no una sola instancia como freqChart.
+let progressChartInstances: ChartInstance[] = [];
 
 function parseFechaISO(fecha: string): Date {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -777,7 +781,45 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
 
 // ---------- Estadisticas ----------
 
-async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean) {
+// Une un widget "exercise_progress_chart" con los datos que necesita para dibujarse: el
+// nombre a mostrar en el titulo y los puntos de peso maximo por dia. exerciseId null =
+// automatico (el mas entrenado); si el ejercicio elegido ya no tiene cargas (se borraron, o
+// nunca hubo), progressPoints queda vacio y el widget se omite del render (ver renderStats).
+function resolveExerciseProgressWidget(
+  logs: WeightLogEntry[],
+  widget: { exerciseId: string | null },
+  top: { id: string; name: string } | null
+): { name: string; auto: boolean; points: { fecha: string; peso: number }[] } {
+  const exerciseId = widget.exerciseId ?? top?.id ?? null;
+  const excLogs = exerciseId ? logs.filter((l) => l.exerciseId === exerciseId) : [];
+  const name = widget.exerciseId ? (excLogs[0]?.exerciseName ?? "Ejercicio") : (top?.name ?? "");
+  return { name, auto: !widget.exerciseId, points: maxWeightPerDay(excLogs) };
+}
+
+// Idem para la tarjeta "Peso maximo por ejercicio", pero en vez de una serie por dia devuelve
+// un unico numero: el maximo historico. Los pesos se pueden cargar en distintas unidades
+// (kg/lb/bloques) y no son convertibles entre si (mismo criterio que progress.ts y
+// getExerciseStats en weightLog.service.ts) -- se usa la mas repetida en el historial de este
+// ejercicio puntual para no mezclar unidades en un mismo maximo.
+function resolveMaxWeightWidget(
+  logs: WeightLogEntry[],
+  widget: { exerciseId: string | null },
+  top: { id: string; name: string } | null
+): { name: string; auto: boolean; max: { peso: number; unidad: WeightUnit } | null } {
+  const exerciseId = widget.exerciseId ?? top?.id ?? null;
+  const excLogs = exerciseId ? logs.filter((l) => l.exerciseId === exerciseId) : [];
+  const name = widget.exerciseId ? (excLogs[0]?.exerciseName ?? "Ejercicio") : (top?.name ?? "");
+  if (excLogs.length === 0) return { name, auto: !widget.exerciseId, max: null };
+
+  const counts = new Map<WeightUnit, number>();
+  excLogs.forEach((l) => counts.set(l.unidad, (counts.get(l.unidad) ?? 0) + 1));
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const sameUnit = excLogs.filter((l) => l.unidad === dominant);
+  const max = Math.max(...sameUnit.map((l) => l.peso));
+  return { name, auto: !widget.exerciseId, max: { peso: max, unidad: dominant } };
+}
+
+async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean, widgets: StatWidget[]) {
   const statsContent = document.getElementById("statsContent");
   if (!statsContent) return;
 
@@ -802,41 +844,81 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
   }
 
   const top = mostFrequentExercise(logs);
-  const excProgress = top ? logs.filter((l) => l.exerciseId === top.id) : [];
-  const dailyProgress = maxWeightPerDay(excProgress);
 
-  statsContent.innerHTML = `
-    <div class="card-grid">
-      <div class="stat-card reveal"><div class="label">Último entrenamiento</div><div class="value">${escapeHtml(lastTrainingLabel(logs))}</div></div>
-      <div class="stat-card reveal"><div class="label">Ejercicio más entrenado</div><div class="value">${escapeHtml(top?.name ?? "—")}</div></div>
-      <div class="stat-card reveal"><div class="label">Entrenamientos registrados</div><div class="value">${trainingDaysCount(logs)}</div></div>
-      <div class="stat-card reveal"><div class="label">Rutinas activas</div><div class="value" id="activeRoutinesStatValue">${activeRoutinesCount}</div></div>
-    </div>
-    <div class="chart-card reveal">
+  const cardsMarkup = widgets
+    .map((w) => {
+      switch (w.type) {
+        case "last_trained":
+          return `<div class="stat-card reveal"><div class="label">Último entrenamiento</div><div class="value">${escapeHtml(lastTrainingLabel(logs))}</div></div>`;
+        case "top_exercise":
+          return `<div class="stat-card reveal"><div class="label">Ejercicio más entrenado</div><div class="value">${escapeHtml(top?.name ?? "—")}</div></div>`;
+        case "training_days_count":
+          return `<div class="stat-card reveal"><div class="label">Entrenamientos registrados</div><div class="value">${trainingDaysCount(logs)}</div></div>`;
+        case "active_routines":
+          return `<div class="stat-card reveal"><div class="label">Rutinas activas</div><div class="value" id="activeRoutinesStatValue">${activeRoutinesCount}</div></div>`;
+        case "max_weight_card": {
+          const resolved = resolveMaxWeightWidget(logs, w, top);
+          const label = resolved.auto ? "Peso máximo (automático)" : `Peso máximo: ${resolved.name}`;
+          const value = resolved.max ? `${resolved.max.peso} ${resolved.max.unidad}` : "—";
+          return `<div class="stat-card reveal"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></div>`;
+        }
+        default:
+          return "";
+      }
+    })
+    .join("");
+
+  // Los widgets de grafico (frecuencia / progreso por ejercicio) se resuelven antes de armar
+  // el HTML porque un progreso sin al menos 2 dias de datos se omite del todo (mismo criterio
+  // que ya usaba el chart unico de antes), y cada uno necesita su propio <canvas id> unico ya
+  // que ahora puede haber varios "progreso por ejercicio" a la vez.
+  const chartWidgets = widgets.filter((w): w is StatWidget & { type: "frequency_chart" | "exercise_progress_chart" } => w.type === "frequency_chart" || w.type === "exercise_progress_chart");
+
+  const chartsMarkup = chartWidgets
+    .map((w, i) => {
+      if (w.type === "frequency_chart") {
+        return `<div class="chart-card reveal">
       <h3>Frecuencia de entrenamiento</h3>
       <p class="chart-sub">Ejercicios distintos entrenados cada día de esta semana.</p>
       <div class="chart-wrap"><canvas id="freqChart"></canvas></div>
-    </div>
-    ${
-      dailyProgress.length >= 2
-        ? `<div class="chart-card reveal">
-      <h3>Progreso: ${escapeHtml(top?.name ?? "")}</h3>
-      <p class="chart-sub">Peso máximo por día en ${ownerView ? "tu" : "su"} ejercicio más entrenado.</p>
-      <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
-    </div>`
-        : ""
-    }
+    </div>`;
+      }
+      const resolved = resolveExerciseProgressWidget(logs, w, top);
+      if (resolved.points.length < 2) return "";
+      return `<div class="chart-card reveal">
+      <h3>Progreso: ${escapeHtml(resolved.name)}</h3>
+      <p class="chart-sub">Peso máximo por día en ${ownerView ? "tu" : "su"} ejercicio${resolved.auto ? " más entrenado" : ""}.</p>
+      <div class="chart-wrap"><canvas id="progressChart-${i}"></canvas></div>
+    </div>`;
+    })
+    .join("");
+
+  statsContent.innerHTML = `
+    <div class="card-grid">${cardsMarkup}</div>
+    ${chartsMarkup}
   `;
 
-  await renderFreqChart(computeDailyFrequency(logs));
-  if (dailyProgress.length >= 2) await renderProgressChart(dailyProgress);
+  freqChartInstance?.destroy();
+  freqChartInstance = null;
+  progressChartInstances.forEach((c) => c.destroy());
+  progressChartInstances = [];
+
+  for (const [i, w] of chartWidgets.entries()) {
+    if (w.type === "frequency_chart") {
+      await renderFreqChart(computeDailyFrequency(logs));
+      continue;
+    }
+    const resolved = resolveExerciseProgressWidget(logs, w, top);
+    if (resolved.points.length < 2) continue;
+    const inst = await renderProgressChart(`progressChart-${i}`, resolved.points);
+    if (inst) progressChartInstances.push(inst);
+  }
 }
 
 async function renderFreqChart(buckets: { label: string; count: number }[]) {
   const canvas = document.getElementById("freqChart") as HTMLCanvasElement | null;
   if (!canvas) return;
   const Chart = await loadChart();
-  freqChartInstance?.destroy();
   freqChartInstance = new Chart(canvas, {
     type: "bar",
     data: {
@@ -855,12 +937,11 @@ async function renderFreqChart(buckets: { label: string; count: number }[]) {
   });
 }
 
-async function renderProgressChart(entries: { fecha: string; peso: number }[]) {
-  const canvas = document.getElementById("progressChart") as HTMLCanvasElement | null;
-  if (!canvas) return;
+async function renderProgressChart(canvasId: string, entries: { fecha: string; peso: number }[]): Promise<ChartInstance | null> {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return null;
   const Chart = await loadChart();
-  progressChartInstance?.destroy();
-  progressChartInstance = new Chart(canvas, {
+  return new Chart(canvas, {
     type: "line",
     data: {
       labels: entries.map((e) => formatFechaCorta(e.fecha)),
@@ -903,7 +984,27 @@ let statsDirty = false;
 // Contexto guardado tras el primer render para poder refrescar la lista de
 // rutinas y el conteo de "Rutinas activas" in-place (sin recargar la pagina)
 // despues de finalizar/reactivar una rutina.
-let routinesCtx: { userId: string; ownerView: boolean; logs: WeightLogEntry[]; userType: Profile["user_type"]; ownerBasic: BasicNamedProfile } | null = null;
+let routinesCtx: {
+  userId: string;
+  ownerView: boolean;
+  logs: WeightLogEntry[];
+  userType: Profile["user_type"];
+  ownerBasic: BasicNamedProfile;
+  widgets: StatWidget[];
+  showStats: boolean;
+} | null = null;
+// Puente hacia el closure de setupActivityTabs (agregar/sacar el boton "Estadisticas" y saltar
+// de pestaña si hacia falta) para cuando show_stats cambia en Configuración mientras esta
+// instancia de perfil sigue viva en cache -- ver refreshCurrentRoutinesTab.
+let activityTabsController: { setShowStats(next: boolean): void } | null = null;
+
+// Mismo fallback tabla-cruda/vista-publica que usa main(): el dueño (o un admin/entrenador con
+// acceso) ve profiles directamente; cualquier otro visitante cae a profiles_public.
+async function fetchStatsPrefs(userId: string): Promise<{ showStats: boolean; widgets: StatWidget[] }> {
+  const full = await getProfile(userId).catch(() => null);
+  const row = full ?? (await getProfileBasicById(userId).catch(() => null));
+  return { showStats: row?.show_stats ?? true, widgets: parseStatWidgets(row?.stats_widgets) };
+}
 // Idem para poder refrescar seguidores/seguidos/suscriptores/publicaciones al volver a esta
 // instancia (ver refreshCurrentRoutinesTab) -- a diferencia de routinesCtx, no depende de
 // weight_logs asi que no necesita cargar nada pesado, solo re-pedir los contadores.
@@ -936,6 +1037,17 @@ async function refreshCurrentRoutinesTab() {
   const logs = await listWeightLogsWithContext(routinesCtx.userId).catch(() => routinesCtx!.logs);
   routinesCtx.logs = logs;
 
+  // "Mostrar estadisticas" y los widgets elegidos se configuran en Configuración >
+  // Personalización, una vista distinta: si el usuario los cambia ahi y vuelve a este perfil
+  // ya montado (misma instancia en cache, ver comentario arriba de esta funcion), sin este
+  // refetch seguiria viendo la config vieja hasta recargar la pagina entera.
+  const prefs = await fetchStatsPrefs(routinesCtx.userId).catch(() => ({ showStats: routinesCtx!.showStats, widgets: routinesCtx!.widgets }));
+  routinesCtx.widgets = prefs.widgets;
+  if (prefs.showStats !== routinesCtx.showStats) {
+    routinesCtx.showStats = prefs.showStats;
+    activityTabsController?.setShowStats(prefs.showStats);
+  }
+
   const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, logs, routinesCtx.userType, routinesCtx.ownerBasic);
   let activeCount = count;
   if (activeRoutineTab === "active") {
@@ -948,11 +1060,13 @@ async function refreshCurrentRoutinesTab() {
     activeCount = Number(document.getElementById("activeRoutinesStatValue")?.textContent ?? 0);
   }
 
+  if (!routinesCtx.showStats) return;
+
   // Los graficos de Chart.js no miden bien un canvas oculto (display:none) al crearse -- si
   // la pestaña de Estadisticas no esta visible ahora mismo, se difiere la reconstruccion
   // hasta que el usuario vuelva a ella (ver switchTab en setupActivityTabs).
   if (activeActivityTab === "stats") {
-    void renderStats(logs, activeCount ?? 0, routinesCtx.ownerView);
+    void renderStats(logs, activeCount ?? 0, routinesCtx.ownerView, routinesCtx.widgets);
   } else {
     statsDirty = true;
   }
@@ -1002,7 +1116,7 @@ function goToPost(postId: string): void {
   smartNavigate(`post.html?id=${encodeURIComponent(postId)}`);
 }
 
-function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string, ctx: ViewContext): void {
+function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string, ctx: ViewContext, showStats: boolean): void {
   const tabsEl = document.getElementById("activityTabs");
   const statsContent = document.getElementById("statsContent");
   const listEl = document.getElementById("activityPostsList");
@@ -1017,7 +1131,12 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   // volver a el cuando se vuelve a la pestaña de Estadisticas.
   const statsSubtitleText = subtitleEl?.textContent ?? "";
 
-  let activeTab: ActivityTab = "stats";
+  // Preferencia de Configuración > Personalización ("mostrar estadísticas"): sin la pestaña
+  // Estadísticas, la que aterriza por defecto es Reps. null (no "stats") fuerza a switchTab
+  // de mas abajo a correr su rama completa la primera vez, en vez de quedar pisada por su
+  // propio guard "if (tab === activeTab) return".
+  if (!showStats) tabsEl.querySelector<HTMLButtonElement>('[data-tab="stats"]')?.remove();
+  let activeTab: ActivityTab | null = null;
   let posts: FeedPost[] = [];
   let cursor: string | undefined;
   let loadingMore = false;
@@ -1132,7 +1251,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   ctx.addCleanup(() => observer.disconnect());
 
   async function loadMore(): Promise<void> {
-    if (activeTab === "stats" || loadingMore || exhausted) return;
+    if (activeTab === "stats" || activeTab === null || loadingMore || exhausted) return;
     loadingMore = true;
     if (spinner) spinner.hidden = false;
     const fetcher = ACTIVITY_FETCHERS[activeTab as Exclude<ActivityTab, "stats">];
@@ -1176,7 +1295,7 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       if (statsDirty && routinesCtx) {
         statsDirty = false;
         const activeCount = Number(document.getElementById("activeRoutinesStatValue")?.textContent ?? 0);
-        void renderStats(routinesCtx.logs, activeCount, routinesCtx.ownerView);
+        void renderStats(routinesCtx.logs, activeCount, routinesCtx.ownerView, routinesCtx.widgets);
       }
       return;
     }
@@ -1203,6 +1322,36 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".routine-tab");
     if (!btn?.dataset.tab) return;
     void switchTab(btn.dataset.tab as ActivityTab);
+  });
+
+  // activeTab arranca en null (no "stats") justamente para que este primer switchTab corra
+  // su rama completa en vez de pisarse con el guard "if (tab === activeTab) return" de mas
+  // arriba. Cuando showStats es true, la rama "stats" no vuelve a pintar el contenido (eso ya
+  // lo hizo main() con su propio renderStats) -- solo deja la pestaña marcada como activa.
+  void switchTab(showStats ? "stats" : "reps");
+
+  // El click en los botones de tabsEl esta delegado en un solo listener (arriba), asi que
+  // agregar/sacar el boton "Estadisticas" del DOM no necesita re-wirear nada -- por eso
+  // alcanza con este controller minimo para que refreshCurrentRoutinesTab pueda reaccionar a
+  // un cambio en vivo de "mostrar estadisticas" (ver activityTabsController mas arriba).
+  activityTabsController = {
+    setShowStats(next) {
+      const hasStatsBtn = !!tabsEl!.querySelector('[data-tab="stats"]');
+      if (next && !hasStatsBtn) {
+        const btn = document.createElement("button");
+        btn.className = "routine-tab";
+        btn.type = "button";
+        btn.dataset.tab = "stats";
+        btn.textContent = "Estadísticas";
+        tabsEl!.insertBefore(btn, tabsEl!.firstChild);
+      } else if (!next && hasStatsBtn) {
+        tabsEl!.querySelector('[data-tab="stats"]')?.remove();
+        if (activeTab === "stats") void switchTab("reps");
+      }
+    },
+  };
+  ctx.addCleanup(() => {
+    activityTabsController = null;
   });
 }
 
@@ -1865,6 +2014,8 @@ async function main(ctx: ViewContext) {
     is_public: displayProfile.is_public,
     is_verified: displayProfile.is_verified,
     user_type: displayProfile.user_type,
+    show_stats: displayProfile.show_stats,
+    stats_widgets: displayProfile.stats_widgets,
   });
 
   const isOwner = displayProfile.id === myId;
@@ -1933,11 +2084,18 @@ async function main(ctx: ViewContext) {
   const viewerCanCopyToSaved =
     viewerBasic?.user_type === "entrenador" || viewerBasic?.user_type === "usuario" || viewerBasic?.user_type === "admin";
 
+  // "Mostrar estadisticas" y que widgets (Configuración > Personalización) aplican tanto al
+  // dueño como a cualquier visitante -- no es un toggle de privacidad, es "no quiero esta
+  // seccion en mi perfil" (confirmado con el usuario). displayProfile puede venir de la tabla
+  // cruda o de profiles_public segun el caso (ver arriba), asi que ambas exponen las columnas.
+  const showStats = displayProfile.show_stats ?? true;
+  const statWidgets = parseStatWidgets(displayProfile.stats_widgets);
+
   const logs = await listWeightLogsWithContext(displayProfile.id!);
-  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile };
+  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
   const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
-  void renderStats(logs, activeCount ?? 0, isOwner);
-  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx);
+  if (showStats) void renderStats(logs, activeCount ?? 0, isOwner, statWidgets);
+  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats);
 }
 
 const VIEW_MARKUP = `
@@ -2025,8 +2183,9 @@ export const profileView: ViewModule = {
     statsDirty = false;
     routinesCtx = null;
     profileStatsCtx = null;
+    activityTabsController = null;
     freqChartInstance = null;
-    progressChartInstance = null;
+    progressChartInstances = [];
 
     container.innerHTML = VIEW_MARKUP;
 

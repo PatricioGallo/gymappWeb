@@ -76,6 +76,8 @@ export async function updateProfileFields(
       | "zoom_enabled"
       | "show_last_seen"
       | "show_read_receipts"
+      | "show_stats"
+      | "stats_widgets"
     >
   >
 ): Promise<{ error?: string }> {

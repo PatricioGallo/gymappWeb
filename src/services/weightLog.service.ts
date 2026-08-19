@@ -18,6 +18,21 @@ export async function insertWeightLogs(userId: string, entries: NewWeightLog[]):
   if (error) throw error;
 }
 
+export interface TrainedExercise {
+  id: string;
+  name: string;
+}
+
+/** Ejercicios distintos que YO entrené alguna vez (para el selector del widget "Progreso por
+ * ejercicio" en Configuración > Personalización) -- usa la RPC list_trained_exercises en vez
+ * de traer weight_logs completo, que en una cuenta con mucho historial puede ser miles de filas
+ * solo para sacar nombres unicos. */
+export async function listTrainedExercises(): Promise<TrainedExercise[]> {
+  const { data, error } = await supabase.rpc("list_trained_exercises");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: row.exercise_id, name: row.name }));
+}
+
 // Borra unicamente la carga de hoy para este ejercicio (todas sus series), sin tocar
 // registros de dias anteriores: "deshacer" lo que se acaba de guardar por error.
 export async function deleteTodayWeightLog(userId: string, routineExerciseId: string, fecha: string): Promise<void> {
