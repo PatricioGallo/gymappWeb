@@ -5125,6 +5125,22 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   margin-bottom: 3px;
 }
 
+.chat-bubble-edited {
+  font-size: 10.5px;
+  font-style: italic;
+  opacity: 0.65;
+  margin-right: 3px;
+}
+
+.chat-bubble-deleted { cursor: default; }
+
+.chat-bubble-deleted-text {
+  margin: 0;
+  font-size: 13.5px;
+  font-style: italic;
+  opacity: 0.65;
+}
+
 /* Sticker: sin el recuadro de burbuja de siempre, solo el emoji grande -- misma idea que
    WhatsApp/Telegram, para que se lea como una reaccion y no como un mensaje de texto. */
 .chat-bubble-me.chat-bubble-sticker-wrap,
@@ -5236,6 +5252,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .chat-msg-menu > button:hover { background: var(--surface-2); }
 .chat-msg-menu > button:disabled { cursor: default; color: var(--text-muted); }
+.chat-msg-menu > button.chat-msg-menu-danger { color: var(--accent); }
 
 .chat-forward-preview {
   background: var(--surface-2);

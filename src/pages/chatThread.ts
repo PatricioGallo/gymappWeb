@@ -20,6 +20,8 @@ import {
   getConversationPinnedMessageId,
   getMessageById,
   reactToMessage,
+  editMessage,
+  deleteMessage,
   copyChatAttachment,
   groupParticipantsOf,
   MESSAGES_PAGE_SIZE,
@@ -101,6 +103,14 @@ const THREAD_MARKUP = `
       <span class="chat-reply-bar-text" id="chatReplyBarText"></span>
     </div>
     <button type="button" class="chat-reply-bar-cancel" id="chatReplyBarCancel" aria-label="Cancelar respuesta">✕</button>
+  </div>
+
+  <div class="chat-reply-bar chat-edit-bar" id="chatEditBar" hidden>
+    <div class="chat-reply-bar-body">
+      <span class="chat-reply-bar-name">Editando mensaje</span>
+      <span class="chat-reply-bar-text" id="chatEditBarText"></span>
+    </div>
+    <button type="button" class="chat-reply-bar-cancel" id="chatEditBarCancel" aria-label="Cancelar edición">✕</button>
   </div>
 
   <div class="chat-composer" id="chatComposer">
@@ -208,6 +218,9 @@ export async function mountThread(
   const replyBarName = container.querySelector("#chatReplyBarName")!;
   const replyBarText = container.querySelector("#chatReplyBarText")!;
   const replyBarCancelBtn = container.querySelector("#chatReplyBarCancel") as HTMLButtonElement;
+  const editBar = container.querySelector("#chatEditBar") as HTMLDivElement;
+  const editBarText = container.querySelector("#chatEditBarText")!;
+  const editBarCancelBtn = container.querySelector("#chatEditBarCancel") as HTMLButtonElement;
 
   backBtn.addEventListener("click", opts.onBack, { signal: ctx.signal });
 
@@ -233,6 +246,7 @@ export async function mountThread(
   let readReceiptsEnabled = true;
   let pinnedMessageId: string | null = null;
   let replyTarget: ChatMessage | null = null;
+  let editingMessage: ChatMessage | null = null;
   const quotedMessageCache = new Map<string, ChatMessage | null>();
 
   async function markReadAndRefreshBadge(): Promise<void> {
@@ -553,6 +567,44 @@ export async function mountThread(
     bubble.insertAdjacentHTML("beforeend", reactionsHtml(m));
   }
 
+  // Editar/eliminar reemplazan todo el cuerpo de la burbuja (texto/adjunto/reacciones), a
+  // diferencia de refreshBubbleReactions/refreshBubbleTicks que tocan solo su pedacito -- por
+  // eso NO se usa para cada UPDATE por realtime (destruiría el <canvas> de la onda de audio ya
+  // dibujada, el <img> ya cargado, etc. en cualquier bubble que no cambió de contenido).
+  function refreshBubbleBody(m: ChatMessage): void {
+    const bubble = messagesEl.querySelector<HTMLElement>(`.chat-bubble[data-id="${m.id}"]`);
+    if (!bubble) return;
+    const isMe = m.sender_id === userId;
+    const isSticker = !m.deleted_at && m.attachment_type === "sticker";
+    const hasReactions = !m.deleted_at && Object.values(getReactions(m)).some((users) => users.length > 0);
+    bubble.classList.toggle("chat-bubble-deleted", !!m.deleted_at);
+    bubble.classList.toggle("chat-bubble-sticker-wrap", isSticker);
+    bubble.classList.toggle("has-reactions", hasReactions);
+    bubble.innerHTML = bubbleBodyHtml(m, isMe);
+  }
+
+  // Cualquier burbuja que citaba este mensaje (responder a) tiene su propio preview embebido
+  // (nombre + snippet) -- si el original se edita/elimina, ese preview queda desactualizado
+  // hasta que se refresque a mano.
+  function refreshQuotePreviewsFor(m: ChatMessage): void {
+    messagesEl.querySelectorAll<HTMLElement>(`.chat-bubble-quote[data-quote-id="${m.id}"]`).forEach((el) => {
+      el.innerHTML = `
+        <span class="chat-bubble-quote-name">${escapeHtml(senderLabel(m))}</span>
+        <span class="chat-bubble-quote-text">${escapeHtml(messageSnippet(m))}</span>
+      `;
+    });
+  }
+
+  /** Punto único para aplicar una edición/eliminación (propia o ajena vía realtime): sincroniza
+   * el array local, el cache de citas y el DOM (burbuja + cualquier respuesta que la cite). */
+  function applyMessageContentUpdate(m: ChatMessage): void {
+    const idx = messages.findIndex((x) => x.id === m.id);
+    if (idx !== -1) messages[idx] = m;
+    if (quotedMessageCache.has(m.id)) quotedMessageCache.set(m.id, m);
+    refreshBubbleBody(m);
+    refreshQuotePreviewsFor(m);
+  }
+
   async function hydrateSharedPosts(list: ChatMessage[]): Promise<void> {
     const ids = [...new Set(list.map((m) => m.shared_post_id).filter((id): id is string => !!id))].filter((id) => !sharedPostsCache.has(id));
     if (ids.length === 0) return;
@@ -583,6 +635,7 @@ export async function mountThread(
   }
 
   function messageSnippet(m: ChatMessage): string {
+    if (m.deleted_at) return "Mensaje eliminado";
     if (m.attachment_type === "sticker") return `${m.content ?? ""} Sticker`;
     if (m.content) return m.content;
     if (m.shared_post_id) return "🔁 Rep compartido";
@@ -613,7 +666,13 @@ export async function mountThread(
     `;
   }
 
-  function bubbleHtml(m: ChatMessage, isMe: boolean, isFirstInRun = true, isLastInRun = true): string {
+  function bubbleBodyHtml(m: ChatMessage, isMe: boolean): string {
+    if (m.deleted_at) {
+      return `
+        <p class="chat-bubble-deleted-text">🚫 Mensaje eliminado</p>
+        <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe && !isGroup ? ticksHtml(m) : ""}</span>
+      `;
+    }
     let mediaHtml = "";
     if (m.shared_post_id) {
       mediaHtml = sharedPostPreviewHtml(m.shared_post_id);
@@ -640,16 +699,24 @@ export async function mountThread(
     const stickerHtml = isSticker ? `<span class="chat-bubble-sticker">${escapeHtml(m.content ?? "")}</span>` : "";
     const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
     const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
-    const hasReactions = Object.values(getReactions(m)).some((users) => users.length > 0);
+    const editedHtml = m.edited_at ? `<span class="chat-bubble-edited">editado</span>` : "";
+    return `
+      ${forwardedHtml}
+      ${replyQuoteHtml(m)}
+      ${mediaHtml}
+      ${stickerHtml}
+      ${textHtml}
+      <span class="chat-bubble-time">${editedHtml}${timeLabel(m.created_at)}${isMe && !isGroup ? ticksHtml(m) : ""}</span>
+      ${reactionsHtml(m)}
+    `;
+  }
+
+  function bubbleHtml(m: ChatMessage, isMe: boolean, isFirstInRun = true, isLastInRun = true): string {
+    const isSticker = !m.deleted_at && m.attachment_type === "sticker";
+    const hasReactions = !m.deleted_at && Object.values(getReactions(m)).some((users) => users.length > 0);
     const bubbleEl = `
-      <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${isSticker ? " chat-bubble-sticker-wrap" : ""}${m.id === pinnedMessageId ? " is-pinned" : ""}${hasReactions ? " has-reactions" : ""}" data-id="${m.id}">
-        ${forwardedHtml}
-        ${replyQuoteHtml(m)}
-        ${mediaHtml}
-        ${stickerHtml}
-        ${textHtml}
-        <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe && !isGroup ? ticksHtml(m) : ""}</span>
-        ${reactionsHtml(m)}
+      <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${isSticker ? " chat-bubble-sticker-wrap" : ""}${m.id === pinnedMessageId ? " is-pinned" : ""}${hasReactions ? " has-reactions" : ""}${m.deleted_at ? " chat-bubble-deleted" : ""}" data-id="${m.id}">
+        ${bubbleBodyHtml(m, isMe)}
       </div>
     `;
 
@@ -924,10 +991,16 @@ export async function mountThread(
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
       const incoming = payload.new as ChatMessage;
       const idx = messages.findIndex((m) => m.id === incoming.id);
+      const previous = idx !== -1 ? messages[idx] : null;
       const updated = reactionMutationInFlight.has(incoming.id) && idx !== -1 ? { ...incoming, reactions: messages[idx].reactions } : incoming;
-      if (idx !== -1) messages[idx] = updated;
-      refreshBubbleTicks(updated);
-      refreshBubbleReactions(updated);
+      const contentChanged = previous && (previous.content !== updated.content || previous.deleted_at !== updated.deleted_at || previous.edited_at !== updated.edited_at);
+      if (contentChanged) {
+        applyMessageContentUpdate(updated);
+      } else {
+        if (idx !== -1) messages[idx] = updated;
+        refreshBubbleTicks(updated);
+        refreshBubbleReactions(updated);
+      }
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` }, (payload) => {
       const updatedConversation = payload.new as { pinned_message_id: string | null; group_name: string | null; group_avatar_url: string | null };
@@ -1169,14 +1242,16 @@ export async function mountThread(
       const bubble = target.closest<HTMLElement>(".chat-bubble");
       if (bubble?.dataset.id) {
         const message = messages.find((m) => m.id === bubble.dataset.id);
-        if (message) openMessageMenu(message, bubble);
+        // Un mensaje eliminado no tiene menú: nada para responder/reenviar/reaccionar/editar
+        // sobre un placeholder vacío -- mismo criterio que WhatsApp.
+        if (message && !message.deleted_at) openMessageMenu(message, bubble);
       }
     },
     { signal: ctx.signal }
   );
 
   // ---------------------------------------------------------------------------
-  // Menú de mensaje: responder / reenviar / anclar
+  // Menú de mensaje: responder / reenviar / anclar / editar / eliminar
   // ---------------------------------------------------------------------------
 
   let closeOpenMessageMenu: (() => void) | null = null;
@@ -1188,6 +1263,7 @@ export async function mountThread(
     const isMe = message.sender_id === userId;
     const isPinned = pinnedMessageId === message.id;
     const myEmoji = myReaction(message);
+    const canEdit = isMe && !message.attachment_path && !message.shared_post_id && message.attachment_type !== "sticker";
     const menu = document.createElement("div");
     menu.className = "chat-msg-menu";
     menu.innerHTML = `
@@ -1198,6 +1274,8 @@ export async function mountThread(
       <button type="button" data-action="forward">Reenviar</button>
       ${message.content ? `<button type="button" data-action="copy">Copiar</button>` : ""}
       <button type="button" data-action="pin">${isPinned ? "Desanclar" : "Anclar"}</button>
+      ${canEdit ? `<button type="button" data-action="edit">Editar</button>` : ""}
+      ${isMe ? `<button type="button" data-action="delete" class="chat-msg-menu-danger">Eliminar</button>` : ""}
     `;
     document.body.appendChild(menu);
 
@@ -1231,6 +1309,8 @@ export async function mountThread(
       if (action === "reply") startReply(message);
       else if (action === "forward") void openForwardModal(message);
       else if (action === "pin") void togglePin(message);
+      else if (action === "edit") startEditMessage(message);
+      else if (action === "delete") confirmDeleteMessage(message);
     }
     function onDocClick(e: MouseEvent): void {
       if (!menu.contains(e.target as Node)) closeOpenMessageMenu?.();
@@ -1258,6 +1338,7 @@ export async function mountThread(
   }
 
   function startReply(message: ChatMessage): void {
+    cancelEditMessage();
     replyTarget = message;
     replyBarName.textContent = senderLabel(message);
     replyBarText.textContent = messageSnippet(message);
@@ -1273,6 +1354,70 @@ export async function mountThread(
     },
     { signal: ctx.signal }
   );
+
+  function cancelEditMessage(): void {
+    editingMessage = null;
+    editBar.hidden = true;
+    composerInput.value = "";
+    composerInput.style.height = "auto";
+    updateSendState();
+  }
+
+  function startEditMessage(message: ChatMessage): void {
+    replyTarget = null;
+    replyBar.hidden = true;
+    clearPendingAttachment();
+    editingMessage = message;
+    editBarText.textContent = message.content ?? "";
+    editBar.hidden = false;
+    composerInput.value = message.content ?? "";
+    composerInput.style.height = "auto";
+    composerInput.style.height = `${Math.min(composerInput.scrollHeight, 120)}px`;
+    composerInput.focus();
+    updateSendState();
+  }
+
+  editBarCancelBtn.addEventListener("click", cancelEditMessage, { signal: ctx.signal });
+
+  /** Confirmacion de borrado, mismo mecanismo que confirmDeletePost en postModals.ts. */
+  function confirmDeleteMessage(message: ChatMessage): void {
+    const loaderBody = document.getElementById("loaderBody");
+    if (!loaderBody) return;
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="modal-card">
+          <h2>Eliminar mensaje</h2>
+          <p class="subtitle">Esta acción no se puede deshacer.</p>
+          <div class="alert_message" id="chatDeleteMsgAlert"></div>
+          <div class="modal-actions">
+            <button class="btn btn-danger" id="confirmDeleteMsg" type="button">Eliminar</button>
+            <button class="btn btn-outline" id="cancelDeleteMsg" type="button">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const close = () => (loaderBody.innerHTML = "");
+    document.getElementById("cancelDeleteMsg")?.addEventListener("click", close);
+    document.getElementById("confirmDeleteMsg")?.addEventListener("click", async () => {
+      const btn = document.getElementById("confirmDeleteMsg") as HTMLButtonElement;
+      btn.disabled = true;
+      const { message: updated, error } = await deleteMessage(message.id);
+      if (error) {
+        const alertBox = document.getElementById("chatDeleteMsgAlert");
+        if (alertBox) alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+        btn.disabled = false;
+        return;
+      }
+      close();
+      if (!updated) return;
+      applyMessageContentUpdate(updated);
+      if (editingMessage?.id === updated.id) cancelEditMessage();
+      if (replyTarget?.id === updated.id) {
+        replyTarget = null;
+        replyBar.hidden = true;
+      }
+    });
+  }
 
   async function openForwardModal(message: ChatMessage): Promise<void> {
     const loaderBody = document.getElementById("loaderBody");
@@ -1708,6 +1853,24 @@ export async function mountThread(
   );
 
   async function handleSend(): Promise<void> {
+    if (editingMessage) {
+      const content = composerInput.value.trim();
+      if (!content || sending) return;
+      const target = editingMessage;
+      sending = true;
+      updateSendState();
+      const { message, error } = await editMessage(target.id, content);
+      sending = false;
+      if (error || !message) {
+        alert(error || "No se pudo editar el mensaje.");
+        updateSendState();
+        return;
+      }
+      applyMessageContentUpdate(message);
+      cancelEditMessage();
+      return;
+    }
+
     if (recorder.isRecording) {
       const attachment = await stopRecording();
       if (attachment) {

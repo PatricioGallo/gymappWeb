@@ -134,6 +134,20 @@ export async function reactToMessage(messageId: string, emoji: string): Promise<
   return { message: data as ChatMessage };
 }
 
+/** Solo texto propio, sin adjunto/Rep compartido/sticker -- los adjuntos no tienen caption editable. */
+export async function editMessage(messageId: string, content: string): Promise<{ message?: ChatMessage; error?: string }> {
+  const { data, error } = await supabase.rpc("edit_message", { p_message_id: messageId, p_content: content });
+  if (error) return { error: friendlyError(error, "No se pudo editar el mensaje.") };
+  return { message: data as ChatMessage };
+}
+
+/** No borra la fila: la deja como placeholder ("Mensaje eliminado") visible para ambos, como WhatsApp. */
+export async function deleteMessage(messageId: string): Promise<{ message?: ChatMessage; error?: string }> {
+  const { data, error } = await supabase.rpc("delete_message", { p_message_id: messageId });
+  if (error) return { error: friendlyError(error, "No se pudo eliminar el mensaje.") };
+  return { message: data as ChatMessage };
+}
+
 export async function getMessageById(messageId: string): Promise<ChatMessage | null> {
   const { data, error } = await supabase.from("messages").select("*").eq("id", messageId).maybeSingle();
   if (error) return null;
