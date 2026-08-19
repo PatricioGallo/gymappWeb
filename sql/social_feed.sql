@@ -772,3 +772,8 @@ begin
   return new;
 end;
 $$;
+
+-- El tipo 'message_reaction' (alguien reacciona con un emoji a tu mensaje de chat) se agrega
+-- a notifications_type_check en sql/chat.sql, sección 6 -- se dispara desde react_to_message,
+-- no desde un trigger acá, porque esa función ya sabe con certeza si la llamada agrega una
+-- reacción nueva o solo la saca.

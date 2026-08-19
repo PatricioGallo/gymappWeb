@@ -536,3 +536,96 @@ create policy chat_stickers_delete on storage.objects
 
 alter publication supabase_realtime add table public.conversations;
 alter publication supabase_realtime add table public.messages;
+
+-- ---------------------------------------------------------------------------
+-- 6. Reacciones (emoji) a mensajes, estilo WhatsApp: un emoji por usuario por
+-- mensaje (tocar el mismo emoji lo saca, tocar otro lo reemplaza). Se guarda
+-- como jsonb en la propia fila del mensaje (mapa emoji -> array de user_id)
+-- para que viaje gratis por el mismo UPDATE realtime + cache de IndexedDB que
+-- ya usan los mensajes, sin necesitar tabla ni canal nuevos.
+-- ---------------------------------------------------------------------------
+
+alter table public.messages add column if not exists reactions jsonb not null default '{}'::jsonb;
+
+create or replace function public.react_to_message(p_message_id uuid, p_emoji text)
+returns public.messages
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_me uuid := auth.uid();
+  v_msg public.messages;
+  v_reactions jsonb;
+  v_new_reactions jsonb := '{}'::jsonb;
+  v_had_this_emoji boolean := false;
+  v_row record;
+  v_users jsonb;
+  v_notify boolean;
+  v_reactor_username text;
+begin
+  if v_me is null then
+    raise exception 'No autenticado';
+  end if;
+  if coalesce(trim(p_emoji), '') = '' or char_length(p_emoji) > 16 then
+    raise exception 'Emoji inválido';
+  end if;
+
+  select * into v_msg from public.messages where id = p_message_id for update;
+  if v_msg.id is null then
+    raise exception 'Mensaje no encontrado';
+  end if;
+
+  if not exists (
+    select 1 from public.conversations c
+    where c.id = v_msg.conversation_id and (c.user1_id = v_me or c.user2_id = v_me)
+  ) then
+    raise exception 'No participás de esta conversación';
+  end if;
+
+  v_reactions := coalesce(v_msg.reactions, '{}'::jsonb);
+
+  for v_row in select * from jsonb_each(v_reactions)
+  loop
+    if v_row.key = p_emoji and v_row.value ? v_me::text then
+      v_had_this_emoji := true;
+    end if;
+    v_users := (
+      select coalesce(jsonb_agg(u), '[]'::jsonb)
+      from jsonb_array_elements_text(v_row.value) u
+      where u <> v_me::text
+    );
+    if jsonb_array_length(v_users) > 0 then
+      v_new_reactions := v_new_reactions || jsonb_build_object(v_row.key, v_users);
+    end if;
+  end loop;
+
+  if not v_had_this_emoji then
+    v_new_reactions := v_new_reactions ||
+      jsonb_build_object(p_emoji, coalesce(v_new_reactions -> p_emoji, '[]'::jsonb) || to_jsonb(v_me::text));
+  end if;
+
+  update public.messages set reactions = v_new_reactions where id = p_message_id returning * into v_msg;
+
+  -- Notifica solo cuando se agrega una reacción nueva (no al sacarla) y no es a tu propio
+  -- mensaje. Mismo sistema que like/comment/repost: tabla notifications + notification_prefs
+  -- (clave 'reactions', default habilitada si no está seteada).
+  if not v_had_this_emoji and v_msg.sender_id <> v_me then
+    select coalesce((notification_prefs ->> 'reactions')::boolean, true) into v_notify
+      from public.profiles where id = v_msg.sender_id;
+    if coalesce(v_notify, true) then
+      select username into v_reactor_username from public.profiles where id = v_me;
+      insert into public.notifications (user_id, type, title, body, link)
+      values (
+        v_msg.sender_id, 'message_reaction', 'Nueva reacción',
+        coalesce(v_reactor_username, 'Alguien') || ' reaccionó ' || p_emoji || ' a tu mensaje',
+        'chats.html?c=' || v_msg.conversation_id
+      );
+    end if;
+  end if;
+
+  return v_msg;
+end;
+$$;
+
+grant execute on function public.react_to_message(uuid, text) to authenticated;

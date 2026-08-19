@@ -111,6 +111,13 @@ export async function getConversationPinnedMessageId(conversationId: string): Pr
   return data.pinned_message_id;
 }
 
+/** Un emoji por usuario por mensaje: tocar el mismo emoji lo saca, tocar otro lo reemplaza (como WhatsApp). */
+export async function reactToMessage(messageId: string, emoji: string): Promise<{ message?: ChatMessage; error?: string }> {
+  const { data, error } = await supabase.rpc("react_to_message", { p_message_id: messageId, p_emoji: emoji });
+  if (error) return { error: friendlyError(error, "No se pudo reaccionar al mensaje.") };
+  return { message: data as ChatMessage };
+}
+
 export async function getMessageById(messageId: string): Promise<ChatMessage | null> {
   const { data, error } = await supabase.from("messages").select("*").eq("id", messageId).maybeSingle();
   if (error) return null;

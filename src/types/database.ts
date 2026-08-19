@@ -491,6 +491,7 @@ export type Database = {
           created_at: string
           id: string
           is_forwarded: boolean
+          reactions: Json
           read_at: string | null
           reply_to_message_id: string | null
           sender_id: string
@@ -506,6 +507,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_forwarded?: boolean
+          reactions?: Json
           read_at?: string | null
           reply_to_message_id?: string | null
           sender_id: string
@@ -521,6 +523,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_forwarded?: boolean
+          reactions?: Json
           read_at?: string | null
           reply_to_message_id?: string | null
           sender_id?: string
@@ -2193,6 +2196,31 @@ export type Database = {
         Args: { p_conversation_id: string; p_message_id: string }
         Returns: undefined
       }
+      react_to_message: {
+        Args: { p_emoji: string; p_message_id: string }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_filename: string | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          is_forwarded: boolean
+          reactions: Json
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          shared_post_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       request_subscription: {
         Args: { p_trainer_id: string }
         Returns: {
@@ -2247,6 +2275,7 @@ export type Database = {
           created_at: string
           id: string
           is_forwarded: boolean
+          reactions: Json
           read_at: string | null
           reply_to_message_id: string | null
           sender_id: string

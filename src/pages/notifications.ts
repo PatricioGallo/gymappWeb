@@ -21,6 +21,7 @@ const TYPE_ICON: Record<string, string> = {
   comment: "💬",
   repost: "🔁",
   quote: "❝",
+  message_reaction: "😀",
 };
 
 function relativeTime(iso: string): string {
