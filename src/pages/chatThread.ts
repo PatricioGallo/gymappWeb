@@ -154,6 +154,13 @@ export interface MountThreadOptions {
   onMissingConversation(): void;
   /** El botón "‹" del header del hilo (solo visible en mobile, ver CSS). */
   onBack(): void;
+  /**
+   * Se acaba de marcar la conversación como leída (al abrirla o por un mensaje nuevo que llega
+   * mientras está en pantalla). chats.ts la usa para limpiar el contador/resaltado de esta fila
+   * en la lista sin esperar la suscripción realtime, que solo escucha la tabla conversations y
+   * mark_conversation_read no la toca (solo conversation_participants.last_read_at).
+   */
+  onRead?(): void;
 }
 
 export async function mountThread(
@@ -227,6 +234,7 @@ export async function mountThread(
   async function markReadAndRefreshBadge(): Promise<void> {
     await markConversationRead(conversationId);
     void refreshChatBadge();
+    opts.onRead?.();
   }
 
   // document.visibilityState solo dice si la pestaña está en primer plano, no si ESTE hilo

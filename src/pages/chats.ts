@@ -247,6 +247,19 @@ export const chatsView: ViewModule = {
       highlightActiveRow();
     }
 
+    // mark_conversation_read solo toca conversation_participants.last_read_at (o messages.read_at
+    // en directo), nunca la tabla conversations -- así que la suscripción realtime de más abajo
+    // (que solo escucha conversations) no se entera cuando yo leo algo. Sin esto, el contador/
+    // resaltado de "no leído" de una fila quedaba pegado hasta el próximo mensaje nuevo en
+    // CUALQUIER chat (lo único que sí dispara esa suscripción).
+    function markLocalRead(conversationId: string): void {
+      const convo = conversations.find((c) => c.conversation_id === conversationId);
+      if (convo && convo.unread_count > 0) {
+        convo.unread_count = 0;
+        renderList();
+      }
+    }
+
     function highlightActiveRow(): void {
       listEl.querySelectorAll<HTMLButtonElement>(".chat-row").forEach((row) => {
         row.classList.toggle("active", row.dataset.id === activeConversationId);
@@ -277,7 +290,10 @@ export const chatsView: ViewModule = {
         existing.el.hidden = false;
         const messagesEl = existing.el.querySelector<HTMLElement>(".chat-messages");
         if (messagesEl) messagesEl.scrollTop = existing.scrollTop;
-        void markConversationRead(conversationId).then(() => refreshChatBadge());
+        void markConversationRead(conversationId).then(() => {
+          refreshChatBadge();
+          markLocalRead(conversationId);
+        });
         return;
       }
 
@@ -303,6 +319,7 @@ export const chatsView: ViewModule = {
           })();
         },
         onBack: () => navigate("chats.html"),
+        onRead: () => markLocalRead(conversationId),
       }).catch((err) => {
         // Si mountThread explota a mitad de camino (ej. un hiccup de red en list_conversations)
         // el header se queda pegado en "Cargando..." para siempre si nadie atrapa el rechazo --
