@@ -2696,6 +2696,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 40px; }
 .chart-grid .chart-card { margin-top: 0; }
 
+/* La pestaña Estadísticas del perfil puede mostrar varios graficos seguidos (uno por widget de
+   "Progreso por ejercicio" elegido en Configuración) -- el margin-top de 16px de .chart-card
+   por si solo no alcanza para distinguirlos a simple vista cuando hay 3-4 seguidos. */
+#statsContent .chart-card + .chart-card { margin-top: 28px; }
+
 @media (min-width: 860px) {
   .chart-grid { grid-template-columns: 1fr 1fr; }
 }
@@ -3391,6 +3396,60 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .settings-blocked-row:first-of-type { border-top: none; padding-top: 0; }
 .settings-blocked-row strong { display: block; font-size: 14px; }
 .settings-blocked-row small { color: var(--text-muted); font-size: 12px; }
+
+.settings-add-widget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 14px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.settings-add-widget select {
+  flex: 1 1 200px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--surface-2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa1ac' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 38px 12px 14px;
+  color: var(--text);
+  font-size: 14.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.settings-add-widget select:hover { border-color: #333a45; }
+.settings-add-widget select:focus { outline: none; border-color: var(--accent-2); }
+.settings-add-widget select:disabled { opacity: 0.6; cursor: not-allowed; }
+.settings-add-widget .btn { flex: 0 0 auto; }
+
+.settings-widget-group { margin-top: 20px; padding-top: 16px; }
+.settings-widget-group:first-of-type { margin-top: 0; padding-top: 0; }
+.settings-widget-group h4 { display: flex; align-items: baseline; gap: 8px; font-size: 15px; margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+.settings-widget-group h4 .chart-sub { font-size: 12px; margin: 0; text-transform: none; letter-spacing: normal; }
+
+.settings-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.settings-save-bar .chart-sub { margin: 0; }
+.settings-save-bar-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+/* [hidden] pierde contra el display:flex de arriba sin esto (mismo motivo que .post-feed-list[hidden] y el resto de esta hoja de estilos). */
+.settings-save-bar[hidden] { display: none; }
 
 #settingsTabs + div .chart-card + .chart-card { margin-top: 20px; }
 .exc-admin-actions .exc-admin-delete:hover { border-color: #ff8a8a; color: #ff8a8a; }

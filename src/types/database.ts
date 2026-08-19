@@ -483,6 +483,7 @@ export type Database = {
       messages: {
         Row: {
           attachment_duration_seconds: number | null
+          attachment_filename: string | null
           attachment_path: string | null
           attachment_type: string | null
           content: string | null
@@ -497,6 +498,7 @@ export type Database = {
         }
         Insert: {
           attachment_duration_seconds?: number | null
+          attachment_filename?: string | null
           attachment_path?: string | null
           attachment_type?: string | null
           content?: string | null
@@ -511,6 +513,7 @@ export type Database = {
         }
         Update: {
           attachment_duration_seconds?: number | null
+          attachment_filename?: string | null
           attachment_path?: string | null
           attachment_type?: string | null
           content?: string | null
@@ -1038,6 +1041,8 @@ export type Database = {
           pwa_last_seen_at: string | null
           show_last_seen: boolean
           show_read_receipts: boolean
+          show_stats: boolean
+          stats_widgets: Json
           updated_at: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
@@ -1065,6 +1070,8 @@ export type Database = {
           pwa_last_seen_at?: string | null
           show_last_seen?: boolean
           show_read_receipts?: boolean
+          show_stats?: boolean
+          stats_widgets?: Json
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username: string
@@ -1092,6 +1099,8 @@ export type Database = {
           pwa_last_seen_at?: string | null
           show_last_seen?: boolean
           show_read_receipts?: boolean
+          show_stats?: boolean
+          stats_widgets?: Json
           updated_at?: string
           user_type?: Database["public"]["Enums"]["user_type"]
           username?: string
@@ -1896,6 +1905,8 @@ export type Database = {
           links: Json | null
           nacionalidad: string | null
           nombre: string | null
+          show_stats: boolean | null
+          stats_widgets: Json | null
           user_type: Database["public"]["Enums"]["user_type"] | null
           username: string | null
         }
@@ -1910,6 +1921,8 @@ export type Database = {
           links?: Json | null
           nacionalidad?: string | null
           nombre?: string | null
+          show_stats?: boolean | null
+          stats_widgets?: Json | null
           user_type?: Database["public"]["Enums"]["user_type"] | null
           username?: string | null
         }
@@ -1924,6 +1937,8 @@ export type Database = {
           links?: Json | null
           nacionalidad?: string | null
           nombre?: string | null
+          show_stats?: boolean | null
+          stats_widgets?: Json | null
           user_type?: Database["public"]["Enums"]["user_type"] | null
           username?: string | null
         }
@@ -2163,6 +2178,13 @@ export type Database = {
           username: string
         }[]
       }
+      list_trained_exercises: {
+        Args: never
+        Returns: {
+          exercise_id: string
+          name: string
+        }[]
+      }
       mark_conversation_read: {
         Args: { p_conversation_id: string }
         Returns: undefined
@@ -2206,6 +2228,7 @@ export type Database = {
       send_message: {
         Args: {
           p_attachment_duration_seconds?: number
+          p_attachment_filename?: string
           p_attachment_path?: string
           p_attachment_type?: string
           p_content?: string
@@ -2216,6 +2239,7 @@ export type Database = {
         }
         Returns: {
           attachment_duration_seconds: number | null
+          attachment_filename: string | null
           attachment_path: string | null
           attachment_type: string | null
           content: string | null

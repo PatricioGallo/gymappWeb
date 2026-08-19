@@ -4,7 +4,7 @@ import { formatFechaCorta, dayDisplayLabel } from "../lib/dias";
 import { formatRepe } from "../lib/reps";
 import { getProfile, listWeightLogsWithContext, listRoutines, type WeightLogEntry } from "../services/profile.service";
 import { getRoutineDetail, type RoutineDetail, type RoutineExerciseWithAuthor } from "../services/routine.service";
-import { getLatestWeights, type LatestWeightsMap, type LatestWeightEntry } from "../services/weightLog.service";
+import { getLatestWeights, type LatestWeightsMap, type LatestWeightEntry, type WeightUnit } from "../services/weightLog.service";
 import { listCommentsForExercises } from "../services/comment.service";
 import type { Tables } from "../types/database";
 import type { Chart as ChartInstance } from "chart.js";
@@ -93,15 +93,28 @@ function oneRepMax(peso: number, repe: number): number {
   if (!repe || repe <= 1) return peso;
   return Math.round(peso * (1 + repe / 30));
 }
-function bestOneRepMax(points: ExerciseGroup["entries"]): { rm: number } | null {
-  const withReps = points.filter((p) => p.repe);
-  if (withReps.length === 0) return null;
-  let best: { rm: number } | null = null;
-  withReps.forEach((p) => {
-    const rm = oneRepMax(p.peso, p.repe!);
-    if (!best || rm > best.rm) best = { rm };
+
+// Los pesos se pueden cargar en distintas unidades (kg/lb/bloques) y no son convertibles
+// entre si -- mismo criterio que getExerciseStats en weightLog.service.ts: se usa la mas
+// repetida en el historial para no mezclar cargas de distinta unidad en un mismo calculo.
+function dominantUnit(entries: { unidad: WeightUnit }[]): WeightUnit {
+  const counts = new Map<WeightUnit, number>();
+  entries.forEach((e) => counts.set(e.unidad, (counts.get(e.unidad) ?? 0) + 1));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// Un dia puede tener varias series a distinto peso (piramidal, series de calentamiento,
+// etc.); el progreso real de esa sesion es la carga mas pesada que se levanto ese dia, no
+// cada serie suelta -- si hay empate de peso, se queda con la de mas repeticiones.
+function sessionMaxEntries<T extends { fecha: string; peso: number; repe: number | null; date: Date }>(entries: T[]): T[] {
+  const byFecha = new Map<string, T>();
+  entries.forEach((e) => {
+    const current = byFecha.get(e.fecha);
+    if (!current || e.peso > current.peso || (e.peso === current.peso && (e.repe ?? 0) > (current.repe ?? 0))) {
+      byFecha.set(e.fecha, e);
+    }
   });
-  return best;
+  return [...byFecha.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 function projectWeight(points: ExerciseGroup["entries"], daysAhead: number): number | null {
   if (points.length < 2) return null;
@@ -443,7 +456,13 @@ export const progressView: ViewModule = {
       }
 
       async function renderExercise(group: ExerciseGroup): Promise<void> {
-        const points = group.entries;
+        // Se identifica primero en que unidad esta cargado este ejercicio (kg/lb/bloques no
+        // son convertibles entre si) y se trabaja solo con esa unidad de aca en adelante.
+        const unidad = dominantUnit(group.entries);
+        const rawEntries = group.entries.filter((p) => p.unidad === unidad);
+        // Una sesion puede tener varias series a distinto peso -- el grafico y las metricas
+        // reflejan la carga maxima levantada por sesion, no cada serie suelta.
+        const points = sessionMaxEntries(rawEntries);
         const weights = points.map((p) => p.peso);
 
         const max = Math.max(...weights);
@@ -458,25 +477,30 @@ export const progressView: ViewModule = {
         const delta = last.peso - first.peso;
         const deltaPct = first.peso > 0 ? Math.round((delta / first.peso) * 100) : 0;
 
-        const rm = bestOneRepMax(points);
+        // RM: formula de Epley sobre el maximo peso levantado y las repeticiones que se
+        // hicieron con ese peso (no el mayor RM calculado entre todas las series sueltas).
+        const rm = oneRepMax(maxEntry.peso, maxEntry.repe ?? 1);
+        const rmIsEstimate = !!maxEntry.repe && maxEntry.repe > 1;
+        // Peso proyectado: misma logica -- se proyecta la serie de maximos por sesion, no
+        // cada serie suelta (evita que un calentamiento liviano distorsione la tendencia).
         const projected = projectWeight(points, PROJECTION_DAYS);
 
-        const volumePoints = points.filter((p) => p.serie && p.repe).map((p) => ({ fecha: p.fecha, volumen: p.serie! * p.repe! * p.peso }));
+        const volumePoints = rawEntries.filter((p) => p.serie && p.repe).map((p) => ({ fecha: p.fecha, volumen: p.serie! * p.repe! * p.peso }));
 
         const progressContent = container.querySelector("#progressContent")!;
         progressContent.innerHTML = `
           <div class="card-grid">
-            <div class="stat-card reveal"><div class="label">Peso máximo</div><div class="value">${max} kg<small>${escapeHtml(formatFechaCorta(maxEntry.fecha))}</small></div></div>
-            <div class="stat-card reveal"><div class="label">1RM estimado</div><div class="value">${rm ? `${rm.rm} kg` : "—"}<small>${rm ? "Fórmula de Epley" : "Cargá repeticiones para calcularlo"}</small></div></div>
-            <div class="stat-card reveal"><div class="label">Promedio últimas ${sesionesLabel(recent.length)}</div><div class="value">${recentAvg} kg</div></div>
-            <div class="stat-card reveal"><div class="label">Peso proyectado (4 semanas)</div><div class="value">${projected !== null ? `${projected} kg` : "—"}<small>${projected !== null ? "Según tu ritmo de progreso" : "Necesitás más registros"}</small></div></div>
-            <div class="stat-card reveal"><div class="label">Progreso total</div><div class="value">${points.length >= 2 ? `${delta >= 0 ? "+" : ""}${delta} kg<small>${deltaPct >= 0 ? "+" : ""}${deltaPct}% desde el primer registro</small>` : `—<small>Necesitás al menos 2 registros</small>`}</div></div>
-            <div class="stat-card reveal"><div class="label">Veces entrenado</div><div class="value">${points.length}<small>Mínimo registrado: ${min} kg</small></div></div>
+            <div class="stat-card reveal"><div class="label">Peso máximo</div><div class="value">${max} ${unidad}<small>${escapeHtml(formatFechaCorta(maxEntry.fecha))}</small></div></div>
+            <div class="stat-card reveal"><div class="label">1RM estimado</div><div class="value">${rm} ${unidad}<small>${rmIsEstimate ? "Fórmula de Epley sobre tu máximo" : "Tu marca máxima registrada"}</small></div></div>
+            <div class="stat-card reveal"><div class="label">Promedio últimas ${sesionesLabel(recent.length)}</div><div class="value">${recentAvg} ${unidad}</div></div>
+            <div class="stat-card reveal"><div class="label">Peso proyectado (4 semanas)</div><div class="value">${projected !== null ? `${projected} ${unidad}` : "—"}<small>${projected !== null ? "Según tu ritmo de progreso" : "Necesitás más registros"}</small></div></div>
+            <div class="stat-card reveal"><div class="label">Progreso total</div><div class="value">${points.length >= 2 ? `${delta >= 0 ? "+" : ""}${delta} ${unidad}<small>${deltaPct >= 0 ? "+" : ""}${deltaPct}% desde el primer registro</small>` : `—<small>Necesitás al menos 2 registros</small>`}</div></div>
+            <div class="stat-card reveal"><div class="label">Veces entrenado</div><div class="value">${points.length}<small>Mínimo registrado: ${min} ${unidad}</small></div></div>
           </div>
 
           <div class="chart-card reveal">
             <h3>${escapeHtml(group.name)}</h3>
-            <p class="chart-sub">Ejercicio de ${escapeHtml(group.authorName)} · evolución del peso a lo largo del tiempo</p>
+            <p class="chart-sub">Ejercicio de ${escapeHtml(group.authorName)} · evolución del peso máximo levantado por sesión</p>
             <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
           </div>
 
@@ -505,7 +529,7 @@ export const progressView: ViewModule = {
             type: "line",
             data: {
               labels: points.map((p) => formatFechaCorta(p.fecha)),
-              datasets: [{ label: "Peso (kg)", data: weights, borderColor: "#ff8a3d", backgroundColor: "rgba(255, 138, 61, 0.18)", borderWidth: 2, tension: 0.3, fill: true, pointBackgroundColor: "#ff8a3d" }],
+              datasets: [{ label: `Peso (${unidad})`, data: weights, borderColor: "#ff8a3d", backgroundColor: "rgba(255, 138, 61, 0.18)", borderWidth: 2, tension: 0.3, fill: true, pointBackgroundColor: "#ff8a3d" }],
             },
             options: {
               responsive: true,
