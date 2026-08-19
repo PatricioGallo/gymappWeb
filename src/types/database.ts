@@ -547,6 +547,8 @@ export type Database = {
           content: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
           is_forwarded: boolean
           reactions: Json
@@ -563,6 +565,8 @@ export type Database = {
           content?: string | null
           conversation_id: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           is_forwarded?: boolean
           reactions?: Json
@@ -579,6 +583,8 @@ export type Database = {
           content?: string | null
           conversation_id?: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           is_forwarded?: boolean
           reactions?: Json
@@ -2090,6 +2096,60 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      delete_message: {
+        Args: { p_message_id: string }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_filename: string | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          is_forwarded: boolean
+          reactions: Json
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          shared_post_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      edit_message: {
+        Args: { p_content: string; p_message_id: string }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_filename: string | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          is_forwarded: boolean
+          reactions: Json
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          shared_post_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_block_status: { Args: { p_target_id: string }; Returns: string }
       get_conversation_peer_meta: {
         Args: { p_other_user_id: string }
@@ -2151,6 +2211,14 @@ export type Database = {
       }
       get_unread_conversation_count: { Args: never; Returns: number }
       is_admin: { Args: never; Returns: boolean }
+      is_conversation_admin: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
+      is_conversation_participant: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       leave_group_conversation: {
@@ -2280,6 +2348,8 @@ export type Database = {
           content: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
           is_forwarded: boolean
           reactions: Json
@@ -2355,6 +2425,8 @@ export type Database = {
           content: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
           is_forwarded: boolean
           reactions: Json
