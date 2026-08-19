@@ -4,7 +4,23 @@ import type { Database, Tables } from "../types/database";
 export type ChatMessage = Tables<"messages">;
 export type ConversationSummary = Database["public"]["Functions"]["list_conversations"]["Returns"][number];
 
+export interface GroupParticipant {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  role: "admin" | "member";
+  left_at: string | null;
+}
+
+/** `participants` viaja como jsonb (solo poblado para kind==='group') -- este helper lo tipa. */
+export function groupParticipantsOf(c: ConversationSummary): GroupParticipant[] {
+  return (c.participants as unknown as GroupParticipant[] | null) ?? [];
+}
+
 const BUCKET = "chat-attachments";
+const AVATARS_BUCKET = "avatars";
+const GROUP_AVATAR_MAX_BYTES = 20 * 1024 * 1024;
+const GROUP_AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AUDIO_MAX_BYTES = 15 * 1024 * 1024;
@@ -177,4 +193,72 @@ export async function getChatAttachmentUrl(path: string): Promise<string | null>
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
   if (error) return null;
   return data.signedUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Grupos
+// ---------------------------------------------------------------------------
+
+/** Crea un grupo (el creador queda admin, el resto member) y devuelve su conversation_id. */
+export async function createGroupConversation(
+  name: string,
+  memberIds: string[],
+  avatarUrl?: string
+): Promise<{ id?: string; error?: string }> {
+  const { data, error } = await supabase.rpc("create_group_conversation", {
+    p_name: name,
+    p_member_ids: memberIds,
+    p_avatar_url: avatarUrl,
+  });
+  if (error) return { error: friendlyError(error, "No se pudo crear el grupo.") };
+  return { id: data as string };
+}
+
+export async function addGroupParticipants(conversationId: string, userIds: string[]): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("add_group_participants", { p_conversation_id: conversationId, p_user_ids: userIds });
+  if (error) return { error: friendlyError(error, "No se pudieron agregar los integrantes.") };
+  return {};
+}
+
+export async function removeGroupParticipant(conversationId: string, userId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("remove_group_participant", { p_conversation_id: conversationId, p_user_id: userId });
+  if (error) return { error: friendlyError(error, "No se pudo sacar a esa persona del grupo.") };
+  return {};
+}
+
+export async function leaveGroup(conversationId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("leave_group_conversation", { p_conversation_id: conversationId });
+  if (error) return { error: friendlyError(error, "No se pudo salir del grupo.") };
+  return {};
+}
+
+export async function renameGroup(conversationId: string, name: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("rename_group", { p_conversation_id: conversationId, p_name: name });
+  if (error) return { error: friendlyError(error, "No se pudo renombrar el grupo.") };
+  return {};
+}
+
+export async function setGroupAvatar(conversationId: string, avatarUrl: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("set_group_avatar", { p_conversation_id: conversationId, p_avatar_url: avatarUrl });
+  if (error) return { error: friendlyError(error, "No se pudo actualizar la foto del grupo.") };
+  return {};
+}
+
+/**
+ * Sube la foto de grupo al bucket público "avatars" (mismo bucket que profiles.avatar_url,
+ * path distinto). Solo sube y devuelve la URL pública -- no llama a setGroupAvatar, porque
+ * en el flujo de "Nuevo grupo" el conversation_id recién existe después de crear el grupo.
+ */
+export async function uploadGroupAvatar(conversationId: string, file: File): Promise<{ url?: string; error?: string }> {
+  if (file.size > GROUP_AVATAR_MAX_BYTES) return { error: "La imagen es muy pesada. Elegí una de menos de 20MB." };
+  if (!GROUP_AVATAR_ALLOWED_TYPES.includes(file.type)) return { error: "Formato no soportado. Usá JPG, PNG o WEBP." };
+
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `groups/${conversationId}/avatar.${ext}`;
+
+  const { error: uploadError } = await supabase.storage.from(AVATARS_BUCKET).upload(path, file, { upsert: true });
+  if (uploadError) return { error: "No se pudo subir la foto. Probá de nuevo." };
+
+  const { data } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(path);
+  return { url: `${data.publicUrl}?t=${Date.now()}` };
 }

@@ -2391,6 +2391,18 @@ button:focus-visible {
 .avatar-edit svg { width: 16px; height: 16px; stroke: #0a0c0f; }
 .avatar-edit input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+/* Misma pieza (avatar circular + lapicito editar superpuesto) pero de tamaño fijo chico, para
+   usarla adentro de un .modal-card (crear grupo, info del grupo) en vez del hero de perfil. */
+.avatar-wrap-sm {
+  width: 88px;
+  height: 88px;
+  min-height: 0;
+  max-height: none;
+  margin: 0 auto 18px;
+}
+.avatar-wrap-sm .avatar-edit { width: 28px; height: 28px; border-width: 2px; }
+.avatar-wrap-sm .avatar-edit svg { width: 14px; height: 14px; }
+
 .profile-info {
   flex: 1;
   min-width: 0;
@@ -4197,6 +4209,14 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   flex-shrink: 0;
 }
 
+.chat-avatar-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.chat-avatar-group svg { width: 22px; height: 22px; }
+
 /* ---------- Bandeja (chats.html) ---------- */
 
 .chat-list-toolbar {
@@ -4822,6 +4842,40 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   border-bottom-left-radius: 4px;
 }
 
+/* Mensajes ajenos en un grupo: foto del remitente afuera de la burbuja, a la izquierda (estilo
+   WhatsApp) -- se muestra solo en el ULTIMO mensaje de una tanda seguida del mismo remitente
+   (el resto de la tanda deja el espacio reservado vacío para no correr las burbujas), y el
+   nombre va afuera y arriba de la burbuja (estilo Instagram) solo en el PRIMERO de la tanda. */
+.chat-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  align-self: flex-start;
+  gap: 8px;
+  max-width: 78%;
+}
+
+.chat-bubble-row-first { margin-top: 6px; }
+
+.chat-bubble-avatar-slot { width: 26px; height: 26px; flex-shrink: 0; }
+
+.chat-bubble-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: block; }
+
+.chat-bubble-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.chat-bubble-sender-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-2);
+  margin: 0 0 2px 3px;
+}
+
+.chat-bubble-row .chat-bubble { max-width: 100%; }
+
 .chat-bubble-text {
   margin: 0;
   font-size: 14.5px;
@@ -5287,6 +5341,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 @media (max-width: 639px) {
   .chat-bubble { max-width: 84%; }
+  .chat-bubble-row { max-width: 88%; }
   .chat-list-toolbar { flex-direction: column; align-items: stretch; }
   .chat-list-toolbar .btn { width: 100%; }
 }
@@ -5709,6 +5764,22 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-share-row:hover { background: var(--surface-2); }
 .post-share-row:disabled { opacity: 0.6; cursor: default; }
 .post-share-name { font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+
+.chat-group-pick-row input[type="checkbox"] { margin-left: auto; width: 18px; height: 18px; accent-color: var(--accent); pointer-events: none; }
+.chat-group-pick-row.selected { background: var(--accent-soft); }
+
+.chat-group-info-name { margin: 8px 0 2px; font-weight: 700; font-size: 16px; }
+.chat-group-member-row { justify-content: flex-start; }
+.chat-group-remove-btn { margin-left: auto; flex-shrink: 0; }
+.chat-group-admin-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 4px;
+}
 .post-viewer-time { margin-left: auto; flex-shrink: 0; font-size: 11.5px; color: var(--text-muted); }
 
 .post-share-external { display: flex; gap: 10px; margin-bottom: 4px; }

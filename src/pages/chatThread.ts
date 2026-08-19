@@ -21,6 +21,7 @@ import {
   getMessageById,
   reactToMessage,
   copyChatAttachment,
+  groupParticipantsOf,
   MESSAGES_PAGE_SIZE,
   AUDIO_MAX_SECONDS,
   SIGNED_URL_TTL_SECONDS,
@@ -31,6 +32,7 @@ import { openMediaLightbox } from "../lib/mediaLightbox";
 import { refreshChatBadge } from "../lib/chat";
 import { watchPeerOnline } from "../lib/presence";
 import { getCachedMessages, cacheMessages } from "../lib/chatDb";
+import { openGroupInfoPanel } from "./chatGroupInfo";
 import type { ViewContext } from "../shell/viewContext";
 
 /** Se re-firma una URL de adjunto si le quedan menos de estos minutos de vida. Importa porque
@@ -246,25 +248,58 @@ export async function mountThread(
 
   isInitiator = conversation.is_initiator;
   conversationStatus = conversation.status as "pending" | "accepted";
+  const isGroup = conversation.kind === "group";
 
-  nameEl.textContent = "";
-  nameEl.insertAdjacentHTML("beforeend", `${escapeHtml(conversation.other_username ?? "")}${renderVerifiedBadge(conversation.other_user_type ?? "usuario", conversation.other_is_verified)}`);
-  avatarEl.src = conversation.other_avatar_url || "/images/avatars/default.svg";
-  profileLink.href = `profile.html?u=${encodeURIComponent(conversation.other_username ?? "")}`;
+  function renderHeaderIdentity(): void {
+    nameEl.textContent = "";
+    if (isGroup) {
+      nameEl.textContent = conversation!.group_name ?? "Grupo";
+      avatarEl.src = conversation!.group_avatar_url || "/images/avatars/default.svg";
+      statusEl.textContent = `${groupParticipantsOf(conversation!).filter((p) => !p.left_at).length} integrantes`;
+    } else {
+      nameEl.insertAdjacentHTML(
+        "beforeend",
+        `${escapeHtml(conversation!.other_username ?? "")}${renderVerifiedBadge(conversation!.other_user_type ?? "usuario", conversation!.other_is_verified)}`
+      );
+      avatarEl.src = conversation!.other_avatar_url || "/images/avatars/default.svg";
+    }
+  }
+  renderHeaderIdentity();
   requestBannerName.textContent = conversation.other_username ?? "";
 
-  const peerMeta = await getConversationPeerMeta(conversation.other_user_id);
-  readReceiptsEnabled = peerMeta.readReceiptsEnabled;
-  let peerLastSeenAt = peerMeta.lastSeenAt;
+  let peerLastSeenAt: string | null = null;
   let peerOnline = false;
-  statusEl.textContent = peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
 
-  if (peerLastSeenAt) {
-    watchPeerOnline(conversation.other_user_id, (online) => {
-      if (!online && peerOnline) peerLastSeenAt = new Date().toISOString();
-      peerOnline = online;
-      statusEl.textContent = online ? "En línea" : peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
-    });
+  if (isGroup) {
+    // El link del header deja de navegar a un perfil individual: abre el panel de info/
+    // administración del grupo (chatGroupInfo.ts), que además maneja "Salir del grupo".
+    profileLink.removeAttribute("href");
+    profileLink.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        // onMissingConversation (no onBack): salir del grupo deja esta conversación inaccesible
+        // para mí -- mismo camino de limpieza que "esta conversación ya no existe/no tengo
+        // permiso" (chats.ts destruye la instancia del hilo Y refresca la lista para sacarla).
+        openGroupInfoPanel(conversation!, userId, { onLeft: opts.onMissingConversation });
+      },
+      { signal: ctx.signal }
+    );
+  } else {
+    profileLink.href = `profile.html?u=${encodeURIComponent(conversation.other_username ?? "")}`;
+
+    const peerMeta = await getConversationPeerMeta(conversation.other_user_id);
+    readReceiptsEnabled = peerMeta.readReceiptsEnabled;
+    peerLastSeenAt = peerMeta.lastSeenAt;
+    statusEl.textContent = peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
+
+    if (peerLastSeenAt) {
+      watchPeerOnline(conversation.other_user_id, (online) => {
+        if (!online && peerOnline) peerLastSeenAt = new Date().toISOString();
+        peerOnline = online;
+        statusEl.textContent = online ? "En línea" : peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
+      });
+    }
   }
 
   function renderBanners(): void {
@@ -545,7 +580,9 @@ export async function mountThread(
   }
 
   function senderLabel(m: ChatMessage): string {
-    return m.sender_id === userId ? "Vos" : (conversation!.other_username ?? "");
+    if (m.sender_id === userId) return "Vos";
+    if (isGroup) return groupParticipantsOf(conversation!).find((p) => p.user_id === m.sender_id)?.username ?? "Alguien";
+    return conversation!.other_username ?? "";
   }
 
   function replyQuoteHtml(m: ChatMessage): string {
@@ -564,7 +601,7 @@ export async function mountThread(
     `;
   }
 
-  function bubbleHtml(m: ChatMessage, isMe: boolean): string {
+  function bubbleHtml(m: ChatMessage, isMe: boolean, isFirstInRun = true, isLastInRun = true): string {
     let mediaHtml = "";
     if (m.shared_post_id) {
       mediaHtml = sharedPostPreviewHtml(m.shared_post_id);
@@ -591,29 +628,61 @@ export async function mountThread(
     const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
     const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
     const hasReactions = Object.values(getReactions(m)).some((users) => users.length > 0);
-    return `
+    const bubbleEl = `
       <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${isSticker ? " chat-bubble-sticker-wrap" : ""}${m.id === pinnedMessageId ? " is-pinned" : ""}${hasReactions ? " has-reactions" : ""}" data-id="${m.id}">
         ${forwardedHtml}
         ${replyQuoteHtml(m)}
         ${mediaHtml}
         ${stickerHtml}
         ${textHtml}
-        <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe ? ticksHtml(m) : ""}</span>
+        <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe && !isGroup ? ticksHtml(m) : ""}</span>
         ${reactionsHtml(m)}
       </div>
     `;
+
+    // Mensajes ajenos en un grupo: foto afuera de la burbuja a la izquierda (solo en el
+    // último de una tanda seguida del mismo remitente) y nombre afuera y arriba (solo en el
+    // primero) -- estilo WhatsApp/Instagram. En 1 a 1 el nombre/foto ya están en el header,
+    // no hace falta repetirlos por mensaje.
+    if (isGroup && !isMe) {
+      const avatarUrl = groupParticipantsOf(conversation!).find((p) => p.user_id === m.sender_id)?.avatar_url;
+      const nameHtml = isFirstInRun ? `<span class="chat-bubble-sender-name">${escapeHtml(senderLabel(m))}</span>` : "";
+      const rowAvatarHtml = isLastInRun
+        ? `<img src="${escapeHtml(avatarUrl || "/images/avatars/default.svg")}" class="chat-bubble-avatar" alt="">`
+        : "";
+      return `
+        <div class="chat-bubble-row${isFirstInRun ? " chat-bubble-row-first" : ""}">
+          <div class="chat-bubble-avatar-slot">${rowAvatarHtml}</div>
+          <div class="chat-bubble-col">
+            ${nameHtml}
+            ${bubbleEl}
+          </div>
+        </div>
+      `;
+    }
+
+    return bubbleEl;
+  }
+
+  function sameDay(a: ChatMessage, b: ChatMessage): boolean {
+    return new Date(a.created_at).toDateString() === new Date(b.created_at).toDateString();
   }
 
   function buildMessagesHtml(list: ChatMessage[]): string {
     let html = "";
     let lastDay: string | null = null;
-    for (const m of list) {
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
       const day = new Date(m.created_at).toDateString();
       if (day !== lastDay) {
         html += `<div class="chat-date-divider"><span>${dayLabel(m.created_at)}</span></div>`;
         lastDay = day;
       }
-      html += bubbleHtml(m, m.sender_id === userId);
+      const prev = list[i - 1];
+      const next = list[i + 1];
+      const isFirstInRun = !prev || prev.sender_id !== m.sender_id || !sameDay(prev, m);
+      const isLastInRun = !next || next.sender_id !== m.sender_id || !sameDay(next, m);
+      html += bubbleHtml(m, m.sender_id === userId, isFirstInRun, isLastInRun);
     }
     return html;
   }
@@ -660,7 +729,7 @@ export async function mountThread(
   }
 
   function refreshBubbleTicks(m: ChatMessage): void {
-    if (m.sender_id !== userId) return;
+    if (m.sender_id !== userId || isGroup) return;
     const timeEl = messagesEl.querySelector<HTMLElement>(`.chat-bubble[data-id="${m.id}"] .chat-bubble-time`);
     if (!timeEl) return;
     timeEl.innerHTML = `${timeLabel(m.created_at)}${ticksHtml(m)}`;
@@ -774,16 +843,24 @@ export async function mountThread(
     renderedIds.add(m.id);
     await hydrateSharedPosts([m]);
 
-    const lastDayBefore = messages.length > 0 ? new Date(messages[messages.length - 1].created_at).toDateString() : null;
+    const prevMessage = messages.length > 0 ? messages[messages.length - 1] : null;
     messages.push(m);
 
     const wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 150;
     if (messagesEl.querySelector(".notif-empty")) messagesEl.innerHTML = "";
 
+    const isFirstInRun = !prevMessage || prevMessage.sender_id !== m.sender_id || !sameDay(prevMessage, m);
+
+    if (!isFirstInRun && prevMessage && isGroup && prevMessage.sender_id !== userId) {
+      // El mensaje nuevo sigue la tanda del mismo remitente -- la burbuja anterior deja de
+      // ser la última de esa tanda, así que le sacamos el avatar (la foto "baja" a esta nueva).
+      const prevBubble = messagesEl.querySelector(`.chat-bubble[data-id="${prevMessage.id}"]`);
+      prevBubble?.closest(".chat-bubble-row")?.querySelector(".chat-bubble-avatar-slot")?.replaceChildren();
+    }
+
     let html = "";
-    const day = new Date(m.created_at).toDateString();
-    if (day !== lastDayBefore) html += `<div class="chat-date-divider"><span>${dayLabel(m.created_at)}</span></div>`;
-    html += bubbleHtml(m, m.sender_id === userId);
+    if (!prevMessage || !sameDay(prevMessage, m)) html += `<div class="chat-date-divider"><span>${dayLabel(m.created_at)}</span></div>`;
+    html += bubbleHtml(m, m.sender_id === userId, isFirstInRun, true);
     messagesEl.insertAdjacentHTML("beforeend", html);
     void hydrateImages();
     void hydrateMissingQuotes();
@@ -819,11 +896,17 @@ export async function mountThread(
       refreshBubbleReactions(updated);
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` }, (payload) => {
-      const updatedConversation = payload.new as { pinned_message_id: string | null };
-      if (updatedConversation.pinned_message_id === pinnedMessageId) return;
-      pinnedMessageId = updatedConversation.pinned_message_id;
-      void renderPinnedBanner();
-      refreshPinnedBubbleClass();
+      const updatedConversation = payload.new as { pinned_message_id: string | null; group_name: string | null; group_avatar_url: string | null };
+      if (updatedConversation.pinned_message_id !== pinnedMessageId) {
+        pinnedMessageId = updatedConversation.pinned_message_id;
+        void renderPinnedBanner();
+        refreshPinnedBubbleClass();
+      }
+      if (isGroup && (updatedConversation.group_name !== conversation!.group_name || updatedConversation.group_avatar_url !== conversation!.group_avatar_url)) {
+        conversation!.group_name = updatedConversation.group_name as string;
+        conversation!.group_avatar_url = updatedConversation.group_avatar_url as string;
+        renderHeaderIdentity();
+      }
     })
     .subscribe();
   ctx.addCleanup(() => void supabase.removeChannel(channel));
