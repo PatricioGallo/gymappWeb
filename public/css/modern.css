@@ -4948,6 +4948,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .chat-audio-toggle svg { width: 16px; height: 16px; }
+/* [hidden] no alcanza para ocultar un <svg> (mismo motivo que .password-toggle svg[hidden]
+   mas arriba en este archivo) -- sin esto, el ícono de pausa nunca reemplaza al de play. */
+.chat-audio-toggle svg[hidden] { display: none; }
 
 .chat-audio-wave {
   flex: 1;

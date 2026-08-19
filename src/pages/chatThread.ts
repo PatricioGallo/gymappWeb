@@ -223,7 +223,9 @@ export async function mountThread(
   const sharedPostsCache = new Map<string, FeedPost>();
   const audioPlayers = new Map<string, HTMLAudioElement>();
   const audioWaveLevels = new Map<string, number[]>();
+  const audioOriginalDuration = new Map<string, string>();
   let currentlyPlayingId: string | null = null;
+  let playbackRaf = 0;
   let isInitiator = false;
   let conversationStatus: "pending" | "accepted" = "pending";
   let readReceiptsEnabled = true;
@@ -715,6 +717,23 @@ export async function mountThread(
     );
   }
 
+  // Dibuja la onda de cada mensaje de audio apenas se renderiza el mensaje, en vez de esperar
+  // a que se apriete play -- mismo criterio que hydrateImages con las fotos.
+  async function hydrateAudioWaveforms(): Promise<void> {
+    const canvases = messagesEl.querySelectorAll<HTMLCanvasElement>(".chat-audio-wave[data-id]");
+    await Promise.all(
+      Array.from(canvases)
+        .filter((canvas) => !audioWaveLevels.has(canvas.dataset.id!))
+        .map(async (canvas) => {
+          const id = canvas.dataset.id!;
+          const path = messagesEl.querySelector<HTMLButtonElement>(`.chat-audio-toggle[data-id="${id}"]`)?.dataset.path;
+          if (!path) return;
+          const url = await resolveAttachmentUrl(path);
+          if (url) await loadWaveform(id, url);
+        })
+    );
+  }
+
   async function hydrateMissingQuotes(): Promise<void> {
     const nodes = messagesEl.querySelectorAll<HTMLButtonElement>(".chat-bubble-quote-missing[data-quote-id]");
     await Promise.all(
@@ -793,6 +812,7 @@ export async function mountThread(
       messagesEl.innerHTML = buildMessagesHtml(messages);
       await hydrateImages();
       void hydrateMissingQuotes();
+      void hydrateAudioWaveforms();
       scrollToBottom("instant");
     } else {
       messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
@@ -808,6 +828,7 @@ export async function mountThread(
       : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
     await hydrateImages();
     void hydrateMissingQuotes();
+    void hydrateAudioWaveforms();
     scrollToBottom("instant");
     if (!olderExhausted) observeLoadSentinel();
     void cacheMessages(conversationId, page);
@@ -841,6 +862,7 @@ export async function mountThread(
     messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
     await hydrateImages();
     void hydrateMissingQuotes();
+    void hydrateAudioWaveforms();
     messagesEl.scrollTo({ top: messagesEl.scrollHeight - prevScrollHeight, left: 0, behavior: "instant" });
     if (olderExhausted) olderMessagesObserver.disconnect();
     else observeLoadSentinel();
@@ -872,6 +894,7 @@ export async function mountThread(
     messagesEl.insertAdjacentHTML("beforeend", html);
     void hydrateImages();
     void hydrateMissingQuotes();
+    void hydrateAudioWaveforms();
     if (wasNearBottom) scrollToBottom();
     else updateScrollBottomBtn();
   }
@@ -1007,10 +1030,32 @@ export async function mountThread(
     ctx2d.globalAlpha = 1;
   }
 
+  function stopPlaybackLoop(): void {
+    cancelAnimationFrame(playbackRaf);
+    playbackRaf = 0;
+  }
+
+  // El evento "timeupdate" del <audio> dispara solo unas pocas veces por segundo (varía por
+  // navegador), no cuadro a cuadro -- por eso la onda se sentía atrasada respecto de lo que se
+  // escuchaba. Mientras el audio está en reproducción, leemos audio.currentTime en cada frame
+  // con requestAnimationFrame en vez de depender de ese evento.
+  function startPlaybackLoop(id: string, audio: HTMLAudioElement, timeEl: HTMLElement | null, originalDuration: string): void {
+    stopPlaybackLoop();
+    const tick = (): void => {
+      if (audio.paused || audio.ended) return;
+      const remaining = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
+      if (timeEl) timeEl.textContent = Number.isFinite(remaining) ? formatDuration(remaining) : originalDuration;
+      drawPlaybackWave(id, audio.duration ? audio.currentTime / audio.duration : 0);
+      playbackRaf = requestAnimationFrame(tick);
+    };
+    playbackRaf = requestAnimationFrame(tick);
+  }
+
   async function toggleAudioMessage(btn: HTMLButtonElement): Promise<void> {
     const id = btn.dataset.id!;
     const path = btn.dataset.path!;
     let audio = audioPlayers.get(id);
+    const timeEl = messagesEl.querySelector<HTMLElement>(`.chat-audio-time[data-id="${id}"]`);
 
     if (!audio) {
       const url = await resolveAttachmentUrl(path);
@@ -1021,23 +1066,18 @@ export async function mountThread(
       audio = new Audio(url);
       audioPlayers.set(id, audio);
       void loadWaveform(id, url);
-      const timeEl = messagesEl.querySelector<HTMLElement>(`.chat-audio-time[data-id="${id}"]`);
-      const originalDuration = timeEl?.textContent ?? "0:00";
-      audio.addEventListener("timeupdate", () => {
-        if (!timeEl || !audio) return;
-        const remaining = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
-        timeEl.textContent = Number.isFinite(remaining) ? formatDuration(remaining) : originalDuration;
-        drawPlaybackWave(id, audio.duration ? audio.currentTime / audio.duration : 0);
-      });
+      audioOriginalDuration.set(id, timeEl?.textContent ?? "0:00");
       audio.addEventListener("ended", () => {
+        stopPlaybackLoop();
         setPlayIcon(btn, true);
-        if (timeEl) timeEl.textContent = originalDuration;
+        if (timeEl) timeEl.textContent = audioOriginalDuration.get(id) ?? "0:00";
         currentlyPlayingId = null;
         drawPlaybackWave(id, 0);
       });
     }
 
     if (currentlyPlayingId && currentlyPlayingId !== id) {
+      stopPlaybackLoop();
       const prevAudio = audioPlayers.get(currentlyPlayingId);
       prevAudio?.pause();
       const prevBtn = messagesEl.querySelector<HTMLButtonElement>(`.chat-audio-toggle[data-id="${currentlyPlayingId}"]`);
@@ -1048,13 +1088,16 @@ export async function mountThread(
       await audio.play();
       setPlayIcon(btn, false);
       currentlyPlayingId = id;
+      startPlaybackLoop(id, audio, timeEl, audioOriginalDuration.get(id) ?? "0:00");
     } else {
       audio.pause();
+      stopPlaybackLoop();
       setPlayIcon(btn, true);
       currentlyPlayingId = null;
     }
   }
   ctx.addCleanup(() => {
+    stopPlaybackLoop();
     audioPlayers.forEach((audio) => audio.pause());
   });
 
@@ -1326,17 +1369,27 @@ export async function mountThread(
   let recordTimer: ReturnType<typeof setInterval> | undefined;
   let recordSeconds = 0;
 
-  function drawBars(canvas: HTMLCanvasElement, levels: number[], color: string): void {
-    const ctx2d = canvas.getContext("2d");
-    if (!ctx2d) return;
+  /** Redimensiona el buffer del canvas (en px físicos) para que coincida con su tamaño CSS
+   * actual -- si no se hace ANTES del primer dibujo, el canvas arranca con su buffer por
+   * default (300x150) estirado dentro de la caja chica del composer y se ve distorsionado. */
+  function sizeWaveCanvas(canvas: HTMLCanvasElement): { width: number; height: number } | null {
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
-    if (width === 0 || height === 0) return;
+    if (width === 0 || height === 0) return null;
     if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
     }
+    return { width, height };
+  }
+
+  function drawBars(canvas: HTMLCanvasElement, levels: number[], liveLevel: number, fillStyle: string | CanvasGradient): void {
+    const ctx2d = canvas.getContext("2d");
+    const size = ctx2d && sizeWaveCanvas(canvas);
+    if (!ctx2d || !size) return;
+    const { width, height } = size;
+    const dpr = window.devicePixelRatio || 1;
     ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2d.clearRect(0, 0, width, height);
 
@@ -1344,9 +1397,11 @@ export async function mountThread(
     const gap = 3;
     const step = barWidth + gap;
     const barsFit = Math.max(1, Math.floor(width / step));
-    const visible = levels.slice(-barsFit);
+    // La barra "en vivo" (liveLevel) no se guarda en el historial: se agrega solo para dibujar,
+    // así sigue el nivel de audio en tiempo real cuadro a cuadro sin inflar el array de niveles.
+    const visible = [...levels, liveLevel].slice(-barsFit);
 
-    ctx2d.fillStyle = color;
+    ctx2d.fillStyle = fillStyle;
     const startX = width - visible.length * step;
     visible.forEach((level, i) => {
       const barHeight = Math.max(3, level * height);
@@ -1359,20 +1414,50 @@ export async function mountThread(
     });
   }
 
+  const WAVE_SAMPLE_MS = 90;
   const waveLevels: number[] = [];
-  let waveTimer: ReturnType<typeof setInterval> | undefined;
-  const recordWaveColor = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff4d4d";
+  let waveRaf = 0;
+  let waveLastSampleAt = 0;
 
+  // Antes se redibujaba con setInterval cada 100ms, desacoplado del ciclo de pintado del
+  // navegador -- eso es lo que se sentía "trabado" (10fps, con tirones cuando el hilo principal
+  // se ocupaba con otra cosa). requestAnimationFrame sincroniza el redibujo con el pintado real
+  // (hasta 60fps) y se pausa solo si la pestaña está oculta, en vez de seguir corriendo a ciegas.
   function startWave(): void {
     waveLevels.length = 0;
-    waveTimer = setInterval(() => {
-      waveLevels.push(recorder.getLevel());
-      drawBars(recordWaveCanvas, waveLevels, recordWaveColor());
-    }, 100);
+    waveLastSampleAt = 0;
+    const size = sizeWaveCanvas(recordWaveCanvas);
+    const ctx2d = recordWaveCanvas.getContext("2d");
+
+    // Colores leídos una sola vez (no en cada frame: getComputedStyle fuerza recálculo de
+    // estilos y llamarlo a 60fps sería contraproducente). Gradiente --accent-2 -> --accent,
+    // el mismo par que ya usa el resto de la web (botón de enviar, avatares, etc).
+    const style = getComputedStyle(document.documentElement);
+    const accent = style.getPropertyValue("--accent").trim() || "#ff4d4d";
+    const accent2 = style.getPropertyValue("--accent-2").trim() || "#ff8a3d";
+    let fillStyle: string | CanvasGradient = accent;
+    if (ctx2d && size) {
+      const gradient = ctx2d.createLinearGradient(0, 0, size.width, 0);
+      gradient.addColorStop(0, accent2);
+      gradient.addColorStop(1, accent);
+      fillStyle = gradient;
+    }
+
+    const tick = (now: number): void => {
+      if (!recorder.isRecording) return;
+      const level = recorder.getLevel();
+      if (now - waveLastSampleAt >= WAVE_SAMPLE_MS) {
+        waveLastSampleAt = now;
+        waveLevels.push(level);
+      }
+      drawBars(recordWaveCanvas, waveLevels, level, fillStyle);
+      waveRaf = requestAnimationFrame(tick);
+    };
+    waveRaf = requestAnimationFrame(tick);
   }
 
   function stopWave(): void {
-    clearInterval(waveTimer);
+    cancelAnimationFrame(waveRaf);
     waveLevels.length = 0;
     const ctx2d = recordWaveCanvas.getContext("2d");
     ctx2d?.clearRect(0, 0, recordWaveCanvas.width, recordWaveCanvas.height);
@@ -1570,7 +1655,7 @@ export async function mountThread(
   );
 
   ctx.addCleanup(() => {
-    clearInterval(waveTimer);
+    cancelAnimationFrame(waveRaf);
     clearInterval(recordTimer);
     if (recorder.isRecording) recorder.cancel();
   });
