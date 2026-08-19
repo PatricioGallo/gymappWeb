@@ -102,45 +102,103 @@ export type Database = {
           },
         ]
       }
+      conversation_participants: {
+        Row: {
+          conversation_id: string
+          joined_at: string
+          last_read_at: string
+          left_at: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          joined_at?: string
+          last_read_at?: string
+          left_at?: string | null
+          role?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          joined_at?: string
+          last_read_at?: string
+          left_at?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
+          group_avatar_url: string | null
+          group_name: string | null
           id: string
           initiator_id: string
+          kind: string
           last_message_at: string
           last_message_preview: string | null
           last_message_sender_id: string | null
           last_message_type: string | null
           pinned_message_id: string | null
           status: string
-          user1_id: string
-          user2_id: string
+          user1_id: string | null
+          user2_id: string | null
         }
         Insert: {
           created_at?: string
+          group_avatar_url?: string | null
+          group_name?: string | null
           id?: string
           initiator_id: string
+          kind?: string
           last_message_at?: string
           last_message_preview?: string | null
           last_message_sender_id?: string | null
           last_message_type?: string | null
           pinned_message_id?: string | null
           status?: string
-          user1_id: string
-          user2_id: string
+          user1_id?: string | null
+          user2_id?: string | null
         }
         Update: {
           created_at?: string
+          group_avatar_url?: string | null
+          group_name?: string | null
           id?: string
           initiator_id?: string
+          kind?: string
           last_message_at?: string
           last_message_preview?: string | null
           last_message_sender_id?: string | null
           last_message_type?: string | null
           pinned_message_id?: string | null
           status?: string
-          user1_id?: string
-          user2_id?: string
+          user1_id?: string | null
+          user2_id?: string | null
         }
         Relationships: [
           {
@@ -1953,6 +2011,10 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      add_group_participants: {
+        Args: { p_conversation_id: string; p_user_ids: string[] }
+        Returns: undefined
+      }
       admin_daily_visits: {
         Args: { p_days?: number }
         Returns: {
@@ -2003,6 +2065,10 @@ export type Database = {
       cancel_subscription: {
         Args: { p_subscriber_id: string; p_trainer_id: string }
         Returns: undefined
+      }
+      create_group_conversation: {
+        Args: { p_avatar_url?: string; p_member_ids?: string[]; p_name: string }
+        Returns: string
       }
       create_routine: {
         Args: {
@@ -2087,11 +2153,18 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_profile_public: { Args: { uid: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      leave_group_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       list_conversations: {
         Args: never
         Returns: {
           conversation_id: string
+          group_avatar_url: string
+          group_name: string
           is_initiator: boolean
+          kind: string
           last_message_at: string
           last_message_preview: string
           last_message_read: boolean
@@ -2104,6 +2177,7 @@ export type Database = {
           other_user_id: string
           other_user_type: Database["public"]["Enums"]["user_type"]
           other_username: string
+          participants: Json
           status: string
           unread_count: number
         }[]
@@ -2221,6 +2295,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      remove_group_participant: {
+        Args: { p_conversation_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      rename_group: {
+        Args: { p_conversation_id: string; p_name: string }
+        Returns: undefined
+      }
       request_subscription: {
         Args: { p_trainer_id: string }
         Returns: {
@@ -2287,6 +2369,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_group_avatar: {
+        Args: { p_avatar_url: string; p_conversation_id: string }
+        Returns: undefined
       }
       set_routine_finished: {
         Args: { p_finished: boolean; p_routine_id: string }

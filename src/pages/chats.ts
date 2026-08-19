@@ -9,6 +9,9 @@ import {
   declineMessageRequest,
   getOrCreateConversation,
   markConversationRead,
+  createGroupConversation,
+  uploadGroupAvatar,
+  setGroupAvatar,
   type ConversationSummary,
 } from "../services/chat.service";
 import { cacheMessages } from "../lib/chatDb";
@@ -30,8 +33,20 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "short" });
 }
 
-function avatarOf(c: ConversationSummary): string {
-  return c.other_avatar_url || "/images/avatars/default.svg";
+const GROUP_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+
+function avatarHtml(c: ConversationSummary): string {
+  if (c.kind === "group") {
+    return c.group_avatar_url
+      ? `<img src="${escapeHtml(c.group_avatar_url)}" class="chat-avatar" alt="">`
+      : `<span class="chat-avatar chat-avatar-group">${GROUP_ICON_SVG}</span>`;
+  }
+  return `<img src="${escapeHtml(c.other_avatar_url || "/images/avatars/default.svg")}" class="chat-avatar" alt="">`;
+}
+
+function titleHtml(c: ConversationSummary): string {
+  if (c.kind === "group") return escapeHtml(c.group_name ?? "Grupo");
+  return `${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}`;
 }
 
 function previewText(c: ConversationSummary): string {
@@ -67,6 +82,7 @@ const VIEW_MARKUP = `
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
               </div>
+              <button type="button" class="btn btn-outline btn-sm" id="chatNewGroupBtn">+ Grupo</button>
             </div>
 
             <div id="chatSearchPeople" hidden></div>
@@ -118,6 +134,7 @@ export const chatsView: ViewModule = {
     const requestsCountEl = container.querySelector("#chatRequestsCount") as HTMLElement;
     const requestsListEl = container.querySelector("#chatRequestsList") as HTMLDivElement;
     const searchInput = container.querySelector("#chatSearchInput") as HTMLInputElement;
+    const newGroupBtn = container.querySelector("#chatNewGroupBtn") as HTMLButtonElement;
     const peopleEl = container.querySelector("#chatSearchPeople") as HTMLDivElement;
     const threadPlaceholder = container.querySelector("#chatThreadPlaceholder") as HTMLDivElement;
     const threadPage = container.querySelector("#chatThreadPage") as HTMLElement;
@@ -146,6 +163,7 @@ export const chatsView: ViewModule = {
     function matchesQuery(c: ConversationSummary): boolean {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
+      if (c.kind === "group") return (c.group_name ?? "").toLowerCase().includes(q);
       return (
         (c.other_username ?? "").toLowerCase().includes(q) ||
         (c.other_nombre ?? "").toLowerCase().includes(q) ||
@@ -164,9 +182,9 @@ export const chatsView: ViewModule = {
               (c) => `
         <div class="chat-request-row" data-id="${c.conversation_id}">
           <button type="button" class="chat-request-open" data-id="${c.conversation_id}">
-            <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
+            ${avatarHtml(c)}
             <span class="chat-request-body">
-              <span class="chat-row-name">${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}</span>
+              <span class="chat-row-name">${titleHtml(c)}</span>
               <span class="chat-row-preview">${previewText(c)}</span>
             </span>
           </button>
@@ -200,15 +218,15 @@ export const chatsView: ViewModule = {
             const seenBadge =
               c.unread_count > 0
                 ? `<span class="notif-badge">${c.unread_count > 9 ? "9+" : c.unread_count}</span>`
-                : c.last_message_sender_is_me && c.last_message_read
+                : c.kind === "direct" && c.last_message_sender_is_me && c.last_message_read
                   ? `<span class="chat-seen">Visto</span>`
                   : "";
             return `
           <button type="button" class="chat-row ${c.unread_count > 0 ? "unread" : ""}" data-id="${c.conversation_id}">
-            <img src="${escapeHtml(avatarOf(c))}" class="chat-avatar" alt="">
+            ${avatarHtml(c)}
             <span class="chat-row-body">
               <span class="chat-row-top">
-                <span class="chat-row-name">${escapeHtml(c.other_username ?? "")}${renderVerifiedBadge(c.other_user_type ?? "usuario", c.other_is_verified)}</span>
+                <span class="chat-row-name">${titleHtml(c)}</span>
                 <span class="chat-row-time">${relativeTime(c.last_message_at)}</span>
               </span>
               <span class="chat-row-bottom">
@@ -227,6 +245,19 @@ export const chatsView: ViewModule = {
       });
 
       highlightActiveRow();
+    }
+
+    // mark_conversation_read solo toca conversation_participants.last_read_at (o messages.read_at
+    // en directo), nunca la tabla conversations -- así que la suscripción realtime de más abajo
+    // (que solo escucha conversations) no se entera cuando yo leo algo. Sin esto, el contador/
+    // resaltado de "no leído" de una fila quedaba pegado hasta el próximo mensaje nuevo en
+    // CUALQUIER chat (lo único que sí dispara esa suscripción).
+    function markLocalRead(conversationId: string): void {
+      const convo = conversations.find((c) => c.conversation_id === conversationId);
+      if (convo && convo.unread_count > 0) {
+        convo.unread_count = 0;
+        renderList();
+      }
     }
 
     function highlightActiveRow(): void {
@@ -259,7 +290,10 @@ export const chatsView: ViewModule = {
         existing.el.hidden = false;
         const messagesEl = existing.el.querySelector<HTMLElement>(".chat-messages");
         if (messagesEl) messagesEl.scrollTop = existing.scrollTop;
-        void markConversationRead(conversationId).then(() => refreshChatBadge());
+        void markConversationRead(conversationId).then(() => {
+          refreshChatBadge();
+          markLocalRead(conversationId);
+        });
         return;
       }
 
@@ -274,8 +308,28 @@ export const chatsView: ViewModule = {
           threadCtx.dispose();
           el.remove();
           closeThread({ updateUrl: true });
+          // Salir de un grupo (o cualquier otro motivo por el que la conversación deja de ser
+          // accesible) solo toca conversation_participants, no conversations -- la suscripción
+          // realtime de la lista escucha esa segunda tabla, así que no se entera sola. Sin este
+          // refresh manual la fila vieja se quedaba pegada en la lista.
+          void (async () => {
+            conversations = await listConversations();
+            renderRequests();
+            renderList();
+          })();
         },
         onBack: () => navigate("chats.html"),
+        onRead: () => markLocalRead(conversationId),
+      }).catch((err) => {
+        // Si mountThread explota a mitad de camino (ej. un hiccup de red en list_conversations)
+        // el header se queda pegado en "Cargando..." para siempre si nadie atrapa el rechazo --
+        // mejor cerrar el hilo y avisar que abrirlo de nuevo.
+        console.error("No se pudo abrir la conversación", err);
+        threadInstances.delete(conversationId);
+        threadCtx.dispose();
+        el.remove();
+        closeThread({ updateUrl: true });
+        alert("No se pudo abrir la conversación. Probá de nuevo.");
       });
     }
 
@@ -380,6 +434,197 @@ export const chatsView: ViewModule = {
       }
       openThread(id, { pushHistory: true });
     }
+
+    // Modal de 2 pasos (elegir integrantes -> nombre/foto) para crear un grupo, reusando el
+    // mismo overlay #loaderBody + .modal-card/.post-share-list que openForwardModal en
+    // chatThread.ts, y las mismas listFollowers/listFollowing que ya usa runPeopleSearch.
+    function openNewGroupModal(): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+
+      const selected = new Map<string, FollowListRow>();
+      let pendingAvatarFile: File | null = null;
+
+      function close(): void {
+        loaderBody!.innerHTML = "";
+      }
+
+      function renderPickStep(): void {
+        loaderBody!.innerHTML = `
+          <div class="success-check-container">
+            <div class="modal-card">
+              <h2>Nuevo grupo</h2>
+              <p class="subtitle">Elegí al menos 2 personas para armar el grupo.</p>
+              <div class="field">
+                <input type="text" id="chatGroupPickSearch" placeholder="Buscar entre tus seguidores...">
+              </div>
+              <div class="post-share-list" id="chatGroupPickList"><p class="exc-pick-empty">Cargando...</p></div>
+              <div class="alert_message" id="chatGroupPickAlert"></div>
+              <div class="modal-actions">
+                <button class="btn btn-outline" id="chatGroupPickCancel" type="button">Cancelar</button>
+                <button class="btn btn-primary" id="chatGroupPickNext" type="button" disabled>Siguiente (<span id="chatGroupPickCount">0</span>)</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.getElementById("chatGroupPickCancel")?.addEventListener("click", close);
+        document.getElementById("chatGroupPickNext")?.addEventListener("click", () => renderDetailsStep());
+
+        const listEl = document.getElementById("chatGroupPickList")!;
+        const searchInput2 = document.getElementById("chatGroupPickSearch") as HTMLInputElement;
+        const nextBtn = document.getElementById("chatGroupPickNext") as HTMLButtonElement;
+        const countEl = document.getElementById("chatGroupPickCount")!;
+
+        function updateCount(): void {
+          countEl.textContent = String(selected.size);
+          nextBtn.disabled = selected.size < 2;
+        }
+        updateCount();
+
+        function renderRows(rows: FollowListRow[]): void {
+          listEl.innerHTML = rows.length
+            ? rows
+                .map(
+                  (r) => `
+          <button type="button" class="post-share-row chat-group-pick-row${selected.has(r.id) ? " selected" : ""}" data-id="${escapeHtml(r.id)}">
+            <img src="${escapeHtml(r.avatarUrl || "/images/avatars/default.svg")}" class="chat-avatar" alt="">
+            <span class="post-share-name">${escapeHtml(r.username)}${renderVerifiedBadge(r.userType, r.isVerified)}</span>
+            <input type="checkbox" ${selected.has(r.id) ? "checked" : ""} tabindex="-1">
+          </button>
+        `
+                )
+                .join("")
+            : `<p class="exc-pick-empty">No se encontraron seguidores.</p>`;
+
+          listEl.querySelectorAll<HTMLButtonElement>(".chat-group-pick-row").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const id = btn.dataset.id!;
+              const row = rows.find((r) => r.id === id);
+              if (!row) return;
+              const checkbox = btn.querySelector("input[type=checkbox]") as HTMLInputElement;
+              if (selected.has(id)) {
+                selected.delete(id);
+                checkbox.checked = false;
+              } else {
+                selected.set(id, row);
+                checkbox.checked = true;
+              }
+              btn.classList.toggle("selected", selected.has(id));
+              updateCount();
+            });
+          });
+        }
+
+        async function runSearch(search: string): Promise<void> {
+          try {
+            const [followers, following] = await Promise.all([listFollowers(userId, search, 30), listFollowing(userId, search, 30)]);
+            const merged = new Map<string, FollowListRow>();
+            for (const r of [...followers, ...following]) {
+              if (r.id !== userId) merged.set(r.id, r);
+            }
+            renderRows([...merged.values()]);
+          } catch {
+            listEl.innerHTML = `<p class="exc-pick-empty">No se pudo cargar tus seguidores.</p>`;
+          }
+        }
+
+        let pickDebounce: ReturnType<typeof setTimeout> | undefined;
+        searchInput2.addEventListener("input", () => {
+          clearTimeout(pickDebounce);
+          pickDebounce = setTimeout(() => void runSearch(searchInput2.value.trim()), 250);
+        });
+
+        void runSearch("");
+      }
+
+      function renderDetailsStep(): void {
+        loaderBody!.innerHTML = `
+          <div class="success-check-container">
+            <div class="modal-card">
+              <h2>Nuevo grupo</h2>
+              <p class="subtitle">${selected.size} integrantes elegidos.</p>
+              <div class="avatar-wrap avatar-wrap-sm">
+                <img src="/images/avatars/default.svg" alt="" id="chatGroupAvatarPreview">
+                <label class="avatar-edit" title="Elegir foto del grupo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <input type="file" id="chatGroupAvatarInput" accept="image/jpeg,image/png,image/webp">
+                </label>
+              </div>
+              <div class="field">
+                <input type="text" id="chatGroupName" placeholder="Nombre del grupo" maxlength="80">
+              </div>
+              <div class="alert_message" id="chatGroupDetailsAlert"></div>
+              <div class="modal-actions">
+                <button class="btn btn-outline" id="chatGroupBack" type="button">Atrás</button>
+                <button class="btn btn-primary" id="chatGroupCreate" type="button">Crear grupo</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.getElementById("chatGroupBack")?.addEventListener("click", () => renderPickStep());
+
+        const nameInput = document.getElementById("chatGroupName") as HTMLInputElement;
+        const avatarPreview = document.getElementById("chatGroupAvatarPreview") as HTMLImageElement;
+        const avatarInput = document.getElementById("chatGroupAvatarInput") as HTMLInputElement;
+        avatarInput.addEventListener("change", () => {
+          const file = avatarInput.files?.[0] ?? null;
+          pendingAvatarFile = file;
+          if (file) avatarPreview.src = URL.createObjectURL(file);
+        });
+
+        document.getElementById("chatGroupCreate")?.addEventListener("click", async () => {
+          const name = nameInput.value.trim();
+          const alertBox = document.getElementById("chatGroupDetailsAlert")!;
+          alertBox.innerHTML = "";
+          if (!name) {
+            alertBox.innerHTML = `<p>Ponele un nombre al grupo.</p>`;
+            return;
+          }
+          const createBtn = document.getElementById("chatGroupCreate") as HTMLButtonElement;
+          createBtn.disabled = true;
+          createBtn.textContent = "Creando...";
+
+          try {
+            const { id, error } = await createGroupConversation(name, [...selected.keys()]);
+            if (error || !id) {
+              alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo crear el grupo.")}</p>`;
+              return;
+            }
+
+            let avatarWarning: string | null = null;
+            if (pendingAvatarFile) {
+              // La foto es secundaria -- si falla no bloqueamos la creación del grupo (ya quedó
+              // creado y usable); se puede reintentar después desde "Info del grupo". Pero el
+              // error hay que avisarlo igual, antes solo quedaba en la consola y no se enteraba
+              // nadie de por qué "no aparecía" la foto.
+              const { url, error: avatarError } = await uploadGroupAvatar(id, pendingAvatarFile);
+              if (url) {
+                const setResult = await setGroupAvatar(id, url);
+                if (setResult.error) avatarWarning = setResult.error;
+              } else {
+                avatarWarning = avatarError ?? "No se pudo subir la foto.";
+              }
+            }
+
+            close();
+            conversations = await listConversations();
+            renderRequests();
+            renderList();
+            openThread(id, { pushHistory: true });
+            if (avatarWarning) alert(`El grupo se creó, pero no se pudo guardar la foto: ${avatarWarning}`);
+          } catch {
+            alertBox.innerHTML = `<p>No se pudo crear el grupo. Probá de nuevo.</p>`;
+          } finally {
+            createBtn.disabled = false;
+            createBtn.textContent = "Crear grupo";
+          }
+        });
+      }
+
+      renderPickStep();
+    }
+
+    newGroupBtn?.addEventListener("click", () => openNewGroupModal(), { signal: ctx.signal });
 
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     ctx.addCleanup(() => clearTimeout(debounceTimer));

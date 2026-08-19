@@ -128,14 +128,18 @@ async function handleNewMessage(detail: NewMessageEventDetail): Promise<void> {
   // La conversacion ya pudo cerrarse/cambiar de pantalla mientras esperabamos la respuesta.
   if (!isActivelyViewing() || isViewingConversation(detail.conversationId)) return;
 
-  const name = `${sender?.nombre ?? ""} ${sender?.apellido ?? ""}`.trim() || sender?.username || "Alguien";
+  const senderName = `${sender?.nombre ?? ""} ${sender?.apellido ?? ""}`.trim() || sender?.username || "Alguien";
   const avatar = sender?.avatar_url || "/images/avatars/default.svg";
+  // Mismo criterio "remitente - grupo" que arma send-web-push para el push del sistema: sin
+  // esto el toast in-app (el "push interno" mientras estás mirando la webapp) no distinguía
+  // un mensaje de grupo de uno directo.
+  const title = detail.kind === "group" && detail.groupName ? `${senderName} - ${detail.groupName}` : senderName;
 
   mountToast(
     `
       <img class="in-app-toast-avatar" src="${escapeHtml(avatar)}" alt="">
       <div class="in-app-toast-body">
-        <strong class="in-app-toast-title">${escapeHtml(name)}</strong>
+        <strong class="in-app-toast-title">${escapeHtml(title)}</strong>
         <span class="in-app-toast-text">${escapeHtml(detail.preview ?? "Te envió un mensaje")}</span>
       </div>
     `,

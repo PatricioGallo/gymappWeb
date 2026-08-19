@@ -8,6 +8,8 @@ export interface NewMessageEventDetail {
   conversationId: string;
   senderId: string;
   preview: string | null;
+  kind: string;
+  groupName: string | null;
 }
 
 /** Evento global disparado cuando llega (via realtime) un mensaje nuevo de otra persona, para que el toast in-app lo muestre sin abrir una suscripcion propia. */
@@ -53,7 +55,22 @@ export function setupChatBadge(userId: string): void {
   // (ej. aceptar/rechazar solicitud, que solo toca "status") para no disparar el toast en falso.
   const lastSeenAt = new Map<string, string>();
 
+  // conversations ya no tiene columnas fijas (user1_id/user2_id) que sirvan para filtrar por
+  // participante con N personas en un grupo, asi que la suscripcion de abajo escucha TODA la
+  // tabla (mismo patron sin filtro que ya usa la lista de chats.ts) y este set -- poblado desde
+  // conversation_participants y mantenido al dia con su propia suscripcion chica, filtrada por
+  // user_id -- decide localmente si el cambio me importa antes de pedir el conteo real o avisar.
+  const myConversationIds = new Set<string>();
+
+  async function loadMyConversationIds(): Promise<void> {
+    const { data } = await supabase.from("conversation_participants").select("conversation_id").eq("user_id", userId).is("left_at", null);
+    myConversationIds.clear();
+    for (const row of data ?? []) myConversationIds.add(row.conversation_id);
+  }
+  void loadMyConversationIds();
+
   function handleConversationChange(row: Tables<"conversations">) {
+    if (!myConversationIds.has(row.id)) return;
     void refreshChatBadge();
 
     const wasSeen = lastSeenAt.get(row.id);
@@ -68,20 +85,35 @@ export function setupChatBadge(userId: string): void {
 
     window.dispatchEvent(
       new CustomEvent<NewMessageEventDetail>(NEW_MESSAGE_EVENT, {
-        detail: { conversationId: row.id, senderId: row.last_message_sender_id, preview: row.last_message_preview },
+        detail: {
+          conversationId: row.id,
+          senderId: row.last_message_sender_id,
+          preview: row.last_message_preview,
+          kind: row.kind,
+          groupName: row.group_name,
+        },
       })
     );
   }
 
-  // Realtime no soporta OR en un filtro: dos suscripciones (una por columna)
-  // cubren "una conversación mía cambió" sin importar en qué slot quedé.
   supabase
     .channel(`chat-badge-${userId}`)
-    .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `user1_id=eq.${userId}` }, (payload) =>
+    .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) =>
       handleConversationChange(payload.new as Tables<"conversations">)
     )
-    .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `user2_id=eq.${userId}` }, (payload) =>
-      handleConversationChange(payload.new as Tables<"conversations">)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "conversation_participants", filter: `user_id=eq.${userId}` },
+      (payload) => {
+        const row = payload.new as Tables<"conversation_participants"> | undefined;
+        if (payload.eventType === "DELETE" || !row || row.left_at) {
+          const oldRow = payload.old as Tables<"conversation_participants"> | undefined;
+          if (oldRow) myConversationIds.delete(oldRow.conversation_id);
+          return;
+        }
+        myConversationIds.add(row.conversation_id);
+        void refreshChatBadge();
+      }
     )
     .subscribe();
 }
