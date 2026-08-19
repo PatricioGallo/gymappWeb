@@ -19,6 +19,7 @@ import {
   unpinMessage,
   getConversationPinnedMessageId,
   getMessageById,
+  reactToMessage,
   copyChatAttachment,
   MESSAGES_PAGE_SIZE,
   AUDIO_MAX_SECONDS,
@@ -203,6 +204,13 @@ export async function mountThread(
 
   let messages: ChatMessage[] = [];
   const renderedIds = new Set<string>();
+  // Mientras esperamos la respuesta de react_to_message para un mensaje, un UPDATE por
+  // realtime ajeno a la reacción (ej. el mark-as-read automático al abrir el hilo, que
+  // pisa toda la fila) puede llegar de vuelta con las reactions *previas* a la que
+  // acabamos de agregar optimistamente, si su propio echo por realtime tarda más en
+  // llegar. Mientras dure la mutación local, no dejamos que ningún UPDATE ajeno pise las
+  // reactions -- la respuesta del propio RPC (o su echo) es la única fuente de verdad.
+  const reactionMutationInFlight = new Set<string>();
   const sharedPostsCache = new Map<string, FeedPost>();
   const audioPlayers = new Map<string, HTMLAudioElement>();
   const audioWaveLevels = new Map<string, number[]>();
@@ -419,6 +427,85 @@ export async function mountThread(
     return `<svg class="chat-bubble-ticks${isRead ? " is-read" : ""}" viewBox="0 0 16 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${CHECK_ICON_PATHS}</svg>`;
   }
 
+  // ---------------------------------------------------------------------------
+  // Reacciones (emoji) a mensajes
+  // ---------------------------------------------------------------------------
+
+  const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+  function getReactions(m: ChatMessage): Record<string, string[]> {
+    return (m.reactions as unknown as Record<string, string[]>) ?? {};
+  }
+
+  function myReaction(m: ChatMessage): string | null {
+    const reactions = getReactions(m);
+    return Object.keys(reactions).find((emoji) => reactions[emoji]?.includes(userId)) ?? null;
+  }
+
+  /** Misma lógica que el RPC react_to_message: saca al usuario de todos los emojis y, si el
+   * emoji tocado no era el suyo, se lo agrega. Se usa para actualizar la UI al toque, antes de
+   * que confirme el servidor. */
+  function toggleReactionLocal(reactions: Record<string, string[]>, emoji: string): Record<string, string[]> {
+    const next: Record<string, string[]> = {};
+    let hadThisEmoji = false;
+    for (const [key, users] of Object.entries(reactions)) {
+      if (key === emoji && users.includes(userId)) hadThisEmoji = true;
+      const filtered = users.filter((u) => u !== userId);
+      if (filtered.length > 0) next[key] = filtered;
+    }
+    if (!hadThisEmoji) next[emoji] = [...(next[emoji] ?? []), userId];
+    return next;
+  }
+
+  function reactionsHtml(m: ChatMessage): string {
+    const reactions = getReactions(m);
+    const emojis = Object.keys(reactions).filter((k) => reactions[k]?.length);
+    if (emojis.length === 0) return "";
+    return `
+      <div class="chat-bubble-reactions">
+        ${emojis
+          .map((emoji) => {
+            const count = reactions[emoji].length;
+            const mine = reactions[emoji].includes(userId);
+            return `<button type="button" class="chat-reaction-pill${mine ? " is-mine" : ""}" data-emoji="${escapeHtml(emoji)}">${emoji}${count > 1 ? `<span class="chat-reaction-count">${count}</span>` : ""}</button>`;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+
+  async function toggleReaction(message: ChatMessage, emoji: string): Promise<void> {
+    reactionMutationInFlight.add(message.id);
+    const prevReactions = message.reactions;
+    message.reactions = toggleReactionLocal(getReactions(message), emoji) as unknown as ChatMessage["reactions"];
+    refreshBubbleReactions(message);
+
+    try {
+      const { message: updated, error } = await reactToMessage(message.id, emoji);
+      if (error) {
+        message.reactions = prevReactions;
+        refreshBubbleReactions(message);
+        alert(error);
+        return;
+      }
+      if (updated) {
+        const idx = messages.findIndex((x) => x.id === updated.id);
+        if (idx !== -1) messages[idx] = updated;
+        refreshBubbleReactions(updated);
+      }
+    } finally {
+      reactionMutationInFlight.delete(message.id);
+    }
+  }
+
+  function refreshBubbleReactions(m: ChatMessage): void {
+    const bubble = messagesEl.querySelector<HTMLElement>(`.chat-bubble[data-id="${m.id}"]`);
+    if (!bubble) return;
+    bubble.classList.toggle("has-reactions", Object.values(getReactions(m)).some((users) => users.length > 0));
+    bubble.querySelector(".chat-bubble-reactions")?.remove();
+    bubble.insertAdjacentHTML("beforeend", reactionsHtml(m));
+  }
+
   async function hydrateSharedPosts(list: ChatMessage[]): Promise<void> {
     const ids = [...new Set(list.map((m) => m.shared_post_id).filter((id): id is string => !!id))].filter((id) => !sharedPostsCache.has(id));
     if (ids.length === 0) return;
@@ -503,14 +590,16 @@ export async function mountThread(
     const stickerHtml = isSticker ? `<span class="chat-bubble-sticker">${escapeHtml(m.content ?? "")}</span>` : "";
     const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
     const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
+    const hasReactions = Object.values(getReactions(m)).some((users) => users.length > 0);
     return `
-      <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${isSticker ? " chat-bubble-sticker-wrap" : ""}${m.id === pinnedMessageId ? " is-pinned" : ""}" data-id="${m.id}">
+      <div class="chat-bubble ${isMe ? "chat-bubble-me" : "chat-bubble-other"}${isSticker ? " chat-bubble-sticker-wrap" : ""}${m.id === pinnedMessageId ? " is-pinned" : ""}${hasReactions ? " has-reactions" : ""}" data-id="${m.id}">
         ${forwardedHtml}
         ${replyQuoteHtml(m)}
         ${mediaHtml}
         ${stickerHtml}
         ${textHtml}
         <span class="chat-bubble-time">${timeLabel(m.created_at)}${isMe ? ticksHtml(m) : ""}</span>
+        ${reactionsHtml(m)}
       </div>
     `;
   }
@@ -722,10 +811,12 @@ export async function mountThread(
       }
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
-      const updated = payload.new as ChatMessage;
-      const idx = messages.findIndex((m) => m.id === updated.id);
+      const incoming = payload.new as ChatMessage;
+      const idx = messages.findIndex((m) => m.id === incoming.id);
+      const updated = reactionMutationInFlight.has(incoming.id) && idx !== -1 ? { ...incoming, reactions: messages[idx].reactions } : incoming;
       if (idx !== -1) messages[idx] = updated;
       refreshBubbleTicks(updated);
+      refreshBubbleReactions(updated);
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` }, (payload) => {
       const updatedConversation = payload.new as { pinned_message_id: string | null };
@@ -905,6 +996,12 @@ export async function mountThread(
         scrollToMessage(quoteBtn.dataset.quoteId);
         return;
       }
+      const reactionPill = target.closest<HTMLButtonElement>(".chat-reaction-pill");
+      if (reactionPill?.dataset.emoji) {
+        const message = messages.find((m) => m.id === reactionPill.closest<HTMLElement>(".chat-bubble")?.dataset.id);
+        if (message) void toggleReaction(message, reactionPill.dataset.emoji);
+        return;
+      }
       if (target.closest(".chat-shared-post")) return;
       const bubble = target.closest<HTMLElement>(".chat-bubble");
       if (bubble?.dataset.id) {
@@ -927,9 +1024,13 @@ export async function mountThread(
 
     const isMe = message.sender_id === userId;
     const isPinned = pinnedMessageId === message.id;
+    const myEmoji = myReaction(message);
     const menu = document.createElement("div");
     menu.className = "chat-msg-menu";
     menu.innerHTML = `
+      <div class="chat-reaction-bar">
+        ${QUICK_REACTIONS.map((emoji) => `<button type="button" class="chat-reaction-option${emoji === myEmoji ? " is-active" : ""}" data-emoji="${emoji}">${emoji}</button>`).join("")}
+      </div>
       <button type="button" data-action="reply">Responder</button>
       <button type="button" data-action="forward">Reenviar</button>
       ${message.content ? `<button type="button" data-action="copy">Copiar</button>` : ""}
@@ -947,6 +1048,12 @@ export async function mountThread(
     menu.style.left = `${left}px`;
 
     function onMenuClick(e: MouseEvent): void {
+      const reactionBtn = (e.target as HTMLElement).closest<HTMLButtonElement>(".chat-reaction-option");
+      if (reactionBtn?.dataset.emoji) {
+        closeOpenMessageMenu?.();
+        void toggleReaction(message, reactionBtn.dataset.emoji);
+        return;
+      }
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
       if (!btn) return;
       const action = btn.dataset.action;
