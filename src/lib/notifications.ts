@@ -28,6 +28,7 @@ const TYPE_ICON: Record<string, string> = {
   subscription_request: "🔔",
   subscription_accepted: "✅",
   subscription_rejected: "🚫",
+  message_reaction: "😀",
 };
 
 function relativeTime(iso: string): string {

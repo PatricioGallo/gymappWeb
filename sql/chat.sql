@@ -561,6 +561,8 @@ declare
   v_had_this_emoji boolean := false;
   v_row record;
   v_users jsonb;
+  v_notify boolean;
+  v_reactor_username text;
 begin
   if v_me is null then
     raise exception 'No autenticado';
@@ -604,6 +606,24 @@ begin
   end if;
 
   update public.messages set reactions = v_new_reactions where id = p_message_id returning * into v_msg;
+
+  -- Notifica solo cuando se agrega una reacción nueva (no al sacarla) y no es a tu propio
+  -- mensaje. Mismo sistema que like/comment/repost: tabla notifications + notification_prefs
+  -- (clave 'reactions', default habilitada si no está seteada).
+  if not v_had_this_emoji and v_msg.sender_id <> v_me then
+    select coalesce((notification_prefs ->> 'reactions')::boolean, true) into v_notify
+      from public.profiles where id = v_msg.sender_id;
+    if coalesce(v_notify, true) then
+      select username into v_reactor_username from public.profiles where id = v_me;
+      insert into public.notifications (user_id, type, title, body, link)
+      values (
+        v_msg.sender_id, 'message_reaction', 'Nueva reacción',
+        coalesce(v_reactor_username, 'Alguien') || ' reaccionó ' || p_emoji || ' a tu mensaje',
+        'chats.html?c=' || v_msg.conversation_id
+      );
+    end if;
+  end if;
+
   return v_msg;
 end;
 $$;
