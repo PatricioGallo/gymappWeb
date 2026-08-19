@@ -8,6 +8,8 @@ export interface NewMessageEventDetail {
   conversationId: string;
   senderId: string;
   preview: string | null;
+  kind: string;
+  groupName: string | null;
 }
 
 /** Evento global disparado cuando llega (via realtime) un mensaje nuevo de otra persona, para que el toast in-app lo muestre sin abrir una suscripcion propia. */
@@ -83,7 +85,13 @@ export function setupChatBadge(userId: string): void {
 
     window.dispatchEvent(
       new CustomEvent<NewMessageEventDetail>(NEW_MESSAGE_EVENT, {
-        detail: { conversationId: row.id, senderId: row.last_message_sender_id, preview: row.last_message_preview },
+        detail: {
+          conversationId: row.id,
+          senderId: row.last_message_sender_id,
+          preview: row.last_message_preview,
+          kind: row.kind,
+          groupName: row.group_name,
+        },
       })
     );
   }
