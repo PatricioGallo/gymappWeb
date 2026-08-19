@@ -4966,6 +4966,23 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   opacity: 0.75;
 }
 
+.chat-audio-speed {
+  flex-shrink: 0;
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.chat-audio-speed:hover { opacity: 1; }
+
 .chat-record-bar,
 .chat-preview-bar {
   display: flex;

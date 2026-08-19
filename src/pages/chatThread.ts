@@ -224,8 +224,10 @@ export async function mountThread(
   const audioPlayers = new Map<string, HTMLAudioElement>();
   const audioWaveLevels = new Map<string, number[]>();
   const audioOriginalDuration = new Map<string, string>();
+  const audioPlaybackRate = new Map<string, number>();
   let currentlyPlayingId: string | null = null;
   let playbackRaf = 0;
+  const PLAYBACK_SPEEDS = [1, 1.5, 2];
   let isInitiator = false;
   let conversationStatus: "pending" | "accepted" = "pending";
   let readReceiptsEnabled = true;
@@ -629,7 +631,8 @@ export async function mountThread(
             <svg class="chat-audio-icon-pause" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
           </button>
           <canvas class="chat-audio-wave" data-id="${m.id}"></canvas>
-          <span class="chat-audio-time" data-id="${m.id}">${formatDuration(m.attachment_duration_seconds ?? 0)}</span>
+          <span class="chat-audio-time" data-id="${m.id}" data-duration="${m.attachment_duration_seconds ?? 0}">${formatDuration(m.attachment_duration_seconds ?? 0)}</span>
+          <button type="button" class="chat-audio-speed" data-id="${m.id}" aria-label="Velocidad de reproducción">1×</button>
         </div>
       `;
     }
@@ -1039,16 +1042,36 @@ export async function mountThread(
   // navegador), no cuadro a cuadro -- por eso la onda se sentía atrasada respecto de lo que se
   // escuchaba. Mientras el audio está en reproducción, leemos audio.currentTime en cada frame
   // con requestAnimationFrame en vez de depender de ese evento.
-  function startPlaybackLoop(id: string, audio: HTMLAudioElement, timeEl: HTMLElement | null, originalDuration: string): void {
+  //
+  // Ni knownDurationSeconds (lo que midió el grabador, guardado en la base) ni audio.duration
+  // (poco confiable en los blobs webm/opus que genera MediaRecorder -- a veces Infinity, a veces
+  // mal calculada) son 100% confiables por separado. Si el "techo" usado queda corto, la barra
+  // llega al tope y se queda ahí trabada mientras el audio real sigue sonando -- por eso el techo
+  // se estira en vivo apenas currentTime lo alcanza, en vez de fijarse de antemano. Nunca muestra
+  // el 100% mientras sigue sonando: eso solo pasa cuando el audio termina de verdad ("ended").
+  function startPlaybackLoop(id: string, audio: HTMLAudioElement, timeEl: HTMLElement | null, originalDuration: string, knownDurationSeconds: number): void {
     stopPlaybackLoop();
+    let ceiling = knownDurationSeconds > 0 ? knownDurationSeconds : Number.isFinite(audio.duration) ? audio.duration : 0;
     const tick = (): void => {
       if (audio.paused || audio.ended) return;
-      const remaining = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
+      if (Number.isFinite(audio.duration) && audio.duration > ceiling) ceiling = audio.duration;
+      if (audio.currentTime >= ceiling) ceiling = audio.currentTime + 1;
+      const remaining = Math.max(0, Math.ceil(ceiling - audio.currentTime));
       if (timeEl) timeEl.textContent = Number.isFinite(remaining) ? formatDuration(remaining) : originalDuration;
-      drawPlaybackWave(id, audio.duration ? audio.currentTime / audio.duration : 0);
+      drawPlaybackWave(id, ceiling ? Math.min(0.99, audio.currentTime / ceiling) : 0);
       playbackRaf = requestAnimationFrame(tick);
     };
     playbackRaf = requestAnimationFrame(tick);
+  }
+
+  function cyclePlaybackSpeed(btn: HTMLButtonElement): void {
+    const id = btn.dataset.id!;
+    const current = audioPlaybackRate.get(id) ?? 1;
+    const next = PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(current) + 1) % PLAYBACK_SPEEDS.length];
+    audioPlaybackRate.set(id, next);
+    btn.textContent = `${next}×`;
+    const audio = audioPlayers.get(id);
+    if (audio) audio.playbackRate = next;
   }
 
   async function toggleAudioMessage(btn: HTMLButtonElement): Promise<void> {
@@ -1064,6 +1087,7 @@ export async function mountThread(
         return;
       }
       audio = new Audio(url);
+      audio.playbackRate = audioPlaybackRate.get(id) ?? 1;
       audioPlayers.set(id, audio);
       void loadWaveform(id, url);
       audioOriginalDuration.set(id, timeEl?.textContent ?? "0:00");
@@ -1088,7 +1112,7 @@ export async function mountThread(
       await audio.play();
       setPlayIcon(btn, false);
       currentlyPlayingId = id;
-      startPlaybackLoop(id, audio, timeEl, audioOriginalDuration.get(id) ?? "0:00");
+      startPlaybackLoop(id, audio, timeEl, audioOriginalDuration.get(id) ?? "0:00", Number(timeEl?.dataset.duration) || 0);
     } else {
       audio.pause();
       stopPlaybackLoop();
@@ -1123,6 +1147,11 @@ export async function mountThread(
       const audioBtn = target.closest<HTMLButtonElement>(".chat-audio-toggle");
       if (audioBtn) {
         void toggleAudioMessage(audioBtn);
+        return;
+      }
+      const speedBtn = target.closest<HTMLButtonElement>(".chat-audio-speed");
+      if (speedBtn) {
+        cyclePlaybackSpeed(speedBtn);
         return;
       }
       const quoteBtn = target.closest<HTMLButtonElement>(".chat-bubble-quote:not(.chat-bubble-quote-missing)");
