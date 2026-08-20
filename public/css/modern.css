@@ -5868,6 +5868,19 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 .post-composer-counter-over { color: var(--accent); font-weight: 700; }
 
+/* Boton "+" flotante para escribir un Rep nuevo -- solo reemplaza al composer inline en
+   mobile (ver ".feed-main .post-composer-wrap" mas abajo), en desktop no se usa. */
+.new-rep-fab { display: none; }
+
+/* El composer reinsertado adentro del modal (ver openComposerModal en feed.ts) ya esta
+   dentro de un .modal-card con su propio fondo/borde -- sin esto quedaba una "tarjeta
+   adentro de otra tarjeta". */
+#composerModalSlot .post-composer { background: none; border: none; padding: 0; margin-bottom: 0; }
+
+/* Un poco mas grande que el composer inline compacto: al ser un modal dedicado (no una barra
+   de arriba del feed) conviene que se sienta mas espacioso para escribir. */
+#composerModalSlot .post-composer-input { height: 150px; }
+
 .post-feed-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
 /* [hidden] pierde contra un display:flex de menor especificidad de origen sin esto */
 .post-feed-list[hidden] { display: none; }
@@ -6416,6 +6429,31 @@ body.feed-page .site-footer { display: none; }
      y quedaria un espacio doble hasta el contenido. */
   body.feed-page:not(.has-app-banner) .features { padding-top: calc(var(--header-h) + 24px); }
   body.profile-page:not(.has-app-banner) .profile-hero { padding-top: calc(var(--header-h) + 52px); }
+
+  /* En mobile no se escribe un Rep inline arriba del feed -- el boton "+" flotante abre el
+     mismo composer adentro de un modal (ver openComposerModal en feed.ts). Escondido por
+     ancestro (".feed-main") y no por clase propia: al tocar el boton, feed.ts reinserta este
+     mismo nodo adentro de #loaderBody, fuera de .feed-main, donde esta regla ya no aplica. */
+  .feed-main .post-composer-wrap { display: none; }
+
+  .new-rep-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 18px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(255, 77, 77, 0.4);
+    cursor: pointer;
+    z-index: 90;
+  }
+  .new-rep-fab svg { width: 26px; height: 26px; }
 }
 
 @media (min-width: 860px) {

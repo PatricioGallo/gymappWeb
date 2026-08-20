@@ -34,6 +34,14 @@ const FEED_PAGE_SIZE = 20;
 const POST_MAX = 240;
 const DRAFT_KEY = "gs_rep_draft";
 
+const NEW_REP_FAB_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+
+// El router mantiene esta vista viva (oculta) al navegar a otra en vez de destruirla (ver
+// router.ts) -- si el composer quedo reinsertado adentro de #loaderBody (modal abierto) al
+// navegar, onHide() lo necesita para devolverlo a su lugar antes de que el router limpie
+// #loaderBody, o si no volver a este feed lo dejaria sin composer inline (nodo huerfano).
+let closeComposerModalRef: (() => void) | null = null;
+
 // Guarda el texto del composer para no perderlo si el usuario navega a otra pagina de la web y
 // despues vuelve (recarga dura, o simplemente otra vez a feed.html). Solo el texto -- no la
 // imagen/video adjunto, que no se puede guardar asi de simple en localStorage.
@@ -77,8 +85,9 @@ const VIEW_MARKUP = `
 
       <div class="feed-main post-feed-container">
         <div class="pull-refresh-indicator" id="pullRefreshIndicator" aria-hidden="true"><div class="modern-spinner"></div></div>
+        <div class="post-composer-wrap" id="postComposerWrap">
         <form class="post-composer" id="postComposerForm">
-          <textarea id="postComposerInput" class="post-composer-input" rows="3" maxlength="240" placeholder="¿Qué estás entrenando hoy?"></textarea>
+          <textarea id="postComposerInput" class="post-composer-input" rows="3" maxlength="240" placeholder="¿Qué querés compartir hoy?"></textarea>
           <div class="post-composer-preview" id="postComposerPreview" hidden>
             <img id="postComposerPreviewImg" alt="" hidden>
             <video id="postComposerPreviewVideo" hidden muted controls></video>
@@ -99,10 +108,13 @@ const VIEW_MARKUP = `
           </div>
           <div class="alert_message" id="postComposerAlert"></div>
         </form>
+        </div>
 
         <div class="post-feed-list" id="postFeedList"></div>
         <div class="post-feed-sentinel" id="postFeedSentinel" aria-hidden="true"><div class="modern-spinner" id="postFeedSentinelSpinner" hidden></div></div>
       </div>
+
+      <button type="button" class="new-rep-fab" id="newRepFab" aria-label="Nuevo Rep">${NEW_REP_FAB_ICON}</button>
 
       <aside class="feed-side feed-side-right">
         <div class="feed-suggestions">
@@ -150,6 +162,57 @@ export const feedView: ViewModule = {
     const youtubePreviewWrap = container.querySelector("#postComposerYoutubePreview") as HTMLDivElement;
     const uploadingOverlay = container.querySelector("#postComposerUploadingOverlay") as HTMLDivElement;
 
+    // ---------------------------------------------------------------------------
+    // Composer en modal (mobile): en celular el composer no vive inline en el feed (se
+    // esconde por CSS, ver ".feed-main .post-composer-wrap" en modern.css) -- el boton "+"
+    // flotante lo saca de ahi y lo reinserta adentro del overlay global (#loaderBody, el mismo
+    // que usan el resto de los modales de la app). Es el mismo form/inputs de siempre, solo
+    // cambia donde vive en el DOM: evita duplicar toda la logica de adjuntos/YouTube/contador
+    // que ya tiene el composer de mas abajo.
+    // ---------------------------------------------------------------------------
+    const composerWrap = container.querySelector("#postComposerWrap") as HTMLDivElement;
+    const newRepFab = container.querySelector("#newRepFab") as HTMLButtonElement;
+    const composerHomeParent = composerWrap.parentElement!;
+    const composerHomeNextSibling = composerWrap.nextElementSibling;
+    let composerInModal = false;
+
+    function openComposerModal(): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+      loaderBody.innerHTML = `
+        <div class="success-check-container" id="composerModalOverlay">
+          <div class="modal-card modal-card-lg">
+            <div class="post-comment-modal-header">
+              <button type="button" class="post-comment-modal-close" id="composerModalClose" aria-label="Cerrar">✕</button>
+            </div>
+            <div id="composerModalSlot"></div>
+          </div>
+        </div>
+      `;
+      document.getElementById("composerModalSlot")!.appendChild(composerWrap);
+      composerInModal = true;
+      document.getElementById("composerModalClose")?.addEventListener("click", closeComposerModal);
+      // e.target === overlay (no bubbleado desde adentro de la tarjeta): tocar el fondo oscuro cierra el modal.
+      document.getElementById("composerModalOverlay")?.addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) closeComposerModal();
+      });
+      composerInput.focus();
+    }
+
+    function closeComposerModal(): void {
+      if (!composerInModal) return;
+      composerInModal = false;
+      composerHomeParent.insertBefore(composerWrap, composerHomeNextSibling);
+      const loaderBody = document.getElementById("loaderBody");
+      if (loaderBody) loaderBody.innerHTML = "";
+    }
+    closeComposerModalRef = closeComposerModal;
+    ctx.addCleanup(() => {
+      closeComposerModalRef = null;
+    });
+
+    newRepFab.addEventListener("click", openComposerModal, { signal: ctx.signal });
+
     let posts: FeedPost[] = [];
 
     type PendingMedia = {
@@ -186,6 +249,7 @@ export const feedView: ViewModule = {
       previewImg.src = "";
       previewVideo.src = "";
       uploadingOverlay.hidden = true;
+      composerAlert.innerHTML = ""; // si habia quedado un error de subida mostrado, sacar el adjunto lo descarta tambien
       updateComposerState();
       updateYoutubePreview();
     }
@@ -369,6 +433,7 @@ export const feedView: ViewModule = {
         // keepUploadedFile=true: el archivo ya subido es el que acaba de quedar
         // referenciado por el Rep recien publicado, no hay que borrarlo del bucket.
         clearPendingMedia(!!localPreviewUrl, true);
+        closeComposerModal(); // no-op si el composer esta inline (desktop), lo cierra si se publico desde el modal (mobile)
       } catch (err) {
         console.error("[feed] error publicando Rep:", err);
         composerAlert.innerHTML = `<p>No se pudo publicar el Rep. Probá de nuevo.</p>`;
@@ -748,6 +813,7 @@ export const feedView: ViewModule = {
     document.body.classList.add("feed-page", "header-autohide");
   },
   onHide() {
+    closeComposerModalRef?.();
     document.body.classList.remove("feed-page", "header-autohide");
   },
 };

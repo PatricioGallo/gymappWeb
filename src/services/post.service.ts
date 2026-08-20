@@ -652,7 +652,7 @@ export async function uploadPostMedia(
   const path = `${authorId}/${crypto.randomUUID()}.${ext}`;
   try {
     const { error: uploadError } = await withUploadTimeout(supabase.storage.from("post-media").upload(path, file), file.size);
-    if (uploadError) return { error: "No se pudo subir el archivo. Probá de nuevo." };
+    if (uploadError) return { error: friendlyError(uploadError, "No se pudo subir el archivo. Probá de nuevo.") };
   } catch {
     return { error: "La subida tardó demasiado. Revisá tu conexión y probá de nuevo." };
   }
