@@ -7,6 +7,8 @@ import { renderVerifiedBadge } from "./verifiedBadge";
 import { escapeHtml } from "./dom";
 import { getPendingFollowRequestCount } from "../services/follow.service";
 import { getPendingSubscriptionRequestCount } from "../services/subscription.service";
+import { getPendingGymMembershipRequestCount } from "../services/gymMember.service";
+import { getPendingGymTrainerRequestCount } from "../services/gymTrainer.service";
 import { getUnreadContactMessageCount } from "../services/contact.service";
 import { getUnreadErrorReportCount } from "../services/errorReport.service";
 import { getUnreadUserReportCount } from "../services/userReport.service";
@@ -87,11 +89,20 @@ async function populateUserMenuTrigger(): Promise<void> {
   }
 
   // Las solicitudes de suscripcion solo le importan a un entrenador (los que
-  // pueden tener suscriptores); gimnasio tendra su propio sistema mas adelante.
+  // pueden tener suscriptores).
   if (data.user_type !== "entrenador") {
     document.getElementById("navSubscriptionRequests")?.remove();
   } else {
     void refreshSubscriptionRequestsBadge(userId);
+  }
+
+  // Idem para las solicitudes de socio, pero del lado del gimnasio.
+  if (data.user_type !== "gimnasio") {
+    document.getElementById("navSocioRequests")?.remove();
+    document.getElementById("navHandleRequests")?.remove();
+  } else {
+    void refreshSocioRequestsBadge(userId);
+    void refreshHandleRequestsBadge(userId);
   }
 
   setupNotificationBell(userId);
@@ -137,6 +148,34 @@ async function refreshSubscriptionRequestsBadge(userId: string): Promise<void> {
   if (!badge) return;
   try {
     const count = await getPendingSubscriptionRequestCount(userId);
+    badge.hidden = count <= 0;
+    badge.textContent = count > 9 ? "9+" : String(count);
+  } catch {
+    // silencioso: el badge simplemente no se actualiza en este ciclo
+  }
+}
+
+/** Numero de solicitudes de socio pendientes junto al link del nav. No-op si el link no esta en esta pagina. */
+async function refreshSocioRequestsBadge(userId: string): Promise<void> {
+  const badge = document.getElementById("socioReqBadge");
+  if (!badge) return;
+  try {
+    const count = await getPendingGymMembershipRequestCount(userId);
+    badge.hidden = count <= 0;
+    badge.textContent = count > 9 ? "9+" : String(count);
+  } catch {
+    // silencioso: el badge simplemente no se actualiza en este ciclo
+  }
+}
+
+/** Numero de solicitudes de handle (iniciadas por un entrenador) pendientes junto al link del
+ * nav. Las invitaciones que mando el propio gimnasio no cuentan aca (getPendingGymTrainerRequestCount
+ * ya filtra por initiated_by='trainer'). No-op si el link no esta en esta pagina. */
+async function refreshHandleRequestsBadge(userId: string): Promise<void> {
+  const badge = document.getElementById("handleReqBadge");
+  if (!badge) return;
+  try {
+    const count = await getPendingGymTrainerRequestCount(userId);
     badge.hidden = count <= 0;
     badge.textContent = count > 9 ? "9+" : String(count);
   } catch {

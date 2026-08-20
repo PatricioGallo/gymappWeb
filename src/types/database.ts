@@ -487,6 +487,285 @@ export type Database = {
           },
         ]
       }
+      gym_class_enrollments: {
+        Row: {
+          class_id: string
+          enrolled_at: string
+          id: string
+          member_id: string
+        }
+        Insert: {
+          class_id: string
+          enrolled_at?: string
+          id?: string
+          member_id: string
+        }
+        Update: {
+          class_id?: string
+          enrolled_at?: string
+          id?: string
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_class_enrollments_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "gym_classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_class_enrollments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_class_enrollments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_class_sessions: {
+        Row: {
+          class_id: string
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+        }
+        Insert: {
+          class_id: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+        }
+        Update: {
+          class_id?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_class_sessions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "gym_classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_classes: {
+        Row: {
+          allow_enrollment: boolean
+          created_at: string
+          description: string | null
+          gym_id: string
+          id: string
+          image_url: string | null
+          instructor_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          allow_enrollment?: boolean
+          created_at?: string
+          description?: string | null
+          gym_id: string
+          id?: string
+          image_url?: string | null
+          instructor_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          allow_enrollment?: boolean
+          created_at?: string
+          description?: string | null
+          gym_id?: string
+          id?: string
+          image_url?: string | null
+          instructor_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_classes_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_classes_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_classes_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_classes_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_members: {
+        Row: {
+          duration_months: number | null
+          ended_at: string | null
+          expires_at: string | null
+          gym_id: string
+          id: string
+          member_id: string
+          membership_type: string | null
+          requested_at: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          duration_months?: number | null
+          ended_at?: string | null
+          expires_at?: string | null
+          gym_id: string
+          id?: string
+          member_id: string
+          membership_type?: string | null
+          requested_at?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          duration_months?: number | null
+          ended_at?: string | null
+          expires_at?: string | null
+          gym_id?: string
+          id?: string
+          member_id?: string
+          membership_type?: string | null
+          requested_at?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_members_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_members_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_trainers: {
+        Row: {
+          duration_months: number | null
+          ended_at: string | null
+          expires_at: string | null
+          gym_id: string
+          id: string
+          initiated_by: string
+          membership_type: string | null
+          requested_at: string
+          responded_at: string | null
+          status: string
+          trainer_id: string
+        }
+        Insert: {
+          duration_months?: number | null
+          ended_at?: string | null
+          expires_at?: string | null
+          gym_id: string
+          id?: string
+          initiated_by: string
+          membership_type?: string | null
+          requested_at?: string
+          responded_at?: string | null
+          status?: string
+          trainer_id: string
+        }
+        Update: {
+          duration_months?: number | null
+          ended_at?: string | null
+          expires_at?: string | null
+          gym_id?: string
+          id?: string
+          initiated_by?: string
+          membership_type?: string | null
+          requested_at?: string
+          responded_at?: string | null
+          status?: string
+          trainer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_trainers_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainers_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainers_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainers_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       issue_reports: {
         Row: {
           created_at: string
@@ -2150,6 +2429,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      end_gym_membership: {
+        Args: { p_gym_id: string; p_member_id: string }
+        Returns: undefined
+      }
+      end_gym_trainer_handle: {
+        Args: { p_gym_id: string; p_trainer_id: string }
+        Returns: undefined
+      }
       get_block_status: { Args: { p_target_id: string }; Returns: string }
       get_conversation_peer_meta: {
         Args: { p_other_user_id: string }
@@ -2167,6 +2454,14 @@ export type Database = {
         }[]
       }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
+      get_gym_membership_status: { Args: { p_gym_id: string }; Returns: string }
+      get_gym_trainer_handle_status: {
+        Args: { p_gym_id: string }
+        Returns: {
+          initiated_by: string
+          status: string
+        }[]
+      }
       get_or_create_conversation: {
         Args: { p_other_user_id: string }
         Returns: string
@@ -2204,12 +2499,39 @@ export type Database = {
         }
       }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
+      get_socio_count: { Args: { p_gym_id: string }; Returns: number }
       get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
       get_subscription_status: {
         Args: { p_target_id: string }
         Returns: string
       }
       get_unread_conversation_count: { Args: never; Returns: number }
+      invite_gym_trainer: {
+        Args: {
+          p_duration_months?: number
+          p_membership_type: string
+          p_trainer_id: string
+        }
+        Returns: {
+          duration_months: number | null
+          ended_at: string | null
+          expires_at: string | null
+          gym_id: string
+          id: string
+          initiated_by: string
+          membership_type: string | null
+          requested_at: string
+          responded_at: string | null
+          status: string
+          trainer_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "gym_trainers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_admin: { Args: never; Returns: boolean }
       is_conversation_admin: {
         Args: { p_conversation_id: string }
@@ -2282,6 +2604,81 @@ export type Database = {
           id: string
           is_verified: boolean
           nombre: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      list_gym_classes: {
+        Args: { p_gym_id: string }
+        Returns: {
+          allow_enrollment: boolean
+          description: string
+          enrolled_count: number
+          id: string
+          image_url: string
+          instructor_apellido: string
+          instructor_avatar_url: string
+          instructor_id: string
+          instructor_nombre: string
+          instructor_username: string
+          is_enrolled: boolean
+          name: string
+          sessions: Json
+        }[]
+      }
+      list_gym_members: {
+        Args: {
+          p_gym_id: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+          p_status_filter?: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          duration_months: number
+          ended_at: string
+          expires_at: string
+          id: string
+          is_verified: boolean
+          member_id: string
+          membership_type: string
+          nombre: string
+          requested_at: string
+          responded_at: string
+          status: string
+          tier: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      list_gym_trainers: {
+        Args: {
+          p_gym_id: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+          p_status_filter?: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          duration_months: number
+          ended_at: string
+          expires_at: string
+          id: string
+          initiated_by: string
+          is_verified: boolean
+          membership_type: string
+          nombre: string
+          requested_at: string
+          responded_at: string
+          status: string
+          tier: string
+          trainer_id: string
           user_type: Database["public"]["Enums"]["user_type"]
           username: string
         }[]
@@ -2372,6 +2769,49 @@ export type Database = {
       rename_group: {
         Args: { p_conversation_id: string; p_name: string }
         Returns: undefined
+      }
+      request_gym_membership: {
+        Args: { p_gym_id: string }
+        Returns: {
+          duration_months: number | null
+          ended_at: string | null
+          expires_at: string | null
+          gym_id: string
+          id: string
+          member_id: string
+          membership_type: string | null
+          requested_at: string
+          responded_at: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "gym_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      request_gym_trainer_handle: {
+        Args: { p_gym_id: string }
+        Returns: {
+          duration_months: number | null
+          ended_at: string | null
+          expires_at: string | null
+          gym_id: string
+          id: string
+          initiated_by: string
+          membership_type: string | null
+          requested_at: string
+          responded_at: string | null
+          status: string
+          trainer_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "gym_trainers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       request_subscription: {
         Args: { p_trainer_id: string }
