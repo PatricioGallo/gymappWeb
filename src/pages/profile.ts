@@ -1511,22 +1511,10 @@ const ACTIVITY_FETCHERS: Record<FeedActivityTab, ActivityFetcher> = {
   likes: getUserLikedPosts,
 };
 
-const ACTIVITY_TITLES: Record<FeedActivityTab, string> = {
-  reps: "Reps",
-  media: "Multimedia",
-  likes: "Me gusta",
-};
-
 function activityEmptyMessage(tab: FeedActivityTab, isOwner: boolean): string {
   if (tab === "reps") return isOwner ? "Todavía no publicaste ningún Rep." : "Todavía no publicó ningún Rep.";
   if (tab === "media") return isOwner ? "Todavía no subiste fotos ni videos." : "Todavía no subió fotos ni videos.";
   return isOwner ? "Todavía no le pusiste me gusta a nada." : "Todavía no le puso me gusta a nada.";
-}
-
-function activitySubtitle(tab: FeedActivityTab, isOwner: boolean, nombre: string): string {
-  if (tab === "reps") return isOwner ? "Los Reps que publicaste y reposteaste." : `Los Reps que publicó y reposteó ${nombre}.`;
-  if (tab === "media") return isOwner ? "Las fotos y videos que subiste." : `Las fotos y videos que subió ${nombre}.`;
-  return isOwner ? "Los Reps que te gustaron." : `Los Reps que le gustaron a ${nombre}.`;
 }
 
 function goToAuthorProfile(author: PostAuthor): void {
@@ -1550,14 +1538,7 @@ function setupActivityTabs(
   const listEl = document.getElementById("activityPostsList");
   const sentinel = document.getElementById("activityPostsSentinel");
   const spinner = document.getElementById("activityPostsSpinner");
-  const titleEl = document.getElementById("activityTitle");
-  const subtitleEl = document.getElementById("statsSubtitle");
   if (!tabsEl || !statsContent || !listEl || !sentinel) return;
-
-  // Ya viene seteado (por defecto o en 3ra persona si no sos el dueño, ver
-  // main()) al momento de llamar a esta funcion -- se lo guarda para poder
-  // volver a el cuando se vuelve a la pestaña de Estadisticas.
-  const statsSubtitleText = subtitleEl?.textContent ?? "";
 
   // Preferencia de Configuración > Personalización ("mostrar estadísticas"): sin la pestaña
   // Estadísticas, la que aterriza por defecto es Reps (o Publicaciones si es un gimnasio, ver
@@ -1567,6 +1548,9 @@ function setupActivityTabs(
   const pubTabBtn = tabsEl.querySelector<HTMLButtonElement>('[data-tab="publicaciones"]');
   if (gymAuthor) pubTabBtn?.removeAttribute("hidden");
   else pubTabBtn?.remove();
+  // Un gimnasio ya tiene "Publicaciones" (grilla estilo IG con fotos/videos) -- la pestaña
+  // "Multimedia" (que junta medios de Reps propios y reposteados) queda redundante ahi.
+  if (gymAuthor) tabsEl.querySelector<HTMLButtonElement>('[data-tab="media"]')?.remove();
 
   let activeTab: ActivityTab | null = null;
   let posts: FeedPost[] = [];
@@ -1747,8 +1731,6 @@ function setupActivityTabs(
       statsContent!.hidden = false;
       listEl!.hidden = true;
       sentinel!.hidden = true;
-      if (titleEl) titleEl.textContent = "Estadísticas";
-      if (subtitleEl) subtitleEl.textContent = statsSubtitleText;
       // Si mientras esta pestaña estuvo oculta llego un refresh de logs (ver
       // refreshCurrentRoutinesTab), el canvas recien ahora queda visible -- reconstruir los
       // graficos con los datos frescos recien en este momento.
@@ -1761,8 +1743,6 @@ function setupActivityTabs(
     }
 
     if (tab === "publicaciones") {
-      if (titleEl) titleEl.textContent = "Publicaciones";
-      if (subtitleEl) subtitleEl.textContent = isOwner ? "Las fotos y videos que compartiste." : `Las fotos y videos que compartió ${nombre}.`;
       statsContent!.hidden = true;
       listEl!.hidden = false;
       listEl!.innerHTML = `<p class="exc-pick-empty">Cargando...</p>`;
@@ -1771,8 +1751,6 @@ function setupActivityTabs(
       return;
     }
 
-    if (titleEl) titleEl.textContent = ACTIVITY_TITLES[tab];
-    if (subtitleEl) subtitleEl.textContent = activitySubtitle(tab, isOwner, nombre);
     statsContent!.hidden = true;
     listEl!.hidden = false;
     listEl!.innerHTML = `<p class="exc-pick-empty">Cargando...</p>`;
@@ -2543,11 +2521,9 @@ async function main(ctx: ViewContext) {
 
   // El resto de la pagina habla en tercera persona cuando no es el dueño.
   const statsEyebrow = document.getElementById("statsEyebrow");
-  const statsSubtitle = document.getElementById("statsSubtitle");
   const rutinasEyebrow = document.getElementById("rutinasEyebrow");
   if (!isOwner) {
     if (statsEyebrow) statsEyebrow.textContent = "Su actividad";
-    if (statsSubtitle) statsSubtitle.textContent = `Un resumen de cómo entrena ${nombre}.`;
     if (rutinasEyebrow) rutinasEyebrow.textContent = `Rutinas de ${nombre}`;
   }
 
@@ -2671,8 +2647,6 @@ const VIEW_MARKUP = `
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow" id="statsEyebrow">Tu actividad</span>
-        <h2 id="activityTitle">Estadísticas</h2>
-        <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
       </div>
       <div class="routine-tabs" id="activityTabs">
         <button class="routine-tab" data-tab="publicaciones" type="button" id="activityPublicacionesTab" hidden>Publicaciones</button>
