@@ -6137,6 +6137,10 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   align-items: center;
   justify-content: center;
   padding: 18px;
+  /* Mas aire arriba que a los costados: dejarle una franja libre a la cruz de cerrar
+     (y a los controles nativos del video, que en mobile suelen dibujar su propia barra
+     arriba y quedaban debajo/pisados por el video). */
+  padding-top: 74px;
 }
 
 .media-lightbox-media {
@@ -6151,7 +6155,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .media-lightbox-media.is-zoomed { cursor: grab; }
 
 @media (max-width: 859px) {
-  .media-lightbox-media-wrap { padding: 0; }
+  .media-lightbox-media-wrap { padding: 0; padding-top: 74px; }
   .media-lightbox-media {
     max-width: 100vw;
     border-radius: 0;
@@ -6176,11 +6180,13 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   position: absolute;
   top: 18px;
   right: 18px;
+  z-index: 5;
   width: 40px;
   height: 40px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 6px 18px rgba(255, 77, 77, 0.4);
   color: #fff;
   font-size: 18px;
   line-height: 1;
@@ -6189,7 +6195,7 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   align-items: center;
   justify-content: center;
 }
-.media-lightbox-close:hover { background: rgba(255, 255, 255, 0.22); }
+.media-lightbox-close:hover { box-shadow: 0 8px 22px rgba(255, 77, 77, 0.55); }
 
 .post-card-actions {
   display: flex;

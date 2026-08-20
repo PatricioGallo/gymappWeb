@@ -48,6 +48,18 @@ import type { ViewContext } from "../shell/viewContext";
  * dentro de la misma sesion larga reusa el cache en vez de pedir una URL nueva cada vez. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
+// Con preload="metadata", Safari/iOS (y a veces Chrome mobile) deja el <video> en blanco/gris
+// hasta que se toca -- conoce la duracion pero no llega a pintar un frame solo. Buscar una
+// posicion minima apenas carga la metadata fuerza ese decodeo, y queda mostrado como si fuera
+// un poster estatico, sin autoplay ni cargar el video entero.
+function primeVideoFrame(video: HTMLVideoElement): void {
+  const nudge = (): void => {
+    if (video.currentTime === 0) video.currentTime = 0.05;
+  };
+  if (video.readyState >= 1) nudge();
+  else video.addEventListener("loadedmetadata", nudge, { once: true });
+}
+
 const THREAD_MARKUP = `
   <div class="chat-thread-header">
     <button type="button" class="chat-thread-back" id="chatThreadBackBtn" aria-label="Volver a mensajes">
@@ -96,7 +108,7 @@ const THREAD_MARKUP = `
 
   <div class="chat-preview-bar" id="chatPreviewBar" hidden>
     <img id="chatPreviewImg" alt="" hidden>
-    <video id="chatPreviewVideo" muted hidden></video>
+    <video id="chatPreviewVideo" muted playsinline preload="metadata" hidden></video>
     <span id="chatPreviewAudioLabel" hidden>🎤 Audio listo (<span id="chatPreviewAudioDuration"></span>)</span>
     <button type="button" class="chat-preview-cancel" id="chatPreviewCancel" aria-label="Quitar adjunto">✕</button>
   </div>
@@ -832,7 +844,9 @@ export async function mountThread(
         .filter((el) => !el.src)
         .map(async (el) => {
           const url = await resolveAttachmentUrl(el.dataset.path!);
-          if (url) el.src = url;
+          if (!url) return;
+          el.src = url;
+          if (el instanceof HTMLVideoElement) primeVideoFrame(el);
         })
     );
   }
@@ -1718,6 +1732,7 @@ export async function mountThread(
     } else if (pendingAttachment?.kind === "video") {
       previewVideo.hidden = false;
       previewVideo.src = pendingAttachment.previewUrl;
+      primeVideoFrame(previewVideo);
     } else if (pendingAttachment?.kind === "audio") {
       previewAudioLabel.hidden = false;
       previewAudioDuration.textContent = formatDuration(pendingAttachment.durationSeconds);
