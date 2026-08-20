@@ -5326,6 +5326,18 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   display: block;
 }
 
+.chat-bubble-video { position: relative; }
+.chat-bubble-video-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  pointer-events: none;
+}
+.chat-bubble-video-play svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)); }
+
 .chat-audio-player {
   display: flex;
   align-items: center;
@@ -5437,7 +5449,8 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .chat-record-cancel:hover,
 .chat-preview-cancel:hover { color: var(--text); border-color: var(--text-muted); }
 
-.chat-preview-bar img {
+.chat-preview-bar img,
+.chat-preview-bar video {
   width: 40px;
   height: 40px;
   border-radius: 8px;

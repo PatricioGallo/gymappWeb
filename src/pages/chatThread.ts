@@ -13,6 +13,7 @@ import {
   acceptMessageRequest,
   declineMessageRequest,
   uploadChatImage,
+  uploadChatVideo,
   uploadChatAudio,
   getChatAttachmentUrl,
   getConversationPeerMeta,
@@ -95,6 +96,7 @@ const THREAD_MARKUP = `
 
   <div class="chat-preview-bar" id="chatPreviewBar" hidden>
     <img id="chatPreviewImg" alt="" hidden>
+    <video id="chatPreviewVideo" muted hidden></video>
     <span id="chatPreviewAudioLabel" hidden>🎤 Audio listo (<span id="chatPreviewAudioDuration"></span>)</span>
     <button type="button" class="chat-preview-cancel" id="chatPreviewCancel" aria-label="Quitar adjunto">✕</button>
   </div>
@@ -116,8 +118,8 @@ const THREAD_MARKUP = `
   </div>
 
   <div class="chat-composer" id="chatComposer">
-    <label class="chat-composer-btn" title="Adjuntar foto">
-      <input type="file" id="chatImageInput" accept="image/jpeg,image/png,image/webp" hidden>
+    <label class="chat-composer-btn" title="Adjuntar foto o video">
+      <input type="file" id="chatImageInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/3gpp,video/x-msvideo,video/x-matroska,video/mpeg,video/ogg" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
     </label>
     <textarea id="chatComposerInput" class="chat-composer-input" placeholder="Escribí un mensaje..." rows="1"></textarea>
@@ -207,6 +209,7 @@ export async function mountThread(
   const recordCancelBtn = container.querySelector("#chatRecordCancel") as HTMLButtonElement;
   const previewBar = container.querySelector("#chatPreviewBar") as HTMLDivElement;
   const previewImg = container.querySelector("#chatPreviewImg") as HTMLImageElement;
+  const previewVideo = container.querySelector("#chatPreviewVideo") as HTMLVideoElement;
   const previewAudioLabel = container.querySelector("#chatPreviewAudioLabel") as HTMLSpanElement;
   const previewAudioDuration = container.querySelector("#chatPreviewAudioDuration")!;
   const previewCancelBtn = container.querySelector("#chatPreviewCancel") as HTMLButtonElement;
@@ -674,6 +677,7 @@ export async function mountThread(
     if (m.shared_post_id) return "🔁 Rep compartido";
     if (m.shared_gym_post_id) return "📌 Publicación compartida";
     if (m.attachment_type === "image") return "📷 Foto";
+    if (m.attachment_type === "video") return "🎥 Video";
     if (m.attachment_type === "audio") return "🎤 Audio";
     return "Mensaje";
   }
@@ -716,6 +720,13 @@ export async function mountThread(
       mediaHtml = `
         <button type="button" class="chat-bubble-image" data-path="${escapeHtml(m.attachment_path)}">
           <img data-path="${escapeHtml(m.attachment_path)}" alt="Foto" class="chat-bubble-img-el">
+        </button>
+      `;
+    } else if (m.attachment_type === "video" && m.attachment_path) {
+      mediaHtml = `
+        <button type="button" class="chat-bubble-image chat-bubble-video" data-path="${escapeHtml(m.attachment_path)}" data-kind="video">
+          <video data-path="${escapeHtml(m.attachment_path)}" muted playsinline preload="metadata" class="chat-bubble-img-el chat-bubble-video-el"></video>
+          <span class="chat-bubble-video-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
         </button>
       `;
     } else if (m.attachment_type === "audio" && m.attachment_path) {
@@ -811,20 +822,23 @@ export async function mountThread(
     return url;
   }
 
-  async function hydrateImages(): Promise<void> {
-    const imgs = messagesEl.querySelectorAll<HTMLImageElement>(".chat-bubble-img-el[data-path]");
+  // Nombre generico (ya no es solo imagenes): resuelve la URL firmada tanto de <img> como de
+  // <video> marcados con .chat-bubble-img-el[data-path] (las fotos y los videos comparten esa
+  // clase para el tamano/recorte del thumbnail, ver bubbleBodyHtml).
+  async function hydrateMedia(): Promise<void> {
+    const els = messagesEl.querySelectorAll<HTMLImageElement | HTMLVideoElement>(".chat-bubble-img-el[data-path]");
     await Promise.all(
-      Array.from(imgs)
-        .filter((img) => !img.src)
-        .map(async (img) => {
-          const url = await resolveAttachmentUrl(img.dataset.path!);
-          if (url) img.src = url;
+      Array.from(els)
+        .filter((el) => !el.src)
+        .map(async (el) => {
+          const url = await resolveAttachmentUrl(el.dataset.path!);
+          if (url) el.src = url;
         })
     );
   }
 
   // Dibuja la onda de cada mensaje de audio apenas se renderiza el mensaje, en vez de esperar
-  // a que se apriete play -- mismo criterio que hydrateImages con las fotos.
+  // a que se apriete play -- mismo criterio que hydrateMedia con las fotos.
   async function hydrateAudioWaveforms(): Promise<void> {
     const canvases = messagesEl.querySelectorAll<HTMLCanvasElement>(".chat-audio-wave[data-id]");
     await Promise.all(
@@ -916,7 +930,7 @@ export async function mountThread(
       messages.forEach((m) => renderedIds.add(m.id));
       await hydrateSharedPosts(messages);
       messagesEl.innerHTML = buildMessagesHtml(messages);
-      await hydrateImages();
+      await hydrateMedia();
       void hydrateMissingQuotes();
       void hydrateAudioWaveforms();
       scrollToBottom("instant");
@@ -932,7 +946,7 @@ export async function mountThread(
     messagesEl.innerHTML = messages.length
       ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
       : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
-    await hydrateImages();
+    await hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
     scrollToBottom("instant");
@@ -966,7 +980,7 @@ export async function mountThread(
     olderExhausted = older.length < MESSAGES_PAGE_SIZE;
     const prevScrollHeight = messagesEl.scrollHeight;
     messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
-    await hydrateImages();
+    await hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
     messagesEl.scrollTo({ top: messagesEl.scrollHeight - prevScrollHeight, left: 0, behavior: "instant" });
@@ -998,7 +1012,7 @@ export async function mountThread(
     if (!prevMessage || !sameDay(prevMessage, m)) html += `<div class="chat-date-divider"><span>${dayLabel(m.created_at)}</span></div>`;
     html += bubbleHtml(m, m.sender_id === userId, isFirstInRun, true);
     messagesEl.insertAdjacentHTML("beforeend", html);
-    void hydrateImages();
+    void hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
     if (wasNearBottom) scrollToBottom();
@@ -1234,13 +1248,13 @@ export async function mountThread(
     audioPlayers.forEach((audio) => audio.pause());
   });
 
-  async function openLightbox(path: string): Promise<void> {
+  async function openLightbox(path: string, kind: "image" | "video"): Promise<void> {
     const url = await resolveAttachmentUrl(path);
     if (!url) return;
     openMediaLightbox({
       queue: [{ url }],
       startIndex: 0,
-      getMedia: (item) => ({ url: item.url, kind: "image" }),
+      getMedia: (item) => ({ url: item.url, kind }),
     });
   }
 
@@ -1250,7 +1264,7 @@ export async function mountThread(
       const target = e.target as HTMLElement;
       const imageBtn = target.closest<HTMLButtonElement>(".chat-bubble-image");
       if (imageBtn) {
-        void openLightbox(imageBtn.dataset.path!);
+        void openLightbox(imageBtn.dataset.path!, imageBtn.dataset.kind === "video" ? "video" : "image");
         return;
       }
       const audioBtn = target.closest<HTMLButtonElement>(".chat-audio-toggle");
@@ -1525,7 +1539,7 @@ export async function mountThread(
           const { error } = await sendMessage(targetConversationId, {
             content: message.content ?? undefined,
             attachmentPath,
-            attachmentType: (message.attachment_type as "image" | "audio" | "sticker" | null) ?? undefined,
+            attachmentType: (message.attachment_type as "image" | "video" | "audio" | "sticker" | null) ?? undefined,
             attachmentDurationSeconds: message.attachment_duration_seconds ?? undefined,
             sharedPostId: message.shared_post_id ?? undefined,
             sharedGymPostId: message.shared_gym_post_id ?? undefined,
@@ -1573,7 +1587,10 @@ export async function mountThread(
   // Composer: texto, foto y grabación de audio
   // ---------------------------------------------------------------------------
 
-  type PendingAttachment = { kind: "image"; file: File; previewUrl: string } | { kind: "audio"; blob: Blob; durationSeconds: number };
+  type PendingAttachment =
+    | { kind: "image"; file: File; previewUrl: string }
+    | { kind: "video"; file: File; previewUrl: string }
+    | { kind: "audio"; blob: Blob; durationSeconds: number };
 
   let pendingAttachment: PendingAttachment | null = null;
   let sending = false;
@@ -1680,10 +1697,12 @@ export async function mountThread(
   }
 
   function clearPendingAttachment(): void {
-    if (pendingAttachment?.kind === "image") URL.revokeObjectURL(pendingAttachment.previewUrl);
+    if (pendingAttachment?.kind === "image" || pendingAttachment?.kind === "video") URL.revokeObjectURL(pendingAttachment.previewUrl);
     pendingAttachment = null;
     previewBar.hidden = true;
     previewImg.hidden = true;
+    previewVideo.hidden = true;
+    previewVideo.src = "";
     previewAudioLabel.hidden = true;
     updateSendState();
   }
@@ -1691,10 +1710,14 @@ export async function mountThread(
   function showPreview(): void {
     previewBar.hidden = false;
     previewImg.hidden = true;
+    previewVideo.hidden = true;
     previewAudioLabel.hidden = true;
     if (pendingAttachment?.kind === "image") {
       previewImg.hidden = false;
       previewImg.src = pendingAttachment.previewUrl;
+    } else if (pendingAttachment?.kind === "video") {
+      previewVideo.hidden = false;
+      previewVideo.src = pendingAttachment.previewUrl;
     } else if (pendingAttachment?.kind === "audio") {
       previewAudioLabel.hidden = false;
       previewAudioDuration.textContent = formatDuration(pendingAttachment.durationSeconds);
@@ -1733,7 +1756,8 @@ export async function mountThread(
       imageInput.value = "";
       if (!file) return;
       clearPendingAttachment();
-      pendingAttachment = { kind: "image", file, previewUrl: URL.createObjectURL(file) };
+      const kind = file.type.startsWith("video/") ? "video" : "image";
+      pendingAttachment = { kind, file, previewUrl: URL.createObjectURL(file) };
       showPreview();
     },
     { signal: ctx.signal }
@@ -1924,7 +1948,7 @@ export async function mountThread(
     updateSendState();
 
     let attachmentPath: string | undefined;
-    let attachmentType: "image" | "audio" | undefined;
+    let attachmentType: "image" | "video" | "audio" | undefined;
     let attachmentDurationSeconds: number | undefined;
 
     if (pendingAttachment?.kind === "image") {
@@ -1937,6 +1961,16 @@ export async function mountThread(
       }
       attachmentPath = path;
       attachmentType = "image";
+    } else if (pendingAttachment?.kind === "video") {
+      const { path, error } = await uploadChatVideo(conversationId, pendingAttachment.file);
+      if (error || !path) {
+        alert(error || "No se pudo subir el video.");
+        sending = false;
+        updateSendState();
+        return;
+      }
+      attachmentPath = path;
+      attachmentType = "video";
     } else if (pendingAttachment?.kind === "audio") {
       const { path, error } = await uploadChatAudio(conversationId, pendingAttachment.blob);
       if (error || !path) {

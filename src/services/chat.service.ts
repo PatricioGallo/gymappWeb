@@ -23,6 +23,10 @@ const GROUP_AVATAR_MAX_BYTES = 20 * 1024 * 1024;
 const GROUP_AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// Mismo criterio amplio de formatos que los Reps (post.service.ts): mp4/webm son lo mas comun,
+// el resto cubre lo que suelen mandar los celulares (mov de iPhone, 3gp viejo de Android, etc).
+const VIDEO_MAX_BYTES = 500 * 1024 * 1024; // igual al file_size_limit del bucket "chat-attachments"
+const VIDEO_ALLOWED_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/3gpp", "video/x-msvideo", "video/x-matroska", "video/mpeg", "video/ogg"];
 const AUDIO_MAX_BYTES = 15 * 1024 * 1024;
 export const AUDIO_MAX_SECONDS = 120;
 export const MESSAGES_PAGE_SIZE = 50;
@@ -86,7 +90,7 @@ export async function getConversationPeerMeta(otherUserId: string): Promise<Conv
 export interface SendMessageInput {
   content?: string;
   attachmentPath?: string;
-  attachmentType?: "image" | "audio" | "sticker";
+  attachmentType?: "image" | "video" | "audio" | "sticker";
   attachmentDurationSeconds?: number;
   sharedPostId?: string;
   sharedGymPostId?: string;
@@ -189,6 +193,19 @@ export async function uploadChatImage(conversationId: string, file: File): Promi
 
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file);
   if (uploadError) return { error: "No se pudo subir la imagen. Probá de nuevo." };
+
+  return { path };
+}
+
+export async function uploadChatVideo(conversationId: string, file: File): Promise<{ path?: string; error?: string }> {
+  if (file.size > VIDEO_MAX_BYTES) return { error: "El video es muy pesado. Máximo 500MB." };
+  if (!VIDEO_ALLOWED_TYPES.includes(file.type)) return { error: "Formato no soportado. Usá MP4, MOV, WEBM, 3GP, AVI, MKV, MPEG u OGG." };
+
+  const ext = file.name.split(".").pop() || "mp4";
+  const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file);
+  if (uploadError) return { error: "No se pudo subir el video. Probá de nuevo." };
 
   return { path };
 }
