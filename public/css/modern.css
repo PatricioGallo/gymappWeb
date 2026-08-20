@@ -4440,7 +4440,9 @@ body.chats-page .features {
   cursor: pointer;
 }
 
-.chat-row:hover { background: var(--surface-2); }
+@media (hover: hover) {
+  .chat-row:hover { background: var(--surface-2); }
+}
 .chat-row.unread { background: var(--accent-soft); }
 .chat-row.active { background: var(--surface-2); }
 
