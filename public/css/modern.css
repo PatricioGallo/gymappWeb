@@ -5157,6 +5157,20 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   background: var(--text-muted);
 }
 
+/* En mobile la lista ocupa toda la pantalla (ver .chat-split arriba, layout de
+   dos paneles solo aplica desde 860px) -- ahi el scrollbar fino de arriba se ve
+   pegado al borde del telefono, se saca del todo (el scroll sigue funcionando). */
+@media (max-width: 859px) {
+  .chat-list-pane,
+  .chat-requests-list {
+    scrollbar-width: none;
+  }
+  .chat-list-pane::-webkit-scrollbar,
+  .chat-requests-list::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .chat-messages {
   scrollbar-width: none;
 }
