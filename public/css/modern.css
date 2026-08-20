@@ -5881,6 +5881,13 @@ body.chat-embedded .chat-thread-container { max-width: none; }
    de arriba del feed) conviene que se sienta mas espacioso para escribir. */
 #composerModalSlot .post-composer-input { height: 150px; }
 
+/* Mas minimalista que el toolbar inline: adentro del modal el boton de adjuntar y el de
+   Publicar quedan mas chicos y sin el glow del boton primario, que en la tarjeta chica del
+   modal se sentia pesado. */
+#composerModalSlot .chat-composer-btn { width: 30px; height: 30px; }
+#composerModalSlot .chat-composer-btn svg { width: 16px; height: 16px; }
+#composerModalSlot #postComposerSubmit { padding: 6px 14px; font-size: 12.5px; box-shadow: none; }
+
 .post-feed-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
 /* [hidden] pierde contra un display:flex de menor especificidad de origen sin esto */
 .post-feed-list[hidden] { display: none; }
