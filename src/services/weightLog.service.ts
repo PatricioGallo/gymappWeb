@@ -13,8 +13,18 @@ export interface NewWeightLog {
   unidad: WeightUnit;
 }
 
+// Upsert (no insert): guardar el mismo dia/serie mas de una vez (ej. el usuario toca "Guardar"
+// varias veces durante la misma sesion) pisa la fila existente en vez de acumular duplicados.
+// created_at se reescribe a mano en cada guardado porque dayLastActivityAt() (pesos.ts) lo usa
+// para saber "cuando se toco por ultima vez este dia" -- si no se actualizara, una edicion
+// posterior no se reflejaria ahi.
 export async function insertWeightLogs(userId: string, entries: NewWeightLog[]): Promise<void> {
-  const { error } = await supabase.from("weight_logs").insert(entries.map((e) => ({ user_id: userId, ...e })));
+  const { error } = await supabase
+    .from("weight_logs")
+    .upsert(
+      entries.map((e) => ({ user_id: userId, ...e, created_at: new Date().toISOString() })),
+      { onConflict: "user_id,routine_exercise_id,fecha,serie" }
+    );
   if (error) throw error;
 }
 
