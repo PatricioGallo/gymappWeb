@@ -577,7 +577,10 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     }
   }
 
-  // -------------------- Mobile: lista vertical scroll-snap, una publicacion por pantalla --------------------
+  // -------------------- Mobile: pagina de publicacion tipo Instagram (header/media/acciones/
+  // caption/"ver comentarios"), apiladas en una lista con scroll-snap vertical para deslizar
+  // entre publicaciones. Los comentarios viven en UNA sola hoja compartida (fixed al visor, no
+  // anidada dentro de cada seccion) para no depender de la altura variable de cada publicacion.
   function renderMobile(): void {
     loaderBody!.innerHTML = `
       <div class="gym-post-viewer-mobile" id="gymPostViewerMobile">
@@ -585,12 +588,81 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
         <div class="gym-post-viewer-mobile-scroller" id="gymPostViewerMobileScroller">
           ${posts.map((p, i) => mobileSectionHtml(p, i)).join("")}
         </div>
+        <div class="gym-post-comments-sheet-backdrop" id="gymPostMobileCommentsBackdrop" hidden></div>
+        <div class="gym-post-comments-sheet" id="gymPostMobileCommentsSheet" hidden>
+          <div class="gym-post-comments-sheet-head">
+            <h3>Comentarios</h3>
+            <button type="button" class="gym-post-comments-sheet-close" id="gymPostMobileCommentsClose" aria-label="Cerrar">✕</button>
+          </div>
+          <div class="gym-post-comments-sheet-list" id="gymPostMobileCommentsList"></div>
+          ${
+            viewerId
+              ? `<div class="gym-post-viewer-composer">
+                  <div class="post-comment-modal-composer">
+                    <img class="post-comment-modal-avatar" src="${escapeHtml(myAvatarUrl())}" alt="">
+                    <textarea id="gymPostMobileCommentInput" class="post-comment-modal-textarea" rows="1" maxlength="500" placeholder="Agregá un comentario..."></textarea>
+                  </div>
+                  <div class="post-comment-modal-footer">
+                    <button type="button" class="btn btn-primary btn-sm" id="gymPostMobileCommentSubmit">Publicar</button>
+                  </div>
+                </div>`
+              : ""
+          }
+        </div>
       </div>
     `;
 
     document.getElementById("gymPostViewerMobileClose")?.addEventListener("click", closeOverlay);
 
     const scroller = document.getElementById("gymPostViewerMobileScroller")!;
+    const backdrop = document.getElementById("gymPostMobileCommentsBackdrop")!;
+    const sheet = document.getElementById("gymPostMobileCommentsSheet")!;
+    const commentsList = document.getElementById("gymPostMobileCommentsList")!;
+    let openPostId: string | null = null;
+
+    function updateCommentsLabel(post: GymPostFull): void {
+      const label = scroller.querySelector<HTMLElement>(`[data-post-id="${post.id}"] [data-comments-label]`);
+      if (!label) return;
+      label.hidden = post.commentsCount === 0;
+      label.textContent = post.commentsCount === 1 ? "Ver 1 comentario" : `Ver los ${post.commentsCount} comentarios`;
+    }
+
+    function closeCommentsSheet(): void {
+      sheet.hidden = true;
+      backdrop.hidden = true;
+      openPostId = null;
+    }
+
+    function paintComments(post: GymPostFull, comments: GymPostCommentRow[]): void {
+      commentsList.innerHTML = comments.length || post.content ? captionRowHtml(post, author) + comments.map(commentRowHtml).join("") : `<p class="exc-pick-empty">Sé el primero en comentar.</p>`;
+    }
+
+    function openCommentsSheet(post: GymPostFull): void {
+      openPostId = post.id;
+      sheet.hidden = false;
+      backdrop.hidden = false;
+      commentsList.innerHTML = `<p class="exc-pick-empty">Cargando comentarios...</p>`;
+      void getComments(post.id)
+        .then((comments) => {
+          if (openPostId === post.id) paintComments(post, comments);
+        })
+        .catch(() => {
+          if (openPostId === post.id) commentsList.innerHTML = `<p class="exc-pick-empty">No se pudieron cargar los comentarios.</p>`;
+        });
+    }
+
+    backdrop.addEventListener("click", closeCommentsSheet);
+    document.getElementById("gymPostMobileCommentsClose")?.addEventListener("click", closeCommentsSheet);
+    document.getElementById("gymPostMobileCommentSubmit")?.addEventListener("click", () => {
+      const post = posts.find((p) => p.id === openPostId);
+      const input = document.getElementById("gymPostMobileCommentInput") as HTMLTextAreaElement | null;
+      if (!post || !input) return;
+      void handleComment(post, input, () => {
+        updateCommentsLabel(post);
+        void getComments(post.id).then((comments) => paintComments(post, comments));
+      });
+    });
+
     posts.forEach((post, i) => {
       const section = scroller.querySelector<HTMLElement>(`[data-post-id="${post.id}"]`);
       if (!section) return;
@@ -598,121 +670,78 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
       wireMobileSection(section, post);
     });
 
+    function wireMobileSection(section: HTMLElement, post: GymPostFull): void {
+      function refreshActions(): void {
+        const likeBtn = section.querySelector<HTMLElement>('[data-action="like"]');
+        if (likeBtn) {
+          likeBtn.classList.toggle("is-active", post.likedByMe);
+          likeBtn.innerHTML = post.likedByMe ? ICON_HEART_FILLED : ICON_HEART;
+        }
+        const likesCountEl = section.querySelector<HTMLElement>("[data-likes-count]");
+        if (likesCountEl) likesCountEl.textContent = post.likesCount === 1 ? "1 me gusta" : `${post.likesCount} me gusta`;
+      }
+
+      section.querySelector('[data-action="like"]')?.addEventListener("click", () => void handleLike(post, refreshActions));
+      section.querySelectorAll('[data-action="comments"]').forEach((btn) => btn.addEventListener("click", () => openCommentsSheet(post)));
+      section.querySelector('[data-action="share"]')?.addEventListener("click", () => openShareGymPostModal(author.username, post.id, author.username, viewerId));
+
+      if (isOwner) {
+        const menuBtn = section.querySelector<HTMLElement>('[data-action="menu"]');
+        const menuPanel = section.querySelector<HTMLElement>(".profile-menu-panel");
+        menuBtn?.addEventListener("click", () => {
+          if (menuPanel) menuPanel.hidden = !menuPanel.hidden;
+        });
+        if (menuPanel) {
+          menuPanel.innerHTML = `
+            <button type="button" class="profile-menu-item" data-action="edit">Editar</button>
+            <button type="button" class="profile-menu-item" data-action="pin">${post.pinned ? "Desfijar" : "Fijar"}</button>
+            <button type="button" class="profile-menu-item profile-menu-item-danger" data-action="delete">${ICON_TRASH}Eliminar</button>
+          `;
+          menuPanel.querySelector('[data-action="edit"]')?.addEventListener("click", () => openEditGymPostModal(post, onChanged));
+          menuPanel.querySelector('[data-action="pin"]')?.addEventListener("click", () => togglePinAndClose(post));
+          menuPanel.querySelector('[data-action="delete"]')?.addEventListener("click", () => confirmDeleteGymPost(post.id, onChanged));
+        }
+      }
+    }
+
     // Arranca en la publicacion tocada en la grilla, sin animacion.
     const startSection = scroller.querySelector<HTMLElement>(`[data-post-id="${posts[index].id}"]`);
     startSection?.scrollIntoView({ block: "start" });
   }
 
   function mobileSectionHtml(post: GymPostFull, i: number): string {
+    const likesLabel = post.likesCount === 1 ? "1 me gusta" : `${post.likesCount} me gusta`;
+    const commentsLabel = post.commentsCount === 1 ? "Ver 1 comentario" : `Ver los ${post.commentsCount} comentarios`;
     return `
       <section class="gym-post-viewer-mobile-section" data-post-id="${post.id}">
-        ${mediaCarouselHtml(post.media, `gymPostViewerM${i}`)}
-        <div class="gym-post-viewer-mobile-scrim">
-          <div class="gym-post-viewer-mobile-info">
-            <p class="gym-post-comment-author">${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, 13)}</p>
-            ${post.location ? `<p class="gym-post-viewer-location">${escapeHtml(post.location)}</p>` : ""}
-            ${post.content ? `<p class="gym-post-viewer-mobile-caption">${escapeHtml(post.content)}</p>` : ""}
-            <p class="gym-post-viewer-time">${formatTiempoRelativo(post.createdAt)}</p>
-          </div>
-          <div class="gym-post-viewer-mobile-rail">
-            <button type="button" class="gym-post-viewer-rail-btn" data-action="like" aria-label="Me gusta">
-              <span class="gym-post-viewer-rail-icon${post.likedByMe ? " is-active" : ""}">${post.likedByMe ? ICON_HEART_FILLED : ICON_HEART}</span>
-              <span>${post.likesCount}</span>
-            </button>
-            <button type="button" class="gym-post-viewer-rail-btn" data-action="comments" aria-label="Comentarios">
-              <span class="gym-post-viewer-rail-icon">${ICON_COMMENT}</span>
-              <span>${post.commentsCount}</span>
-            </button>
-            <button type="button" class="gym-post-viewer-rail-btn" data-action="share" aria-label="Compartir">
-              <span class="gym-post-viewer-rail-icon">${ICON_SHARE}</span>
-            </button>
-            ${isOwner ? `<button type="button" class="gym-post-viewer-rail-btn" data-action="menu" aria-label="Más opciones"><span class="gym-post-viewer-rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span></button>` : ""}
-          </div>
-        </div>
-        <div class="gym-post-comments-sheet" data-sheet-for="${post.id}" hidden>
-          <div class="gym-post-comments-sheet-head">
-            <h3>Comentarios</h3>
-            <button type="button" class="gym-post-comments-sheet-close" data-action="close-comments" aria-label="Cerrar">✕</button>
-          </div>
-          <div class="gym-post-comments-sheet-list" data-comments-list>
-            <p class="exc-pick-empty">Cargando comentarios...</p>
+        <div class="gym-post-viewer-mobile-header">
+          <img class="gym-post-comment-avatar" src="${escapeHtml(author.avatarUrl || DEFAULT_AVATAR)}" alt="">
+          <div class="gym-post-viewer-mobile-header-text">
+            <span class="gym-post-comment-author">${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, 13)}</span>
+            ${post.location ? `<span class="gym-post-viewer-location">${escapeHtml(post.location)}</span>` : ""}
           </div>
           ${
-            viewerId
-              ? `<div class="gym-post-viewer-composer">
-                  <div class="post-comment-modal-composer">
-                    <img class="post-comment-modal-avatar" src="${escapeHtml(myAvatarUrl())}" alt="">
-                    <textarea class="post-comment-modal-textarea" rows="1" maxlength="500" placeholder="Agregá un comentario..." data-comment-input></textarea>
-                  </div>
-                  <div class="post-comment-modal-footer">
-                    <button type="button" class="btn btn-primary btn-sm" data-action="submit-comment">Publicar</button>
-                  </div>
+            isOwner
+              ? `<div class="profile-menu-wrap">
+                  <button type="button" class="profile-menu-btn" data-action="menu" aria-label="Más opciones">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                  </button>
+                  <div class="profile-menu-panel" hidden></div>
                 </div>`
               : ""
           }
         </div>
-        ${
-          isOwner
-            ? `<div class="profile-menu-panel gym-post-viewer-mobile-menu" data-menu-for="${post.id}" hidden>
-                <button type="button" class="profile-menu-item" data-action="edit">Editar</button>
-                <button type="button" class="profile-menu-item" data-action="pin">${post.pinned ? "Desfijar" : "Fijar"}</button>
-                <button type="button" class="profile-menu-item profile-menu-item-danger" data-action="delete">${ICON_TRASH}Eliminar</button>
-              </div>`
-            : ""
-        }
+        ${mediaCarouselHtml(post.media, `gymPostViewerM${i}`)}
+        <div class="gym-post-viewer-mobile-actions">
+          <button type="button" class="post-action post-action-like${post.likedByMe ? " is-active" : ""}" data-action="like" aria-label="Me gusta">${post.likedByMe ? ICON_HEART_FILLED : ICON_HEART}</button>
+          <button type="button" class="post-action" data-action="comments" aria-label="Comentarios">${ICON_COMMENT}</button>
+          <button type="button" class="post-action" data-action="share" aria-label="Compartir">${ICON_SHARE}</button>
+        </div>
+        <p class="gym-post-viewer-mobile-likes" data-likes-count>${likesLabel}</p>
+        ${post.content ? `<p class="gym-post-viewer-mobile-caption-row"><span class="gym-post-comment-author">${escapeHtml(author.username)}</span> ${escapeHtml(post.content)}</p>` : ""}
+        <button type="button" class="gym-post-viewer-view-comments" data-action="comments" data-comments-label ${post.commentsCount === 0 ? "hidden" : ""}>${commentsLabel}</button>
+        <p class="gym-post-viewer-mobile-date">${formatTiempoRelativo(post.createdAt)}</p>
       </section>
     `;
-  }
-
-  function wireMobileSection(section: HTMLElement, post: GymPostFull): void {
-    const sheet = section.querySelector<HTMLElement>(`.gym-post-comments-sheet[data-sheet-for="${post.id}"]`);
-    const menu = section.querySelector<HTMLElement>(`.gym-post-viewer-mobile-menu[data-menu-for="${post.id}"]`);
-
-    function refreshRail(): void {
-      const likeIcon = section.querySelector<HTMLElement>('[data-action="like"] .gym-post-viewer-rail-icon');
-      const likeCount = section.querySelector<HTMLElement>('[data-action="like"] span:last-child');
-      if (likeIcon) {
-        likeIcon.classList.toggle("is-active", post.likedByMe);
-        likeIcon.innerHTML = post.likedByMe ? ICON_HEART_FILLED : ICON_HEART;
-      }
-      if (likeCount) likeCount.textContent = String(post.likesCount);
-      const commentCount = section.querySelector<HTMLElement>('[data-action="comments"] span:last-child');
-      if (commentCount) commentCount.textContent = String(post.commentsCount);
-    }
-
-    async function paintComments(): Promise<void> {
-      const list = sheet?.querySelector<HTMLElement>("[data-comments-list]");
-      if (!list) return;
-      const comments = await getComments(post.id);
-      list.innerHTML = captionRowHtml(post, author) + comments.map(commentRowHtml).join("");
-    }
-
-    section.querySelector('[data-action="like"]')?.addEventListener("click", () => void handleLike(post, refreshRail));
-    section.querySelector('[data-action="comments"]')?.addEventListener("click", () => {
-      if (!sheet) return;
-      sheet.hidden = false;
-      void paintComments();
-    });
-    section.querySelector('[data-action="close-comments"]')?.addEventListener("click", () => {
-      if (sheet) sheet.hidden = true;
-    });
-    section.querySelector('[data-action="submit-comment"]')?.addEventListener("click", () => {
-      const input = sheet?.querySelector<HTMLTextAreaElement>("[data-comment-input]");
-      if (!input) return;
-      void handleComment(post, input, () => {
-        refreshRail();
-        void paintComments();
-      });
-    });
-    section.querySelector('[data-action="share"]')?.addEventListener("click", () => openShareGymPostModal(author.username, post.id, author.username, viewerId));
-
-    if (menu) {
-      section.querySelector('[data-action="menu"]')?.addEventListener("click", () => {
-        menu.hidden = !menu.hidden;
-      });
-      menu.querySelector('[data-action="edit"]')?.addEventListener("click", () => openEditGymPostModal(post, onChanged));
-      menu.querySelector('[data-action="pin"]')?.addEventListener("click", () => togglePinAndClose(post));
-      menu.querySelector('[data-action="delete"]')?.addEventListener("click", () => confirmDeleteGymPost(post.id, onChanged));
-    }
   }
 }

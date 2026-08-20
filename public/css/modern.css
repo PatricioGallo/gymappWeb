@@ -3522,7 +3522,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .gym-post-comment-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .gym-post-comment-body p { margin: 0; font-size: 13.5px; line-height: 1.4; }
 .gym-post-comment-author { font-weight: 700; margin-right: 4px; }
-.gym-post-comment-time { display: inline-block; margin-top: 2px; font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; }
+.gym-post-comment-time { display: inline-block; margin-top: 2px; font-size: 9px; color: var(--text-muted); letter-spacing: 0.02em; }
 
 /* ---------- Visor de publicación: media (carrusel horizontal con scroll-snap) ---------- */
 
@@ -3592,59 +3592,61 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .gym-post-viewer-actions .post-action { padding: 8px 10px; }
 .gym-post-viewer-actions .post-action svg { width: 26px; height: 26px; }
 .gym-post-viewer-likes-count { font-weight: 700; font-size: 13.5px; padding: 4px 14px 0; }
-.gym-post-viewer-time { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 14px 10px; }
+.gym-post-viewer-time { font-size: 11px; color: var(--text-muted); letter-spacing: 0.03em; padding: 2px 14px 10px; }
 .gym-post-viewer-composer { padding: 10px 14px; border-top: 1px solid var(--border); }
 .gym-post-viewer-composer .post-comment-modal-textarea { max-height: 80px; }
 
-/* ---------- Visor de publicación: mobile, pantalla completa con scroll-snap vertical ---------- */
+/* ---------- Visor de publicación: mobile, pagina de post tipo Instagram (header/media/
+   acciones/caption apilados, no un overlay tipo Reels) con scroll-snap vertical para pasar
+   de una publicacion a otra. La hoja de comentarios es UNICA y compartida (fixed al visor
+   completo, no anidada dentro de cada seccion) para no depender de la altura variable de
+   cada publicacion -- ver openGymPostViewer/renderMobile. ---------- */
 
-.gym-post-viewer-mobile { position: fixed; inset: 0; z-index: 200; background: #000; }
+.gym-post-viewer-mobile { position: fixed; inset: 0; z-index: 200; background: var(--bg); }
 .gym-post-viewer-close-mobile { top: 14px; left: 14px; right: auto; }
-.gym-post-viewer-mobile-scroller { height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; }
+.gym-post-viewer-mobile-scroller { height: 100dvh; overflow-y: auto; scroll-snap-type: y proximity; scrollbar-width: none; }
 .gym-post-viewer-mobile-scroller::-webkit-scrollbar { display: none; }
-.gym-post-viewer-mobile-section { position: relative; height: 100dvh; scroll-snap-align: start; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
-.gym-post-viewer-mobile-section .gym-post-viewer-media-wrap { height: 100%; }
+.gym-post-viewer-mobile-section { position: relative; scroll-snap-align: start; display: flex; flex-direction: column; background: var(--bg); padding-bottom: 8px; border-bottom: 8px solid var(--surface-2); }
 
-.gym-post-viewer-mobile-scrim {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 14px 26px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0) 70%);
-}
-.gym-post-viewer-mobile-info { flex: 1; min-width: 0; color: #fff; }
-.gym-post-viewer-mobile-info .gym-post-comment-author { color: #fff; }
-.gym-post-viewer-mobile-caption { font-size: 13.5px; margin-top: 4px; }
-.gym-post-viewer-mobile-info .gym-post-viewer-time { padding: 0; margin-top: 4px; color: rgba(255, 255, 255, 0.7); }
-.gym-post-viewer-mobile-info .gym-post-viewer-location { color: rgba(255, 255, 255, 0.85); }
-.gym-post-viewer-mobile-rail { display: flex; flex-direction: column; align-items: center; gap: 18px; flex-shrink: 0; }
-.gym-post-viewer-rail-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; border: none; background: none; color: #fff; font-size: 11.5px; font-weight: 700; cursor: pointer; }
-.gym-post-viewer-rail-icon { display: flex; }
-.gym-post-viewer-rail-icon.is-active { color: #e0555c; }
+.gym-post-viewer-mobile-header { display: flex; align-items: center; gap: 10px; padding: 56px 14px 10px; }
+.gym-post-viewer-mobile-header .gym-post-comment-avatar { width: 34px; height: 34px; }
+.gym-post-viewer-mobile-header-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gym-post-viewer-mobile-header .gym-post-viewer-location { font-size: 11.5px; }
+.gym-post-viewer-mobile-header .profile-menu-btn { color: var(--text); }
 
+.gym-post-viewer-mobile-section .gym-post-viewer-media-wrap { height: 62dvh; background: #000; }
+.gym-post-viewer-mobile-section .gym-post-viewer-carousel-track { height: 62dvh; }
+
+.gym-post-viewer-mobile-actions { display: flex; align-items: center; gap: 2px; padding: 4px 4px 0; }
+.gym-post-viewer-mobile-actions .post-action svg { width: 24px; height: 24px; }
+
+.gym-post-viewer-mobile-likes { font-weight: 700; font-size: 13.5px; padding: 4px 14px 0; margin: 0; }
+.gym-post-viewer-mobile-caption-row { font-size: 13.5px; line-height: 1.4; padding: 4px 14px 0; margin: 0; }
+.gym-post-viewer-view-comments { display: block; border: none; background: none; color: var(--text-muted); font-size: 13px; padding: 6px 14px 0; margin: 0; cursor: pointer; text-align: left; }
+.gym-post-viewer-view-comments[hidden] { display: none; }
+.gym-post-viewer-mobile-date { font-size: 11px; color: var(--text-muted); letter-spacing: 0.03em; padding: 4px 14px 4px; margin: 0; }
+
+.gym-post-comments-sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 220; }
 .gym-post-comments-sheet {
-  position: absolute;
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  max-height: 65%;
+  height: 68dvh;
   background: var(--surface);
   border-radius: 16px 16px 0 0;
   display: flex;
   flex-direction: column;
-  z-index: 3;
+  z-index: 221;
 }
-.gym-post-comments-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+/* [hidden] y .clase con "display" propio empatan en especificidad -- sin este override la hoja
+   queda flex (visible) tapando los botones de like/comentar/compartir aunque tenga hidden. */
+.gym-post-comments-sheet[hidden] { display: none; }
+.gym-post-comments-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .gym-post-comments-sheet-head h3 { font-size: 14.5px; }
 .gym-post-comments-sheet-close { border: none; background: none; color: var(--text-muted); font-size: 15px; cursor: pointer; }
 .gym-post-comments-sheet-list { flex: 1; overflow-y: auto; padding: 4px 14px; }
-
-.gym-post-viewer-mobile-menu { position: absolute; top: 50px; right: 14px; z-index: 4; }
+.gym-post-comments-sheet .gym-post-viewer-composer { flex-shrink: 0; }
 
 .member-accept-option {
   display: flex;
