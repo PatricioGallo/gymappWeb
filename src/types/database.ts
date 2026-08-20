@@ -877,6 +877,82 @@ export type Database = {
           },
         ]
       }
+      gym_trainer_ratings: {
+        Row: {
+          comment: string | null
+          created_at: string
+          gym_id: string
+          id: string
+          member_id: string
+          rating: number
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          gym_id: string
+          id?: string
+          member_id: string
+          rating: number
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          gym_id?: string
+          id?: string
+          member_id?: string
+          rating?: number
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_trainer_ratings_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainer_ratings_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainer_ratings_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainer_ratings_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainer_ratings_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_trainer_ratings_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gym_trainers: {
         Row: {
           duration_months: number | null
@@ -2900,6 +2976,34 @@ export type Database = {
           visibility: string
         }[]
       }
+      list_gym_trainer_ratings: {
+        Args: { p_gym_id: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          avg_rating: number
+          is_verified: boolean
+          my_comment: string
+          my_rating: number
+          nombre: string
+          rating_count: number
+          trainer_id: string
+          username: string
+        }[]
+      }
+      list_gym_trainer_reviews: {
+        Args: { p_gym_id: string; p_trainer_id: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          comment: string
+          created_at: string
+          member_id: string
+          nombre: string
+          rating: number
+          username: string
+        }[]
+      }
       list_gym_trainers: {
         Args: {
           p_gym_id: string
@@ -3092,84 +3196,45 @@ export type Database = {
           username: string
         }[]
       }
-      send_message:
-        | {
-            Args: {
-              p_attachment_duration_seconds?: number
-              p_attachment_filename?: string
-              p_attachment_path?: string
-              p_attachment_type?: string
-              p_content?: string
-              p_conversation_id: string
-              p_is_forwarded?: boolean
-              p_reply_to_message_id?: string
-              p_shared_post_id?: string
-            }
-            Returns: {
-              attachment_duration_seconds: number | null
-              attachment_filename: string | null
-              attachment_path: string | null
-              attachment_type: string | null
-              content: string | null
-              conversation_id: string
-              created_at: string
-              deleted_at: string | null
-              edited_at: string | null
-              id: string
-              is_forwarded: boolean
-              reactions: Json
-              read_at: string | null
-              reply_to_message_id: string | null
-              sender_id: string
-              shared_gym_post_id: string | null
-              shared_post_id: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "messages"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_attachment_duration_seconds?: number
-              p_attachment_filename?: string
-              p_attachment_path?: string
-              p_attachment_type?: string
-              p_content?: string
-              p_conversation_id: string
-              p_is_forwarded?: boolean
-              p_reply_to_message_id?: string
-              p_shared_gym_post_id?: string
-              p_shared_post_id?: string
-            }
-            Returns: {
-              attachment_duration_seconds: number | null
-              attachment_filename: string | null
-              attachment_path: string | null
-              attachment_type: string | null
-              content: string | null
-              conversation_id: string
-              created_at: string
-              deleted_at: string | null
-              edited_at: string | null
-              id: string
-              is_forwarded: boolean
-              reactions: Json
-              read_at: string | null
-              reply_to_message_id: string | null
-              sender_id: string
-              shared_gym_post_id: string | null
-              shared_post_id: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "messages"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      send_message: {
+        Args: {
+          p_attachment_duration_seconds?: number
+          p_attachment_filename?: string
+          p_attachment_path?: string
+          p_attachment_type?: string
+          p_content?: string
+          p_conversation_id: string
+          p_is_forwarded?: boolean
+          p_reply_to_message_id?: string
+          p_shared_gym_post_id?: string
+          p_shared_post_id?: string
+        }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_filename: string | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          is_forwarded: boolean
+          reactions: Json
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          shared_gym_post_id: string | null
+          shared_post_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_group_avatar: {
         Args: { p_avatar_url: string; p_conversation_id: string }
         Returns: undefined

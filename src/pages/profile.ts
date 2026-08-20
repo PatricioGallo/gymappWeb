@@ -47,6 +47,8 @@ import {
   type HandleInitiatedBy,
 } from "../services/gymTrainer.service";
 import { listGymClasses, enrollInClass, unenrollFromClass, type GymClassRow, type ClassSession } from "../services/gymClass.service";
+import { listGymTrainerRatings, type GymTrainerRatingRow } from "../services/gymTrainerRating.service";
+import { openRateTrainerModal, openTrainerReviewsModal } from "../lib/gymTrainerRatingModal";
 import { listGymPostsFull, type GymPostFull } from "../services/gymPost.service";
 import { openGymPostViewer } from "../lib/gymPostViewer";
 import { openCreateGymPostModal } from "../lib/gymPostComposer";
@@ -1067,6 +1069,90 @@ async function renderGymClasses(gymId: string, isActiveSocio: boolean, myUserId:
           c.enrolledCount = Math.max(0, c.enrolledCount - 1);
         }
         paint();
+      });
+    });
+  }
+  paint();
+}
+
+// ---------- Entrenadores (solo perfiles de gimnasio, calificacion de handles activos) ----------
+// A diferencia de gymTrainer.service's listGymTrainers (privada, gym-owner-only), esta seccion
+// usa list_gym_trainer_ratings: publica, gate por is_profile_public igual que Clases, y solo
+// muestra handles activos -- no hay nada que ver aca para pending/ended.
+
+function trainerRatingStarsMarkup(avg: number): string {
+  const rounded = Math.round(avg);
+  return `<span class="trainer-rating-stars" aria-hidden="true">${Array.from({ length: 5 }, (_, i) =>
+    `<span class="trainer-rating-star${i < rounded ? " is-filled" : ""}">${TRAINER_STAR_ICON}</span>`
+  ).join("")}</span>`;
+}
+
+const TRAINER_STAR_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l2.76 5.6 6.18.9-4.47 4.36 1.06 6.16L12 16.6l-5.53 2.92 1.06-6.16-4.47-4.36 6.18-.9L12 2.5z"/></svg>`;
+
+function entrenadorRatingCardMarkup(t: GymTrainerRatingRow, isActiveSocio: boolean): string {
+  const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
+  const myRatingLabel = t.myRating != null ? `Tu calificación: ${t.myRating}★ · Editar` : "Calificar";
+
+  const reviewsBtn = t.ratingCount > 0 ? `<button class="btn btn-outline btn-sm viewReviewsBtn" data-trainer="${t.trainerId}" type="button">Ver reseñas</button>` : "";
+  const ratingArea = isActiveSocio
+    ? `<div class="routine-actions"><button class="btn btn-outline btn-sm rateTrainerBtn" data-trainer="${t.trainerId}" type="button">${escapeHtml(myRatingLabel)}</button>${reviewsBtn}</div>`
+    : `${reviewsBtn ? `<div class="routine-actions">${reviewsBtn}</div>` : ""}<p class="gym-gated-note">Hacete socio del gimnasio para calificar.</p>`;
+
+  return `
+    <div class="routine-card reveal" data-trainer="${t.trainerId}">
+      <a class="follow-request-user" href="profile.html?u=${encodeURIComponent(t.username)}">
+        <img src="${escapeHtml(t.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+        <span class="search-result-body">
+          <span class="search-result-name">${escapeHtml(nombreCompleto)}${renderVerifiedBadge("entrenador", t.isVerified)}</span>
+          <span class="search-result-username">@${escapeHtml(t.username)}</span>
+        </span>
+      </a>
+      <div class="trainer-rating-summary">
+        ${trainerRatingStarsMarkup(t.avgRating)}
+        <strong>${t.ratingCount > 0 ? t.avgRating.toFixed(1) : "Sin calificaciones"}</strong>
+        ${t.ratingCount > 0 ? `<span class="trainer-rating-count">(${t.ratingCount})</span>` : ""}
+      </div>
+      ${ratingArea}
+    </div>
+  `;
+}
+
+async function renderGymEntrenadores(gymId: string, isActiveSocio: boolean, myUserId: string | null): Promise<void> {
+  const section = document.getElementById("gymEntrenadoresSection");
+  const summaryEl = document.getElementById("gymEntrenadoresSummary");
+  const listEl = document.getElementById("gymEntrenadoresList");
+  if (!section || !summaryEl || !listEl) return;
+
+  let trainers: GymTrainerRatingRow[];
+  try {
+    trainers = await listGymTrainerRatings(gymId);
+  } catch {
+    return;
+  }
+  // Sin handles activos, la seccion no tiene nada que mostrar -- se mantiene oculta.
+  if (trainers.length === 0) return;
+  section.hidden = false;
+  summaryEl.textContent = "";
+
+  function paint(): void {
+    listEl!.innerHTML = trainers.map((t) => entrenadorRatingCardMarkup(t, isActiveSocio)).join("");
+    listEl!.querySelectorAll<HTMLButtonElement>(".rateTrainerBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!myUserId) return;
+        const t = trainers.find((x) => x.trainerId === btn.dataset.trainer);
+        if (!t) return;
+        const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
+        openRateTrainerModal(gymId, t.trainerId, myUserId, nombreCompleto, { rating: t.myRating, comment: t.myComment }, () => {
+          void renderGymEntrenadores(gymId, isActiveSocio, myUserId);
+        });
+      });
+    });
+    listEl!.querySelectorAll<HTMLButtonElement>(".viewReviewsBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const t = trainers.find((x) => x.trainerId === btn.dataset.trainer);
+        if (!t) return;
+        const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
+        openTrainerReviewsModal(gymId, t.trainerId, nombreCompleto);
       });
     });
   }
@@ -2494,6 +2580,7 @@ async function main(ctx: ViewContext) {
     routinesCtx = null;
     const isActiveSocio = !isOwner && myId ? (await getGymMembershipStatus(displayProfile.id!).catch(() => "none")) === "active" : false;
     void renderGymClasses(displayProfile.id!, isActiveSocio, myId);
+    void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId);
   } else {
     const logs = await listWeightLogsWithContext(displayProfile.id!);
     routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
@@ -2551,6 +2638,17 @@ const VIEW_MARKUP = `
       </div>
       <p class="chart-sub" id="gymClasesSummary"></p>
       <div class="search-page-list" id="gymClasesList"></div>
+    </div>
+  </section>
+
+  <section class="features" id="gymEntrenadoresSection" hidden>
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Gimnasio</span>
+        <h2>Entrenadores</h2>
+      </div>
+      <p class="chart-sub" id="gymEntrenadoresSummary"></p>
+      <div class="search-page-list" id="gymEntrenadoresList"></div>
     </div>
   </section>
 

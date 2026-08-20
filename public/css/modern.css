@@ -3379,6 +3379,45 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .gym-class-enroll-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
 
+/* ---------- Calificacion de entrenadores (handles) de gimnasio ---------- */
+
+.gym-gated-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
+
+.trainer-rating-summary { display: flex; align-items: center; gap: 6px; margin: 10px 0; font-size: 13.5px; color: var(--text-muted); flex-wrap: wrap; }
+.trainer-rating-summary strong { color: var(--text); font-size: 14px; font-weight: 700; }
+
+.trainer-rating-stars { display: inline-flex; gap: 2px; }
+.trainer-rating-star { width: 15px; height: 15px; color: var(--border); }
+.trainer-rating-star svg { width: 100%; height: 100%; }
+.trainer-rating-star.is-filled { color: #f5b942; }
+
+.trainer-rating-count { color: var(--text-muted); }
+
+.trainer-rating-stars-input { display: inline-flex; gap: 6px; }
+.trainer-rating-star-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  color: var(--border);
+  transition: color 0.1s ease;
+}
+.trainer-rating-star-btn svg { width: 100%; height: 100%; }
+.trainer-rating-star-btn.is-filled,
+.trainer-rating-star-btn:hover { color: #f5b942; }
+
+.trainer-reviews-list { max-height: 50vh; overflow-y: auto; margin: 14px 0; }
+.trainer-review-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.trainer-review-row:last-child { border-bottom: none; }
+.trainer-review-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.trainer-review-body { min-width: 0; flex: 1; }
+.trainer-review-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trainer-review-name { font-weight: 700; }
+.trainer-review-date { font-size: 12px; color: var(--text-muted); }
+.trainer-review-comment { margin: 4px 0 0; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+
 /* ---------- Publicaciones de gimnasio: grilla estilo Instagram ---------- */
 
 .gym-post-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
