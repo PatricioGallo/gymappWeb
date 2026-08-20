@@ -1,4 +1,5 @@
 import { escapeHtml } from "./dom";
+import { linkifyHtml } from "./linkify";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
 import { openMediaLightbox } from "./postModals";
@@ -43,39 +44,6 @@ const ICON_METRICS = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none
 
 export function authorLineHtml(author: PostAuthor, badgeSize = 14): string {
   return `${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, badgeSize)}`;
-}
-
-// URL o @usuario (mismo charset que valida el username al registrarse, ver USERNAME_RE en auth.service.ts).
-const URL_OR_MENTION_RE = /(https?:\/\/[^\s]+)|@([a-z0-9_]{3,30})/gi;
-const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]}'"]+$/;
-
-// El preview de abajo (linkPreviewHtml/youtubeEmbedHtml) es solo un adelanto: el
-// texto del Rep puede traer la URL tal cual la pegó el usuario, y esa tiene que
-// seguir siendo un link de verdad al que se le pueda hacer click y te lleve ahi.
-// De paso, un @usuario etiquetado se convierte en link a su perfil (no valida que exista:
-// mismo criterio "best effort" que ya usa la URL de arriba).
-function linkifyHtml(text: string): string {
-  let html = "";
-  let lastIndex = 0;
-  for (const match of text.matchAll(URL_OR_MENTION_RE)) {
-    const start = match.index ?? 0;
-    html += escapeHtml(text.slice(lastIndex, start)).replace(/\n/g, "<br>");
-
-    const [full, urlMatch, mentionMatch] = match;
-    if (urlMatch) {
-      let url = urlMatch;
-      const trailingMatch = url.match(URL_TRAILING_PUNCT_RE);
-      const trailing = trailingMatch ? trailingMatch[0] : "";
-      if (trailing) url = url.slice(0, -trailing.length);
-      html += `<a class="post-card-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
-      html += escapeHtml(trailing);
-    } else {
-      html += `<a class="post-card-mention" href="profile.html?u=${encodeURIComponent(mentionMatch)}">@${escapeHtml(mentionMatch)}</a>`;
-    }
-    lastIndex = start + full.length;
-  }
-  html += escapeHtml(text.slice(lastIndex)).replace(/\n/g, "<br>");
-  return html;
 }
 
 // linkify=false para texto que ya vive adentro de un <a> (la cita: quotedPostHtml

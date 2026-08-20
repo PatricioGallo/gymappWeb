@@ -1,4 +1,5 @@
 import { escapeHtml } from "../lib/dom";
+import { linkifyHtml } from "../lib/linkify";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { supabase } from "../lib/supabaseClient";
 import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
@@ -732,7 +733,7 @@ export async function mountThread(
     }
     const isSticker = m.attachment_type === "sticker";
     const stickerHtml = isSticker ? `<span class="chat-bubble-sticker">${escapeHtml(m.content ?? "")}</span>` : "";
-    const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${escapeHtml(m.content)}</p>` : "";
+    const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${linkifyHtml(m.content)}</p>` : "";
     const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
     const editedHtml = m.edited_at ? `<span class="chat-bubble-edited">editado</span>` : "";
     return `
@@ -1274,6 +1275,7 @@ export async function mountThread(
         return;
       }
       if (target.closest(".chat-shared-post")) return;
+      if (target.closest("a")) return;
       const bubble = target.closest<HTMLElement>(".chat-bubble");
       if (bubble?.dataset.id) {
         const message = messages.find((m) => m.id === bubble.dataset.id);
