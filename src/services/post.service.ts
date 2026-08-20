@@ -154,7 +154,7 @@ async function getViewerId(): Promise<string | null> {
 // Consulta separada a profiles_public en vez de un embed de PostgREST: la vista
 // no es "simple" (bypassea RLS a proposito) y el embed automatico contra ella
 // devuelve null en el join real aunque la relacion se detecte sin error.
-async function fetchAuthorsByIds(ids: string[]): Promise<Map<string, PostAuthor>> {
+export async function fetchAuthorsByIds(ids: string[]): Promise<Map<string, PostAuthor>> {
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) return new Map();
   const { data, error } = await supabase
@@ -627,7 +627,7 @@ export async function deleteComment(commentId: string): Promise<{ error?: string
 const UPLOAD_TIMEOUT_MIN_MS = 30_000;
 const UPLOAD_TIMEOUT_BYTES_PER_SEC = 150 * 1024; // ~150KB/s, conexion movil lenta
 
-function withUploadTimeout<T>(promise: Promise<T>, fileSize: number): Promise<T> {
+export function withUploadTimeout<T>(promise: Promise<T>, fileSize: number): Promise<T> {
   const timeoutMs = Math.max(UPLOAD_TIMEOUT_MIN_MS, Math.ceil((fileSize / UPLOAD_TIMEOUT_BYTES_PER_SEC) * 1000));
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("upload-timeout")), timeoutMs);
@@ -685,14 +685,25 @@ function readVideoDurationSeconds(file: File): Promise<number> {
   });
 }
 
-/** Rechaza videos de mas de 2 minutos antes de subirlos. Null = duracion valida (o no se pudo determinar, se deja pasar). */
-export async function validatePostVideoDuration(file: File): Promise<string | null> {
-  if (!POST_VIDEO_TYPES.includes(file.type)) return null;
+/**
+ * Rechaza videos de mas de maxSeconds antes de subirlos. Null = duracion valida (o no se pudo
+ * determinar, se deja pasar). Formato-agnostico (solo mira que el mime empiece con "video/"), a
+ * diferencia de validatePostVideoDuration de abajo -- reusado por gymPost.service.ts, que acepta
+ * cualquier formato de video en vez de la lista fija de Reps.
+ */
+export async function validateVideoDurationSeconds(file: File, maxSeconds: number): Promise<string | null> {
+  if (!file.type.startsWith("video/")) return null;
   try {
     const duration = await readVideoDurationSeconds(file);
-    if (duration > POST_VIDEO_MAX_DURATION_SEC) return "El video no puede durar más de 2 minutos.";
+    if (duration > maxSeconds) return `El video no puede durar más de ${Math.round(maxSeconds / 60)} minutos.`;
     return null;
   } catch {
     return null; // no se pudo leer metadata (formato raro/navegador viejo): no bloqueamos, el backend igual valida peso
   }
+}
+
+/** Rechaza videos de mas de 2 minutos antes de subirlos. Null = duracion valida (o no se pudo determinar, se deja pasar). */
+export async function validatePostVideoDuration(file: File): Promise<string | null> {
+  if (!POST_VIDEO_TYPES.includes(file.type)) return null;
+  return validateVideoDurationSeconds(file, POST_VIDEO_MAX_DURATION_SEC);
 }

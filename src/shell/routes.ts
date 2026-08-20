@@ -11,6 +11,9 @@ import { modExcView } from "../pages/modExc";
 import { showExcView } from "../pages/showExc";
 import { postView } from "../pages/post";
 import { alumnosView } from "../pages/alumnos";
+import { sociosView } from "../pages/socios";
+import { entrenadoresView } from "../pages/entrenadores";
+import { clasesView } from "../pages/clases";
 import { progressView } from "../pages/progress";
 import { rutinsView } from "../pages/rutins";
 import { feedView } from "../pages/feed";
@@ -82,6 +85,21 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/alumnos.html") ? new URLSearchParams() : null),
     view: alumnosView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/socios.html") ? new URLSearchParams() : null),
+    view: sociosView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/entrenadores.html") ? new URLSearchParams() : null),
+    view: entrenadoresView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/clases.html") ? new URLSearchParams() : null),
+    view: clasesView,
     auth: "required",
   });
   registerRoute({

@@ -37,6 +37,21 @@ import {
   type SubscriptionStatus,
   type SubscriberListRow,
 } from "../services/subscription.service";
+import { getGymMembershipStatus, getSocioCount, requestGymMembership, leaveGym, type GymMembershipStatus } from "../services/gymMember.service";
+import {
+  getGymTrainerHandleStatus,
+  requestGymTrainerHandle,
+  acceptGymTrainerInvite,
+  leaveGymAsTrainer,
+  type GymTrainerHandleStatus,
+  type HandleInitiatedBy,
+} from "../services/gymTrainer.service";
+import { listGymClasses, enrollInClass, unenrollFromClass, type GymClassRow, type ClassSession } from "../services/gymClass.service";
+import { listGymTrainerRatings, type GymTrainerRatingRow } from "../services/gymTrainerRating.service";
+import { openRateTrainerModal, openTrainerReviewsModal } from "../lib/gymTrainerRatingModal";
+import { listGymPostsFull, type GymPostFull } from "../services/gymPost.service";
+import { openGymPostViewer } from "../lib/gymPostViewer";
+import { openCreateGymPostModal } from "../lib/gymPostComposer";
 import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
@@ -233,15 +248,16 @@ function renderProfileIdentity(username: string, nombre: string, apellido: strin
   }
 }
 
-async function renderProfileStats(userId: string, username: string, canViewLists: boolean, userType: Profile["user_type"]) {
+async function renderProfileStats(userId: string, username: string, canViewLists: boolean, userType: Profile["user_type"], isOwner: boolean) {
   const stats = document.getElementById("profileStats");
   if (!stats) return;
   const [counts, postCount] = await Promise.all([
     getFollowCounts(userId).catch(() => ({ followers: 0, following: 0 })),
     getUserPostCount(userId).catch(() => 0),
   ]);
-  // Suscriptores solo aplica a entrenadores (gimnasio tendra su propio sistema mas adelante).
+  // Suscriptores solo aplica a entrenadores, socios solo a gimnasios.
   const subscriberCount = userType === "entrenador" ? await getSubscriberCount(userId).catch(() => 0) : null;
+  const socioCount = userType === "gimnasio" ? await getSocioCount(userId).catch(() => 0) : null;
   const u = encodeURIComponent(username);
 
   function stat(count: number, label: string, tab: "followers" | "following" | "subscribers"): string {
@@ -249,11 +265,21 @@ async function renderProfileStats(userId: string, username: string, canViewLists
     return canViewLists ? `<a class="profile-stat" href="followers.html?u=${u}&tab=${tab}">${inner}</a>` : `<span class="profile-stat">${inner}</span>`;
   }
 
+  // El listado de socios es informacion de gestion privada del gimnasio (nombre, estado,
+  // fecha de alta, boton para dar de baja) -- a diferencia de seguidores/suscriptores no es
+  // un listado semi-publico, asi que solo el dueño del perfil puede entrar a verlo.
+  const socioStat = socioCount !== null
+    ? isOwner
+      ? `<a class="profile-stat" href="socios.html">${`<strong>${socioCount}</strong> socios`}</a>`
+      : `<span class="profile-stat"><strong>${socioCount}</strong> socios</span>`
+    : "";
+
   stats.innerHTML = `
     <span class="profile-stat"><strong>${postCount}</strong> publicaciones</span>
     ${stat(counts.followers, "seguidores", "followers")}
     ${stat(counts.following, "seguidos", "following")}
     ${subscriberCount !== null ? stat(subscriberCount, "suscriptores", "subscribers") : ""}
+    ${socioStat}
   `;
 }
 
@@ -400,6 +426,50 @@ function initSubscribeButton(targetId: string, initialStatus: SubscriptionStatus
   });
 }
 
+function socioButtonLabel(status: GymMembershipStatus): string {
+  if (status === "pending") return "Solicitud enviada";
+  if (status === "active") return "Socio";
+  return "Ser socio";
+}
+
+function initSocioButton(targetId: string, initialStatus: GymMembershipStatus) {
+  const btn = document.getElementById("socioBtn") as HTMLButtonElement | null;
+  if (!btn || !myId) return;
+  let status: GymMembershipStatus = initialStatus;
+
+  function paint() {
+    btn!.textContent = socioButtonLabel(status);
+    btn!.classList.toggle("btn-primary", status === "none");
+    btn!.classList.toggle("btn-outline", status !== "none");
+  }
+  paint();
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      if (status === "none") {
+        const { status: newStatus, error } = await requestGymMembership(targetId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = newStatus ?? "pending";
+      } else {
+        // "Solicitud enviada" -> cancela; "Socio" -> deja de ser socio. Misma operación.
+        const { error } = await leaveGym(targetId, myId!);
+        if (error) {
+          alert(error);
+          return;
+        }
+        status = "none";
+      }
+      paint();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 async function renderProfileActions(
   targetId: string,
   username: string,
@@ -412,13 +482,16 @@ async function renderProfileActions(
   // Si hay un bloqueo de por medio (en cualquier direccion) no tiene sentido mostrar
   // "+ Seguir": el trigger de la base lo rechaza igual, pero evitamos el error confuso.
   const showFollowBtn = !ownerView && viewerLoggedIn && blockStatus === "none";
-  // Suscripcion solo tiene sentido contra un entrenador (gimnasio tendra su propio flujo mas adelante).
+  // Suscripcion solo tiene sentido contra un entrenador; "socio" solo contra un gimnasio.
   const showSubscribeBtn = showFollowBtn && targetUserType === "entrenador";
+  const showSocioBtn = showFollowBtn && targetUserType === "gimnasio";
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
-  // "ended" (fue alumno, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
-  // suscribirse, y la RPC de suscripcion reactiva ese mismo vinculo historico si corresponde.
+  // "ended" (fue alumno/socio, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
+  // suscribirse/hacerse socio, y la RPC reactiva ese mismo vinculo historico si corresponde.
   const rawSubscriptionStatus: SubscriptionStatus = showSubscribeBtn ? await getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : "none";
   const subscriptionStatus: SubscriptionStatus = rawSubscriptionStatus === "ended" ? "none" : rawSubscriptionStatus;
+  const rawSocioStatus: GymMembershipStatus = showSocioBtn ? await getGymMembershipStatus(targetId).catch(() => "none" as GymMembershipStatus) : "none";
+  const socioStatus: GymMembershipStatus = rawSocioStatus === "ended" ? "none" : rawSocioStatus;
   if (!actions) return followStatus;
 
   // En mi propio perfil, "Compartir perfil"; en el de otro con sesion iniciada,
@@ -440,11 +513,13 @@ async function renderProfileActions(
     ${secondaryBtn}
     ${showFollowBtn ? `<button class="btn ${followStatus === "none" ? "btn-primary" : "btn-outline"}" id="followBtn" type="button">${followButtonLabel(followStatus)}</button>` : ""}
     ${showSubscribeBtn ? `<button class="btn ${subscriptionStatus === "none" ? "btn-primary" : "btn-outline"}" id="subscribeBtn" type="button">${subscribeButtonLabel(subscriptionStatus)}</button>` : ""}
+    ${showSocioBtn ? `<button class="btn ${socioStatus === "none" ? "btn-primary" : "btn-outline"}" id="socioBtn" type="button">${socioButtonLabel(socioStatus)}</button>` : ""}
   `;
   if (showMessageBtn) initMessageButton(targetId);
   else initShare(username, "shareBtn");
   if (showFollowBtn) initFollowButton(targetId, followStatus);
   if (showSubscribeBtn) initSubscribeButton(targetId, subscriptionStatus);
+  if (showSocioBtn) initSocioButton(targetId, socioStatus);
   return followStatus;
 }
 
@@ -459,8 +534,52 @@ const SETTINGS_ICON = profileMenuIcon(`<circle cx="12" cy="12" r="3"/><path d="M
 const BLOCK_ICON = profileMenuIcon(`<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>`);
 const REPORT_ICON = profileMenuIcon(`<path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>`);
 const REPORT_USER_ICON = profileMenuIcon(`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>`);
+const HANDLE_ICON = profileMenuIcon(`<path d="M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M10 5h4v2h-4z"/>`);
 
-function renderProfileMenu(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus) {
+// ---------- Item "Handle" del menu (solo entrenador visitando el perfil de un gimnasio) ----------
+
+function confirmHandleAction(title: string, subtitle: string, confirmLabel: string, danger: boolean, onConfirm: () => Promise<{ error?: string }>, onDone: () => void): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>${escapeHtml(title)}</h2>
+        <p class="subtitle">${escapeHtml(subtitle)}</p>
+        <div class="modal-actions">
+          <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirmHandleActionBtn" type="button">${escapeHtml(confirmLabel)}</button>
+          <button class="btn btn-outline" id="cancelHandleActionBtn" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("cancelHandleActionBtn")?.addEventListener("click", closeOverlay);
+  document.getElementById("confirmHandleActionBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("confirmHandleActionBtn") as HTMLButtonElement;
+    btn.disabled = true;
+    const { error } = await onConfirm();
+    closeOverlay();
+    if (error) {
+      alert(error);
+      return;
+    }
+    onDone();
+  });
+}
+
+function handleMenuItemsMarkup(status: GymTrainerHandleStatus, initiatedBy: HandleInitiatedBy): string {
+  if (status === "pending" && initiatedBy === "gym") {
+    return `
+      <button class="profile-menu-item" id="menuAcceptHandleBtn" type="button">${HANDLE_ICON}Aceptar invitación de handle</button>
+      <button class="profile-menu-item profile-menu-item-danger" id="menuRejectHandleBtn" type="button">${HANDLE_ICON}Rechazar invitación de handle</button>
+    `;
+  }
+  if (status === "pending") return `<button class="profile-menu-item" id="menuCancelHandleBtn" type="button">${HANDLE_ICON}Cancelar solicitud de handle</button>`;
+  if (status === "active") return `<button class="profile-menu-item profile-menu-item-danger" id="menuLeaveHandleBtn" type="button">${HANDLE_ICON}Dejar de ser handle de este gimnasio</button>`;
+  return `<button class="profile-menu-item" id="menuRequestHandleBtn" type="button">${HANDLE_ICON}Ser handle de este gimnasio</button>`;
+}
+
+async function renderProfileMenu(targetId: string, username: string, ownerView: boolean, viewerLoggedIn: boolean, blockStatus: BlockStatus, targetUserType: Profile["user_type"]) {
   const wrap = document.getElementById("profileMenuWrap");
   const panel = document.getElementById("profileMenuPanel");
   if (!wrap || !panel) return;
@@ -469,17 +588,63 @@ function renderProfileMenu(targetId: string, username: string, ownerView: boolea
   const reportItem = `<button class="profile-menu-item" id="menuReportBtn" type="button">${REPORT_ICON}Reportar un error</button>`;
   const reportUserItem = `<button class="profile-menu-item profile-menu-item-danger" id="menuReportUserBtn" type="button">${REPORT_USER_ICON}Reportar usuario</button>`;
 
+  // "Handle" solo tiene sentido si un entrenador esta mirando el perfil de un gimnasio.
+  const handleEligible = !ownerView && viewerLoggedIn && targetUserType === "gimnasio";
+  let showHandleItem = false;
+  let handleItem = "";
+  if (handleEligible) {
+    const viewerBasic = await getProfileBasicById(myId!).catch(() => null);
+    if (viewerBasic?.user_type === "entrenador") {
+      showHandleItem = true;
+      const h = await getGymTrainerHandleStatus(targetId).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy }));
+      const handleStatus = h.status === "ended" ? "none" : h.status;
+      handleItem = handleMenuItemsMarkup(handleStatus, h.initiatedBy);
+    }
+  }
+
   if (ownerView) {
     panel.innerHTML = `${shareItem}<a class="profile-menu-item" href="/pages/settings.html">${SETTINGS_ICON}Configuración</a>${reportItem}`;
   } else if (viewerLoggedIn) {
     const blockLabel = blockStatus === "blocked_by_me" ? "Desbloquear usuario" : "Bloquear usuario";
-    panel.innerHTML = `${shareItem}<button class="profile-menu-item profile-menu-item-danger" id="menuBlockBtn" type="button">${BLOCK_ICON}${blockLabel}</button>${reportUserItem}${reportItem}`;
+    panel.innerHTML = `${shareItem}${showHandleItem ? handleItem : ""}<button class="profile-menu-item profile-menu-item-danger" id="menuBlockBtn" type="button">${BLOCK_ICON}${blockLabel}</button>${reportUserItem}${reportItem}`;
   } else {
     panel.innerHTML = shareItem;
   }
 
   wrap.hidden = false;
   initShare(username, "menuShareBtn");
+
+  function refreshMenu(): void {
+    void renderProfileMenu(targetId, username, ownerView, viewerLoggedIn, blockStatus, targetUserType);
+  }
+
+  document.getElementById("menuRequestHandleBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    confirmHandleAction(
+      "Ser handle de este gimnasio",
+      "Le vas a pedir al gimnasio que te sume como entrenador. El gimnasio tiene que aceptar y va a elegir por cuánto tiempo vas a ser handle.",
+      "Pedir",
+      false,
+      () => requestGymTrainerHandle(targetId),
+      refreshMenu
+    );
+  });
+  document.getElementById("menuCancelHandleBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    confirmHandleAction("Cancelar solicitud de handle", "Se cancela tu solicitud para ser handle de este gimnasio.", "Cancelar solicitud", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
+  });
+  document.getElementById("menuAcceptHandleBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    confirmHandleAction("Aceptar invitación", "Vas a pasar a ser handle de este gimnasio, con la duración que ya definió.", "Aceptar", false, () => acceptGymTrainerInvite(targetId, myId!), refreshMenu);
+  });
+  document.getElementById("menuRejectHandleBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    confirmHandleAction("Rechazar invitación", "No vas a ser handle de este gimnasio.", "Rechazar", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
+  });
+  document.getElementById("menuLeaveHandleBtn")?.addEventListener("click", () => {
+    panel.hidden = true;
+    confirmHandleAction("Dejar de ser handle", "Vas a dejar de ser handle de este gimnasio. Vas a poder volver a pedirlo cuando quieras.", "Dejar de ser handle", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
+  });
 
   document.getElementById("menuBlockBtn")?.addEventListener("click", () => {
     panel.hidden = true;
@@ -755,6 +920,31 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
   const quickActions = document.getElementById("quickActions");
   if (!quickActions) return;
 
+  // El gimnasio no tiene rutinas propias ni progreso: sus accesos rapidos son un set
+  // completamente distinto, no un agregado sobre el de usuario/entrenador de abajo.
+  if (userType === "gimnasio") {
+    quickActions.innerHTML = `
+    <a class="quick-card reveal" href="/pages/socios.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div><h3>Tus socios</h3><p>Gestioná los socios de tu gimnasio</p></div>
+    </a>
+    <a class="quick-card reveal" href="/pages/entrenadores.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/></svg></div>
+      <div><h3>Tus entrenadores</h3><p>Solicitudes, invitaciones y tu plantel de handles</p></div>
+    </a>
+    <a class="quick-card reveal" href="/pages/clases.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
+      <div><h3>Tus clases</h3><p>Horarios, profesores e inscripción de socios</p></div>
+    </a>
+    <button type="button" class="quick-card reveal" id="addGymPostQuickBtn">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+      <div><h3>Agregar publicación</h3><p>Compartí fotos o videos con tus socios, entrenadores o público</p></div>
+    </button>
+  `;
+    document.getElementById("addGymPostQuickBtn")?.addEventListener("click", () => activityTabsController?.openCreatePost());
+    return;
+  }
+
   quickActions.innerHTML = `
     <a class="quick-card reveal" href="#rutinas">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
@@ -777,6 +967,229 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
         : ""
     }
   `;
+}
+
+// ---------- Clases (solo perfiles de gimnasio) ----------
+
+const CLASE_DAY_ABBR = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+function claseFormatTime(t: string): string {
+  return t.slice(0, 5);
+}
+
+function claseSessionsSummary(sessions: ClassSession[]): string {
+  if (sessions.length === 0) return "Sin horario definido";
+  return sessions.map((s) => `${CLASE_DAY_ABBR[s.dayOfWeek]} ${claseFormatTime(s.startTime)}-${claseFormatTime(s.endTime)}`).join(", ");
+}
+
+function claseCardMarkup(c: GymClassRow, isActiveSocio: boolean): string {
+  const instructorName = c.instructorId ? `${c.instructorNombre ?? ""} ${c.instructorApellido ?? ""}`.trim() || c.instructorUsername : null;
+  const instructorLine = instructorName
+    ? c.instructorUsername
+      ? `<a href="profile.html?u=${encodeURIComponent(c.instructorUsername)}">${escapeHtml(instructorName)}</a>`
+      : escapeHtml(instructorName)
+    : "Sin asignar";
+
+  let enrollArea = "";
+  if (c.allowEnrollment) {
+    if (isActiveSocio) {
+      enrollArea = c.isEnrolled
+        ? `<div class="routine-actions"><button class="btn btn-outline btn-sm unenrollClassBtn" data-id="${c.id}" type="button">Cancelar inscripción</button></div>`
+        : `<div class="routine-actions"><button class="btn btn-primary btn-sm enrollClassBtn" data-id="${c.id}" type="button">Inscribirme</button></div>`;
+    } else {
+      enrollArea = `<p class="gym-class-enroll-note">Hacete socio del gimnasio para inscribirte.</p>`;
+    }
+  }
+
+  return `
+    <div class="routine-card reveal" data-id="${c.id}">
+      ${c.imageUrl ? `<img src="${escapeHtml(c.imageUrl)}" alt="" class="gym-class-image">` : ""}
+      <h3>${escapeHtml(c.name)}</h3>
+      ${c.description ? `<p>${escapeHtml(c.description)}</p>` : ""}
+      <div class="routine-stats">
+        <div><span>Profesor</span><strong>${instructorLine}</strong></div>
+        <div><span>Horarios</span><strong>${escapeHtml(claseSessionsSummary(c.sessions))}</strong></div>
+      </div>
+      ${enrollArea}
+    </div>
+  `;
+}
+
+async function renderGymClasses(gymId: string, isActiveSocio: boolean, myUserId: string | null): Promise<void> {
+  const section = document.getElementById("gymClasesSection");
+  const summaryEl = document.getElementById("gymClasesSummary");
+  const listEl = document.getElementById("gymClasesList");
+  if (!section || !summaryEl || !listEl) return;
+
+  let classes: GymClassRow[];
+  try {
+    classes = await listGymClasses(gymId);
+  } catch {
+    return;
+  }
+  // Sin clases publicadas, la seccion entera no tiene nada que mostrar -- se mantiene
+  // oculta (arranca hidden en el markup) en vez de mostrar un estado vacio.
+  if (classes.length === 0) return;
+  section.hidden = false;
+  summaryEl.textContent = "";
+
+  function paint(): void {
+    listEl!.innerHTML = classes.map((c) => claseCardMarkup(c, isActiveSocio)).join("");
+    listEl!.querySelectorAll<HTMLButtonElement>(".enrollClassBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!myUserId) return;
+        btn.disabled = true;
+        const { error } = await enrollInClass(btn.dataset.id!, myUserId);
+        if (error) {
+          alert(error);
+          btn.disabled = false;
+          return;
+        }
+        const c = classes.find((x) => x.id === btn.dataset.id);
+        if (c) {
+          c.isEnrolled = true;
+          c.enrolledCount += 1;
+        }
+        paint();
+      });
+    });
+    listEl!.querySelectorAll<HTMLButtonElement>(".unenrollClassBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!myUserId) return;
+        btn.disabled = true;
+        const { error } = await unenrollFromClass(btn.dataset.id!, myUserId);
+        if (error) {
+          alert(error);
+          btn.disabled = false;
+          return;
+        }
+        const c = classes.find((x) => x.id === btn.dataset.id);
+        if (c) {
+          c.isEnrolled = false;
+          c.enrolledCount = Math.max(0, c.enrolledCount - 1);
+        }
+        paint();
+      });
+    });
+  }
+  paint();
+}
+
+// ---------- Entrenadores (solo perfiles de gimnasio, calificacion de handles activos) ----------
+// A diferencia de gymTrainer.service's listGymTrainers (privada, gym-owner-only), esta seccion
+// usa list_gym_trainer_ratings: publica, gate por is_profile_public igual que Clases, y solo
+// muestra handles activos -- no hay nada que ver aca para pending/ended.
+
+function trainerRatingStarsMarkup(avg: number): string {
+  const rounded = Math.round(avg);
+  return `<span class="trainer-rating-stars" aria-hidden="true">${Array.from({ length: 5 }, (_, i) =>
+    `<span class="trainer-rating-star${i < rounded ? " is-filled" : ""}">${TRAINER_STAR_ICON}</span>`
+  ).join("")}</span>`;
+}
+
+const TRAINER_STAR_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l2.76 5.6 6.18.9-4.47 4.36 1.06 6.16L12 16.6l-5.53 2.92 1.06-6.16-4.47-4.36 6.18-.9L12 2.5z"/></svg>`;
+
+function entrenadorRatingCardMarkup(t: GymTrainerRatingRow, isActiveSocio: boolean): string {
+  const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
+  const myRatingLabel = t.myRating != null ? `Tu calificación: ${t.myRating}★ · Editar` : "Calificar";
+
+  const reviewsBtn = t.ratingCount > 0 ? `<button class="btn btn-outline btn-sm viewReviewsBtn" data-trainer="${t.trainerId}" type="button">Ver reseñas</button>` : "";
+  const ratingArea = isActiveSocio
+    ? `<div class="routine-actions"><button class="btn btn-outline btn-sm rateTrainerBtn" data-trainer="${t.trainerId}" type="button">${escapeHtml(myRatingLabel)}</button>${reviewsBtn}</div>`
+    : `${reviewsBtn ? `<div class="routine-actions">${reviewsBtn}</div>` : ""}<p class="gym-gated-note">Hacete socio del gimnasio para calificar.</p>`;
+
+  return `
+    <div class="routine-card reveal" data-trainer="${t.trainerId}">
+      <a class="follow-request-user" href="profile.html?u=${encodeURIComponent(t.username)}">
+        <img src="${escapeHtml(t.avatarUrl || "/images/avatars/default.svg")}" alt="" class="search-result-avatar">
+        <span class="search-result-body">
+          <span class="search-result-name">${escapeHtml(nombreCompleto)}${renderVerifiedBadge("entrenador", t.isVerified)}</span>
+          <span class="search-result-username">@${escapeHtml(t.username)}</span>
+        </span>
+      </a>
+      <div class="trainer-rating-summary">
+        ${trainerRatingStarsMarkup(t.avgRating)}
+        <strong>${t.ratingCount > 0 ? t.avgRating.toFixed(1) : "Sin calificaciones"}</strong>
+        ${t.ratingCount > 0 ? `<span class="trainer-rating-count">(${t.ratingCount})</span>` : ""}
+      </div>
+      ${ratingArea}
+    </div>
+  `;
+}
+
+async function renderGymEntrenadores(gymId: string, isActiveSocio: boolean, myUserId: string | null): Promise<void> {
+  const section = document.getElementById("gymEntrenadoresSection");
+  const summaryEl = document.getElementById("gymEntrenadoresSummary");
+  const listEl = document.getElementById("gymEntrenadoresList");
+  if (!section || !summaryEl || !listEl) return;
+
+  let trainers: GymTrainerRatingRow[];
+  try {
+    trainers = await listGymTrainerRatings(gymId);
+  } catch {
+    return;
+  }
+  // Sin handles activos, la seccion no tiene nada que mostrar -- se mantiene oculta.
+  if (trainers.length === 0) return;
+  section.hidden = false;
+  summaryEl.textContent = "";
+
+  function paint(): void {
+    listEl!.innerHTML = trainers.map((t) => entrenadorRatingCardMarkup(t, isActiveSocio)).join("");
+    listEl!.querySelectorAll<HTMLButtonElement>(".rateTrainerBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!myUserId) return;
+        const t = trainers.find((x) => x.trainerId === btn.dataset.trainer);
+        if (!t) return;
+        const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
+        openRateTrainerModal(gymId, t.trainerId, myUserId, nombreCompleto, { rating: t.myRating, comment: t.myComment }, () => {
+          void renderGymEntrenadores(gymId, isActiveSocio, myUserId);
+        });
+      });
+    });
+    listEl!.querySelectorAll<HTMLButtonElement>(".viewReviewsBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const t = trainers.find((x) => x.trainerId === btn.dataset.trainer);
+        if (!t) return;
+        const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
+        openTrainerReviewsModal(gymId, t.trainerId, nombreCompleto);
+      });
+    });
+  }
+  paint();
+}
+
+// ---------- Publicaciones (solo perfiles de gimnasio, grilla estilo Instagram) ----------
+// Viven como una pestaña mas de "Tu actividad" (ver setupActivityTabs) en vez de una seccion
+// fija: para un gimnasio es la pestaña por defecto. RLS de list_gym_posts_full ya filtra que
+// publicaciones puede ver este visitante puntual segun su visibilidad (publica/socios/
+// entrenadores) -- aca solo se pinta lo que vino, sin recalcular nada del lado del cliente.
+
+const GYM_POST_GRID_ICON_MULTI = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 15V5a2 2 0 0 1 2-2h10"/></svg>`;
+const GYM_POST_GRID_ICON_PLAY = `<svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+
+function gymPostGridCellMarkup(p: GymPostFull): string {
+  const cover = p.media[0];
+  const isVideo = cover?.type === "video";
+  return `
+    <button type="button" class="gym-post-grid-cell" data-id="${p.id}">
+      ${cover ? (isVideo ? `<video src="${escapeHtml(cover.url)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(cover.url)}" alt="">`) : ""}
+      ${p.pinned ? `<span class="gym-post-grid-pin">Fijada</span>` : ""}
+      ${p.media.length > 1 ? `<span class="gym-post-grid-icon">${GYM_POST_GRID_ICON_MULTI}</span>` : isVideo ? `<span class="gym-post-grid-icon">${GYM_POST_GRID_ICON_PLAY}</span>` : ""}
+    </button>
+  `;
+}
+
+function gymAuthorFromProfile(profile: { id?: string | null; username?: string | null; nombre?: string | null; apellido?: string | null; avatar_url?: string | null; is_verified?: boolean | null }): PostAuthor {
+  return {
+    id: profile.id!,
+    username: profile.username ?? "",
+    nombre: profile.nombre ?? "",
+    apellido: profile.apellido ?? "",
+    avatarUrl: profile.avatar_url ?? null,
+    userType: "gimnasio",
+    isVerified: profile.is_verified ?? false,
+  };
 }
 
 // ---------- Estadisticas ----------
@@ -993,10 +1406,12 @@ let routinesCtx: {
   widgets: StatWidget[];
   showStats: boolean;
 } | null = null;
-// Puente hacia el closure de setupActivityTabs (agregar/sacar el boton "Estadisticas" y saltar
-// de pestaña si hacia falta) para cuando show_stats cambia en Configuración mientras esta
-// instancia de perfil sigue viva en cache -- ver refreshCurrentRoutinesTab.
-let activityTabsController: { setShowStats(next: boolean): void } | null = null;
+// Puente hacia el closure de setupActivityTabs: agregar/sacar el boton "Estadisticas" y saltar
+// de pestaña si hacia falta (para cuando show_stats cambia en Configuración mientras esta
+// instancia de perfil sigue viva en cache, ver refreshCurrentRoutinesTab), y abrir el modal de
+// "Agregar publicación" desde el quick-action del dueño de un gimnasio (ver renderQuickActions)
+// sin que ese renderer tenga que conocer nada de la pestaña Publicaciones.
+let activityTabsController: { setShowStats(next: boolean): void; openCreatePost(): void } | null = null;
 
 // Mismo fallback tabla-cruda/vista-publica que usa main(): el dueño (o un admin/entrenador con
 // acceso) ve profiles directamente; cualquier otro visitante cae a profiles_public.
@@ -1008,7 +1423,7 @@ async function fetchStatsPrefs(userId: string): Promise<{ showStats: boolean; wi
 // Idem para poder refrescar seguidores/seguidos/suscriptores/publicaciones al volver a esta
 // instancia (ver refreshCurrentRoutinesTab) -- a diferencia de routinesCtx, no depende de
 // weight_logs asi que no necesita cargar nada pesado, solo re-pedir los contadores.
-let profileStatsCtx: { userId: string; username: string; canViewLists: boolean; userType: Profile["user_type"] } | null = null;
+let profileStatsCtx: { userId: string; username: string; canViewLists: boolean; userType: Profile["user_type"]; isOwner: boolean } | null = null;
 
 async function refreshRoutinesAndStats() {
   if (!routinesCtx) return;
@@ -1028,11 +1443,13 @@ async function refreshRoutinesAndStats() {
 // refreshRoutinesAndStats (pensada para finalizar/reactivar, siempre en la pestaña
 // "Activas"), esta respeta la pestaña de rutinas que el usuario tenia seleccionada.
 async function refreshCurrentRoutinesTab() {
-  if (!routinesCtx) return;
-
   if (profileStatsCtx) {
-    void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType);
+    void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType, profileStatsCtx.isOwner);
   }
+
+  // Un gimnasio no tiene rutinas (routinesCtx queda null a proposito, ver main()) -- ya se
+  // refresco lo unico que le aplica (seguidores/socios arriba), no hay nada mas que hacer.
+  if (!routinesCtx) return;
 
   const logs = await listWeightLogsWithContext(routinesCtx.userId).catch(() => routinesCtx!.logs);
   routinesCtx.logs = logs;
@@ -1081,28 +1498,32 @@ async function refreshCurrentRoutinesTab() {
 
 const ACTIVITY_PAGE_SIZE = 20;
 
-type ActivityTab = "stats" | "reps" | "media" | "likes";
+// "publicaciones" (solo gimnasios) no entra en los mismos mapas/tipos que reps/media/likes:
+// trae GymPostFull (grilla + visor propios), no FeedPost -- se maneja aparte en cada rama de
+// abajo (renderList/loadMore/switchTab), nunca se castea a FeedActivityTab.
+type ActivityTab = "stats" | "reps" | "media" | "likes" | "publicaciones";
+type FeedActivityTab = Exclude<ActivityTab, "stats" | "publicaciones">;
 type ActivityFetcher = (userId: string, beforeIso?: string) => Promise<FeedPost[]>;
 
-const ACTIVITY_FETCHERS: Record<Exclude<ActivityTab, "stats">, ActivityFetcher> = {
+const ACTIVITY_FETCHERS: Record<FeedActivityTab, ActivityFetcher> = {
   reps: getUserRepsAndReposts,
   media: getUserMedia,
   likes: getUserLikedPosts,
 };
 
-const ACTIVITY_TITLES: Record<Exclude<ActivityTab, "stats">, string> = {
+const ACTIVITY_TITLES: Record<FeedActivityTab, string> = {
   reps: "Reps",
   media: "Multimedia",
   likes: "Me gusta",
 };
 
-function activityEmptyMessage(tab: Exclude<ActivityTab, "stats">, isOwner: boolean): string {
+function activityEmptyMessage(tab: FeedActivityTab, isOwner: boolean): string {
   if (tab === "reps") return isOwner ? "Todavía no publicaste ningún Rep." : "Todavía no publicó ningún Rep.";
   if (tab === "media") return isOwner ? "Todavía no subiste fotos ni videos." : "Todavía no subió fotos ni videos.";
   return isOwner ? "Todavía no le pusiste me gusta a nada." : "Todavía no le puso me gusta a nada.";
 }
 
-function activitySubtitle(tab: Exclude<ActivityTab, "stats">, isOwner: boolean, nombre: string): string {
+function activitySubtitle(tab: FeedActivityTab, isOwner: boolean, nombre: string): string {
   if (tab === "reps") return isOwner ? "Los Reps que publicaste y reposteaste." : `Los Reps que publicó y reposteó ${nombre}.`;
   if (tab === "media") return isOwner ? "Las fotos y videos que subiste." : `Las fotos y videos que subió ${nombre}.`;
   return isOwner ? "Los Reps que te gustaron." : `Los Reps que le gustaron a ${nombre}.`;
@@ -1116,7 +1537,14 @@ function goToPost(postId: string): void {
   smartNavigate(`post.html?id=${encodeURIComponent(postId)}`);
 }
 
-function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string, ctx: ViewContext, showStats: boolean): void {
+function setupActivityTabs(
+  targetUserId: string,
+  isOwner: boolean,
+  nombre: string,
+  ctx: ViewContext,
+  showStats: boolean,
+  gymAuthor: PostAuthor | null
+): void {
   const tabsEl = document.getElementById("activityTabs");
   const statsContent = document.getElementById("statsContent");
   const listEl = document.getElementById("activityPostsList");
@@ -1132,19 +1560,49 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   const statsSubtitleText = subtitleEl?.textContent ?? "";
 
   // Preferencia de Configuración > Personalización ("mostrar estadísticas"): sin la pestaña
-  // Estadísticas, la que aterriza por defecto es Reps. null (no "stats") fuerza a switchTab
-  // de mas abajo a correr su rama completa la primera vez, en vez de quedar pisada por su
-  // propio guard "if (tab === activeTab) return".
+  // Estadísticas, la que aterriza por defecto es Reps (o Publicaciones si es un gimnasio, ver
+  // mas abajo). null (no "stats") fuerza a switchTab de mas abajo a correr su rama completa la
+  // primera vez, en vez de quedar pisada por su propio guard "if (tab === activeTab) return".
   if (!showStats) tabsEl.querySelector<HTMLButtonElement>('[data-tab="stats"]')?.remove();
+  const pubTabBtn = tabsEl.querySelector<HTMLButtonElement>('[data-tab="publicaciones"]');
+  if (gymAuthor) pubTabBtn?.removeAttribute("hidden");
+  else pubTabBtn?.remove();
+
   let activeTab: ActivityTab | null = null;
   let posts: FeedPost[] = [];
   let cursor: string | undefined;
   let loadingMore = false;
   let exhausted = false;
+  let gymPosts: GymPostFull[] = [];
+
+  async function refreshGymPostGrid(): Promise<void> {
+    gymPosts = await listGymPostsFull(targetUserId).catch(() => []);
+    renderList();
+  }
 
   function renderList(): void {
     if (activeTab === "stats") return;
-    const tab = activeTab as Exclude<ActivityTab, "stats">;
+    if (activeTab === "publicaciones") {
+      listEl!.innerHTML = gymPosts.length
+        ? `<div class="gym-post-grid">${gymPosts.map(gymPostGridCellMarkup).join("")}</div>`
+        : `<p class="exc-pick-empty">${isOwner ? "Todavía no publicaste nada." : `Todavía no publicó nada ${nombre}.`}</p>`;
+      listEl!.querySelectorAll<HTMLButtonElement>(".gym-post-grid-cell").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const i = gymPosts.findIndex((p) => p.id === btn.dataset.id);
+          if (i === -1 || !gymAuthor) return;
+          openGymPostViewer({
+            posts: gymPosts,
+            startIndex: i,
+            author: gymAuthor,
+            viewerId: myId,
+            isOwner,
+            onChanged: () => void refreshGymPostGrid(),
+          });
+        });
+      });
+      return;
+    }
+    const tab = activeTab as FeedActivityTab;
     listEl!.innerHTML = posts.length ? posts.map((p) => renderPostCard(p, myId, { compact: true })).join("") : `<p class="exc-pick-empty">${activityEmptyMessage(tab, isOwner)}</p>`;
     wirePostCard(listEl!, posts, handlers);
   }
@@ -1251,10 +1709,12 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   ctx.addCleanup(() => observer.disconnect());
 
   async function loadMore(): Promise<void> {
-    if (activeTab === "stats" || activeTab === null || loadingMore || exhausted) return;
+    // "publicaciones" no pagina: list_gym_posts_full trae todo en una sola llamada (mismo
+    // criterio que list_gym_classes/list_gym_members, sin infra de paginacion en este proyecto).
+    if (activeTab === "stats" || activeTab === "publicaciones" || activeTab === null || loadingMore || exhausted) return;
     loadingMore = true;
     if (spinner) spinner.hidden = false;
-    const fetcher = ACTIVITY_FETCHERS[activeTab as Exclude<ActivityTab, "stats">];
+    const fetcher = ACTIVITY_FETCHERS[activeTab as FeedActivityTab];
     const older = await fetcher(targetUserId, cursor).catch(() => []);
     loadingMore = false;
     if (spinner) spinner.hidden = true;
@@ -1300,6 +1760,17 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       return;
     }
 
+    if (tab === "publicaciones") {
+      if (titleEl) titleEl.textContent = "Publicaciones";
+      if (subtitleEl) subtitleEl.textContent = isOwner ? "Las fotos y videos que compartiste." : `Las fotos y videos que compartió ${nombre}.`;
+      statsContent!.hidden = true;
+      listEl!.hidden = false;
+      listEl!.innerHTML = `<p class="exc-pick-empty">Cargando...</p>`;
+      sentinel!.hidden = true;
+      await refreshGymPostGrid();
+      return;
+    }
+
     if (titleEl) titleEl.textContent = ACTIVITY_TITLES[tab];
     if (subtitleEl) subtitleEl.textContent = activitySubtitle(tab, isOwner, nombre);
     statsContent!.hidden = true;
@@ -1327,8 +1798,10 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   // activeTab arranca en null (no "stats") justamente para que este primer switchTab corra
   // su rama completa en vez de pisarse con el guard "if (tab === activeTab) return" de mas
   // arriba. Cuando showStats es true, la rama "stats" no vuelve a pintar el contenido (eso ya
-  // lo hizo main() con su propio renderStats) -- solo deja la pestaña marcada como activa.
-  void switchTab(showStats ? "stats" : "reps");
+  // lo hizo main() con su propio renderStats) -- solo deja la pestaña marcada como activa. Un
+  // gimnasio no tiene "stats" (showStats siempre false para isGym, ver main()) y aterriza en
+  // Publicaciones por defecto en vez de Reps.
+  void switchTab(gymAuthor ? "publicaciones" : showStats ? "stats" : "reps");
 
   // El click en los botones de tabsEl esta delegado en un solo listener (arriba), asi que
   // agregar/sacar el boton "Estadisticas" del DOM no necesita re-wirear nada -- por eso
@@ -1348,6 +1821,13 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
         tabsEl!.querySelector('[data-tab="stats"]')?.remove();
         if (activeTab === "stats") void switchTab("reps");
       }
+    },
+    openCreatePost() {
+      if (!gymAuthor) return;
+      openCreateGymPostModal(targetUserId, () => {
+        if (activeTab === "publicaciones") void refreshGymPostGrid();
+        else void switchTab("publicaciones");
+      });
     },
   };
   ctx.addCleanup(() => {
@@ -2039,7 +2519,7 @@ async function main(ctx: ViewContext) {
   const targetUserType = displayProfile.user_type ?? "usuario";
   const blockStatus: BlockStatus = !isOwner && myId ? await getBlockStatus(displayProfile.id!).catch(() => "none" as BlockStatus) : "none";
   const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, targetUserType);
-  renderProfileMenu(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus);
+  void renderProfileMenu(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, targetUserType);
 
   // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
   // que ya usan las RLS de rutinas/pesos via is_profile_public en la base).
@@ -2048,8 +2528,8 @@ async function main(ctx: ViewContext) {
   // El link a seguidores/seguidos usa la misma regla: si el perfil es privado
   // para este visitante, ni siquiera se muestra clickeable (la RPC tambien lo
   // bloquea server-side, pero evitamos el link muerto).
-  profileStatsCtx = { userId: displayProfile.id!, username: displayProfile.username ?? "", canViewLists: !isPrivateForViewer, userType: targetUserType };
-  void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType);
+  profileStatsCtx = { userId: displayProfile.id!, username: displayProfile.username ?? "", canViewLists: !isPrivateForViewer, userType: targetUserType, isOwner };
+  void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType, profileStatsCtx.isOwner);
 
   if (isPrivateForViewer) {
     renderProfileBio(displayProfile.bio ?? null);
@@ -2088,14 +2568,26 @@ async function main(ctx: ViewContext) {
   // dueño como a cualquier visitante -- no es un toggle de privacidad, es "no quiero esta
   // seccion en mi perfil" (confirmado con el usuario). displayProfile puede venir de la tabla
   // cruda o de profiles_public segun el caso (ver arriba), asi que ambas exponen las columnas.
-  const showStats = displayProfile.show_stats ?? true;
+  // Un gimnasio no entrena, asi que no tiene rutinas ni estadisticas de entrenamiento --
+  // fuerza showStats a false (pisa la preferencia guardada) y saltea toda la seccion de
+  // rutinas por completo, sin ni siquiera pedir los weight_logs.
+  const isGym = targetUserType === "gimnasio";
+  const showStats = isGym ? false : (displayProfile.show_stats ?? true);
   const statWidgets = parseStatWidgets(displayProfile.stats_widgets);
 
-  const logs = await listWeightLogsWithContext(displayProfile.id!);
-  routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
-  const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
-  if (showStats) void renderStats(logs, activeCount ?? 0, isOwner, statWidgets);
-  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats);
+  if (isGym) {
+    document.getElementById("rutinas")?.remove();
+    routinesCtx = null;
+    const isActiveSocio = !isOwner && myId ? (await getGymMembershipStatus(displayProfile.id!).catch(() => "none")) === "active" : false;
+    void renderGymClasses(displayProfile.id!, isActiveSocio, myId);
+    void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId);
+  } else {
+    const logs = await listWeightLogsWithContext(displayProfile.id!);
+    routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
+    const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
+    if (showStats) void renderStats(logs, activeCount ?? 0, isOwner, statWidgets);
+  }
+  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats, isGym ? gymAuthorFromProfile(displayProfile) : null);
 }
 
 const VIEW_MARKUP = `
@@ -2138,6 +2630,28 @@ const VIEW_MARKUP = `
     </div>
   </section>
 
+  <section class="features" id="gymClasesSection" hidden>
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Gimnasio</span>
+        <h2>Clases</h2>
+      </div>
+      <p class="chart-sub" id="gymClasesSummary"></p>
+      <div class="search-page-list" id="gymClasesList"></div>
+    </div>
+  </section>
+
+  <section class="features" id="gymEntrenadoresSection" hidden>
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Gimnasio</span>
+        <h2>Entrenadores</h2>
+      </div>
+      <p class="chart-sub" id="gymEntrenadoresSummary"></p>
+      <div class="search-page-list" id="gymEntrenadoresList"></div>
+    </div>
+  </section>
+
   <section class="steps" id="rutinas">
     <div class="container">
       <div class="section-head reveal">
@@ -2161,6 +2675,7 @@ const VIEW_MARKUP = `
         <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
       </div>
       <div class="routine-tabs" id="activityTabs">
+        <button class="routine-tab" data-tab="publicaciones" type="button" id="activityPublicacionesTab" hidden>Publicaciones</button>
         <button class="routine-tab active" data-tab="stats" type="button">Estadísticas</button>
         <button class="routine-tab" data-tab="reps" type="button">Reps</button>
         <button class="routine-tab" data-tab="media" type="button">Multimedia</button>
