@@ -47,6 +47,9 @@ import {
   type HandleInitiatedBy,
 } from "../services/gymTrainer.service";
 import { listGymClasses, enrollInClass, unenrollFromClass, type GymClassRow, type ClassSession } from "../services/gymClass.service";
+import { listGymPostsFull, type GymPostFull } from "../services/gymPost.service";
+import { openGymPostViewer } from "../lib/gymPostViewer";
+import { openCreateGymPostModal } from "../lib/gymPostComposer";
 import { getBlockStatus, blockUser, unblockUser, type BlockStatus } from "../services/block.service";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
@@ -917,7 +920,6 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
 
   // El gimnasio no tiene rutinas propias ni progreso: sus accesos rapidos son un set
   // completamente distinto, no un agregado sobre el de usuario/entrenador de abajo.
-  // TODO Fase 4: agregar aca "Información".
   if (userType === "gimnasio") {
     quickActions.innerHTML = `
     <a class="quick-card reveal" href="/pages/socios.html">
@@ -932,7 +934,12 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
       <div><h3>Tus clases</h3><p>Horarios, profesores e inscripción de socios</p></div>
     </a>
+    <button type="button" class="quick-card reveal" id="addGymPostQuickBtn">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+      <div><h3>Agregar publicación</h3><p>Compartí fotos o videos con tus socios, entrenadores o público</p></div>
+    </button>
   `;
+    document.getElementById("addGymPostQuickBtn")?.addEventListener("click", () => activityTabsController?.openCreatePost());
     return;
   }
 
@@ -1064,6 +1071,39 @@ async function renderGymClasses(gymId: string, isActiveSocio: boolean, myUserId:
     });
   }
   paint();
+}
+
+// ---------- Publicaciones (solo perfiles de gimnasio, grilla estilo Instagram) ----------
+// Viven como una pestaña mas de "Tu actividad" (ver setupActivityTabs) en vez de una seccion
+// fija: para un gimnasio es la pestaña por defecto. RLS de list_gym_posts_full ya filtra que
+// publicaciones puede ver este visitante puntual segun su visibilidad (publica/socios/
+// entrenadores) -- aca solo se pinta lo que vino, sin recalcular nada del lado del cliente.
+
+const GYM_POST_GRID_ICON_MULTI = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 15V5a2 2 0 0 1 2-2h10"/></svg>`;
+const GYM_POST_GRID_ICON_PLAY = `<svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+
+function gymPostGridCellMarkup(p: GymPostFull): string {
+  const cover = p.media[0];
+  const isVideo = cover?.type === "video";
+  return `
+    <button type="button" class="gym-post-grid-cell" data-id="${p.id}">
+      ${cover ? (isVideo ? `<video src="${escapeHtml(cover.url)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(cover.url)}" alt="">`) : ""}
+      ${p.pinned ? `<span class="gym-post-grid-pin">Fijada</span>` : ""}
+      ${p.media.length > 1 ? `<span class="gym-post-grid-icon">${GYM_POST_GRID_ICON_MULTI}</span>` : isVideo ? `<span class="gym-post-grid-icon">${GYM_POST_GRID_ICON_PLAY}</span>` : ""}
+    </button>
+  `;
+}
+
+function gymAuthorFromProfile(profile: { id?: string | null; username?: string | null; nombre?: string | null; apellido?: string | null; avatar_url?: string | null; is_verified?: boolean | null }): PostAuthor {
+  return {
+    id: profile.id!,
+    username: profile.username ?? "",
+    nombre: profile.nombre ?? "",
+    apellido: profile.apellido ?? "",
+    avatarUrl: profile.avatar_url ?? null,
+    userType: "gimnasio",
+    isVerified: profile.is_verified ?? false,
+  };
 }
 
 // ---------- Estadisticas ----------
@@ -1280,10 +1320,12 @@ let routinesCtx: {
   widgets: StatWidget[];
   showStats: boolean;
 } | null = null;
-// Puente hacia el closure de setupActivityTabs (agregar/sacar el boton "Estadisticas" y saltar
-// de pestaña si hacia falta) para cuando show_stats cambia en Configuración mientras esta
-// instancia de perfil sigue viva en cache -- ver refreshCurrentRoutinesTab.
-let activityTabsController: { setShowStats(next: boolean): void } | null = null;
+// Puente hacia el closure de setupActivityTabs: agregar/sacar el boton "Estadisticas" y saltar
+// de pestaña si hacia falta (para cuando show_stats cambia en Configuración mientras esta
+// instancia de perfil sigue viva en cache, ver refreshCurrentRoutinesTab), y abrir el modal de
+// "Agregar publicación" desde el quick-action del dueño de un gimnasio (ver renderQuickActions)
+// sin que ese renderer tenga que conocer nada de la pestaña Publicaciones.
+let activityTabsController: { setShowStats(next: boolean): void; openCreatePost(): void } | null = null;
 
 // Mismo fallback tabla-cruda/vista-publica que usa main(): el dueño (o un admin/entrenador con
 // acceso) ve profiles directamente; cualquier otro visitante cae a profiles_public.
@@ -1370,28 +1412,32 @@ async function refreshCurrentRoutinesTab() {
 
 const ACTIVITY_PAGE_SIZE = 20;
 
-type ActivityTab = "stats" | "reps" | "media" | "likes";
+// "publicaciones" (solo gimnasios) no entra en los mismos mapas/tipos que reps/media/likes:
+// trae GymPostFull (grilla + visor propios), no FeedPost -- se maneja aparte en cada rama de
+// abajo (renderList/loadMore/switchTab), nunca se castea a FeedActivityTab.
+type ActivityTab = "stats" | "reps" | "media" | "likes" | "publicaciones";
+type FeedActivityTab = Exclude<ActivityTab, "stats" | "publicaciones">;
 type ActivityFetcher = (userId: string, beforeIso?: string) => Promise<FeedPost[]>;
 
-const ACTIVITY_FETCHERS: Record<Exclude<ActivityTab, "stats">, ActivityFetcher> = {
+const ACTIVITY_FETCHERS: Record<FeedActivityTab, ActivityFetcher> = {
   reps: getUserRepsAndReposts,
   media: getUserMedia,
   likes: getUserLikedPosts,
 };
 
-const ACTIVITY_TITLES: Record<Exclude<ActivityTab, "stats">, string> = {
+const ACTIVITY_TITLES: Record<FeedActivityTab, string> = {
   reps: "Reps",
   media: "Multimedia",
   likes: "Me gusta",
 };
 
-function activityEmptyMessage(tab: Exclude<ActivityTab, "stats">, isOwner: boolean): string {
+function activityEmptyMessage(tab: FeedActivityTab, isOwner: boolean): string {
   if (tab === "reps") return isOwner ? "Todavía no publicaste ningún Rep." : "Todavía no publicó ningún Rep.";
   if (tab === "media") return isOwner ? "Todavía no subiste fotos ni videos." : "Todavía no subió fotos ni videos.";
   return isOwner ? "Todavía no le pusiste me gusta a nada." : "Todavía no le puso me gusta a nada.";
 }
 
-function activitySubtitle(tab: Exclude<ActivityTab, "stats">, isOwner: boolean, nombre: string): string {
+function activitySubtitle(tab: FeedActivityTab, isOwner: boolean, nombre: string): string {
   if (tab === "reps") return isOwner ? "Los Reps que publicaste y reposteaste." : `Los Reps que publicó y reposteó ${nombre}.`;
   if (tab === "media") return isOwner ? "Las fotos y videos que subiste." : `Las fotos y videos que subió ${nombre}.`;
   return isOwner ? "Los Reps que te gustaron." : `Los Reps que le gustaron a ${nombre}.`;
@@ -1405,7 +1451,14 @@ function goToPost(postId: string): void {
   smartNavigate(`post.html?id=${encodeURIComponent(postId)}`);
 }
 
-function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: string, ctx: ViewContext, showStats: boolean): void {
+function setupActivityTabs(
+  targetUserId: string,
+  isOwner: boolean,
+  nombre: string,
+  ctx: ViewContext,
+  showStats: boolean,
+  gymAuthor: PostAuthor | null
+): void {
   const tabsEl = document.getElementById("activityTabs");
   const statsContent = document.getElementById("statsContent");
   const listEl = document.getElementById("activityPostsList");
@@ -1421,19 +1474,49 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   const statsSubtitleText = subtitleEl?.textContent ?? "";
 
   // Preferencia de Configuración > Personalización ("mostrar estadísticas"): sin la pestaña
-  // Estadísticas, la que aterriza por defecto es Reps. null (no "stats") fuerza a switchTab
-  // de mas abajo a correr su rama completa la primera vez, en vez de quedar pisada por su
-  // propio guard "if (tab === activeTab) return".
+  // Estadísticas, la que aterriza por defecto es Reps (o Publicaciones si es un gimnasio, ver
+  // mas abajo). null (no "stats") fuerza a switchTab de mas abajo a correr su rama completa la
+  // primera vez, en vez de quedar pisada por su propio guard "if (tab === activeTab) return".
   if (!showStats) tabsEl.querySelector<HTMLButtonElement>('[data-tab="stats"]')?.remove();
+  const pubTabBtn = tabsEl.querySelector<HTMLButtonElement>('[data-tab="publicaciones"]');
+  if (gymAuthor) pubTabBtn?.removeAttribute("hidden");
+  else pubTabBtn?.remove();
+
   let activeTab: ActivityTab | null = null;
   let posts: FeedPost[] = [];
   let cursor: string | undefined;
   let loadingMore = false;
   let exhausted = false;
+  let gymPosts: GymPostFull[] = [];
+
+  async function refreshGymPostGrid(): Promise<void> {
+    gymPosts = await listGymPostsFull(targetUserId).catch(() => []);
+    renderList();
+  }
 
   function renderList(): void {
     if (activeTab === "stats") return;
-    const tab = activeTab as Exclude<ActivityTab, "stats">;
+    if (activeTab === "publicaciones") {
+      listEl!.innerHTML = gymPosts.length
+        ? `<div class="gym-post-grid">${gymPosts.map(gymPostGridCellMarkup).join("")}</div>`
+        : `<p class="exc-pick-empty">${isOwner ? "Todavía no publicaste nada." : `Todavía no publicó nada ${nombre}.`}</p>`;
+      listEl!.querySelectorAll<HTMLButtonElement>(".gym-post-grid-cell").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const i = gymPosts.findIndex((p) => p.id === btn.dataset.id);
+          if (i === -1 || !gymAuthor) return;
+          openGymPostViewer({
+            posts: gymPosts,
+            startIndex: i,
+            author: gymAuthor,
+            viewerId: myId,
+            isOwner,
+            onChanged: () => void refreshGymPostGrid(),
+          });
+        });
+      });
+      return;
+    }
+    const tab = activeTab as FeedActivityTab;
     listEl!.innerHTML = posts.length ? posts.map((p) => renderPostCard(p, myId, { compact: true })).join("") : `<p class="exc-pick-empty">${activityEmptyMessage(tab, isOwner)}</p>`;
     wirePostCard(listEl!, posts, handlers);
   }
@@ -1540,10 +1623,12 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   ctx.addCleanup(() => observer.disconnect());
 
   async function loadMore(): Promise<void> {
-    if (activeTab === "stats" || activeTab === null || loadingMore || exhausted) return;
+    // "publicaciones" no pagina: list_gym_posts_full trae todo en una sola llamada (mismo
+    // criterio que list_gym_classes/list_gym_members, sin infra de paginacion en este proyecto).
+    if (activeTab === "stats" || activeTab === "publicaciones" || activeTab === null || loadingMore || exhausted) return;
     loadingMore = true;
     if (spinner) spinner.hidden = false;
-    const fetcher = ACTIVITY_FETCHERS[activeTab as Exclude<ActivityTab, "stats">];
+    const fetcher = ACTIVITY_FETCHERS[activeTab as FeedActivityTab];
     const older = await fetcher(targetUserId, cursor).catch(() => []);
     loadingMore = false;
     if (spinner) spinner.hidden = true;
@@ -1589,6 +1674,17 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
       return;
     }
 
+    if (tab === "publicaciones") {
+      if (titleEl) titleEl.textContent = "Publicaciones";
+      if (subtitleEl) subtitleEl.textContent = isOwner ? "Las fotos y videos que compartiste." : `Las fotos y videos que compartió ${nombre}.`;
+      statsContent!.hidden = true;
+      listEl!.hidden = false;
+      listEl!.innerHTML = `<p class="exc-pick-empty">Cargando...</p>`;
+      sentinel!.hidden = true;
+      await refreshGymPostGrid();
+      return;
+    }
+
     if (titleEl) titleEl.textContent = ACTIVITY_TITLES[tab];
     if (subtitleEl) subtitleEl.textContent = activitySubtitle(tab, isOwner, nombre);
     statsContent!.hidden = true;
@@ -1616,8 +1712,10 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
   // activeTab arranca en null (no "stats") justamente para que este primer switchTab corra
   // su rama completa en vez de pisarse con el guard "if (tab === activeTab) return" de mas
   // arriba. Cuando showStats es true, la rama "stats" no vuelve a pintar el contenido (eso ya
-  // lo hizo main() con su propio renderStats) -- solo deja la pestaña marcada como activa.
-  void switchTab(showStats ? "stats" : "reps");
+  // lo hizo main() con su propio renderStats) -- solo deja la pestaña marcada como activa. Un
+  // gimnasio no tiene "stats" (showStats siempre false para isGym, ver main()) y aterriza en
+  // Publicaciones por defecto en vez de Reps.
+  void switchTab(gymAuthor ? "publicaciones" : showStats ? "stats" : "reps");
 
   // El click en los botones de tabsEl esta delegado en un solo listener (arriba), asi que
   // agregar/sacar el boton "Estadisticas" del DOM no necesita re-wirear nada -- por eso
@@ -1637,6 +1735,13 @@ function setupActivityTabs(targetUserId: string, isOwner: boolean, nombre: strin
         tabsEl!.querySelector('[data-tab="stats"]')?.remove();
         if (activeTab === "stats") void switchTab("reps");
       }
+    },
+    openCreatePost() {
+      if (!gymAuthor) return;
+      openCreateGymPostModal(targetUserId, () => {
+        if (activeTab === "publicaciones") void refreshGymPostGrid();
+        else void switchTab("publicaciones");
+      });
     },
   };
   ctx.addCleanup(() => {
@@ -2395,7 +2500,7 @@ async function main(ctx: ViewContext) {
     const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
     if (showStats) void renderStats(logs, activeCount ?? 0, isOwner, statWidgets);
   }
-  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats);
+  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats, isGym ? gymAuthorFromProfile(displayProfile) : null);
 }
 
 const VIEW_MARKUP = `
@@ -2472,6 +2577,7 @@ const VIEW_MARKUP = `
         <p id="statsSubtitle">Un resumen de cómo venís entrenando.</p>
       </div>
       <div class="routine-tabs" id="activityTabs">
+        <button class="routine-tab" data-tab="publicaciones" type="button" id="activityPublicacionesTab" hidden>Publicaciones</button>
         <button class="routine-tab active" data-tab="stats" type="button">Estadísticas</button>
         <button class="routine-tab" data-tab="reps" type="button">Reps</button>
         <button class="routine-tab" data-tab="media" type="button">Multimedia</button>

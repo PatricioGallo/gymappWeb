@@ -3379,6 +3379,234 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .gym-class-enroll-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
 
+/* ---------- Publicaciones de gimnasio: grilla estilo Instagram ---------- */
+
+.gym-post-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.gym-post-grid-cell {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--surface-2);
+}
+.gym-post-grid-cell img,
+.gym-post-grid-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gym-post-grid-pin {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+.gym-post-grid-icon { position: absolute; top: 6px; right: 6px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
+@media (max-width: 640px) {
+  .gym-post-grid { gap: 2px; }
+}
+
+/* ---------- Modal "Agregar publicación": tira de miniaturas multi-archivo ---------- */
+
+.gym-post-media-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.gym-post-media-strip { display: contents; }
+.gym-post-media-thumb {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+.gym-post-media-thumb img,
+.gym-post-media-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gym-post-media-video-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  display: flex;
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+.gym-post-media-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.gym-post-media-thumb-error { color: #e05c5c; font-weight: 800; font-size: 18px; }
+.gym-post-media-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.gym-post-media-add {
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.gym-post-media-add:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.gym-post-media-add.is-hidden { display: none; }
+
+/* ---------- Visor de publicación: comentarios (compartidos entre desktop/mobile) ---------- */
+
+.gym-post-comment-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; }
+.gym-post-comment-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.gym-post-comment-body p { margin: 0; font-size: 13.5px; line-height: 1.4; }
+.gym-post-comment-author { font-weight: 700; margin-right: 4px; }
+.gym-post-comment-time { display: inline-block; margin-top: 2px; font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; }
+
+/* ---------- Visor de publicación: media (carrusel horizontal con scroll-snap) ---------- */
+
+.gym-post-viewer-media-wrap { width: 100%; height: 100%; position: relative; display: flex; }
+.gym-post-viewer-media { width: 100%; height: 100%; object-fit: contain; display: block; }
+.gym-post-viewer-carousel-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.gym-post-viewer-carousel-track::-webkit-scrollbar { display: none; }
+.gym-post-viewer-carousel-item { flex: 0 0 100%; scroll-snap-align: start; display: flex; align-items: center; justify-content: center; }
+.gym-post-viewer-dots { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
+.gym-post-viewer-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); cursor: pointer; }
+.gym-post-viewer-dot.active { background: #fff; }
+
+.gym-post-viewer-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 210;
+}
+
+/* ---------- Visor de publicación: desktop, panel fijo tipo Instagram ---------- */
+
+.gym-post-viewer-desktop { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; }
+.gym-post-viewer-card { display: flex; width: min(1000px, 92vw); height: min(680px, 88vh); background: var(--surface); border-radius: var(--radius-md); overflow: hidden; }
+.gym-post-viewer-media-col { flex: 1.3; background: #000; display: flex; align-items: center; justify-content: center; min-width: 0; position: relative; }
+.gym-post-viewer-side-col { flex: 1; display: flex; flex-direction: column; min-width: 320px; max-width: 380px; border-left: 1px solid var(--border); }
+
+.gym-post-viewer-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 205;
+}
+.gym-post-viewer-nav:disabled { opacity: 0.25; cursor: default; }
+.gym-post-viewer-nav-prev { left: 24px; }
+.gym-post-viewer-nav-next { right: 24px; }
+
+.gym-post-viewer-header { display: flex; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid var(--border); }
+.gym-post-viewer-header-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.gym-post-viewer-location { font-size: 11.5px; color: var(--text-muted); }
+.gym-post-viewer-comments { flex: 1; overflow-y: auto; padding: 6px 14px; }
+.gym-post-viewer-actions { display: flex; gap: 6px; padding: 10px 10px 0; }
+/* Un poco mas grandes que el tamaño estandar de .post-action (18px) -- pedido puntual para la
+   version web del visor de publicaciones, no afecta a los Reps (esos siguen en postCard.ts). */
+.gym-post-viewer-actions .post-action { padding: 8px 10px; }
+.gym-post-viewer-actions .post-action svg { width: 26px; height: 26px; }
+.gym-post-viewer-likes-count { font-weight: 700; font-size: 13.5px; padding: 4px 14px 0; }
+.gym-post-viewer-time { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 14px 10px; }
+.gym-post-viewer-composer { padding: 10px 14px; border-top: 1px solid var(--border); }
+.gym-post-viewer-composer .post-comment-modal-textarea { max-height: 80px; }
+
+/* ---------- Visor de publicación: mobile, pantalla completa con scroll-snap vertical ---------- */
+
+.gym-post-viewer-mobile { position: fixed; inset: 0; z-index: 200; background: #000; }
+.gym-post-viewer-close-mobile { top: 14px; left: 14px; right: auto; }
+.gym-post-viewer-mobile-scroller { height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; }
+.gym-post-viewer-mobile-scroller::-webkit-scrollbar { display: none; }
+.gym-post-viewer-mobile-section { position: relative; height: 100dvh; scroll-snap-align: start; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+.gym-post-viewer-mobile-section .gym-post-viewer-media-wrap { height: 100%; }
+
+.gym-post-viewer-mobile-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 14px 26px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0) 70%);
+}
+.gym-post-viewer-mobile-info { flex: 1; min-width: 0; color: #fff; }
+.gym-post-viewer-mobile-info .gym-post-comment-author { color: #fff; }
+.gym-post-viewer-mobile-caption { font-size: 13.5px; margin-top: 4px; }
+.gym-post-viewer-mobile-info .gym-post-viewer-time { padding: 0; margin-top: 4px; color: rgba(255, 255, 255, 0.7); }
+.gym-post-viewer-mobile-info .gym-post-viewer-location { color: rgba(255, 255, 255, 0.85); }
+.gym-post-viewer-mobile-rail { display: flex; flex-direction: column; align-items: center; gap: 18px; flex-shrink: 0; }
+.gym-post-viewer-rail-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; border: none; background: none; color: #fff; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.gym-post-viewer-rail-icon { display: flex; }
+.gym-post-viewer-rail-icon.is-active { color: #e0555c; }
+
+.gym-post-comments-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 65%;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 3;
+}
+.gym-post-comments-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.gym-post-comments-sheet-head h3 { font-size: 14.5px; }
+.gym-post-comments-sheet-close { border: none; background: none; color: var(--text-muted); font-size: 15px; cursor: pointer; }
+.gym-post-comments-sheet-list { flex: 1; overflow-y: auto; padding: 4px 14px; }
+
+.gym-post-viewer-mobile-menu { position: absolute; top: 50px; right: 14px; z-index: 4; }
+
 .member-accept-option {
   display: flex;
   align-items: center;

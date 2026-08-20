@@ -89,6 +89,7 @@ export interface SendMessageInput {
   attachmentType?: "image" | "audio" | "sticker";
   attachmentDurationSeconds?: number;
   sharedPostId?: string;
+  sharedGymPostId?: string;
   replyToMessageId?: string;
   isForwarded?: boolean;
 }
@@ -101,6 +102,7 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_attachment_type: input.attachmentType,
     p_attachment_duration_seconds: input.attachmentDurationSeconds,
     p_shared_post_id: input.sharedPostId,
+    p_shared_gym_post_id: input.sharedGymPostId,
     p_reply_to_message_id: input.replyToMessageId,
     p_is_forwarded: input.isForwarded,
   });

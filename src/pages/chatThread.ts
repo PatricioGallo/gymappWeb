@@ -3,6 +3,7 @@ import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { supabase } from "../lib/supabaseClient";
 import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
 import { getPostsByIds, type FeedPost } from "../services/post.service";
+import { getGymPostsByIds, type GymPostChatPreview } from "../services/gymPost.service";
 import {
   listConversations,
   listMessages,
@@ -234,6 +235,7 @@ export async function mountThread(
   // reactions -- la respuesta del propio RPC (o su echo) es la única fuente de verdad.
   const reactionMutationInFlight = new Set<string>();
   const sharedPostsCache = new Map<string, FeedPost>();
+  const sharedGymPostsCache = new Map<string, GymPostChatPreview>();
   const audioPlayers = new Map<string, HTMLAudioElement>();
   const audioWaveLevels = new Map<string, number[]>();
   const audioOriginalDuration = new Map<string, string>();
@@ -607,9 +609,14 @@ export async function mountThread(
 
   async function hydrateSharedPosts(list: ChatMessage[]): Promise<void> {
     const ids = [...new Set(list.map((m) => m.shared_post_id).filter((id): id is string => !!id))].filter((id) => !sharedPostsCache.has(id));
-    if (ids.length === 0) return;
-    const map = await getPostsByIds(ids);
+    const gymIds = [...new Set(list.map((m) => m.shared_gym_post_id).filter((id): id is string => !!id))].filter((id) => !sharedGymPostsCache.has(id));
+    if (ids.length === 0 && gymIds.length === 0) return;
+    const [map, gymMap] = await Promise.all([
+      ids.length ? getPostsByIds(ids) : Promise.resolve(new Map<string, FeedPost>()),
+      gymIds.length ? getGymPostsByIds(gymIds) : Promise.resolve(new Map<string, GymPostChatPreview>()),
+    ]);
     map.forEach((post, id) => sharedPostsCache.set(id, post));
+    gymMap.forEach((post, id) => sharedGymPostsCache.set(id, post));
   }
 
   function sharedPostPreviewHtml(postId: string): string {
@@ -634,11 +641,37 @@ export async function mountThread(
     `;
   }
 
+  // Sin pagina propia por publicacion (a diferencia de los Reps con post.html): el link va al
+  // perfil del gimnasio, que ya aterriza en la pestaña Publicaciones por default (ver profile.ts).
+  function sharedGymPostPreviewHtml(postId: string): string {
+    const post = sharedGymPostsCache.get(postId);
+    if (!post) return `<div class="chat-shared-post chat-shared-post-missing">Publicación no disponible</div>`;
+    const content = post.content ?? "";
+    const preview = content.length > 100 ? `${content.slice(0, 100)}…` : content;
+    const cover = post.media[0];
+    const thumb = cover
+      ? cover.type === "video"
+        ? `<video class="chat-shared-post-thumb" src="${escapeHtml(cover.url)}" muted playsinline autoplay loop preload="metadata"></video>`
+        : `<img class="chat-shared-post-thumb" src="${escapeHtml(cover.url)}" alt="">`
+      : "";
+    return `
+      <a class="chat-shared-post" href="profile.html?u=${encodeURIComponent(post.gymUsername)}&post=${encodeURIComponent(post.id)}">
+        <div class="chat-shared-post-head">
+          <img class="chat-shared-post-avatar" src="${escapeHtml(post.gymAvatarUrl || "/images/avatars/default.svg")}" alt="">
+          <span class="chat-shared-post-name">${escapeHtml(post.gymUsername)}${renderVerifiedBadge("gimnasio", post.gymIsVerified, 12)}</span>
+        </div>
+        ${preview ? `<p class="chat-shared-post-text">${escapeHtml(preview)}</p>` : ""}
+        ${thumb}
+      </a>
+    `;
+  }
+
   function messageSnippet(m: ChatMessage): string {
     if (m.deleted_at) return "Mensaje eliminado";
     if (m.attachment_type === "sticker") return `${m.content ?? ""} Sticker`;
     if (m.content) return m.content;
     if (m.shared_post_id) return "🔁 Rep compartido";
+    if (m.shared_gym_post_id) return "📌 Publicación compartida";
     if (m.attachment_type === "image") return "📷 Foto";
     if (m.attachment_type === "audio") return "🎤 Audio";
     return "Mensaje";
@@ -676,6 +709,8 @@ export async function mountThread(
     let mediaHtml = "";
     if (m.shared_post_id) {
       mediaHtml = sharedPostPreviewHtml(m.shared_post_id);
+    } else if (m.shared_gym_post_id) {
+      mediaHtml = sharedGymPostPreviewHtml(m.shared_gym_post_id);
     } else if (m.attachment_type === "image" && m.attachment_path) {
       mediaHtml = `
         <button type="button" class="chat-bubble-image" data-path="${escapeHtml(m.attachment_path)}">
@@ -1263,7 +1298,7 @@ export async function mountThread(
     const isMe = message.sender_id === userId;
     const isPinned = pinnedMessageId === message.id;
     const myEmoji = myReaction(message);
-    const canEdit = isMe && !message.attachment_path && !message.shared_post_id && message.attachment_type !== "sticker";
+    const canEdit = isMe && !message.attachment_path && !message.shared_post_id && !message.shared_gym_post_id && message.attachment_type !== "sticker";
     const menu = document.createElement("div");
     menu.className = "chat-msg-menu";
     menu.innerHTML = `
@@ -1491,6 +1526,7 @@ export async function mountThread(
             attachmentType: (message.attachment_type as "image" | "audio" | "sticker" | null) ?? undefined,
             attachmentDurationSeconds: message.attachment_duration_seconds ?? undefined,
             sharedPostId: message.shared_post_id ?? undefined,
+            sharedGymPostId: message.shared_gym_post_id ?? undefined,
             isForwarded: true,
           });
           if (error) {
