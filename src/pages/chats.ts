@@ -20,7 +20,7 @@ import { supabase } from "../lib/supabaseClient";
 import type { ViewModule } from "../shell/router";
 import { navigate } from "../shell/router";
 import { createViewContext, type ViewContext } from "../shell/viewContext";
-import { mountThread } from "./chatThread";
+import { mountThread, type ThreadController } from "./chatThread";
 
 function relativeTime(iso: string): string {
   const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -148,7 +148,9 @@ export const chatsView: ViewModule = {
     // cambiar de conversacion o cerrar el hilo, solo se oculta. Reabrirla despues es
     // instantaneo (mismos <img>, mismo scroll, ningun re-render) en vez de volver a montar
     // todo de cero como con el iframe de antes.
-    const threadInstances = new Map<string, { el: HTMLDivElement; ctx: ViewContext; scrollTop: number }>();
+    // controller: undefined mientras mountThread todavia esta resolviendo (ver mas abajo) --
+    // openThread no llama catchUp() en esa ventana porque ese primer mount ya trae todo fresco.
+    const threadInstances = new Map<string, { el: HTMLDivElement; ctx: ViewContext; scrollTop: number; controller?: ThreadController }>();
     ctx.addCleanup(() => {
       threadInstances.forEach((instance) => instance.ctx.dispose());
       threadInstances.clear();
@@ -297,6 +299,11 @@ export const chatsView: ViewModule = {
           refreshChatBadge();
           markLocalRead(conversationId);
         });
+        // Mientras estuvo oculto, la unica fuente de mensajes nuevos era el canal realtime del
+        // propio hilo, que en mobile puede perder eventos si el navegador suspende el websocket
+        // en segundo plano -- sin esto, un chat ya visitado se quedaba pegado atras del resumen
+        // que la lista de la izquierda ya mostraba actualizado (via su propio refresh completo).
+        void existing.controller?.catchUp();
         return;
       }
 
@@ -326,17 +333,22 @@ export const chatsView: ViewModule = {
         },
         onBack: () => navigate("chats.html"),
         onRead: () => markLocalRead(conversationId),
-      }).catch((err) => {
-        // Si mountThread explota a mitad de camino (ej. un hiccup de red en list_conversations)
-        // el header se queda pegado en "Cargando..." para siempre si nadie atrapa el rechazo --
-        // mejor cerrar el hilo y avisar que abrirlo de nuevo.
-        console.error("No se pudo abrir la conversación", err);
-        threadInstances.delete(conversationId);
-        threadCtx.dispose();
-        el.remove();
-        closeThread({ updateUrl: true });
-        alert("No se pudo abrir la conversación. Probá de nuevo.");
-      });
+      })
+        .then((controller) => {
+          const instance = threadInstances.get(conversationId);
+          if (instance) instance.controller = controller;
+        })
+        .catch((err) => {
+          // Si mountThread explota a mitad de camino (ej. un hiccup de red en list_conversations)
+          // el header se queda pegado en "Cargando..." para siempre si nadie atrapa el rechazo --
+          // mejor cerrar el hilo y avisar que abrirlo de nuevo.
+          console.error("No se pudo abrir la conversación", err);
+          threadInstances.delete(conversationId);
+          threadCtx.dispose();
+          el.remove();
+          closeThread({ updateUrl: true });
+          alert("No se pudo abrir la conversación. Probá de nuevo.");
+        });
     }
 
     function closeThread(opts: { updateUrl: boolean }): void {

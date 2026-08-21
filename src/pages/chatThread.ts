@@ -200,13 +200,23 @@ export interface MountThreadOptions {
   initialConversation?: ConversationSummary;
 }
 
+export interface ThreadController {
+  /** chats.ts mantiene este hilo montado (oculto) mientras el usuario mira otro -- la unica
+   * fuente de mensajes nuevos mientras tanto es el canal realtime de mas abajo, que en mobile
+   * puede perder eventos si el navegador suspende el websocket en segundo plano (pantalla
+   * bloqueada, app minimizada, chrome mata la pestaña de fondo). Se llama al volver a mostrarlo
+   * (ver openThread en chats.ts) para traer la ultima pagina de la red y agregar lo que todavia
+   * no se haya renderizado, sin tocar lo que ya esta pintado. */
+  catchUp(): Promise<void>;
+}
+
 export async function mountThread(
   container: HTMLElement,
   conversationId: string,
   userId: string,
   ctx: ViewContext,
   opts: MountThreadOptions
-): Promise<void> {
+): Promise<ThreadController | undefined> {
   container.innerHTML = THREAD_MARKUP;
   const attachmentUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
@@ -2065,4 +2075,15 @@ export async function mountThread(
 
     updateSendState();
   }
+
+  async function catchUpMessages(): Promise<void> {
+    const page = await listMessages(conversationId).catch(() => [] as ChatMessage[]);
+    // Ascendente (mas viejo primero), mismo orden que appendMessage espera para ir pegando
+    // abajo en secuencia -- listMessages() sin cursor trae la ultima pagina, mas nuevo primero.
+    for (const m of page.slice().reverse()) {
+      if (!renderedIds.has(m.id)) await appendMessage(m);
+    }
+  }
+
+  return { catchUp: catchUpMessages };
 }
