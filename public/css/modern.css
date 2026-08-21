@@ -6447,24 +6447,8 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   display: flex;
   flex-direction: column;
   animation: post-detail-in 0.22s ease-out;
-  transition: transform 0.22s ease;
-  touch-action: pan-y;
 }
-/* Sin esto, arrastrar con mouse sobre texto (captions, nombres...) arranca una seleccion nativa
-   que compite con el swipe-para-salir y lo hace tartamudear -- ver el preventDefault en mouse en
-   wireSwipeToExit (postDetail.ts), esto es el refuerzo por si algun navegador igual selecciona. */
-.post-detail-modal { -webkit-user-select: none; user-select: none; }
 .post-detail-modal[hidden] { display: none; }
-/* Solo transition, nunca animation: la de entrada (post-detail-in) es de un solo uso y ya
-   termino mucho antes de que se pueda arrastrar -- si esta clase tambien apagara "animation",
-   cada vez que se prende/apaga (incluso por un toque con algo de movimiento incidental, no un
-   swipe real) el navegador la reinicia desde cero, y el modal parpadea como si reapareciera. */
-.post-detail-modal.post-detail-modal-dragging { transition: none; }
-/* Sin esto, arrancar el swipe-para-salir con el mouse/dedo justo arriba de una imagen (avatar,
-   foto del post -- ocupan la mayor parte de la pantalla) dispara el drag nativo del navegador
-   ("arrastrar esta imagen") en vez de seguir mandando pointermove a nuestro gesto, y el swipe
-   se muere ahi -- solo agarraba si por casualidad arrancabas en una zona sin imagen. */
-.post-detail-modal img { -webkit-user-drag: none; user-drag: none; }
 
 @keyframes post-detail-in {
   from { opacity: 0; transform: translateY(14px); }

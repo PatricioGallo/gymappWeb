@@ -35,7 +35,7 @@ export interface OpenPostDetailModalOptions {
 /**
  * Abre el detalle de un Rep como modal a pantalla completa adentro de #loaderBody, en vez de
  * navegar a post.html (esto es lo que reemplaza esa navegacion en feed/perfil/hilo -- ver
- * wireSwipeToExit/mountPostDetail en postDetail.ts para el contenido). Citar/compartir/ver
+ * mountPostDetail en postDetail.ts para el contenido). Citar/compartir/ver
  * metricas/borrar el Rep reemplazan este modal por el suyo propio (mismo slot #loaderBody, mismo
  * criterio que el resto de los modales de Reps) y cierran de vuelta al feed/perfil de atras, igual
  * que el visor de publicaciones de gimnasio -- comentar/responder/borrar un comentario NO cierran
