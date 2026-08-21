@@ -59,6 +59,7 @@ import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
+import { openPostDetailModal } from "../lib/postDetailModal";
 import {
   getUserRepsAndReposts,
   getUserMedia,
@@ -1521,8 +1522,12 @@ function goToAuthorProfile(author: PostAuthor): void {
   smartNavigate(`profile.html?u=${encodeURIComponent(author.username)}`);
 }
 
-function goToPost(postId: string): void {
-  smartNavigate(`post.html?id=${encodeURIComponent(postId)}`);
+function goToPost(postId: string, onCommentPosted?: (postId: string) => void): void {
+  if (!myId) {
+    smartNavigate("login.html");
+    return;
+  }
+  openPostDetailModal(postId, myId, onCommentPosted);
 }
 
 function setupActivityTabs(
@@ -1627,6 +1632,15 @@ function setupActivityTabs(
     }
   }
 
+  // Comentar desde adentro del modal de detalle (ver postDetailModal.ts) actualiza su propia
+  // copia del Rep, no esta lista -- sin esto el contador de comentarios queda viejo al volver.
+  function bumpCommentCount(postId: string): void {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    post.comments_count += 1;
+    renderList();
+  }
+
   const handlers: PostCardHandlers = {
     viewerId: myId,
     onLikeToggle: (post) => void handleLikeToggle(post),
@@ -1676,7 +1690,8 @@ function setupActivityTabs(
     onView: (post) => {
       if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
     },
-    onOpenPost: (post) => goToPost(post.id),
+    onOpenPost: (post) => goToPost(post.id, bumpCommentCount),
+    onQuotedClick: (quotedId) => goToPost(quotedId, bumpCommentCount),
     // A diferencia del feed, en el perfil el swipe-arriba nunca tiene que mostrar un
     // video de otra persona -- ni siquiera en la pestaña "Me gusta", que puede traer Reps
     // ajenos: se filtra siempre por el autor del Rep que se tocó, no por targetUserId (da

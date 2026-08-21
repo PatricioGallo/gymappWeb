@@ -4,6 +4,7 @@ import { setupAutoHideHeader } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderPostCard, wirePostCard, youtubeEmbedHtml, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
+import { openPostDetailModal } from "../lib/postDetailModal";
 import {
   getPersonalizedFeed,
   createPost,
@@ -459,7 +460,12 @@ export const feedView: ViewModule = {
     }
 
     function goToPost(postId: string): void {
-      navigate(`post.html?id=${encodeURIComponent(postId)}`);
+      openPostDetailModal(postId, userId, (commentedId) => {
+        const post = posts.find((p) => p.id === commentedId);
+        if (!post) return;
+        post.comments_count += 1;
+        renderFeed();
+      });
     }
 
     async function handleLikeToggle(post: FeedPost): Promise<void> {
@@ -519,6 +525,7 @@ export const feedView: ViewModule = {
         if (post.author_id !== userId) void recordPostView(post.id, userId);
       },
       onOpenPost: (post) => goToPost(post.id),
+      onQuotedClick: (quotedId) => goToPost(quotedId),
       // El feed mezcla autores a proposito -- "otro video, sea del mismo usuario o de otro"
       // (a diferencia del perfil, ver getVideoQueue ahi). Cierra sobre `posts` en vivo (no una
       // copia): sigue trayendo videos nuevos aunque el Rep tocado venga de una tanda vieja de

@@ -479,10 +479,12 @@ function openReplyModal(
       return;
     }
     submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="btn-spinner"></span> Comentando...`;
     const { comment, error } = await submit(input.value);
     if (error || !comment) {
       alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo comentar.")}</p>`;
       submitBtn.disabled = false;
+      submitBtn.textContent = "Comentar";
       return;
     }
     closeOverlay();
