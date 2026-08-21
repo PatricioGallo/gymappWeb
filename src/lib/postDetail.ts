@@ -431,12 +431,29 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
   // Trae los comentarios de nuevo (se acaba de comentar/responder, o llego uno por realtime) y
   // anima de entrada los que sean nuevos -- mismo criterio que animateCommentRemoval, en espejo,
   // para que un comentario nuevo aparezca con transicion en vez de saltar de golpe a la lista.
+  //
+  // Comentar dispara DOS llamadas casi juntas: la de acá (el callback de onReplied) y la del
+  // realtime (el INSERT que la propia insercion dispara, ver subscribeToComments), y el chequeo
+  // "ya lo tengo" del realtime compara contra `comments` ANTES de que la primera termine de
+  // resolver -- sin coalescerlas, la segunda vuelve a pintar la lista (con renderComments(),
+  // que reemplaza el innerHTML entero) a mitad de la animacion de la primera, cortandola en seco
+  // y arrancandola de nuevo: se ve como si el comentario "parpadeara"/entrara dos veces. Si ya
+  // hay una carga en curso, las llamadas de mas se enganchan a esa misma en vez de arrancar otra.
+  let refreshInFlight: Promise<void> | null = null;
   async function refreshComments(): Promise<void> {
-    const previousIds = new Set(comments.map((c) => c.id));
-    comments = await listComments(currentId);
-    renderComments();
-    const newIds = comments.map((c) => c.id).filter((id) => !previousIds.has(id));
-    animateCommentsEntering(newIds);
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
+      const previousIds = new Set(comments.map((c) => c.id));
+      comments = await listComments(currentId);
+      renderComments();
+      const newIds = comments.map((c) => c.id).filter((id) => !previousIds.has(id));
+      animateCommentsEntering(newIds);
+    })();
+    try {
+      await refreshInFlight;
+    } finally {
+      refreshInFlight = null;
+    }
   }
 
   function animateCommentsEntering(ids: string[]): void {
