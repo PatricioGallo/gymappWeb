@@ -35,7 +35,7 @@ const SWIPE_DISMISS_VELOCITY = 0.5; // px/ms
 export interface PostDetailOptions {
   viewerId: string;
   /** El usuario esta en el Rep raiz (no hay a donde volver dentro del hilo) y toco la flecha de
-   * volver o hizo swipe a la izquierda -- cada contexto decide que significa "salir" (cerrar el
+   * volver o hizo swipe a la derecha -- cada contexto decide que significa "salir" (cerrar el
    * modal, o volver atras en el historial del navegador). */
   onExit(): void;
   /** Ir al perfil de un autor (avatar, nombre o @usuario) -- cada contexto decide si hace falta
@@ -91,7 +91,7 @@ function authorHeaderHtml(author: PostAuthor, timestampIso: string, showFollow: 
   return `
     <div class="post-detail-author">
       <button type="button" class="post-detail-avatar-btn" data-role="author" aria-label="Ver perfil de ${escapeHtml(author.username)}">
-        <img class="post-detail-avatar" src="${escapeHtml(author.avatarUrl || DEFAULT_AVATAR)}" alt="">
+        <img class="post-detail-avatar" src="${escapeHtml(author.avatarUrl || DEFAULT_AVATAR)}" alt="" draggable="false">
       </button>
       <button type="button" class="post-detail-author-info" data-role="author">
         <span class="post-detail-author-name">${escapeHtml(resultFullName(author))}${renderVerifiedBadge(author.userType, author.isVerified, 14)}</span>
@@ -111,7 +111,7 @@ function paintFollowBtn(btn: HTMLButtonElement, status: FollowStatus): void {
 /**
  * Reconstruye el hilo (ancestros + Rep enfocado + continuaciones) y la lista de comentarios de
  * un Rep adentro de `container`, con su propio header (flecha de volver + "Post") y gesto de
- * swipe a la izquierda para salir. Reusado tanto por la pagina de detalle (post.ts, para links
+ * swipe a la derecha para salir. Reusado tanto por la pagina de detalle (post.ts, para links
  * compartidos que aterrizan directo en post.html) como por el modal que se abre al tocar un Rep
  * desde el feed/perfil/hilo (ver postDetailModal.ts) -- mismo componente, dos formas de montarlo.
  */
@@ -313,6 +313,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
       if (post.id !== currentId) openId(post.id, true);
     },
     onQuotedClick: (quotedId) => openId(quotedId, true),
+    onMediaOpening: opts.onSubmodalOpening,
     // El hilo puede traer Reps de otros autores (citas encadenadas): el swipe-arriba se queda
     // siempre en el autor del Rep que se tocó, no en el del Rep enfocado.
     getVideoQueue: (current) => currentThread.filter((p2) => p2.author_id === current.author_id && p2.media_type === "video" && p2.media_url),
@@ -549,8 +550,11 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
 }
 
 // -----------------------------------------------------------------------
-// Swipe a la izquierda, en cualquier punto del modal, para salir -- siempre sale del todo (no
-// hace pop del stack de hilo como la flecha de volver). Mismo patron de pointer events que el
+// Swipe a la derecha, en cualquier punto del modal, para salir -- siempre sale del todo (no hace
+// pop del stack de hilo como la flecha de volver). Mismo gesto que "volver atras" en iOS: el modal
+// va pegado al dedo (sin fade -- al ser fixed/inset:0, correrlo a la derecha ya destapa por si solo
+// la vista de atras, que sigue montada en #view-root debajo de #loaderBody) y a partir de cierto
+// punto se termina de ir solo, en vez de volver a su lugar. Mismo patron de pointer events que el
 // swipe vertical de mediaLightbox.ts (enganchar solo despues de superar un umbral, para no robarle
 // el tap a botones ni el scroll vertical nativo), pero en el eje horizontal.
 // -----------------------------------------------------------------------
@@ -566,13 +570,18 @@ function wireSwipeToExit(root: HTMLElement, onExit: () => void): () => void {
   function reset(): void {
     root.classList.remove("post-detail-modal-dragging");
     root.style.transform = "";
-    root.style.opacity = "";
     pointerId = null;
     axis = null;
   }
 
   function onPointerDown(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // Con mouse, frenar el default recien cuando se determina el eje (en onPointerMove) llega
+    // tarde: los primeros pixeles ya alcanzan para que el navegador arranque una seleccion de
+    // texto o un drag nativo, que compiten con el gesto y lo hacen tartamudear. Con touch NO se
+    // hace: ahi todavia hace falta el default (scroll nativo) mientras no se sepa si el gesto es
+    // vertical -- frenarlo de una rompería el scroll de la pagina para cualquier toque.
+    if (e.pointerType === "mouse") e.preventDefault();
     pointerId = e.pointerId;
     startX = lastX = e.clientX;
     startY = e.clientY;
@@ -586,7 +595,10 @@ function wireSwipeToExit(root: HTMLElement, onExit: () => void): () => void {
     const dy = e.clientY - startY;
     if (axis === null) {
       if (Math.abs(dx) < SWIPE_ENGAGE_PX && Math.abs(dy) < SWIPE_ENGAGE_PX) return;
-      axis = Math.abs(dx) > Math.abs(dy) * 1.3 ? "x" : "y";
+      // dx solo necesita empatar a dy (no ganarle por 30%) para trabarse en "x" -- con el umbral
+      // viejo, un arrastre con algo de diagonal (comun arrastrando con mouse) quedaba mal
+      // enganchado en "y" (scroll) y ya no habia forma de recuperarlo en ese mismo gesto.
+      axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
       if (axis === "x") {
         root.classList.add("post-detail-modal-dragging");
         root.setPointerCapture(pointerId);
@@ -594,9 +606,8 @@ function wireSwipeToExit(root: HTMLElement, onExit: () => void): () => void {
     }
     if (axis !== "x") return;
     e.preventDefault();
-    const clamped = Math.min(dx, 0); // solo hacia la izquierda -- deslizar a la derecha no hace nada
+    const clamped = Math.max(dx, 0); // solo hacia la derecha -- deslizar a la izquierda no hace nada
     root.style.transform = `translateX(${clamped}px)`;
-    root.style.opacity = String(Math.max(1 - Math.abs(clamped) / 300, 0.4));
     lastX = e.clientX;
     lastT = e.timeStamp;
   }
@@ -607,10 +618,9 @@ function wireSwipeToExit(root: HTMLElement, onExit: () => void): () => void {
       const dx = e.clientX - startX;
       const dt = Math.max(e.timeStamp - lastT, 1);
       const velocity = Math.abs(e.clientX - lastX) / dt;
-      if (dx < -SWIPE_DISMISS_PX || (dx < -30 && velocity > SWIPE_DISMISS_VELOCITY)) {
+      if (dx > SWIPE_DISMISS_PX || (dx > 30 && velocity > SWIPE_DISMISS_VELOCITY)) {
         root.classList.remove("post-detail-modal-dragging");
-        root.style.transform = "translateX(-100%)";
-        root.style.opacity = "0";
+        root.style.transform = "translateX(100%)";
         setTimeout(onExit, 150);
         pointerId = null;
         axis = null;

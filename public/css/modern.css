@@ -33,6 +33,12 @@ html {
   scroll-behavior: smooth;
   overflow-x: hidden;
   scrollbar-width: none; /* Firefox */
+  /* Sin esto, un swipe horizontal de trackpad/mouse (ej. el gesto de "volver" del
+     detalle de Rep en postDetail.ts) puede coincidir con el gesto nativo de
+     "atras"/"adelante" del navegador (Chrome/Edge en Windows) y disparar una
+     navegacion real de por medio -- deja la app en un estado raro (el scroll-lock del
+     modal nunca llega a liberarse porque nuestro cierre no corrio). */
+  overscroll-behavior-x: none;
 }
 /* Oculta la barra de scroll de la pagina (Chrome/Edge/Safari) sin perder el scroll en
    si -- pedido especificamente para que no se vea en perfil/feed, pero al ser el html
@@ -48,6 +54,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
   width: 100%;
 }
 
@@ -6440,11 +6447,24 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   display: flex;
   flex-direction: column;
   animation: post-detail-in 0.22s ease-out;
-  transition: transform 0.22s ease, opacity 0.22s ease;
+  transition: transform 0.22s ease;
   touch-action: pan-y;
 }
+/* Sin esto, arrastrar con mouse sobre texto (captions, nombres...) arranca una seleccion nativa
+   que compite con el swipe-para-salir y lo hace tartamudear -- ver el preventDefault en mouse en
+   wireSwipeToExit (postDetail.ts), esto es el refuerzo por si algun navegador igual selecciona. */
+.post-detail-modal { -webkit-user-select: none; user-select: none; }
 .post-detail-modal[hidden] { display: none; }
-.post-detail-modal.post-detail-modal-dragging { transition: none; animation: none; }
+/* Solo transition, nunca animation: la de entrada (post-detail-in) es de un solo uso y ya
+   termino mucho antes de que se pueda arrastrar -- si esta clase tambien apagara "animation",
+   cada vez que se prende/apaga (incluso por un toque con algo de movimiento incidental, no un
+   swipe real) el navegador la reinicia desde cero, y el modal parpadea como si reapareciera. */
+.post-detail-modal.post-detail-modal-dragging { transition: none; }
+/* Sin esto, arrancar el swipe-para-salir con el mouse/dedo justo arriba de una imagen (avatar,
+   foto del post -- ocupan la mayor parte de la pantalla) dispara el drag nativo del navegador
+   ("arrastrar esta imagen") en vez de seguir mandando pointermove a nuestro gesto, y el swipe
+   se muere ahi -- solo agarraba si por casualidad arrancabas en una zona sin imagen. */
+.post-detail-modal img { -webkit-user-drag: none; user-drag: none; }
 
 @keyframes post-detail-in {
   from { opacity: 0; transform: translateY(14px); }

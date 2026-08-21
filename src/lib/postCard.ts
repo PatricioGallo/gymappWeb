@@ -25,6 +25,11 @@ export interface PostCardHandlers {
   onOpenPost?(post: FeedPost): void;
   /** Tocar el Rep citado embebido adentro de otro Rep -- abre el detalle de ESE Rep (no el contenedor). */
   onQuotedClick?(quotedPostId: string): void;
+  /** El visor de media (ver openMediaLightbox mas abajo) SI pisa el mismo #loaderBody sin
+   * avisar -- si esta tarjeta esta adentro del modal de detalle de Rep (postDetailModal.ts),
+   * hay que soltar su scroll lock y su canal realtime ANTES, si no el body se queda con
+   * position:fixed para siempre. undefined en feed/perfil (ahi no hay nada que cerrar). */
+  onMediaOpening?(): void;
   /**
    * Cola de Reps con video para el swipe-hacia-arriba dentro del visor (ver
    * openMediaLightbox): a partir del Rep que se tocó, en qué otros videos se puede seguir
@@ -63,7 +68,7 @@ function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   if (!mediaUrl) return "";
   if (mediaType === "video")
     return `<video class="post-card-media" src="${escapeHtml(mediaUrl)}" playsinline muted loop preload="metadata"></video>`;
-  return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="">`;
+  return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="" draggable="false">`;
 }
 
 // nocookie: no larga cookies de tracking hasta que se le da play, buen default sin pedirle nada al usuario.
@@ -97,7 +102,7 @@ function linkPreviewHtml(post: Post): string {
   if (!post.link_url || post.media_url || post.youtube_video_id) return "";
   return `
     <a class="post-link-preview" href="${escapeHtml(post.link_url)}" target="_blank" rel="noopener noreferrer">
-      ${post.link_image_url ? `<img class="post-link-preview-image" src="${escapeHtml(post.link_image_url)}" alt="">` : ""}
+      ${post.link_image_url ? `<img class="post-link-preview-image" src="${escapeHtml(post.link_image_url)}" alt="" draggable="false">` : ""}
       <div class="post-link-preview-body">
         <span class="post-link-preview-domain">${escapeHtml(post.link_site_name || domainOf(post.link_url))}</span>
         ${post.link_title ? `<p class="post-link-preview-title">${escapeHtml(post.link_title)}</p>` : ""}
@@ -112,7 +117,7 @@ function linkPreviewHtml(post: Post): string {
 function quotedMediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   if (!mediaUrl) return "";
   if (mediaType === "video") return `<video class="post-quoted-media" src="${escapeHtml(mediaUrl)}" muted playsinline></video>`;
-  return `<img class="post-quoted-media" src="${escapeHtml(mediaUrl)}" alt="">`;
+  return `<img class="post-quoted-media" src="${escapeHtml(mediaUrl)}" alt="" draggable="false">`;
 }
 
 // Un solo nivel: si el Rep citado a su vez cita a otro, no se recursa (queda solo texto+media del citado directo).
@@ -126,7 +131,7 @@ function quotedPostHtml(quoted: (Post & { author: PostAuthor }) | null): string 
   return `
     <button type="button" class="post-quoted" data-quoted-id="${escapeHtml(quoted.id)}">
       <div class="post-quoted-head">
-        <img class="post-quoted-avatar" src="${escapeHtml(quoted.author.avatarUrl || DEFAULT_AVATAR)}" alt="">
+        <img class="post-quoted-avatar" src="${escapeHtml(quoted.author.avatarUrl || DEFAULT_AVATAR)}" alt="" draggable="false">
         <span class="post-quoted-name">${authorLineHtml(quoted.author, 12)}</span>
         <span class="post-quoted-dot">·</span>
         <span class="post-quoted-time">${formatTiempoRelativo(quoted.created_at)}</span>
@@ -180,7 +185,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
             ? ""
             : `
         <button type="button" class="post-card-avatar-btn" data-action="author" aria-label="Ver perfil de ${escapeHtml(post.author.username)}">
-          <img class="post-card-avatar" src="${escapeHtml(post.author.avatarUrl || DEFAULT_AVATAR)}" alt="">
+          <img class="post-card-avatar" src="${escapeHtml(post.author.avatarUrl || DEFAULT_AVATAR)}" alt="" draggable="false">
         </button>`
         }
         <div class="post-card-body">
@@ -269,6 +274,7 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
     card.querySelector<HTMLElement>(".post-card-media")?.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!post.media_url) return;
+      handlers.onMediaOpening?.();
       openMediaLightbox(post, handlers);
     });
 

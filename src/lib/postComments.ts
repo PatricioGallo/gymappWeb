@@ -34,7 +34,7 @@ function commentRowHtml(c: FeedComment, depth: number): string {
   return `
     <div class="post-comment" data-id="${c.id}" style="margin-left:${Math.min(depth, 6) * 24}px">
       <button type="button" class="post-comment-avatar-btn" data-action="author" data-username="${escapeHtml(c.author.username)}" aria-label="Ver perfil de ${escapeHtml(c.author.username)}">
-        <img class="post-comment-avatar" src="${escapeHtml(c.author.avatarUrl || DEFAULT_AVATAR)}" alt="">
+        <img class="post-comment-avatar" src="${escapeHtml(c.author.avatarUrl || DEFAULT_AVATAR)}" alt="" draggable="false">
       </button>
       <div class="post-comment-body">
         <div class="post-comment-head">
