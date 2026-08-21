@@ -53,6 +53,12 @@ export interface PostDetailOptions {
   /** Abre el composer de comentario solito apenas termina de cargar el Rep enfocado -- usado
    * cuando se toca "Comentar" directo desde una tarjeta del feed/perfil (ver goToPostAndComment). */
   autoOpenComment?: boolean;
+  /** El Rep enfocado (postId) ya esta cargado en memoria -- es la misma tarjeta que se tocó en el
+   * feed/perfil para abrir esto. Si viene, se pinta de una con ESTOS datos en vez de esperar la
+   * vuelta de red (que igual se dispara atras para traer el hilo real -- ancestros/continuaciones
+   * -- y los comentarios, y reemplaza esta pintura provisoria apenas llega). Solo aplica al load
+   * inicial: navegar dentro del hilo (citas, continuaciones) no tiene de donde sacar un preload. */
+  initialPost?: FeedPost;
 }
 
 export interface PostDetailController {
@@ -136,10 +142,10 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     }
   }
 
-  function openId(id: string, push: boolean): void {
+  function openId(id: string, push: boolean, preloadedPost?: FeedPost): void {
     if (push) backStack.push(currentId);
     currentId = id;
-    void load(id);
+    void load(id, preloadedPost);
   }
 
   function handleBack(): void {
@@ -305,7 +311,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
       if (post.author_id !== viewerId) void recordPostView(post.id, viewerId);
     },
     onOpenPost: (post) => {
-      if (post.id !== currentId) openId(post.id, true);
+      if (post.id !== currentId) openId(post.id, true, post);
     },
     onQuotedClick: (quotedId) => openId(quotedId, true),
     onMediaOpening: opts.onSubmodalOpening,
@@ -494,14 +500,27 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     activeChannel = channel;
   }
 
-  async function load(id: string): Promise<void> {
+  async function load(id: string, preloadedPost?: FeedPost): Promise<void> {
     pauseRealtime();
     emptyEl.hidden = true;
     commentsEl.hidden = false;
-    threadEl.innerHTML = `<div class="post-detail-loading"><span class="modern-spinner"></span></div>`;
-    commentsEl.innerHTML = "";
 
-    const postPromise = getPost(id);
+    const usablePreload = preloadedPost?.id === id ? preloadedPost : undefined;
+    if (usablePreload) {
+      // Ya lo tenemos (la tarjeta que se tocó en el feed/perfil trae los mismos datos que
+      // devolvería getPost) -- pintar el Rep enfocado de una, sin esperar la red. El hilo real
+      // (abajo) y los comentarios se siguen trayendo atras y reemplazan esta pintura provisoria
+      // en cuanto llegan, asi que si algo cambió (o hay ancestros/continuaciones) se corrige solo.
+      currentThread = [usablePreload];
+      renderThread();
+      bodyEl.scrollTo({ top: 0 });
+      commentsEl.innerHTML = `<div class="post-detail-loading"><span class="modern-spinner"></span></div>`;
+    } else {
+      threadEl.innerHTML = `<div class="post-detail-loading"><span class="modern-spinner"></span></div>`;
+      commentsEl.innerHTML = "";
+    }
+
+    const postPromise = usablePreload ? Promise.resolve(usablePreload) : getPost(id);
     const commentsPromise = listComments(id).catch(() => [] as FeedComment[]);
 
     const post = await postPromise.catch(() => null);
@@ -524,7 +543,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     subscribeToComments(id);
   }
 
-  await load(currentId);
+  await load(currentId, opts.initialPost);
 
   // Atajo para "Comentar" tocado directo desde una tarjeta del feed/perfil (sin abrir el Rep a
   // mano primero): apenas termina de cargar, abre el composer de una -- el usuario ve primero

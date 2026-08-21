@@ -1522,7 +1522,10 @@ function goToAuthorProfile(author: PostAuthor): void {
   smartNavigate(`profile.html?u=${encodeURIComponent(author.username)}`);
 }
 
-function goToPost(postId: string, opts?: { onCommentPosted?: (postId: string) => void; autoOpenComment?: boolean }): void {
+function goToPost(
+  postId: string,
+  opts?: { onCommentPosted?: (postId: string) => void; autoOpenComment?: boolean; initialPost?: FeedPost },
+): void {
   if (!myId) {
     smartNavigate("login.html");
     return;
@@ -1647,7 +1650,7 @@ function setupActivityTabs(
     onRepostToggle: (post) => void handleRepostToggle(post),
     // Igual que en el feed: pasa por el modal del Rep y de ahi el composer, para que al guardar
     // el comentario vuelva a esa vista en vez de quedarse en la lista de actividad.
-    onCommentClick: (post) => goToPost(post.id, { onCommentPosted: bumpCommentCount, autoOpenComment: true }),
+    onCommentClick: (post) => goToPost(post.id, { onCommentPosted: bumpCommentCount, autoOpenComment: true, initialPost: post }),
     onQuoteClick: (post) => {
       if (!myId) {
         smartNavigate("login.html");
@@ -1683,7 +1686,7 @@ function setupActivityTabs(
     onView: (post) => {
       if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
     },
-    onOpenPost: (post) => goToPost(post.id, { onCommentPosted: bumpCommentCount }),
+    onOpenPost: (post) => goToPost(post.id, { onCommentPosted: bumpCommentCount, initialPost: post }),
     onQuotedClick: (quotedId) => goToPost(quotedId, { onCommentPosted: bumpCommentCount }),
     // A diferencia del feed, en el perfil el swipe-arriba nunca tiene que mostrar un
     // video de otra persona -- ni siquiera en la pestaña "Me gusta", que puede traer Reps

@@ -429,7 +429,7 @@ function openReplyModal(
   onReplied: (comment: PostComment) => void
 ): void {
   const overlay = document.createElement("div");
-  overlay.className = "success-check-container";
+  overlay.className = "success-check-container post-comment-modal-overlay";
   overlay.innerHTML = `
     <div class="modal-card post-comment-modal">
       <div class="post-comment-modal-header">

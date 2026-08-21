@@ -1,5 +1,6 @@
 import { navigate } from "../shell/router";
 import { mountPostDetail, type PostDetailController } from "./postDetail";
+import type { FeedPost } from "../services/post.service";
 
 // Mismo truco que mediaLightbox.ts: frena el scroll de fondo con body fijo (no solo
 // overflow:hidden) porque en Safari/Chrome mobile un position:fixed insertado mientras la pagina
@@ -30,6 +31,10 @@ export interface OpenPostDetailModalOptions {
   /** Abre el composer de comentario solito apenas carga -- "Comentar" tocado directo desde una
    * tarjeta, sin pasar primero por el Rep a mano (ver goToPostAndComment en feed.ts/profile.ts). */
   autoOpenComment?: boolean;
+  /** La tarjeta que se tocó para abrir este modal, si el caller la tiene a mano -- se lo pasa a
+   * mountPostDetail para pintar el Rep enfocado al toque, sin esperar la vuelta de red (ver
+   * PostDetailOptions.initialPost en postDetail.ts). */
+  initialPost?: FeedPost;
 }
 
 /**
@@ -82,6 +87,7 @@ export function openPostDetailModal(postId: string, viewerId: string, opts?: Ope
       navigate(`profile.html?u=${encodeURIComponent(username)}`);
     },
     autoOpenComment: opts?.autoOpenComment,
+    initialPost: opts?.initialPost,
   }).then((c) => {
     if (closed) {
       c.dispose(); // se cerro (Escape, swipe) mientras todavia estaba cargando

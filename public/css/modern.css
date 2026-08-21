@@ -6389,6 +6389,15 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 
 .post-comment-modal { max-width: 520px; width: calc(100% - 40px); max-height: 85vh; overflow-y: auto; padding: 18px 20px; }
 
+/* Centrado vertical (heredado de .success-check-container) en mobile queda tapado por el
+   teclado al tocar el textarea: position:fixed se ubica segun el viewport de layout (no el
+   visual, que es el que encoge cuando aparece el teclado), asi que "centrado" termina bien abajo
+   del area que realmente se ve. Pegado bien arriba (casi sin padding) y mas ancho -- pisando el
+   padding/max-width del contenedor generico -- para dejar el maximo de aire posible por si el
+   teclado se come buena parte de lo que queda abajo. */
+.post-comment-modal-overlay { align-items: flex-start; padding: 10px 12px 0; }
+.post-comment-modal-overlay .post-comment-modal { width: 100%; max-width: 640px; }
+
 .post-comment-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .post-comment-modal-close {
   border: none;

@@ -461,15 +461,18 @@ export const feedView: ViewModule = {
       navigate(`profile.html?u=${encodeURIComponent(author.username)}`);
     }
 
-    function goToPost(postId: string): void {
-      openPostDetailModal(postId, userId, { onCommentPosted: bumpCommentCount });
+    // preloadedPost: si quien llama ya tiene la tarjeta a mano (onOpenPost/onCommentClick, no
+    // onQuotedClick que solo trae el id), se la pasamos al modal para que pinte el Rep enfocado
+    // al toque en vez de esperar la vuelta de red (ver PostDetailOptions.initialPost).
+    function goToPost(postId: string, preloadedPost?: FeedPost): void {
+      openPostDetailModal(postId, userId, { onCommentPosted: bumpCommentCount, initialPost: preloadedPost });
     }
 
     // "Comentar" tocado directo desde la tarjeta (sin abrir el Rep a mano primero): igual pasa
     // por el modal del Rep y de ahi el composer, para que al guardar el comentario vuelva a esa
     // vista en vez de quedarse en el feed.
     function handleCommentClick(post: FeedPost): void {
-      openPostDetailModal(post.id, userId, { onCommentPosted: bumpCommentCount, autoOpenComment: true });
+      openPostDetailModal(post.id, userId, { onCommentPosted: bumpCommentCount, autoOpenComment: true, initialPost: post });
     }
 
     async function handleLikeToggle(post: FeedPost): Promise<void> {
@@ -528,7 +531,7 @@ export const feedView: ViewModule = {
       onView: (post) => {
         if (post.author_id !== userId) void recordPostView(post.id, userId);
       },
-      onOpenPost: (post) => goToPost(post.id),
+      onOpenPost: (post) => goToPost(post.id, post),
       onQuotedClick: (quotedId) => goToPost(quotedId),
       // El feed mezcla autores a proposito -- "otro video, sea del mismo usuario o de otro"
       // (a diferencia del perfil, ver getVideoQueue ahi). Cierra sobre `posts` en vivo (no una
