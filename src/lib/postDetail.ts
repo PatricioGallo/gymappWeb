@@ -4,7 +4,8 @@ import { formatTiempoRelativo } from "./dias";
 import { resultFullName } from "./search";
 import { supabase } from "./supabaseClient";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "./postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, openPostMetricsModal, confirmDeletePost, confirmDeleteComment } from "./postModals";
+import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, openPostMetricsModal, confirmDeletePost } from "./postModals";
+import { confirmDialog } from "./confirmDialog";
 import { renderCommentsHtml, wireCommentsList, collectCommentAndDescendantIds, type CommentListHandlers } from "./postComments";
 import {
   getPost,
@@ -40,19 +41,22 @@ export interface PostDetailOptions {
   /** Ir al perfil de un autor (avatar, nombre o @usuario) -- cada contexto decide si hace falta
    * cerrar algo antes de navegar (el modal lo cierra; la pagina de detalle solo navega). */
   onAuthorClick(username: string): void;
-  /** Se llama justo antes de abrir cualquier modal secundario que comparte el slot #loaderBody
-   * (comentar, responder, citar, compartir, metricas, borrar): si este componente esta viviendo
-   * ADENTRO de #loaderBody (ver postDetailModal.ts), el sub-modal lo va a pisar sin avisar --
-   * hay que soltar el scroll lock del body y el canal realtime ANTES, o quedan colgados (el body
-   * se queda con position:fixed para siempre y la pagina de atras parece trabada). La pagina de
-   * detalle (post.ts) no vive en #loaderBody y no necesita hacer nada aca. */
+  /** Se llama justo antes de abrir un modal secundario que SI comparte el slot #loaderBody
+   * (citar, compartir, metricas, borrar el Rep -- comentar/responder/borrar un comentario NO
+   * pasan por aca, se montan aparte arriba de este componente, ver openReplyModal en
+   * postModals.ts y confirmDialog.ts): si este componente esta viviendo ADENTRO de #loaderBody
+   * (ver postDetailModal.ts), el sub-modal lo va a pisar sin avisar -- hay que soltar el scroll
+   * lock del body y el canal realtime ANTES, o quedan colgados (el body se queda con
+   * position:fixed para siempre y la pagina de atras parece trabada). La pagina de detalle
+   * (post.ts) no vive en #loaderBody y no necesita hacer nada aca. */
   onSubmodalOpening?(): void;
   /** Se comento (o respondio) un Rep desde adentro de este componente -- avisa el id para que
    * quien abrio el modal (feed/perfil) pueda sumarle 1 al contador de comentarios de SU propia
-   * copia de ese Rep. Sin esto, comentar desde el modal deja el contador viejo en la lista de
-   * atras: este componente actualiza su propio estado interno, pero esa copia queda descartada
-   * en cuanto onSubmodalOpening cierra el modal (ver postDetailModal.ts). */
+   * copia de ese Rep en la lista de atras. */
   onCommentPosted?(postId: string): void;
+  /** Abre el composer de comentario solito apenas termina de cargar el Rep enfocado -- usado
+   * cuando se toca "Comentar" directo desde una tarjeta del feed/perfil (ver goToPostAndComment). */
+  autoOpenComment?: boolean;
 }
 
 export interface PostDetailController {
@@ -249,14 +253,25 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     }
   }
 
+  // Sin opts.onSubmodalOpening(): el composer se monta arriba de este modal (ver openReplyModal
+  // en postModals.ts), no lo pisa -- comentar ya no necesita cerrar/reabrir nada.
   function handleCommentClick(post: FeedPost): void {
-    opts.onSubmodalOpening?.();
     openCommentModal(post, viewerId, () => {
       post.comments_count += 1;
-      renderThread();
+      updateCommentCountDisplay(post.id);
       if (post.id === currentId) void refreshComments();
       opts.onCommentPosted?.(post.id);
     });
+  }
+
+  // Actualiza solo el numerito del boton de comentar de un Rep del hilo, sin volver a pintar toda
+  // la tarjeta (avatar, video, boton de seguir...) como haria renderThread() -- eso alcanzaba a
+  // reiniciar un video en reproduccion o parpadear la tarjeta con cada comentario nuevo.
+  function updateCommentCountDisplay(postId: string): void {
+    const post = currentThread.find((p) => p.id === postId);
+    if (!post) return;
+    const countEl = threadEl.querySelector(`.post-card[data-post-id="${postId}"] [data-action="comment"] span`);
+    if (countEl) countEl.textContent = String(post.comments_count);
   }
 
   function handleDeleteClick(post: FeedPost): void {
@@ -327,8 +342,12 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     onAuthorClick: (username) => opts.onAuthorClick(username),
     onLikeToggle: (comment) => void handleCommentLikeToggle(comment.id),
     onReplyClick: (comment) => {
-      opts.onSubmodalOpening?.();
       openCommentReplyModal(comment, viewerId, () => {
+        const post = currentThread.find((p) => p.id === comment.post_id);
+        if (post) {
+          post.comments_count += 1;
+          updateCommentCountDisplay(post.id);
+        }
         void refreshComments();
         opts.onCommentPosted?.(comment.post_id);
       });
@@ -352,17 +371,26 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     }
   }
 
-  function handleDeleteComment(id: string): void {
-    opts.onSubmodalOpening?.();
-    confirmDeleteComment(() => void deleteCommentConfirmed(id));
-  }
+  // confirmDialog (no confirmDeletePost/openCommentModal) a proposito: se monta en su propio
+  // <div> directo en <body>, no en #loaderBody, asi que no pisa este modal -- no hace falta
+  // opts.onSubmodalOpening() y el usuario nunca se va del post con solo borrar un comentario.
+  async function handleDeleteComment(id: string): Promise<void> {
+    const confirmed = await confirmDialog("Las respuestas que tenga también se van a borrar.", {
+      title: "Eliminar comentario",
+      confirmLabel: "Eliminar",
+      danger: true,
+    });
+    if (!confirmed) return;
 
-  async function deleteCommentConfirmed(id: string): Promise<void> {
     const idsToRemove = collectCommentAndDescendantIds(comments, id);
+    const deletePromise = deleteComment(id);
+    await animateCommentRemoval(idsToRemove);
+
     const previous = comments;
     comments = comments.filter((c) => !idsToRemove.has(c.id));
     renderComments();
-    const { error } = await deleteComment(id);
+
+    const { error } = await deletePromise;
     if (error) {
       comments = previous;
       renderComments();
@@ -370,14 +398,57 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     }
   }
 
+  // Encoge y desvanece cada comentario a borrar (el tocado + sus respuestas, ver
+  // collectCommentAndDescendantIds) ANTES de sacarlo del array y volver a pintar -- si no, el
+  // re-render de renderComments() los hace desaparecer de un salto. Arranca desde la altura real
+  // medida (no un valor fijo) para que el colapso se sienta proporcional a cada fila.
+  function animateCommentRemoval(ids: Set<string>): Promise<void> {
+    const els = [...ids]
+      .map((id) => commentsEl.querySelector<HTMLElement>(`.post-comment[data-id="${id}"]`))
+      .filter((el): el is HTMLElement => !!el);
+    if (els.length === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      let pending = els.length;
+      function onDone(): void {
+        pending -= 1;
+        if (pending <= 0) resolve();
+      }
+      els.forEach((el) => {
+        el.style.maxHeight = `${el.offsetHeight}px`;
+        void el.offsetHeight; // fuerza el reflow: sin esto el navegador funde el maxHeight inicial con el final y no anima nada
+        el.classList.add("post-comment-collapsed");
+        el.addEventListener("transitionend", onDone, { once: true });
+      });
+      setTimeout(resolve, 400); // salvavidas si transitionend no llega a disparar
+    });
+  }
+
   function renderComments(): void {
     commentsEl.innerHTML = renderCommentsHtml(comments);
     wireCommentsList(commentsEl, comments, commentListHandlers);
   }
 
+  // Trae los comentarios de nuevo (se acaba de comentar/responder, o llego uno por realtime) y
+  // anima de entrada los que sean nuevos -- mismo criterio que animateCommentRemoval, en espejo,
+  // para que un comentario nuevo aparezca con transicion en vez de saltar de golpe a la lista.
   async function refreshComments(): Promise<void> {
+    const previousIds = new Set(comments.map((c) => c.id));
     comments = await listComments(currentId);
     renderComments();
+    const newIds = comments.map((c) => c.id).filter((id) => !previousIds.has(id));
+    animateCommentsEntering(newIds);
+  }
+
+  function animateCommentsEntering(ids: string[]): void {
+    const els = ids.map((id) => commentsEl.querySelector<HTMLElement>(`.post-comment[data-id="${id}"]`)).filter((el): el is HTMLElement => !!el);
+    els.forEach((el) => {
+      const targetHeight = el.offsetHeight;
+      el.classList.add("post-comment-collapsed"); // arranca colapsado
+      el.style.maxHeight = `${targetHeight}px`; // valor de llegada, ignorado mientras la clase siga puesta (ver !important en el CSS)
+      void el.offsetHeight; // fuerza el reflow con el estado colapsado ya pintado, antes de animar
+      el.classList.remove("post-comment-collapsed"); // ahora el inline maxHeight (y el resto de la fila) toma efecto, animado
+      setTimeout(() => (el.style.maxHeight = ""), 320); // suelta el limite fijo: si el contenido crece despues no queda recortado
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -441,6 +512,14 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
   }
 
   await load(currentId);
+
+  // Atajo para "Comentar" tocado directo desde una tarjeta del feed/perfil (sin abrir el Rep a
+  // mano primero): apenas termina de cargar, abre el composer de una -- el usuario ve primero
+  // el Rep y de ahi el modal de comentario, como pidio (ver goToPostAndComment en feed.ts).
+  if (opts.autoOpenComment) {
+    const focusedPost = currentThread.find((p) => p.id === currentId);
+    if (focusedPost) handleCommentClick(focusedPost);
+  }
 
   return {
     pause: pauseRealtime,

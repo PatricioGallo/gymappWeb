@@ -23,20 +23,27 @@ function lockBodyScroll(): () => void {
   };
 }
 
+export interface OpenPostDetailModalOptions {
+  /** El caller (feed/perfil) la usa para sumarle 1 al contador de comentarios de su propia copia
+   * de ese Rep en la lista de atras -- sin esto el contador queda desactualizado ahi. */
+  onCommentPosted?(postId: string): void;
+  /** Abre el composer de comentario solito apenas carga -- "Comentar" tocado directo desde una
+   * tarjeta, sin pasar primero por el Rep a mano (ver goToPostAndComment en feed.ts/profile.ts). */
+  autoOpenComment?: boolean;
+}
+
 /**
  * Abre el detalle de un Rep como modal a pantalla completa adentro de #loaderBody, en vez de
  * navegar a post.html (esto es lo que reemplaza esa navegacion en feed/perfil/hilo -- ver
- * wireSwipeToExit/mountPostDetail en postDetail.ts para el contenido). Comentar/citar/compartir/
- * ver metricas/borrar reemplazan este modal por el suyo propio (mismo slot #loaderBody, mismo
- * criterio que el resto de los modales de Reps) -- cerrar esos vuelve al feed/perfil de atras, no
- * a este modal, igual que ya pasa con el visor de publicaciones de gimnasio.
- *
- * onCommentPosted (opcional): si se comento algo desde el modal, el caller (feed/perfil) la usa
- * para sumarle 1 al contador de comentarios de su propia copia de ese Rep en la lista de atras --
- * sin esto, el contador queda desactualizado ahi porque el modal ya se cerro para cuando el
- * comentario termina de mandarse (ver onSubmodalOpening en postDetail.ts).
+ * wireSwipeToExit/mountPostDetail en postDetail.ts para el contenido). Citar/compartir/ver
+ * metricas/borrar el Rep reemplazan este modal por el suyo propio (mismo slot #loaderBody, mismo
+ * criterio que el resto de los modales de Reps) y cierran de vuelta al feed/perfil de atras, igual
+ * que el visor de publicaciones de gimnasio -- comentar/responder/borrar un comentario NO cierran
+ * este modal (esos modales se montan aparte, arriba de este, ver openReplyModal en postModals.ts
+ * y confirmDialog.ts), asi que agregar o borrar un comentario se ve y se siente en el momento, sin
+ * ningun cierre/reapertura de por medio.
  */
-export function openPostDetailModal(postId: string, viewerId: string, onCommentPosted?: (postId: string) => void): void {
+export function openPostDetailModal(postId: string, viewerId: string, opts?: OpenPostDetailModalOptions): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
 
@@ -65,15 +72,16 @@ export function openPostDetailModal(postId: string, viewerId: string, onCommentP
   void mountPostDetail(modalEl, postId, {
     viewerId,
     onExit: close,
-    // Comentar/citar/compartir/ver metricas/borrar abren su propio modal en el mismo #loaderBody
-    // y lo pisan sin avisar -- hay que soltar el scroll lock y el canal realtime ANTES, si no
-    // el body se queda con position:fixed para siempre (la pagina de atras queda "trabada").
+    // Citar/compartir/ver metricas/borrar el Rep SI abren su propio modal en el mismo
+    // #loaderBody y lo pisan sin avisar -- hay que soltar el scroll lock y el canal realtime
+    // ANTES, si no el body se queda con position:fixed para siempre ("trabado").
     onSubmodalOpening: close,
-    onCommentPosted,
+    onCommentPosted: opts?.onCommentPosted,
     onAuthorClick: (username) => {
       close();
       navigate(`profile.html?u=${encodeURIComponent(username)}`);
     },
+    autoOpenComment: opts?.autoOpenComment,
   }).then((c) => {
     if (closed) {
       c.dispose(); // se cerro (Escape, swipe) mientras todavia estaba cargando

@@ -151,7 +151,7 @@ export function actionsHtml(post: FeedPost, isOwner: boolean): string {
   return `
     <div class="post-card-actions">
       <button type="button" class="post-action" data-action="comment" aria-label="Comentar">${ICON_COMMENT}<span>${post.comments_count}</span></button>
-      <button type="button" class="post-action post-action-repost${post.repostedByMe ? " is-active" : ""}" data-action="repost" aria-label="Repostear">${ICON_REPOST}<span>${post.reposts_count}</span></button>
+      ${isOwner ? "" : `<button type="button" class="post-action post-action-repost${post.repostedByMe ? " is-active" : ""}" data-action="repost" aria-label="Repostear">${ICON_REPOST}<span>${post.reposts_count}</span></button>`}
       <button type="button" class="post-action post-action-like${post.likedByMe ? " is-active" : ""}" data-action="like" aria-label="Me gusta">${post.likedByMe ? ICON_HEART_FILLED : ICON_HEART}<span>${post.likes_count}</span></button>
       <button type="button" class="post-action" data-action="quote" aria-label="Citar">${ICON_QUOTE}${post.quotes_count > 0 ? `<span>${post.quotes_count}</span>` : ""}</button>
       <button type="button" class="post-action" data-action="share" aria-label="Compartir por chat">${ICON_SHARE}</button>

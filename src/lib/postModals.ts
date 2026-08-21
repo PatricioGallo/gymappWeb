@@ -410,77 +410,58 @@ export function confirmDeletePost(post: FeedPost, onDeleted: () => void): void {
   });
 }
 
-/**
- * Confirmacion de borrado de un comentario, mismo mecanismo/pinta que confirmDeletePost --
- * reemplaza el confirm() nativo del navegador. La baja en si (optimista + rollback si falla)
- * la sigue manejando el caller (ver handleDeleteComment en postDetail.ts); esto solo pregunta.
- */
-export function confirmDeleteComment(onConfirmed: () => void): void {
-  const loaderBody = document.getElementById("loaderBody");
-  if (!loaderBody) return;
-  loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="modal-card">
-        <h2>Eliminar comentario</h2>
-        <p class="subtitle">Las respuestas que tenga también se van a borrar.</p>
-        <div class="modal-actions">
-          <button class="btn btn-danger" id="confirmDeleteComment" type="button">Eliminar</button>
-          <button class="btn btn-outline" id="cancelDeleteComment" type="button">Cancelar</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.getElementById("cancelDeleteComment")?.addEventListener("click", closeOverlay);
-  document.getElementById("confirmDeleteComment")?.addEventListener("click", () => {
-    closeOverlay();
-    onConfirmed();
-  });
-}
-
 function myAvatarUrl(): string {
   const navAvatar = document.getElementById("navMenuAvatar") as HTMLImageElement | null;
   return (navAvatar && navAvatar.src) || DEFAULT_AVATAR;
 }
 
-/** Chrome comun del modal de respuesta estilo Twitter: recibe el preview de "lo original" ya armado y quien lo publica. */
+/**
+ * Chrome comun del modal de respuesta estilo Twitter: recibe el preview de "lo original" ya
+ * armado y quien lo publica. Se monta en su propio <div> directo en <body> (mismo criterio que
+ * confirmDialog.ts), NO en #loaderBody: asi puede abrirse arriba del modal de detalle de un Rep
+ * (ver postDetail.ts) sin pisarlo -- si compartiera #loaderBody, comentar tendria que cerrar ese
+ * modal primero y volver a abrirlo despues, sintiendose como una recarga de la pagina.
+ */
 function openReplyModal(
   originalHtml: string,
   replyToUsername: string,
   submit: (content: string) => Promise<{ comment?: PostComment; error?: string }>,
   onReplied: (comment: PostComment) => void
 ): void {
-  const loaderBody = document.getElementById("loaderBody");
-  if (!loaderBody) return;
-
-  loaderBody.innerHTML = `
-    <div class="success-check-container">
-      <div class="modal-card post-comment-modal">
-        <div class="post-comment-modal-header">
-          <button type="button" class="post-comment-modal-close" id="commentModalClose" aria-label="Cerrar">✕</button>
-          <button type="button" class="btn btn-primary btn-sm" id="commentModalSubmit" disabled>Comentar</button>
-        </div>
-
-        ${originalHtml}
-
-        <p class="post-comment-modal-replyto">Respondiendo a <span>@${escapeHtml(replyToUsername)}</span></p>
-
-        <div class="post-comment-modal-composer">
-          <img class="post-comment-modal-avatar" src="${escapeHtml(myAvatarUrl())}" alt="">
-          <textarea id="commentModalInput" class="post-comment-modal-textarea" rows="2" maxlength="${COMMENT_MODAL_MAX}" placeholder="Postea tu respuesta"></textarea>
-        </div>
-        <div class="post-comment-modal-footer">
-          <span class="post-composer-counter" id="commentModalCounter">${COMMENT_MODAL_MAX}</span>
-        </div>
-        <div class="alert_message" id="commentModalAlert"></div>
+  const overlay = document.createElement("div");
+  overlay.className = "success-check-container";
+  overlay.innerHTML = `
+    <div class="modal-card post-comment-modal">
+      <div class="post-comment-modal-header">
+        <button type="button" class="post-comment-modal-close" id="commentModalClose" aria-label="Cerrar">✕</button>
+        <button type="button" class="btn btn-primary btn-sm" id="commentModalSubmit" disabled>Comentar</button>
       </div>
+
+      ${originalHtml}
+
+      <p class="post-comment-modal-replyto">Respondiendo a <span>@${escapeHtml(replyToUsername)}</span></p>
+
+      <div class="post-comment-modal-composer">
+        <img class="post-comment-modal-avatar" src="${escapeHtml(myAvatarUrl())}" alt="">
+        <textarea id="commentModalInput" class="post-comment-modal-textarea" rows="2" maxlength="${COMMENT_MODAL_MAX}" placeholder="Postea tu respuesta"></textarea>
+      </div>
+      <div class="post-comment-modal-footer">
+        <span class="post-composer-counter" id="commentModalCounter">${COMMENT_MODAL_MAX}</span>
+      </div>
+      <div class="alert_message" id="commentModalAlert"></div>
     </div>
   `;
+  document.body.appendChild(overlay);
 
-  document.getElementById("commentModalClose")?.addEventListener("click", closeOverlay);
+  function close(): void {
+    overlay.remove();
+  }
 
-  const input = document.getElementById("commentModalInput") as HTMLTextAreaElement;
-  const counter = document.getElementById("commentModalCounter")!;
-  const submitBtn = document.getElementById("commentModalSubmit") as HTMLButtonElement;
+  overlay.querySelector("#commentModalClose")?.addEventListener("click", close);
+
+  const input = overlay.querySelector("#commentModalInput") as HTMLTextAreaElement;
+  const counter = overlay.querySelector("#commentModalCounter")!;
+  const submitBtn = overlay.querySelector("#commentModalSubmit") as HTMLButtonElement;
 
   input.focus();
 
@@ -498,7 +479,7 @@ function openReplyModal(
   updateState();
 
   submitBtn.addEventListener("click", async () => {
-    const alertBox = document.getElementById("commentModalAlert")!;
+    const alertBox = overlay.querySelector("#commentModalAlert")!;
     alertBox.innerHTML = "";
     const validationError = validateCommentContent(input.value);
     if (validationError) {
@@ -514,7 +495,7 @@ function openReplyModal(
       submitBtn.textContent = "Comentar";
       return;
     }
-    closeOverlay();
+    close();
     onReplied(comment);
   });
 }

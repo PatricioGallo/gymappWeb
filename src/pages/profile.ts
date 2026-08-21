@@ -58,7 +58,7 @@ import { submitUserReport, validateUserReport } from "../services/userReport.ser
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
+import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import { openPostDetailModal } from "../lib/postDetailModal";
 import {
   getUserRepsAndReposts,
@@ -1522,12 +1522,12 @@ function goToAuthorProfile(author: PostAuthor): void {
   smartNavigate(`profile.html?u=${encodeURIComponent(author.username)}`);
 }
 
-function goToPost(postId: string, onCommentPosted?: (postId: string) => void): void {
+function goToPost(postId: string, opts?: { onCommentPosted?: (postId: string) => void; autoOpenComment?: boolean }): void {
   if (!myId) {
     smartNavigate("login.html");
     return;
   }
-  openPostDetailModal(postId, myId, onCommentPosted);
+  openPostDetailModal(postId, myId, opts);
 }
 
 function setupActivityTabs(
@@ -1645,16 +1645,9 @@ function setupActivityTabs(
     viewerId: myId,
     onLikeToggle: (post) => void handleLikeToggle(post),
     onRepostToggle: (post) => void handleRepostToggle(post),
-    onCommentClick: (post) => {
-      if (!myId) {
-        smartNavigate("login.html");
-        return;
-      }
-      openCommentModal(post, myId, () => {
-        post.comments_count += 1;
-        renderList();
-      });
-    },
+    // Igual que en el feed: pasa por el modal del Rep y de ahi el composer, para que al guardar
+    // el comentario vuelva a esa vista en vez de quedarse en la lista de actividad.
+    onCommentClick: (post) => goToPost(post.id, { onCommentPosted: bumpCommentCount, autoOpenComment: true }),
     onQuoteClick: (post) => {
       if (!myId) {
         smartNavigate("login.html");
@@ -1690,8 +1683,8 @@ function setupActivityTabs(
     onView: (post) => {
       if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
     },
-    onOpenPost: (post) => goToPost(post.id, bumpCommentCount),
-    onQuotedClick: (quotedId) => goToPost(quotedId, bumpCommentCount),
+    onOpenPost: (post) => goToPost(post.id, { onCommentPosted: bumpCommentCount }),
+    onQuotedClick: (quotedId) => goToPost(quotedId, { onCommentPosted: bumpCommentCount }),
     // A diferencia del feed, en el perfil el swipe-arriba nunca tiene que mostrar un
     // video de otra persona -- ni siquiera en la pestaña "Me gusta", que puede traer Reps
     // ajenos: se filtra siempre por el autor del Rep que se tocó, no por targetUserId (da

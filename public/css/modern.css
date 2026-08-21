@@ -6550,6 +6550,24 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   gap: 10px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
+  overflow: hidden;
+  transition: opacity 0.22s ease, max-height 0.28s ease, padding 0.28s ease, border-color 0.28s ease;
+}
+
+/* Estado "colapsado" de una fila de comentario, en los dos sentidos (ver postDetail.ts):
+   - Al borrar (animateCommentRemoval): arranca del alto real medido en JS y esta clase lo lleva
+     a 0 con la transition de .post-comment, en vez de desaparecer de un salto cuando
+     renderComments() vuelve a pintar la lista sin el.
+   - Al agregar (animateCommentsEntering): el comentario nuevo arranca CON esta clase puesta (0),
+     y sacarla anima de vuelta al alto real -- misma clase, animacion espejada.
+   El !important en max-height es a proposito: mientras esta puesta, tiene que ganarle a
+   cualquier max-height inline que ya este seteado (el valor de llegada de animateCommentsEntering). */
+.post-comment-collapsed {
+  opacity: 0;
+  max-height: 0 !important;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-color: transparent;
 }
 
 .post-comment-avatar-btn { flex-shrink: 0; border: none; background: none; padding: 0; cursor: pointer; height: fit-content; }
