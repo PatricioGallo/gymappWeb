@@ -259,6 +259,13 @@ export async function removeGroupParticipant(conversationId: string, userId: str
   return {};
 }
 
+/** Asciende a un integrante a admin, o lo vuelve a member -- un grupo puede tener mas de un admin. */
+export async function setGroupParticipantRole(conversationId: string, userId: string, role: "admin" | "member"): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("set_group_participant_role", { p_conversation_id: conversationId, p_user_id: userId, p_role: role });
+  if (error) return { error: friendlyError(error, "No se pudo cambiar el rol de esa persona.") };
+  return {};
+}
+
 export async function leaveGroup(conversationId: string): Promise<{ error?: string }> {
   const { error } = await supabase.rpc("leave_group_conversation", { p_conversation_id: conversationId });
   if (error) return { error: friendlyError(error, "No se pudo salir del grupo.") };

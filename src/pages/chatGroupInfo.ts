@@ -6,6 +6,7 @@ import {
   listConversations,
   addGroupParticipants,
   removeGroupParticipant,
+  setGroupParticipantRole,
   leaveGroup,
   renameGroup,
   setGroupAvatar,
@@ -15,18 +16,22 @@ import {
   type GroupParticipant,
 } from "../services/chat.service";
 
+const MEMBER_MENU_KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
+
 /**
- * Panel "Info del grupo": lista de integrantes, agregar/sacar (solo admin), salir, y
- * renombrar/cambiar foto (solo admin). Se muestra en el mismo overlay #loaderBody que ya
- * usa chatThread.ts para el modal de reenviar -- self-contained, sin necesitar ViewContext
- * propio (cada render reemplaza el HTML anterior, no quedan listeners colgados al cerrar).
+ * Panel "Info del grupo": lista de integrantes (con menu de tres puntos por fila para
+ * hacer/quitar admin y eliminar, solo admin), agregar/salir, y renombrar/cambiar foto (solo
+ * admin). Un grupo puede tener mas de un admin -- no es exclusivo de quien lo creo. Se
+ * muestra en el mismo overlay #loaderBody que ya usa chatThread.ts para el modal de reenviar
+ * -- self-contained, sin necesitar ViewContext propio (cada render reemplaza el HTML
+ * anterior, no quedan listeners colgados al cerrar).
  *
  * Los cambios de nombre/foto del grupo llegan solos al header del hilo abierto vía la
  * suscripción realtime a "conversations" que chatThread.ts ya tiene activa -- este panel no
- * necesita avisarle de vuelta. Cambios de integrantes (agregar/sacar/salir) sí se reflejan acá
- * mismo (se vuelve a pedir list_conversations tras cada acción), pero no empujan un refresh en
- * vivo del "N integrantes" del header mientras el panel está cerrado -- se ve actualizado la
- * próxima vez que se abra el hilo o este panel.
+ * necesita avisarle de vuelta. Cambios de integrantes (agregar/eliminar/roles/salir) sí se
+ * reflejan acá mismo (se vuelve a pedir list_conversations tras cada acción), pero no empujan
+ * un refresh en vivo del "N integrantes" del header mientras el panel está cerrado -- se ve
+ * actualizado la próxima vez que se abra el hilo o este panel.
  */
 export function openGroupInfoPanel(conversation: ConversationSummary, userId: string, opts: { onLeft: () => void }): void {
   const loaderBody = document.getElementById("loaderBody");
@@ -63,9 +68,12 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
     const admin = isAdmin();
 
     loaderBody!.innerHTML = `
-      <div class="success-check-container">
+      <div class="success-check-container" id="chatGroupInfoOverlay">
         <div class="modal-card">
-          <h2>Info del grupo</h2>
+          <div class="post-comment-modal-header">
+            <button type="button" class="post-comment-modal-close" id="chatGroupInfoClose" aria-label="Cerrar">✕</button>
+          </div>
+
           <div class="avatar-wrap avatar-wrap-sm">
             <img src="${escapeHtml(current.group_avatar_url || "/images/avatars/default.svg")}" alt="" id="chatGroupInfoAvatarImg">
             <div class="avatar-uploading" id="chatGroupInfoAvatarUploading" hidden><div class="modern-spinner"></div></div>
@@ -78,65 +86,161 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
                 : ""
             }
           </div>
-          <p class="chat-group-info-name" style="text-align:center">${escapeHtml(current.group_name ?? "Grupo")}</p>
-          <p class="subtitle" style="text-align:center">${participants.length} integrantes</p>
 
           ${
             admin
-              ? `
-          <div class="field">
-            <label>Nombre del grupo</label>
-            <input type="text" id="chatGroupInfoName" value="${escapeHtml(current.group_name ?? "")}" maxlength="80">
-          </div>
-          `
-              : ""
+              ? `<input type="text" id="chatGroupInfoName" class="chat-group-info-name-input" value="${escapeHtml(current.group_name ?? "")}" maxlength="80">`
+              : `<p class="chat-group-info-name">${escapeHtml(current.group_name ?? "Grupo")}</p>`
           }
+          <p class="subtitle" style="text-align:center">${participants.length} integrantes</p>
 
           <div class="alert_message" id="chatGroupInfoAlert"></div>
 
+          <div class="chat-group-members-head">
+            <span>Integrantes</span>
+            ${admin ? `<button type="button" class="btn btn-outline btn-sm" id="chatGroupInfoAdd">Agregar</button>` : ""}
+          </div>
           <div class="post-share-list" id="chatGroupInfoMembers"></div>
 
-          <div class="modal-actions">
-            ${admin ? `<button class="btn btn-outline" id="chatGroupInfoAdd" type="button">Agregar</button>` : ""}
-            <button class="btn btn-outline" id="chatGroupInfoLeave" type="button">Salir del grupo</button>
-            <button class="btn btn-primary" id="chatGroupInfoClose" type="button">Cerrar</button>
-          </div>
+          <button type="button" class="chat-group-leave-link" id="chatGroupInfoLeave">Salir del grupo</button>
+
+          <div class="chat-group-floating-menu" id="chatGroupFloatingMenu" hidden></div>
         </div>
       </div>
     `;
 
     const alertBox = document.getElementById("chatGroupInfoAlert")!;
     const membersEl = document.getElementById("chatGroupInfoMembers")!;
+    const overlay = document.getElementById("chatGroupInfoOverlay")!;
+    const floatingMenu = document.getElementById("chatGroupFloatingMenu") as HTMLDivElement;
 
     membersEl.innerHTML = participants
-      .map(
-        (p) => `
+      .map((p) => {
+        const canManage = admin && p.user_id !== userId;
+        const menuBtn = canManage
+          ? `<button type="button" class="profile-menu-btn chat-group-member-menu-btn" data-id="${escapeHtml(p.user_id)}" data-role="${escapeHtml(p.role)}" aria-label="Más opciones" aria-expanded="false">${MEMBER_MENU_KEBAB_ICON}</button>`
+          : "";
+        return `
       <div class="post-share-row chat-group-member-row" data-id="${escapeHtml(p.user_id)}">
         <img src="${escapeHtml(p.avatar_url || "/images/avatars/default.svg")}" class="chat-avatar" alt="">
         <span class="post-share-name">${escapeHtml(p.username)}${p.role === "admin" ? ` <span class="chat-group-admin-tag">Admin</span>` : ""}</span>
-        ${admin && p.user_id !== userId ? `<button type="button" class="btn btn-outline btn-sm chat-group-remove-btn" data-id="${escapeHtml(p.user_id)}">Sacar</button>` : ""}
+        ${menuBtn}
       </div>
-    `
-      )
+    `;
+      })
       .join("");
 
-    membersEl.querySelectorAll<HTMLButtonElement>(".chat-group-remove-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (!(await confirmDialog("¿Sacar a esta persona del grupo?", { confirmLabel: "Sacar", danger: true }))) return;
-        btn.disabled = true;
+    // ---------------------------------------------------------------------------
+    // Menu de integrante: se renderiza UNA sola vez, flotante y con position:fixed en vez de
+    // vivir anidado (con position:absolute) adentro de cada fila -- la lista de integrantes
+    // scrollea (.post-share-list, overflow-y:auto) y un menu anidado ahi quedaba recortado o
+    // se veia mal segun donde tocaras. Con position:fixed no lo recorta ningun ancestro:
+    // se posiciona a mano (getBoundingClientRect del boton tocado) cada vez que se abre.
+    // ---------------------------------------------------------------------------
+    let openMenuBtn: HTMLButtonElement | null = null;
+
+    function closeFloatingMenu(): void {
+      floatingMenu.hidden = true;
+      openMenuBtn?.classList.remove("open");
+      openMenuBtn?.setAttribute("aria-expanded", "false");
+      openMenuBtn = null;
+    }
+
+    function wireFloatingMenuItems(targetId: string): void {
+      floatingMenu.querySelector<HTMLButtonElement>(".chat-group-promote-btn")?.addEventListener("click", async () => {
+        closeFloatingMenu();
         try {
-          const { error } = await removeGroupParticipant(current.conversation_id, btn.dataset.id!);
+          const { error } = await setGroupParticipantRole(current.conversation_id, targetId, "admin");
           if (error) {
             alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
             return;
           }
           await refresh();
         } catch {
-          alertBox.innerHTML = `<p>No se pudo sacar a esa persona. Probá de nuevo.</p>`;
-        } finally {
-          btn.disabled = false;
+          alertBox.innerHTML = `<p>No se pudo hacer admin a esa persona. Probá de nuevo.</p>`;
         }
       });
+
+      floatingMenu.querySelector<HTMLButtonElement>(".chat-group-demote-btn")?.addEventListener("click", async () => {
+        closeFloatingMenu();
+        try {
+          const { error } = await setGroupParticipantRole(current.conversation_id, targetId, "member");
+          if (error) {
+            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+            return;
+          }
+          await refresh();
+        } catch {
+          alertBox.innerHTML = `<p>No se pudo quitar el admin de esa persona. Probá de nuevo.</p>`;
+        }
+      });
+
+      floatingMenu.querySelector<HTMLButtonElement>(".chat-group-remove-btn")?.addEventListener("click", async () => {
+        closeFloatingMenu();
+        if (!(await confirmDialog("¿Eliminar a esta persona del grupo?", { confirmLabel: "Eliminar", danger: true }))) return;
+        try {
+          const { error } = await removeGroupParticipant(current.conversation_id, targetId);
+          if (error) {
+            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+            return;
+          }
+          await refresh();
+        } catch {
+          alertBox.innerHTML = `<p>No se pudo eliminar a esa persona. Probá de nuevo.</p>`;
+        }
+      });
+    }
+
+    function openFloatingMenuFor(btn: HTMLButtonElement): void {
+      const targetId = btn.dataset.id!;
+      floatingMenu.innerHTML = `
+        ${
+          btn.dataset.role === "admin"
+            ? `<button type="button" class="profile-menu-item chat-group-demote-btn">Quitar admin</button>`
+            : `<button type="button" class="profile-menu-item chat-group-promote-btn">Hacer admin</button>`
+        }
+        <button type="button" class="profile-menu-item profile-menu-item-danger chat-group-remove-btn">Eliminar del grupo</button>
+      `;
+      wireFloatingMenuItems(targetId);
+
+      floatingMenu.hidden = false;
+      const rect = btn.getBoundingClientRect();
+      const menuWidth = floatingMenu.offsetWidth;
+      const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+      floatingMenu.style.left = `${left}px`;
+      floatingMenu.style.top = `${rect.bottom + 6}px`;
+
+      btn.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+      openMenuBtn = btn;
+    }
+
+    membersEl.querySelectorAll<HTMLButtonElement>(".chat-group-member-menu-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (openMenuBtn === btn) {
+          closeFloatingMenu();
+          return;
+        }
+        openFloatingMenuFor(btn);
+      });
+    });
+
+    // Scrollear la lista con el menu abierto lo dejaria flotando lejos de su boton (es
+    // position:fixed, no se mueve con el contenido) -- mas simple cerrarlo que reposicionarlo
+    // en cada evento de scroll.
+    membersEl.addEventListener("scroll", () => closeFloatingMenu(), { passive: true });
+
+    // Un solo listener en el overlay (se recrea entero en cada renderMain(), no queda
+    // colgado): tocar el fondo oscuro cierra todo el panel; cualquier otro click afuera del
+    // menu flotante (y de su boton disparador) lo cierra a el solo.
+    overlay.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) {
+        close();
+        return;
+      }
+      const target = e.target as HTMLElement;
+      if (!target.closest(".chat-group-member-menu-btn") && !target.closest(".chat-group-floating-menu")) closeFloatingMenu();
     });
 
     document.getElementById("chatGroupInfoClose")?.addEventListener("click", close);
@@ -190,7 +294,10 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
             nameInput.value = current.group_name ?? "";
             return;
           }
-          await refresh();
+          // Ya sabemos el nombre nuevo (lo acabamos de guardar) -- actualizar current en vez
+          // de refresh()+renderMain() completo evita el parpadeo de recrear todo el modal por
+          // un cambio que ya se ve reflejado en el input tal cual esta.
+          current = { ...current, group_name: name };
         } catch {
           alertBox.innerHTML = `<p>No se pudo renombrar el grupo. Probá de nuevo.</p>`;
           nameInput.value = current.group_name ?? "";
@@ -217,7 +324,9 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
             alertBox.innerHTML = `<p>${escapeHtml(setResult.error)}</p>`;
             return;
           }
-          await refresh();
+          // Mismo criterio que el nombre: ya tenemos la URL real subida, no hace falta
+          // refresh()+renderMain() completo (el preview local ya se ve puesto arriba).
+          current = { ...current, group_avatar_url: url };
         } catch {
           alertBox.innerHTML = `<p>No se pudo actualizar la foto. Probá de nuevo.</p>`;
         } finally {
@@ -233,7 +342,7 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
     const selected = new Map<string, FollowListRow>();
 
     loaderBody!.innerHTML = `
-      <div class="success-check-container">
+      <div class="success-check-container" id="chatGroupAddOverlay">
         <div class="modal-card">
           <h2>Agregar integrantes</h2>
           <div class="field">
@@ -250,6 +359,9 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
     `;
 
     document.getElementById("chatGroupAddBack")?.addEventListener("click", () => renderMain());
+    document.getElementById("chatGroupAddOverlay")?.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) close();
+    });
 
     const listEl = document.getElementById("chatGroupAddList")!;
     const searchInput = document.getElementById("chatGroupAddSearch") as HTMLInputElement;

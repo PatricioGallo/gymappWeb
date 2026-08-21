@@ -3239,6 +3239,10 @@ export type Database = {
         Args: { p_avatar_url: string; p_conversation_id: string }
         Returns: undefined
       }
+      set_group_participant_role: {
+        Args: { p_conversation_id: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
       set_routine_finished: {
         Args: { p_finished: boolean; p_routine_id: string }
         Returns: undefined

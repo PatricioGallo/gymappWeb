@@ -770,7 +770,15 @@ export async function mountThread(
     `;
   }
 
+  // Aviso tipo "Fulano cambió el nombre del grupo a 'X'" (o la foto) -- lo insertan las RPC
+  // rename_group/set_group_avatar como un mensaje mas (attachment_type='system'), asi que
+  // llega por los mismos canales (historial, realtime, push) sin logica aparte. Se pinta
+  // como una linea centrada y muda, sin avatar/nombre/hora/menu -- no es un mensaje "de
+  // alguien", es un evento del grupo (mismo criterio que .chat-date-divider).
   function bubbleHtml(m: ChatMessage, isMe: boolean, isFirstInRun = true, isLastInRun = true): string {
+    if (m.attachment_type === "system") {
+      return `<div class="chat-system-message">${escapeHtml(m.content ?? "")}</div>`;
+    }
     const isSticker = !m.deleted_at && m.attachment_type === "sticker";
     const hasReactions = !m.deleted_at && Object.values(getReactions(m)).some((users) => users.length > 0);
     const bubbleEl = `

@@ -5220,6 +5220,20 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   color: var(--text-muted);
 }
 
+/* Aviso de "cambió el nombre/foto del grupo" -- mismo look que .chat-date-divider (centrado,
+   pastilla mudo) pero para texto en vez de una fecha. */
+.chat-system-message {
+  text-align: center;
+  margin: 6px auto 10px;
+  padding: 4px 12px;
+  max-width: 80%;
+  background: var(--surface-2);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .chat-bubble {
   position: relative;
   max-width: 74%;
@@ -6245,9 +6259,45 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .chat-group-pick-row input[type="checkbox"] { margin-left: auto; width: 18px; height: 18px; accent-color: var(--accent); pointer-events: none; }
 .chat-group-pick-row.selected { background: var(--accent-soft); }
 
-.chat-group-info-name { margin: 8px 0 2px; font-weight: 700; font-size: 16px; }
+.chat-group-info-name { margin: 8px 0 2px; font-weight: 700; font-size: 16px; text-align: center; }
+.chat-group-info-name-input {
+  display: block;
+  margin: 8px auto 2px;
+  width: auto;
+  max-width: 100%;
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  color: var(--text);
+  padding: 2px 4px;
+}
+.chat-group-info-name-input:focus { outline: none; border-color: var(--accent-2); }
+
 .chat-group-member-row { justify-content: flex-start; }
-.chat-group-remove-btn { margin-left: auto; flex-shrink: 0; }
+.chat-group-member-menu-btn { margin-left: auto; flex-shrink: 0; }
+
+/* Flotante con position:fixed (posicionado a mano en JS, ver openFloatingMenuFor en
+   chatGroupInfo.ts) en vez de anidado con position:absolute adentro de cada fila -- la lista
+   de integrantes scrollea (.post-share-list, overflow-y:auto) y de esa forma un ancestro con
+   overflow ya no lo puede recortar, no importa donde este scrolleada la lista. z-index por
+   encima del overlay del modal (1000) para que quede siempre arriba de todo. */
+.chat-group-floating-menu {
+  position: fixed;
+  z-index: 1300;
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+}
+.chat-group-floating-menu[hidden] { display: none; }
 .chat-group-admin-tag {
   font-size: 11px;
   font-weight: 700;
@@ -6257,6 +6307,39 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   padding: 1px 8px;
   margin-left: 4px;
 }
+
+/* Cabecera compacta arriba de la lista de integrantes: el titulo a la izquierda, el boton
+   de agregar (chico, solo admin) a la derecha -- reemplaza la fila de botones grandes que
+   antes vivia abajo de todo. */
+.chat-group-members-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* "Salir del grupo" es una accion poco frecuente y bastante consecuente -- un link chico y
+   discreto pesa menos en la pantalla que un boton grande, sin dejar de ser accionable
+   (el confirmDialog sigue frenando el click accidental). */
+.chat-group-leave-link {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.chat-group-leave-link:hover { color: #f04438; }
 .post-viewer-time { margin-left: auto; flex-shrink: 0; font-size: 11.5px; color: var(--text-muted); }
 
 .post-share-external { display: flex; gap: 10px; margin-bottom: 4px; }
