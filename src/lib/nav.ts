@@ -194,6 +194,17 @@ async function applyZoomPreference(userId: string): Promise<void> {
   if (viewport) viewport.setAttribute("content", "width=device-width, initial-scale=1");
 }
 
+/** Marca de una todo `.reveal` adentro de `container` como ya revelado, sin esperar a que el
+ * IntersectionObserver de setupRevealObserver dispare el fade-in. Pensado para re-renders "de
+ * fondo" (ej. refreshCurrentRoutinesTab en profile.ts, que recarga rutinas/estadisticas cada vez
+ * que se vuelve a un perfil ya visitado en esta sesion): esas tarjetas ya se vieron una vez, asi
+ * que si el HTML se reemplaza de cero con las mismas clases `.reveal`, sin esto reproducen el
+ * fade-in desde invisible cada vez -- se siente como si la pagina "se recargara" en cada visita,
+ * aunque el contenido sea identico. */
+export function settleReveal(container: ParentNode): void {
+  container.querySelectorAll(".reveal").forEach((el) => el.classList.add("in-view"));
+}
+
 export function setupRevealObserver(): void {
   if (!("IntersectionObserver" in window)) {
     document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in-view"));

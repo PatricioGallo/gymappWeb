@@ -1,4 +1,4 @@
-import { setupAutoHideHeader } from "../lib/nav";
+import { setupAutoHideHeader, settleReveal } from "../lib/nav";
 import { smartNavigate } from "../shell/router";
 import type { ViewModule } from "../shell/router";
 import type { ViewContext } from "../shell/viewContext";
@@ -1444,8 +1444,15 @@ async function refreshRoutinesAndStats() {
 // refreshRoutinesAndStats (pensada para finalizar/reactivar, siempre en la pestaña
 // "Activas"), esta respeta la pestaña de rutinas que el usuario tenia seleccionada.
 async function refreshCurrentRoutinesTab() {
+  // Este refresh corre cada vez que se vuelve a un perfil ya visitado en esta sesion (ver el
+  // comentario grande de arriba) -- la mayoria de las veces el contenido es igual al que ya se
+  // estaba viendo, asi que se asienta el reveal de una en vez de dejar que las tarjetas nuevas
+  // (mismo innerHTML de cero, misma clase .reveal) vuelvan a hacer fade-in desde invisible.
   if (profileStatsCtx) {
-    void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType, profileStatsCtx.isOwner);
+    void renderProfileStats(profileStatsCtx.userId, profileStatsCtx.username, profileStatsCtx.canViewLists, profileStatsCtx.userType, profileStatsCtx.isOwner).then(() => {
+      const el = document.getElementById("profileStats");
+      if (el) settleReveal(el);
+    });
   }
 
   // Un gimnasio no tiene rutinas (routinesCtx queda null a proposito, ver main()) -- ya se
@@ -1467,6 +1474,8 @@ async function refreshCurrentRoutinesTab() {
   }
 
   const count = await renderRoutines(routinesCtx.userId, routinesCtx.ownerView, logs, routinesCtx.userType, routinesCtx.ownerBasic);
+  const routinesContentEl = document.getElementById("routinesContent");
+  if (routinesContentEl) settleReveal(routinesContentEl);
   let activeCount = count;
   if (activeRoutineTab === "active") {
     const statValue = document.getElementById("activeRoutinesStatValue");
@@ -1484,7 +1493,10 @@ async function refreshCurrentRoutinesTab() {
   // la pestaña de Estadisticas no esta visible ahora mismo, se difiere la reconstruccion
   // hasta que el usuario vuelva a ella (ver switchTab en setupActivityTabs).
   if (activeActivityTab === "stats") {
-    void renderStats(logs, activeCount ?? 0, routinesCtx.ownerView, routinesCtx.widgets);
+    void renderStats(logs, activeCount ?? 0, routinesCtx.ownerView, routinesCtx.widgets).then(() => {
+      const el = document.getElementById("statsContent");
+      if (el) settleReveal(el);
+    });
   } else {
     statsDirty = true;
   }
