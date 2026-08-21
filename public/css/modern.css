@@ -6605,16 +6605,21 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-comment-like.is-active { color: var(--accent); }
 
 .post-comment-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   color: var(--text-muted);
   cursor: pointer;
   align-self: flex-start;
-  font-size: 13px;
-  padding: 4px;
+  padding: 6px;
+  border-radius: 999px;
   flex-shrink: 0;
+  transition: color 0.15s ease, background 0.15s ease;
 }
-.post-comment-delete:hover { color: var(--accent); }
+.post-comment-delete svg { width: 15px; height: 15px; }
+.post-comment-delete:hover { background: var(--surface-2); color: var(--accent); }
 
 /* ---- Rep compartido en el chat ---- */
 

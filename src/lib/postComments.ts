@@ -2,7 +2,7 @@ import { escapeHtml } from "./dom";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
 import { resultFullName } from "./search";
-import { ICON_HEART, ICON_HEART_FILLED } from "./postCard";
+import { ICON_HEART, ICON_HEART_FILLED, ICON_TRASH } from "./postCard";
 import type { FeedComment } from "../services/post.service";
 
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
@@ -49,7 +49,7 @@ function commentRowHtml(c: FeedComment, depth: number): string {
           <button type="button" class="post-comment-like${c.likedByMe ? " is-active" : ""}" data-action="like" data-id="${c.id}" aria-label="Me gusta">${c.likedByMe ? ICON_HEART_FILLED : ICON_HEART}<span>${c.likes_count}</span></button>
         </div>
       </div>
-      <button type="button" class="post-comment-delete" data-action="delete" data-id="${c.id}" aria-label="Eliminar comentario" hidden>✕</button>
+      <button type="button" class="post-comment-delete" data-action="delete" data-id="${c.id}" aria-label="Eliminar comentario" hidden>${ICON_TRASH}</button>
     </div>
   `;
 }

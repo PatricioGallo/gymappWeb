@@ -410,6 +410,33 @@ export function confirmDeletePost(post: FeedPost, onDeleted: () => void): void {
   });
 }
 
+/**
+ * Confirmacion de borrado de un comentario, mismo mecanismo/pinta que confirmDeletePost --
+ * reemplaza el confirm() nativo del navegador. La baja en si (optimista + rollback si falla)
+ * la sigue manejando el caller (ver handleDeleteComment en postDetail.ts); esto solo pregunta.
+ */
+export function confirmDeleteComment(onConfirmed: () => void): void {
+  const loaderBody = document.getElementById("loaderBody");
+  if (!loaderBody) return;
+  loaderBody.innerHTML = `
+    <div class="success-check-container">
+      <div class="modal-card">
+        <h2>Eliminar comentario</h2>
+        <p class="subtitle">Las respuestas que tenga también se van a borrar.</p>
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="confirmDeleteComment" type="button">Eliminar</button>
+          <button class="btn btn-outline" id="cancelDeleteComment" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById("cancelDeleteComment")?.addEventListener("click", closeOverlay);
+  document.getElementById("confirmDeleteComment")?.addEventListener("click", () => {
+    closeOverlay();
+    onConfirmed();
+  });
+}
+
 function myAvatarUrl(): string {
   const navAvatar = document.getElementById("navMenuAvatar") as HTMLImageElement | null;
   return (navAvatar && navAvatar.src) || DEFAULT_AVATAR;

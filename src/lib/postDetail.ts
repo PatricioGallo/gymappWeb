@@ -4,7 +4,7 @@ import { formatTiempoRelativo } from "./dias";
 import { resultFullName } from "./search";
 import { supabase } from "./supabaseClient";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "./postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, openPostMetricsModal, confirmDeletePost } from "./postModals";
+import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, openPostMetricsModal, confirmDeletePost, confirmDeleteComment } from "./postModals";
 import { renderCommentsHtml, wireCommentsList, collectCommentAndDescendantIds, type CommentListHandlers } from "./postComments";
 import {
   getPost,
@@ -333,7 +333,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
         opts.onCommentPosted?.(comment.post_id);
       });
     },
-    onDeleteClick: (comment) => void handleDeleteComment(comment.id),
+    onDeleteClick: (comment) => handleDeleteComment(comment.id),
   };
 
   async function handleCommentLikeToggle(id: string): Promise<void> {
@@ -352,8 +352,12 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     }
   }
 
-  async function handleDeleteComment(id: string): Promise<void> {
-    if (!confirm("¿Eliminar este comentario? Las respuestas que tenga también se van a borrar.")) return;
+  function handleDeleteComment(id: string): void {
+    opts.onSubmodalOpening?.();
+    confirmDeleteComment(() => void deleteCommentConfirmed(id));
+  }
+
+  async function deleteCommentConfirmed(id: string): Promise<void> {
     const idsToRemove = collectCommentAndDescendantIds(comments, id);
     const previous = comments;
     comments = comments.filter((c) => !idsToRemove.has(c.id));
