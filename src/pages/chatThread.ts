@@ -972,10 +972,14 @@ export async function mountThread(
       messages.forEach((m) => renderedIds.add(m.id));
       await hydrateSharedPosts(messages);
       messagesEl.innerHTML = buildMessagesHtml(messages);
-      await hydrateMedia();
+      // El scroll no tiene que esperar a que las imagenes/audio terminen de resolver su URL
+      // firmada -- el alto de cada media ya esta fijo por CSS (no depende de que cargue), asi
+      // que hacerlo esperar solo se sentia como "aparece arriba y recien despues salta al
+      // final". Se hidratan en paralelo, sin bloquear nada visible.
+      scrollToBottom("instant");
+      void hydrateMedia();
       void hydrateMissingQuotes();
       void hydrateAudioWaveforms();
-      scrollToBottom("instant");
     } else {
       messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
     }
@@ -988,10 +992,10 @@ export async function mountThread(
     messagesEl.innerHTML = messages.length
       ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
       : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
-    await hydrateMedia();
+    scrollToBottom("instant");
+    void hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
-    scrollToBottom("instant");
     if (!olderExhausted) observeLoadSentinel();
     void cacheMessages(conversationId, page);
 
