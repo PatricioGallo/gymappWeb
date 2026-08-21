@@ -143,7 +143,12 @@ button:focus-visible {
   box-shadow: 0 8px 24px rgba(255, 77, 77, 0.28);
 }
 
-.btn-primary:hover { box-shadow: 0 10px 28px rgba(255, 77, 77, 0.4); }
+/* Solo en dispositivos que soportan hover de verdad (mouse/trackpad) -- en touch, el navegador
+   aplica el estado :hover igual al tocar y se queda pegado (marco/sombra fantasma) hasta el
+   proximo toque en otro lado, lo que se ve como un bug visual sin sentido en mobile. */
+@media (hover: hover) {
+  .btn-primary:hover { box-shadow: 0 10px 28px rgba(255, 77, 77, 0.4); }
+}
 
 .btn-outline {
   background: transparent;
@@ -151,7 +156,9 @@ button:focus-visible {
   border-color: var(--border);
 }
 
-.btn-outline:hover { border-color: var(--accent-2); color: var(--accent-2); }
+@media (hover: hover) {
+  .btn-outline:hover { border-color: var(--accent-2); color: var(--accent-2); }
+}
 
 .btn-block { width: 100%; }
 
@@ -246,7 +253,9 @@ button:focus-visible {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.user-menu-toggle:hover,
+@media (hover: hover) {
+  .user-menu-toggle:hover { background: var(--surface-2); border-color: var(--border); }
+}
 .user-menu-toggle.open { background: var(--surface-2); border-color: var(--border); }
 
 @media (max-width: 859px) {
@@ -299,7 +308,9 @@ button:focus-visible {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.notif-bell-btn:hover,
+@media (hover: hover) {
+  .notif-bell-btn:hover { background: var(--surface-2); border-color: var(--border); }
+}
 .notif-bell-btn.open { background: var(--surface-2); border-color: var(--border); }
 
 .notif-bell-btn svg { width: 20px; height: 20px; stroke: currentColor; }
@@ -460,7 +471,9 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.notif-page-item:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .notif-page-item:hover { border-color: var(--accent-2); }
+}
 .notif-page-item.unread { border-color: var(--accent-2); background: var(--accent-soft); }
 
 .notif-page-dot {
@@ -506,7 +519,9 @@ button:focus-visible {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.header-search-btn:hover,
+@media (hover: hover) {
+  .header-search-btn:hover { background: var(--surface-2); border-color: var(--border); }
+}
 .header-search-btn.open { background: var(--surface-2); border-color: var(--border); }
 
 .header-search-btn svg { width: 20px; height: 20px; stroke: currentColor; }
@@ -746,7 +761,9 @@ button:focus-visible {
   color: var(--text);
 }
 
-.search-page-item:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .search-page-item:hover { border-color: var(--accent-2); }
+}
 
 .search-page-avatar {
   width: 48px;
@@ -1462,7 +1479,10 @@ button:focus-visible {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.dropzone:hover, .dropzone.dragover { border-color: var(--accent-2); background: var(--accent-soft); }
+@media (hover: hover) {
+  .dropzone:hover { border-color: var(--accent-2); background: var(--accent-soft); }
+}
+.dropzone.dragover { border-color: var(--accent-2); background: var(--accent-soft); }
 
 .dropzone-input {
   position: absolute;
@@ -1528,7 +1548,9 @@ button:focus-visible {
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.dropzone-remove:hover { color: var(--accent-2); border-color: var(--accent-2); }
+@media (hover: hover) {
+  .dropzone-remove:hover { color: var(--accent-2); border-color: var(--accent-2); }
+}
 
 .verify-doc-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
 
@@ -1572,7 +1594,9 @@ button:focus-visible {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.verify-doc-add-tile:hover { border-color: var(--accent-2); background: var(--accent-soft); }
+@media (hover: hover) {
+  .verify-doc-add-tile:hover { border-color: var(--accent-2); background: var(--accent-soft); }
+}
 .verify-doc-add-tile svg { width: 22px; height: 22px; stroke: currentColor; }
 
 .trainer-fields-hint { margin-bottom: 14px; }
@@ -1604,7 +1628,9 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.credential-remove:hover { border-color: var(--accent-2); color: var(--text); }
+@media (hover: hover) {
+  .credential-remove:hover { border-color: var(--accent-2); color: var(--text); }
+}
 
 .credential-institution-other { margin-top: 8px; }
 
@@ -2441,7 +2467,9 @@ button:focus-visible {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.profile-menu-btn:hover,
+@media (hover: hover) {
+  .profile-menu-btn:hover { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+}
 .profile-menu-btn.open { background: var(--surface-2); border-color: var(--border); color: var(--text); }
 
 .profile-menu-btn svg { width: 18px; height: 18px; }
@@ -2625,7 +2653,9 @@ a.profile-stat:hover { color: var(--accent-2); }
   transition: border-color 0.15s ease;
 }
 
-.quick-card:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .quick-card:hover { border-color: var(--accent-2); }
+}
 
 .quick-card .icon {
   width: 44px;
@@ -3186,7 +3216,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-family: inherit;
 }
 
-.exc-admin-actions button:hover { border-color: var(--accent-2); color: var(--text); }
+@media (hover: hover) {
+  .exc-admin-actions button:hover { border-color: var(--accent-2); color: var(--text); }
+}
 
 .roadmap-section { margin-bottom: 30px; }
 
@@ -3265,7 +3297,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-family: inherit;
 }
 
-.roadmap-task-actions button:hover { border-color: var(--accent-2); color: var(--text); }
+@media (hover: hover) {
+  .roadmap-task-actions button:hover { border-color: var(--accent-2); color: var(--text); }
+}
 
 @media (max-width: 640px) {
   .roadmap-task { flex-wrap: wrap; }
@@ -3344,7 +3378,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
-.member-sort-trigger:hover,
+@media (hover: hover) {
+  .member-sort-trigger:hover { border-color: var(--accent-2); }
+}
 .member-sort-trigger[aria-expanded="true"] { border-color: var(--accent-2); }
 .member-sort-trigger svg { flex-shrink: 0; stroke: currentColor; opacity: 0.7; }
 
@@ -3520,7 +3556,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: pointer;
   flex-shrink: 0;
 }
-.gym-post-media-add:hover { border-color: var(--accent-2); color: var(--accent-2); }
+@media (hover: hover) {
+  .gym-post-media-add:hover { border-color: var(--accent-2); color: var(--accent-2); }
+}
 .gym-post-media-add.is-hidden { display: none; }
 
 /* ---------- Visor de publicación: comentarios (compartidos entre desktop/mobile) ---------- */
@@ -3725,7 +3763,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: pointer;
 }
 
-.settings-link-remove:hover { border-color: var(--accent-2); color: var(--text); }
+@media (hover: hover) {
+  .settings-link-remove:hover { border-color: var(--accent-2); color: var(--text); }
+}
 
 .settings-toggle-row {
   display: flex;
@@ -3828,7 +3868,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
-.settings-add-widget select:hover { border-color: #333a45; }
+@media (hover: hover) {
+  .settings-add-widget select:hover { border-color: #333a45; }
+}
 .settings-add-widget select:focus { outline: none; border-color: var(--accent-2); }
 .settings-add-widget select:disabled { opacity: 0.6; cursor: not-allowed; }
 .settings-add-widget .btn { flex: 0 0 auto; }
@@ -3856,7 +3898,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .settings-save-bar[hidden] { display: none; }
 
 #settingsTabs + div .chart-card + .chart-card { margin-top: 20px; }
-.exc-admin-actions .exc-admin-delete:hover { border-color: #ff8a8a; color: #ff8a8a; }
+@media (hover: hover) {
+  .exc-admin-actions .exc-admin-delete:hover { border-color: #ff8a8a; color: #ff8a8a; }
+}
 
 .exc-meta {
   font-size: 12.5px;
@@ -3896,7 +3940,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: pointer;
 }
 
-.exc-remove:hover { border-color: #ff8a8a; color: #ff8a8a; }
+@media (hover: hover) {
+  .exc-remove:hover { border-color: #ff8a8a; color: #ff8a8a; }
+}
 
 .exc-reorder {
   display: flex;
@@ -3921,7 +3967,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-move-up { border-radius: 5px 5px 2px 2px; }
 .exc-move-down { border-radius: 2px 2px 5px 5px; }
 
-.exc-move-up:hover:not(:disabled), .exc-move-down:hover:not(:disabled) { color: var(--accent-2); border-color: var(--accent-2); }
+@media (hover: hover) {
+  .exc-move-up:hover:not(:disabled), .exc-move-down:hover:not(:disabled) { color: var(--accent-2); border-color: var(--accent-2); }
+}
 .exc-move-up:disabled, .exc-move-down:disabled { opacity: 0.3; cursor: default; }
 
 .day-add-btn {
@@ -3937,7 +3985,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   width: 100%;
 }
 
-.day-add-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+@media (hover: hover) {
+  .day-add-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+}
 
 /* ---------- Semana: filas de dia con mini progreso (pesos.html) ---------- */
 
@@ -3966,7 +4016,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .day-row + .day-row { margin-top: 10px; }
-.day-row:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .day-row:hover { border-color: var(--accent-2); }
+}
 .day-row.done { border-color: rgba(47, 217, 113, 0.35); }
 
 .day-ring { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
@@ -4373,7 +4425,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.exc-picker-btn:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .exc-picker-btn:hover { border-color: var(--accent-2); }
+}
 
 .exc-pick-search-row { display: flex; gap: 8px; margin-bottom: 14px; }
 
@@ -4400,7 +4454,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
-.exc-pick-refresh:hover { color: var(--accent-2); border-color: var(--accent-2); }
+@media (hover: hover) {
+  .exc-pick-refresh:hover { color: var(--accent-2); border-color: var(--accent-2); }
+}
 
 .exc-pick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 
@@ -4419,7 +4475,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-family: inherit;
   white-space: nowrap;
 }
-.exc-pick-chip:hover { border-color: var(--accent-2); color: var(--text); }
+@media (hover: hover) {
+  .exc-pick-chip:hover { border-color: var(--accent-2); color: var(--text); }
+}
 .exc-pick-chip.active { background: var(--accent-soft); border-color: var(--accent-2); color: var(--accent-2); }
 
 .exc-pick-results { max-height: 48vh; overflow-y: auto; padding-right: 4px; }
@@ -4452,7 +4510,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-family: inherit;
   color: var(--text);
 }
-.exc-pick-card:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .exc-pick-card:hover { border-color: var(--accent-2); }
+}
 
 .exc-pick-thumb {
   aspect-ratio: 1 / 1;
@@ -5128,7 +5188,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .chat-load-more[hidden] { display: none; }
-.chat-load-more:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .chat-load-more:hover { border-color: var(--accent-2); }
+}
 
 .chat-messages {
   display: flex;
@@ -5225,7 +5287,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .chat-scroll-bottom-btn[hidden] { display: none; }
-.chat-scroll-bottom-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+@media (hover: hover) {
+  .chat-scroll-bottom-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+}
 .chat-scroll-bottom-btn svg { width: 18px; height: 18px; stroke: currentColor; }
 
 .chat-date-divider {
@@ -5483,8 +5547,10 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   cursor: pointer;
 }
 
-.chat-record-cancel:hover,
-.chat-preview-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+@media (hover: hover) {
+  .chat-record-cancel:hover,
+  .chat-preview-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+}
 
 .chat-preview-bar img,
 .chat-preview-bar video {
@@ -5534,7 +5600,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   cursor: pointer;
 }
 
-.chat-reply-bar-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+@media (hover: hover) {
+  .chat-reply-bar-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+}
 
 /* Cita de respuesta dentro de una burbuja (ver replyQuoteHtml en chat.ts): mismo fondo
    semitransparente en ambos tipos de burbuja, para que se lea como "incrustado" sin
@@ -6069,7 +6137,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   text-align: left;
   cursor: pointer;
 }
-.post-quoted:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .post-quoted:hover { border-color: var(--accent-2); }
+}
 
 .post-quoted-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .post-quoted-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
@@ -6088,7 +6158,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   overflow: hidden;
   background: var(--surface-2);
 }
-.post-link-preview:hover { border-color: var(--accent-2); }
+@media (hover: hover) {
+  .post-link-preview:hover { border-color: var(--accent-2); }
+}
 
 .post-link-preview-image {
   display: block;
@@ -6382,7 +6454,9 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   color: var(--text);
   cursor: pointer;
 }
-.post-share-external-btn:hover { background: var(--surface-3, var(--surface-2)); border-color: var(--accent-2); }
+@media (hover: hover) {
+  .post-share-external-btn:hover { background: var(--surface-3, var(--surface-2)); border-color: var(--accent-2); }
+}
 .post-share-copied { font-size: 13px; color: var(--live); margin: 4px 0 12px; }
 
 /* ---- Modal de comentario estilo Twitter ---- */
