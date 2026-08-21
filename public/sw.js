@@ -66,7 +66,13 @@ self.addEventListener("push", (event) => {
       return self.registration.showNotification(data.title || "Gym Social", {
         body: data.body || "",
         icon,
-        badge: "/images/icon-192.png",
+        // "badge" es el icono chico de la barra de estado en Android -- el sistema lo pinta
+        // como una silueta monocroma a partir del canal alfa, ignorando el color. icon-192.png
+        // (el logo a color, cuadrado y sin transparencia) hace que esa mascara termine siendo
+        // el cuadrado entero opaco, mostrando un bloque blanco feo en vez del logo. icon-badge.png
+        // es ese mismo logo pero solo la silueta blanca sobre fondo transparente -- pensado
+        // especificamente para esto (ver public/images/icon-badge.png).
+        badge: "/images/icon-badge.png",
         data: { url: data.url || "/pages/notifications.html" },
       });
     })()

@@ -49,6 +49,10 @@ import type { ViewContext } from "../shell/viewContext";
  * dentro de la misma sesion larga reusa el cache en vez de pedir una URL nueva cada vez. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
+// Techo del auto-grow del composer (ver el listener de "input" mas abajo) -- coincide con el
+// max-height de .chat-composer-input en modern.css, tienen que ir sincronizados.
+const COMPOSER_MAX_HEIGHT_PX = 200;
+
 // Con preload="metadata", Safari/iOS (y a veces Chrome mobile) deja el <video> en blanco/gris
 // hasta que se toca -- conoce la duracion pero no llega a pintar un frame solo. Buscar una
 // posicion minima apenas carga la metadata fuerza ese decodeo, y queda mostrado como si fuera
@@ -1469,7 +1473,7 @@ export async function mountThread(
     editBar.hidden = false;
     composerInput.value = message.content ?? "";
     composerInput.style.height = "auto";
-    composerInput.style.height = `${Math.min(composerInput.scrollHeight, 120)}px`;
+    composerInput.style.height = `${Math.min(composerInput.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
     composerInput.focus();
     updateSendState();
   }
@@ -1776,7 +1780,7 @@ export async function mountThread(
     "input",
     () => {
       composerInput.style.height = "auto";
-      composerInput.style.height = `${Math.min(composerInput.scrollHeight, 120)}px`;
+      composerInput.style.height = `${Math.min(composerInput.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
       updateSendState();
     },
     { signal: ctx.signal }

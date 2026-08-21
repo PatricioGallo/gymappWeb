@@ -5858,7 +5858,8 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .chat-composer-input {
   flex: 1;
   resize: none;
-  max-height: 120px;
+  min-height: 40px;
+  max-height: 200px;
   background: none;
   border: none;
   color: var(--text);
