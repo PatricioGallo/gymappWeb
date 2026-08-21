@@ -69,6 +69,7 @@ function groupHeaderHtml(label: string, showMarkAllBtn: boolean, unreadCount: nu
 const VIEW_MARKUP = `
   <section class="features">
     <div class="container">
+      <div class="pull-refresh-indicator" id="notifPullRefreshIndicator" aria-hidden="true"><div class="modern-spinner"></div></div>
       <span class="eyebrow eyebrow-standalone">Notificaciones</span>
       <div class="notif-page-list" id="notifPageList"></div>
     </div>
@@ -76,9 +77,10 @@ const VIEW_MARKUP = `
 `;
 
 export const notificationsView: ViewModule = {
-  async mount(container) {
+  async mount(container, _params, ctx) {
     container.innerHTML = VIEW_MARKUP;
     const listEl = container.querySelector<HTMLElement>("#notifPageList")!;
+    const pullIndicator = container.querySelector("#notifPullRefreshIndicator") as HTMLDivElement;
 
     let notifications: AppNotification[] = [];
 
@@ -133,6 +135,94 @@ export const notificationsView: ViewModule = {
       renderList();
       await markAllNotificationsRead();
     }
+
+    // ---------------------------------------------------------------------------
+    // Pull-to-refresh (solo mobile, gesto táctil): arrastrar hacia abajo estando ya arriba
+    // del todo de la pagina pide las notificaciones de nuevo. Mismo patron que feed.ts:
+    // esta pagina scrollea la ventana entera (no tiene un panel propio con su propio
+    // scroll, a diferencia de chats.ts), asi que el gesto se engancha en document y mira
+    // el scroll de la ventana.
+    // ---------------------------------------------------------------------------
+
+    const PULL_THRESHOLD = 70;
+    const PULL_MAX = 110;
+    const PULL_LOADING_HEIGHT = 56;
+
+    let pullDragging = false;
+    let pullActive = false; // true una vez que se movio hacia abajo lo suficiente como para contar como "pull" y no un scroll comun
+    let pullStartY = 0;
+    let isRefreshingList = false;
+
+    function isMobileLayout(): boolean {
+      return window.matchMedia("(max-width: 859px)").matches;
+    }
+
+    function isAtTop(): boolean {
+      return (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+    }
+
+    function setPullHeight(px: number, animated: boolean): void {
+      pullIndicator.classList.toggle("pull-refresh-animate", animated);
+      pullIndicator.style.height = `${px}px`;
+    }
+
+    async function refreshNotificationsList(): Promise<void> {
+      isRefreshingList = true;
+      setPullHeight(PULL_LOADING_HEIGHT, true);
+      try {
+        notifications = await listAllNotifications();
+        renderList();
+      } catch {
+        // silencioso: un pull-to-refresh fallido no tiene mucho mas que mostrar que "no paso nada"
+      } finally {
+        setPullHeight(0, true);
+        isRefreshingList = false;
+      }
+    }
+
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        // El router deja esta vista viva (solo hidden) al navegar a otra -- sin este chequeo,
+        // arrastrar hacia abajo en OTRA pagina terminaria disparando este gesto tambien (mismo
+        // motivo que feed.ts guarda container.hidden acá).
+        if (isRefreshingList || container.hidden || !isMobileLayout() || !isAtTop()) return;
+        pullDragging = true;
+        pullActive = false;
+        pullStartY = e.touches[0].clientY;
+      },
+      { passive: true, signal: ctx.signal }
+    );
+
+    document.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!pullDragging) return;
+        const deltaY = e.touches[0].clientY - pullStartY;
+        if (deltaY <= 0 || !isAtTop()) {
+          pullDragging = false;
+          if (pullActive) setPullHeight(0, true);
+          pullActive = false;
+          return;
+        }
+        pullActive = true;
+        e.preventDefault(); // corta el rebote/pull-to-refresh nativo mientras dura el gesto propio
+        setPullHeight(Math.min(deltaY * 0.5, PULL_MAX), false);
+      },
+      { passive: false, signal: ctx.signal }
+    );
+
+    function onPullEnd(): void {
+      if (!pullDragging) return;
+      pullDragging = false;
+      if (!pullActive) return;
+      pullActive = false;
+      const reached = pullIndicator.getBoundingClientRect().height >= PULL_THRESHOLD;
+      if (reached) void refreshNotificationsList();
+      else setPullHeight(0, true);
+    }
+    document.addEventListener("touchend", onPullEnd, { signal: ctx.signal });
+    document.addEventListener("touchcancel", onPullEnd, { signal: ctx.signal });
 
     notifications = await listAllNotifications();
     renderList();

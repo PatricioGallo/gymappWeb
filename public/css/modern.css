@@ -4749,6 +4749,7 @@ body.chats-page .features {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 @media (min-width: 860px) {

@@ -77,6 +77,7 @@ const VIEW_MARKUP = `
       <div id="chatMessagesPanel">
         <div class="chat-split">
           <div class="chat-list-pane">
+            <div class="pull-refresh-indicator" id="chatPullRefreshIndicator" aria-hidden="true"><div class="modern-spinner"></div></div>
             <div class="chat-list-toolbar">
               <div class="chat-list-search">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -129,6 +130,8 @@ export const chatsView: ViewModule = {
     let searchQuery = "";
 
     const listEl = container.querySelector("#chatList")!;
+    const chatListPane = container.querySelector(".chat-list-pane") as HTMLDivElement;
+    const pullIndicator = container.querySelector("#chatPullRefreshIndicator") as HTMLDivElement;
     const tabsWrap = container.querySelector("#chatTabs")!;
     const messagesPanel = container.querySelector("#chatMessagesPanel") as HTMLDivElement;
     const requestsCountEl = container.querySelector("#chatRequestsCount") as HTMLElement;
@@ -651,6 +654,87 @@ export const chatsView: ViewModule = {
         { signal: ctx.signal }
       );
     });
+
+    // ---------------------------------------------------------------------------
+    // Pull-to-refresh (gesto táctil): arrastrar hacia abajo estando ya arriba del todo de la
+    // lista pide las conversaciones de nuevo. A diferencia del feed, .chat-list-pane scrollea
+    // siempre ella misma (mobile y desktop, ver esa clase en modern.css) -- no hace falta
+    // distinguir "scrollea la ventana" vs "scrollea el panel" segun el ancho.
+    // ---------------------------------------------------------------------------
+
+    const PULL_THRESHOLD = 70;
+    const PULL_MAX = 110;
+    const PULL_LOADING_HEIGHT = 56;
+
+    let pullDragging = false;
+    let pullActive = false; // true una vez que se movio hacia abajo lo suficiente como para contar como "pull" y no un scroll comun
+    let pullStartY = 0;
+    let isRefreshingList = false;
+
+    function isListAtTop(): boolean {
+      return chatListPane.scrollTop <= 0;
+    }
+
+    function setPullHeight(px: number, animated: boolean): void {
+      pullIndicator.classList.toggle("pull-refresh-animate", animated);
+      pullIndicator.style.height = `${px}px`;
+    }
+
+    async function refreshConversationsList(): Promise<void> {
+      isRefreshingList = true;
+      setPullHeight(PULL_LOADING_HEIGHT, true);
+      try {
+        conversations = await listConversations();
+        renderRequests();
+        renderList();
+      } catch {
+        // silencioso: un pull-to-refresh fallido no tiene mucho mas que mostrar que "no paso nada"
+      } finally {
+        setPullHeight(0, true);
+        isRefreshingList = false;
+      }
+    }
+
+    chatListPane.addEventListener(
+      "touchstart",
+      (e) => {
+        if (isRefreshingList || !isListAtTop()) return;
+        pullDragging = true;
+        pullActive = false;
+        pullStartY = e.touches[0].clientY;
+      },
+      { passive: true, signal: ctx.signal }
+    );
+
+    chatListPane.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!pullDragging) return;
+        const deltaY = e.touches[0].clientY - pullStartY;
+        if (deltaY <= 0 || !isListAtTop()) {
+          pullDragging = false;
+          if (pullActive) setPullHeight(0, true);
+          pullActive = false;
+          return;
+        }
+        pullActive = true;
+        e.preventDefault(); // corta el rebote/pull-to-refresh nativo mientras dura el gesto propio
+        setPullHeight(Math.min(deltaY * 0.5, PULL_MAX), false);
+      },
+      { passive: false, signal: ctx.signal }
+    );
+
+    function onPullEnd(): void {
+      if (!pullDragging) return;
+      pullDragging = false;
+      if (!pullActive) return;
+      pullActive = false;
+      const reached = pullIndicator.getBoundingClientRect().height >= PULL_THRESHOLD;
+      if (reached) void refreshConversationsList();
+      else setPullHeight(0, true);
+    }
+    chatListPane.addEventListener("touchend", onPullEnd, { signal: ctx.signal });
+    chatListPane.addEventListener("touchcancel", onPullEnd, { signal: ctx.signal });
 
     const PREFETCH_CONVERSATIONS_COUNT = 30;
     const PREFETCH_MESSAGES_PER_CHAT = MESSAGES_PAGE_SIZE;
