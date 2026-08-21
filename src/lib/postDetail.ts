@@ -28,15 +28,11 @@ const DEFAULT_AVATAR = "/images/avatars/default.svg";
 const ICON_BACK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`;
 const ICON_NOT_FOUND = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/></svg>`;
 
-const SWIPE_ENGAGE_PX = 10;
-const SWIPE_DISMISS_PX = 90;
-const SWIPE_DISMISS_VELOCITY = 0.5; // px/ms
-
 export interface PostDetailOptions {
   viewerId: string;
   /** El usuario esta en el Rep raiz (no hay a donde volver dentro del hilo) y toco la flecha de
-   * volver o hizo swipe a la derecha -- cada contexto decide que significa "salir" (cerrar el
-   * modal, o volver atras en el historial del navegador). */
+   * volver -- cada contexto decide que significa "salir" (cerrar el modal, o volver atras en el
+   * historial del navegador). */
   onExit(): void;
   /** Ir al perfil de un autor (avatar, nombre o @usuario) -- cada contexto decide si hace falta
    * cerrar algo antes de navegar (el modal lo cierra; la pagina de detalle solo navega). */
@@ -63,7 +59,7 @@ export interface PostDetailController {
   /** Corta el canal realtime sin tocar el DOM ya pintado -- para cuando la vista se oculta pero
    * sigue cacheada (ver onHide en post.ts), sin perder lo ya renderizado. */
   pause(): void;
-  /** Corta el canal realtime y los listeners de gesto/back -- desmontaje final. */
+  /** Corta el canal realtime y el listener de la flecha de volver -- desmontaje final. */
   dispose(): void;
 }
 
@@ -110,10 +106,10 @@ function paintFollowBtn(btn: HTMLButtonElement, status: FollowStatus): void {
 
 /**
  * Reconstruye el hilo (ancestros + Rep enfocado + continuaciones) y la lista de comentarios de
- * un Rep adentro de `container`, con su propio header (flecha de volver + "Post") y gesto de
- * swipe a la derecha para salir. Reusado tanto por la pagina de detalle (post.ts, para links
- * compartidos que aterrizan directo en post.html) como por el modal que se abre al tocar un Rep
- * desde el feed/perfil/hilo (ver postDetailModal.ts) -- mismo componente, dos formas de montarlo.
+ * un Rep adentro de `container`, con su propio header (flecha de volver + "Post"). Reusado tanto
+ * por la pagina de detalle (post.ts, para links compartidos que aterrizan directo en post.html)
+ * como por el modal que se abre al tocar un Rep desde el feed/perfil/hilo (ver
+ * postDetailModal.ts) -- mismo componente, dos formas de montarlo.
  */
 export async function mountPostDetail(container: HTMLElement, postId: string, opts: PostDetailOptions): Promise<PostDetailController> {
   const { viewerId } = opts;
@@ -157,7 +153,6 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
 
   const backBtn = container.querySelector<HTMLButtonElement>("#postDetailBackBtn")!;
   backBtn.addEventListener("click", handleBack);
-  const unwireSwipe = wireSwipeToExit(container, () => opts.onExit());
 
   // -----------------------------------------------------------------------
   // Header de autor del Rep enfocado (avatar arriba, nombre en negrita, @usuario abajo, seguir)
@@ -544,101 +539,6 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     dispose: () => {
       pauseRealtime();
       backBtn.removeEventListener("click", handleBack);
-      unwireSwipe();
     },
-  };
-}
-
-// -----------------------------------------------------------------------
-// Swipe a la derecha, en cualquier punto del modal, para salir -- siempre sale del todo (no hace
-// pop del stack de hilo como la flecha de volver). Mismo gesto que "volver atras" en iOS: el modal
-// va pegado al dedo (sin fade -- al ser fixed/inset:0, correrlo a la derecha ya destapa por si solo
-// la vista de atras, que sigue montada en #view-root debajo de #loaderBody) y a partir de cierto
-// punto se termina de ir solo, en vez de volver a su lugar. Mismo patron de pointer events que el
-// swipe vertical de mediaLightbox.ts (enganchar solo despues de superar un umbral, para no robarle
-// el tap a botones ni el scroll vertical nativo), pero en el eje horizontal.
-// -----------------------------------------------------------------------
-
-function wireSwipeToExit(root: HTMLElement, onExit: () => void): () => void {
-  let pointerId: number | null = null;
-  let startX = 0;
-  let startY = 0;
-  let lastX = 0;
-  let lastT = 0;
-  let axis: "x" | "y" | null = null;
-
-  function reset(): void {
-    root.classList.remove("post-detail-modal-dragging");
-    root.style.transform = "";
-    pointerId = null;
-    axis = null;
-  }
-
-  function onPointerDown(e: PointerEvent): void {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    // Con mouse, frenar el default recien cuando se determina el eje (en onPointerMove) llega
-    // tarde: los primeros pixeles ya alcanzan para que el navegador arranque una seleccion de
-    // texto o un drag nativo, que compiten con el gesto y lo hacen tartamudear. Con touch NO se
-    // hace: ahi todavia hace falta el default (scroll nativo) mientras no se sepa si el gesto es
-    // vertical -- frenarlo de una rompería el scroll de la pagina para cualquier toque.
-    if (e.pointerType === "mouse") e.preventDefault();
-    pointerId = e.pointerId;
-    startX = lastX = e.clientX;
-    startY = e.clientY;
-    lastT = e.timeStamp;
-    axis = null;
-  }
-
-  function onPointerMove(e: PointerEvent): void {
-    if (e.pointerId !== pointerId) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    if (axis === null) {
-      if (Math.abs(dx) < SWIPE_ENGAGE_PX && Math.abs(dy) < SWIPE_ENGAGE_PX) return;
-      // dx solo necesita empatar a dy (no ganarle por 30%) para trabarse en "x" -- con el umbral
-      // viejo, un arrastre con algo de diagonal (comun arrastrando con mouse) quedaba mal
-      // enganchado en "y" (scroll) y ya no habia forma de recuperarlo en ese mismo gesto.
-      axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
-      if (axis === "x") {
-        root.classList.add("post-detail-modal-dragging");
-        root.setPointerCapture(pointerId);
-      }
-    }
-    if (axis !== "x") return;
-    e.preventDefault();
-    const clamped = Math.max(dx, 0); // solo hacia la derecha -- deslizar a la izquierda no hace nada
-    root.style.transform = `translateX(${clamped}px)`;
-    lastX = e.clientX;
-    lastT = e.timeStamp;
-  }
-
-  function onPointerUp(e: PointerEvent): void {
-    if (e.pointerId !== pointerId) return;
-    if (axis === "x") {
-      const dx = e.clientX - startX;
-      const dt = Math.max(e.timeStamp - lastT, 1);
-      const velocity = Math.abs(e.clientX - lastX) / dt;
-      if (dx > SWIPE_DISMISS_PX || (dx > 30 && velocity > SWIPE_DISMISS_VELOCITY)) {
-        root.classList.remove("post-detail-modal-dragging");
-        root.style.transform = "translateX(100%)";
-        setTimeout(onExit, 150);
-        pointerId = null;
-        axis = null;
-        return;
-      }
-    }
-    reset();
-  }
-
-  root.addEventListener("pointerdown", onPointerDown);
-  root.addEventListener("pointermove", onPointerMove);
-  root.addEventListener("pointerup", onPointerUp);
-  root.addEventListener("pointercancel", onPointerUp);
-
-  return () => {
-    root.removeEventListener("pointerdown", onPointerDown);
-    root.removeEventListener("pointermove", onPointerMove);
-    root.removeEventListener("pointerup", onPointerUp);
-    root.removeEventListener("pointercancel", onPointerUp);
   };
 }
