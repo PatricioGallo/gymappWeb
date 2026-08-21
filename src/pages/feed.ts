@@ -3,7 +3,8 @@ import { navigate } from "../shell/router";
 import { setupAutoHideHeader } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
 import { renderPostCard, wirePostCard, youtubeEmbedHtml, type PostCardHandlers } from "../lib/postCard";
-import { openQuoteModal, openShareToChatModal, openCommentModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
+import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
+import { openPostDetailModal } from "../lib/postDetailModal";
 import {
   getPersonalizedFeed,
   createPost,
@@ -447,11 +448,13 @@ export const feedView: ViewModule = {
     // Feed: render, acciones y paginación
     // ---------------------------------------------------------------------------
 
-    function handleCommentClick(post: FeedPost): void {
-      openCommentModal(post, userId, () => {
-        post.comments_count += 1;
-        renderFeed();
-      });
+    // Comentar desde adentro del modal de detalle actualiza su propia copia del Rep, no esta
+    // lista -- sin esto el contador de comentarios queda viejo al volver (ver postDetailModal.ts).
+    function bumpCommentCount(postId: string): void {
+      const post = posts.find((p) => p.id === postId);
+      if (!post) return;
+      post.comments_count += 1;
+      renderFeed();
     }
 
     function goToProfile(author: PostAuthor): void {
@@ -459,7 +462,14 @@ export const feedView: ViewModule = {
     }
 
     function goToPost(postId: string): void {
-      navigate(`post.html?id=${encodeURIComponent(postId)}`);
+      openPostDetailModal(postId, userId, { onCommentPosted: bumpCommentCount });
+    }
+
+    // "Comentar" tocado directo desde la tarjeta (sin abrir el Rep a mano primero): igual pasa
+    // por el modal del Rep y de ahi el composer, para que al guardar el comentario vuelva a esa
+    // vista en vez de quedarse en el feed.
+    function handleCommentClick(post: FeedPost): void {
+      openPostDetailModal(post.id, userId, { onCommentPosted: bumpCommentCount, autoOpenComment: true });
     }
 
     async function handleLikeToggle(post: FeedPost): Promise<void> {
@@ -519,6 +529,7 @@ export const feedView: ViewModule = {
         if (post.author_id !== userId) void recordPostView(post.id, userId);
       },
       onOpenPost: (post) => goToPost(post.id),
+      onQuotedClick: (quotedId) => goToPost(quotedId),
       // El feed mezcla autores a proposito -- "otro video, sea del mismo usuario o de otro"
       // (a diferencia del perfil, ver getVideoQueue ahi). Cierra sobre `posts` en vivo (no una
       // copia): sigue trayendo videos nuevos aunque el Rep tocado venga de una tanda vieja de

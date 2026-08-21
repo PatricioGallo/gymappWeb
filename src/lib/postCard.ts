@@ -23,6 +23,8 @@ export interface PostCardHandlers {
   onView?(post: FeedPost): void;
   /** Tocar la tarjeta (fuera de los botones/links de acción) abre el detalle del Rep, como en Twitter. */
   onOpenPost?(post: FeedPost): void;
+  /** Tocar el Rep citado embebido adentro de otro Rep -- abre el detalle de ESE Rep (no el contenedor). */
+  onQuotedClick?(quotedPostId: string): void;
   /**
    * Cola de Reps con video para el swipe-hacia-arriba dentro del visor (ver
    * openMediaLightbox): a partir del Rep que se tocó, en qué otros videos se puede seguir
@@ -114,10 +116,15 @@ function quotedMediaHtml(mediaUrl: string | null, mediaType: string | null): str
 }
 
 // Un solo nivel: si el Rep citado a su vez cita a otro, no se recursa (queda solo texto+media del citado directo).
+// Boton en vez de <a href="post.html?...">: si esto se toca desde adentro del modal de detalle
+// (ver postDetailModal.ts), un link real navegaria el shell por debajo dejando el modal abierto
+// y desincronizado -- wirePostCard() engancha el click via data-quoted-id y lo manda por
+// handlers.onQuotedClick, que cada pagina resuelve a su manera (modal si hay uno abierto, o el
+// mismo abrir-modal en feed/perfil para mantener todo el sitio consistente).
 function quotedPostHtml(quoted: (Post & { author: PostAuthor }) | null): string {
   if (!quoted) return "";
   return `
-    <a class="post-quoted" href="post.html?id=${encodeURIComponent(quoted.id)}">
+    <button type="button" class="post-quoted" data-quoted-id="${escapeHtml(quoted.id)}">
       <div class="post-quoted-head">
         <img class="post-quoted-avatar" src="${escapeHtml(quoted.author.avatarUrl || DEFAULT_AVATAR)}" alt="">
         <span class="post-quoted-name">${authorLineHtml(quoted.author, 12)}</span>
@@ -126,7 +133,7 @@ function quotedPostHtml(quoted: (Post & { author: PostAuthor }) | null): string 
       </div>
       ${contentHtml(quoted.content, "post-quoted-text")}
       ${quotedMediaHtml(quoted.media_url, quoted.media_type)}
-    </a>
+    </button>
   `;
 }
 
@@ -144,7 +151,7 @@ export function actionsHtml(post: FeedPost, isOwner: boolean): string {
   return `
     <div class="post-card-actions">
       <button type="button" class="post-action" data-action="comment" aria-label="Comentar">${ICON_COMMENT}<span>${post.comments_count}</span></button>
-      <button type="button" class="post-action post-action-repost${post.repostedByMe ? " is-active" : ""}" data-action="repost" aria-label="Repostear">${ICON_REPOST}<span>${post.reposts_count}</span></button>
+      ${isOwner ? "" : `<button type="button" class="post-action post-action-repost${post.repostedByMe ? " is-active" : ""}" data-action="repost" aria-label="Repostear">${ICON_REPOST}<span>${post.reposts_count}</span></button>`}
       <button type="button" class="post-action post-action-like${post.likedByMe ? " is-active" : ""}" data-action="like" aria-label="Me gusta">${post.likedByMe ? ICON_HEART_FILLED : ICON_HEART}<span>${post.likes_count}</span></button>
       <button type="button" class="post-action" data-action="quote" aria-label="Citar">${ICON_QUOTE}${post.quotes_count > 0 ? `<span>${post.quotes_count}</span>` : ""}</button>
       <button type="button" class="post-action" data-action="share" aria-label="Compartir por chat">${ICON_SHARE}</button>
@@ -154,23 +161,39 @@ export function actionsHtml(post: FeedPost, isOwner: boolean): string {
   `;
 }
 
-/** Renderer central del feed/hilo/perfil: string puro de HTML, sin asumir nada de la pagina que lo use. */
-export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: { compact?: boolean }): string {
+/**
+ * Renderer central del feed/hilo/perfil: string puro de HTML, sin asumir nada de la pagina que lo use.
+ * hideHeader: para el Rep enfocado del modal de detalle (ver postDetail.ts), que pinta su propio
+ * encabezado de autor (avatar arriba, nombre en negrita, usuario abajo, boton de seguir) en vez
+ * del avatar+nombre en una sola linea que usan las tarjetas normales del feed/hilo.
+ */
+export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: { compact?: boolean; hideHeader?: boolean }): string {
   const compact = opts?.compact ?? false;
+  const hideHeader = opts?.hideHeader ?? false;
   const isOwner = viewerId != null && viewerId === post.author_id;
   return `
-    <article class="post-card${compact ? " post-card-compact" : ""}" data-post-id="${post.id}">
+    <article class="post-card${compact ? " post-card-compact" : ""}${hideHeader ? " post-card-bare" : ""}" data-post-id="${post.id}">
       ${repostedByHtml(post.repostedBy)}
       <div class="post-card-main">
+        ${
+          hideHeader
+            ? ""
+            : `
         <button type="button" class="post-card-avatar-btn" data-action="author" aria-label="Ver perfil de ${escapeHtml(post.author.username)}">
           <img class="post-card-avatar" src="${escapeHtml(post.author.avatarUrl || DEFAULT_AVATAR)}" alt="">
-        </button>
+        </button>`
+        }
         <div class="post-card-body">
+          ${
+            hideHeader
+              ? ""
+              : `
           <div class="post-card-head">
             <button type="button" class="post-card-author" data-action="author">${authorLineHtml(post.author)}</button>
             <span class="post-card-dot">·</span>
             <span class="post-card-time">${formatTiempoRelativo(post.feedTimestamp)}</span>
-          </div>
+          </div>`
+          }
           ${contentHtml(post.content, "post-card-text", true)}
           ${mediaHtml(post.media_url, post.media_type)}
           ${!post.media_url && post.youtube_video_id ? youtubeEmbedHtml(post.youtube_video_id) : ""}
@@ -247,6 +270,13 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
       e.stopPropagation();
       if (!post.media_url) return;
       openMediaLightbox(post, handlers);
+    });
+
+    // El Rep citado embebido es su propio Rep, no el contenedor: para el click.
+    card.querySelector<HTMLButtonElement>(".post-quoted")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const quotedId = post.quotedPost?.id;
+      if (quotedId) handlers.onQuotedClick?.(quotedId);
     });
 
     if (handlers.onOpenPost) {
