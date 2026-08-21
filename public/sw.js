@@ -73,8 +73,12 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// Foco a una pestaña ya abierta en esa URL exacta si existe, si no abre una nueva
-// (no hay router client-side para "navegar" una pestaña ya abierta en otra pagina).
+// Foco a una pestaña ya abierta en esa URL exacta si existe. Si hay una pestaña abierta en
+// CUALQUIER otra pantalla de la app, le pedimos que navegue ella misma (via el router client-side
+// de la SPA, ver el listener de "message" en shell/boot.ts) en vez de abrir/navegar una ventana
+// nueva -- eso reinicializa el shell entero de cero (sesion, presencia, listas) y es la principal
+// razon por la que entrar desde una notificación se sentía mucho más lento que navegar adentro de
+// la app. Solo si NO hay ninguna pestaña abierta recurrimos a abrir una nueva de verdad.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || "/pages/notifications.html";
@@ -84,6 +88,13 @@ self.addEventListener("notificationclick", (event) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       const exact = wins.find((w) => w.url === targetUrl && "focus" in w);
       if (exact) return exact.focus();
+
+      const any = wins.find((w) => "focus" in w);
+      if (any) {
+        any.postMessage({ type: "navigate", url: targetUrl });
+        return any.focus();
+      }
+
       return self.clients.openWindow(targetUrl);
     })
   );

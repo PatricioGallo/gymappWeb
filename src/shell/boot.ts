@@ -2,10 +2,24 @@ import { setupNavToggle, setupRevealObserver } from "../lib/nav";
 import { logVisitOncePerSession } from "../services/visits.service";
 import { setupPasswordToggles } from "../lib/passwordToggle";
 import { setupLinkInterceptor } from "./linkInterceptor";
-import { startRouter } from "./router";
+import { startRouter, navigate } from "./router";
 import { registerShellRoutes } from "./routes";
 
 let booted = false;
+
+// Al tocar una notificación con la app ya abierta en otra pantalla, el service worker (sw.js,
+// notificationclick) le manda este mensaje a esa pestaña en vez de abrir/navegar una ventana
+// nueva (eso reinicializaria el shell entero de cero) -- aca la recibimos y navegamos client-side
+// con el router de la SPA, tan rapido como tocar un link adentro de la app.
+function listenForSwNavigation(): void {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const data = event.data as { type?: string; url?: string } | null;
+    if (data?.type !== "navigate" || typeof data.url !== "string") return;
+    const target = new URL(data.url, location.origin);
+    navigate(target.pathname + target.search);
+  });
+}
 
 /**
  * Arranca el shell persistente: header/nav, click-afuera-cierra-menu, revelado por scroll,
@@ -23,6 +37,7 @@ export function bootShell(): void {
   setupRevealObserver();
   setupPasswordToggles();
   setupLinkInterceptor();
+  listenForSwNavigation();
   void logVisitOncePerSession();
 }
 

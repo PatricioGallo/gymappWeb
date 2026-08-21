@@ -31,6 +31,7 @@ import {
   AUDIO_MAX_SECONDS,
   SIGNED_URL_TTL_SECONDS,
   type ChatMessage,
+  type ConversationSummary,
 } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
 import { openMediaLightbox } from "../lib/mediaLightbox";
@@ -187,6 +188,12 @@ export interface MountThreadOptions {
    * mark_conversation_read no la toca (solo conversation_participants.last_read_at).
    */
   onRead?(): void;
+  /** chats.ts ya tiene la lista de conversaciones cargada en memoria (la usa para pintar la
+   * lista) -- si la conversacion que se abre esta ahi, se la pasamos para no volver a pedirla
+   * de cero aca adentro (ver el `await listConversations()` que reemplaza mas abajo). Solo tiene
+   * sentido para el open inicial: si no viene o no matchea el id (conversacion nueva que todavia
+   * no entro a esa lista), se cae al fetch de siempre. */
+  initialConversation?: ConversationSummary;
 }
 
 export async function mountThread(
@@ -283,8 +290,16 @@ export async function mountThread(
     return document.visibilityState === "visible" && container.offsetParent !== null;
   }
 
-  const conversations = await listConversations();
-  const conversation = conversations.find((c) => c.conversation_id === conversationId);
+  // chats.ts ya la tiene en memoria (por eso mount() empieza sabiendo que conversacion abrir) --
+  // solo si no vino, o quedo vieja (id no matchea, ej. conversacion recien creada), se pide la
+  // lista de nuevo. Antes esto pedia la lista SIEMPRE, aunque el caller ya la tuviera: era la
+  // misma demora redundante que tenia postDetail.ts con getPost antes del fix ahi.
+  let conversation =
+    opts.initialConversation?.conversation_id === conversationId ? opts.initialConversation : undefined;
+  if (!conversation) {
+    const conversations = await listConversations();
+    conversation = conversations.find((c) => c.conversation_id === conversationId);
+  }
   if (!conversation) {
     opts.onMissingConversation();
     return;
@@ -314,6 +329,11 @@ export async function mountThread(
   let peerLastSeenAt: string | null = null;
   let peerOnline = false;
 
+  // Se dispara ya (sin await) y se resuelve mas abajo junto con getConversationPinnedMessageId
+  // -- las dos son independientes entre si y de listConversations/lo de arriba, asi que no hay
+  // motivo para pagarlas en serie (esperar una, despues la otra) antes de poder pintar mensajes.
+  const peerMetaPromise = isGroup ? null : getConversationPeerMeta(conversation.other_user_id);
+
   if (isGroup) {
     // El link del header deja de navegar a un perfil individual: abre el panel de info/
     // administración del grupo (chatGroupInfo.ts), que además maneja "Salir del grupo".
@@ -331,19 +351,6 @@ export async function mountThread(
     );
   } else {
     profileLink.href = `profile.html?u=${encodeURIComponent(conversation.other_username ?? "")}`;
-
-    const peerMeta = await getConversationPeerMeta(conversation.other_user_id);
-    readReceiptsEnabled = peerMeta.readReceiptsEnabled;
-    peerLastSeenAt = peerMeta.lastSeenAt;
-    statusEl.textContent = peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
-
-    if (peerLastSeenAt) {
-      watchPeerOnline(conversation.other_user_id, (online) => {
-        if (!online && peerOnline) peerLastSeenAt = new Date().toISOString();
-        peerOnline = online;
-        statusEl.textContent = online ? "En línea" : peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
-      });
-    }
   }
 
   function renderBanners(): void {
@@ -464,7 +471,20 @@ export async function mountThread(
     if (pinnedMessageId) messagesEl.querySelector(`.chat-bubble[data-id="${pinnedMessageId}"]`)?.classList.add("is-pinned");
   }
 
-  pinnedMessageId = await getConversationPinnedMessageId(conversationId);
+  const [peerMeta, resolvedPinnedId] = await Promise.all([peerMetaPromise, getConversationPinnedMessageId(conversationId)]);
+  if (peerMeta) {
+    readReceiptsEnabled = peerMeta.readReceiptsEnabled;
+    peerLastSeenAt = peerMeta.lastSeenAt;
+    statusEl.textContent = peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
+    if (peerLastSeenAt) {
+      watchPeerOnline(conversation.other_user_id, (online) => {
+        if (!online && peerOnline) peerLastSeenAt = new Date().toISOString();
+        peerOnline = online;
+        statusEl.textContent = online ? "En línea" : peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
+      });
+    }
+  }
+  pinnedMessageId = resolvedPinnedId;
   void renderPinnedBanner();
 
   // ---------------------------------------------------------------------------

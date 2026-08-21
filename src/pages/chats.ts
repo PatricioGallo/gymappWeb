@@ -306,6 +306,9 @@ export const chatsView: ViewModule = {
       const threadCtx: ViewContext = createViewContext();
       threadInstances.set(conversationId, { el, ctx: threadCtx, scrollTop: 0 });
       void mountThread(el, conversationId, userId, threadCtx, {
+        // Ya la tenemos en memoria (es la misma lista que pinta la izquierda) -- se la pasamos
+        // para que mountThread no vuelva a pedirla de cero (ver initialConversation ahi).
+        initialConversation: conversations.find((c) => c.conversation_id === conversationId),
         onMissingConversation: () => {
           threadInstances.delete(conversationId);
           threadCtx.dispose();
