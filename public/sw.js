@@ -78,24 +78,45 @@ self.addEventListener("push", (event) => {
 // de la SPA, ver el listener de "message" en shell/boot.ts) en vez de abrir/navegar una ventana
 // nueva -- eso reinicializa el shell entero de cero (sesion, presencia, listas) y es la principal
 // razon por la que entrar desde una notificación se sentía mucho más lento que navegar adentro de
-// la app. Solo si NO hay ninguna pestaña abierta recurrimos a abrir una nueva de verdad.
+// la app.
+//
+// Esa pestaña puede estar corriendo JS viejo (abierta desde antes del ultimo deploy, sin el
+// listener que agregamos en shell/boot.ts) -- si el mensaje cae en saco roto, la pestaña se queda
+// tal cual estaba (ej. mostrando el perfil) en vez de llevar al chat. Por eso se espera una
+// confirmacion corta: si no llega, se cae a una navegacion de verdad en esa MISMA pestaña (mas
+// lenta que el mensaje, pero nunca deja al usuario en la pantalla equivocada). Solo si no hay
+// ninguna pestaña abierta se abre una ventana nueva.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || "/pages/notifications.html";
   const targetUrl = new URL(url, self.location.origin).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const exact = wins.find((w) => w.url === targetUrl && "focus" in w);
       if (exact) return exact.focus();
 
       const any = wins.find((w) => "focus" in w);
-      if (any) {
-        any.postMessage({ type: "navigate", url: targetUrl });
-        return any.focus();
-      }
+      if (!any) return self.clients.openWindow(targetUrl);
 
+      const acked = await new Promise((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => resolve(true);
+        any.postMessage({ type: "navigate", url: targetUrl }, [channel.port2]);
+        setTimeout(() => resolve(false), 400);
+      });
+      if (acked) return any.focus();
+
+      if ("navigate" in any) {
+        try {
+          await any.navigate(targetUrl);
+          return any.focus();
+        } catch {
+          // sigue al openWindow de abajo
+        }
+      }
       return self.clients.openWindow(targetUrl);
-    })
+    })()
   );
 });

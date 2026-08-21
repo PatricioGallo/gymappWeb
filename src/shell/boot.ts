@@ -10,7 +10,11 @@ let booted = false;
 // Al tocar una notificación con la app ya abierta en otra pantalla, el service worker (sw.js,
 // notificationclick) le manda este mensaje a esa pestaña en vez de abrir/navegar una ventana
 // nueva (eso reinicializaria el shell entero de cero) -- aca la recibimos y navegamos client-side
-// con el router de la SPA, tan rapido como tocar un link adentro de la app.
+// con el router de la SPA, tan rapido como tocar un link adentro de la app. El SW manda un
+// MessageChannel junto con el mensaje y espera una confirmacion corta por ahi: si esta pestaña
+// quedo con JS viejo (abierta desde antes de un deploy) y nadie escucha, el SW se entera de que
+// nadie contesto y hace una navegacion de verdad como respaldo en vez de dejarla colgada donde
+// estaba -- sin el ack, un push antiguo silenciosamente no hacia nada.
 function listenForSwNavigation(): void {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.addEventListener("message", (event) => {
@@ -18,6 +22,7 @@ function listenForSwNavigation(): void {
     if (data?.type !== "navigate" || typeof data.url !== "string") return;
     const target = new URL(data.url, location.origin);
     navigate(target.pathname + target.search);
+    event.ports[0]?.postMessage("ok");
   });
 }
 
