@@ -21,7 +21,12 @@ function listenForSwNavigation(): void {
     const data = event.data as { type?: string; url?: string } | null;
     if (data?.type !== "navigate" || typeof data.url !== "string") return;
     const target = new URL(data.url, location.origin);
-    navigate(target.pathname + target.search);
+    // replace: true -- esto es un punto de entrada (equivalente a que el navegador hubiera
+    // cargado esta URL de cero, como hacia el openWindow() de antes), no un paso adelante desde
+    // donde el usuario ya estaba parado. Con push (el default) quedaba una entrada fantasma en
+    // el historial: salir del chat con la flecha y despues volver con el gesto/boton "atras" del
+    // celular no salia de la app, volvia a abrir ese mismo chat una y otra vez.
+    navigate(target.pathname + target.search, { replace: true });
     event.ports[0]?.postMessage("ok");
   });
 }
