@@ -4653,9 +4653,24 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 #chatSearchPeople[hidden] { display: none; }
 
-.chat-person-row { width: 100%; cursor: pointer; background: none; border: none; text-align: left; font-family: inherit; font-size: inherit; color: inherit; }
+.chat-person-row {
+  width: 100%;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+/* Separador fino entre cada persona encontrada -- sin esto la lista se sentia como un
+   bloque solido en vez de opciones distintas. */
+.chat-person-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+
 .chat-person-cta {
   flex-shrink: 0;
+  margin-left: auto;
   font-size: 12px;
   font-weight: 700;
   color: var(--accent-2);
