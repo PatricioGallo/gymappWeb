@@ -124,15 +124,19 @@ export function setupNotificationBell(userId: string): void {
     if (!loaded) void loadRecent();
   }
 
-  bellBtn.addEventListener("click", () => void handleBellClick());
+  bellBtn.addEventListener("click", () => handleBellClick());
 
-  async function handleBellClick() {
+  function handleBellClick(): void {
     // Un click en la campana da por leidas todas las notificaciones, sea cual sea la vista.
     unread = 0;
     recent = recent.map((n) => ({ ...n, is_read: true }));
     renderBadge();
     renderList();
-    await markAllNotificationsRead().catch(() => {
+    // Sin esperar la vuelta de red: en mobile esto navegaba recien despues de que resolviera
+    // (markAllNotificationsRead), asi que con conexion lenta el primer toque parecia no hacer
+    // nada -- el estado local (badge/lista) ya quedo en 0 arriba, marcar en el servidor es un
+    // efecto de fondo que no tiene por que trabar la navegacion.
+    void markAllNotificationsRead().catch(() => {
       // silencioso: si falla, el badge local ya quedo en 0; se resincroniza en el proximo poll
     });
 
