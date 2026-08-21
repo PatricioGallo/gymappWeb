@@ -32,6 +32,7 @@ import {
   SIGNED_URL_TTL_SECONDS,
   type ChatMessage,
   type ConversationSummary,
+  type GroupParticipant,
 } from "../services/chat.service";
 import { listFollowers, type FollowListRow } from "../services/follow.service";
 import { openMediaLightbox } from "../lib/mediaLightbox";
@@ -322,6 +323,12 @@ export async function mountThread(
   isInitiator = conversation.is_initiator;
   conversationStatus = conversation.status as "pending" | "accepted";
   const isGroup = conversation.kind === "group";
+
+  // Indice por user_id -- senderLabel/bubbleHtml necesitan resolver quien mando cada mensaje
+  // ajeno del grupo (nombre + avatar), y sin esto cada uno hacia su propio groupParticipantsOf(
+  // conversation!).find(...) (recorrido lineal, reconstruyendo el array cada vez) sobre TODA la
+  // pagina de mensajes al montar -- se arma una sola vez aca en vez de una vez por mensaje.
+  const participantsById = new Map<string, GroupParticipant>(isGroup ? groupParticipantsOf(conversation).map((p) => [p.user_id, p]) : []);
 
   function renderHeaderIdentity(): void {
     nameEl.textContent = "";
@@ -730,7 +737,7 @@ export async function mountThread(
 
   function senderLabel(m: ChatMessage): string {
     if (m.sender_id === userId) return "Vos";
-    if (isGroup) return groupParticipantsOf(conversation!).find((p) => p.user_id === m.sender_id)?.username ?? "Alguien";
+    if (isGroup) return participantsById.get(m.sender_id)?.username ?? "Alguien";
     return conversation!.other_username ?? "";
   }
 
@@ -826,7 +833,7 @@ export async function mountThread(
     // primero) -- estilo WhatsApp/Instagram. En 1 a 1 el nombre/foto ya están en el header,
     // no hace falta repetirlos por mensaje.
     if (isGroup && !isMe) {
-      const avatarUrl = groupParticipantsOf(conversation!).find((p) => p.user_id === m.sender_id)?.avatar_url;
+      const avatarUrl = participantsById.get(m.sender_id)?.avatar_url;
       const nameHtml = isFirstInRun ? `<span class="chat-bubble-sender-name">${escapeHtml(senderLabel(m))}</span>` : "";
       const rowAvatarHtml = isLastInRun
         ? `<img src="${escapeHtml(avatarUrl || "/images/avatars/default.svg")}" class="chat-bubble-avatar" alt="">`
