@@ -6475,8 +6475,12 @@ body.chat-embedded .chat-thread-container { max-width: none; }
    visual, que es el que encoge cuando aparece el teclado), asi que "centrado" termina bien abajo
    del area que realmente se ve. Pegado bien arriba (casi sin padding) y mas ancho -- pisando el
    padding/max-width del contenedor generico -- para dejar el maximo de aire posible por si el
-   teclado se come buena parte de lo que queda abajo. */
-.post-comment-modal-overlay { align-items: flex-start; padding: 10px 12px 0; }
+   teclado se come buena parte de lo que queda abajo.
+   OJO: .success-check-container es flex-direction:column, asi que el eje vertical lo maneja
+   justify-content (no align-items, que ahi es el eje horizontal) -- probado con Playwright y
+   confirmado que con align-items el modal seguia quedando centrado verticalmente pese a "verse"
+   bien en capturas achicadas (el ancho al 100% disimulaba el desacierto). */
+.post-comment-modal-overlay { justify-content: flex-start; padding: 10px 12px 0; }
 .post-comment-modal-overlay .post-comment-modal { width: 100%; max-width: 640px; }
 
 .post-comment-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }

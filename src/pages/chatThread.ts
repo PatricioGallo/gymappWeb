@@ -1139,6 +1139,11 @@ export async function mountThread(
     "visibilitychange",
     () => {
       if (!isThreadOnScreen()) return;
+      // Se estaba mirando ESTE hilo justo cuando el navegador paso a segundo plano (pantalla
+      // bloqueada, se cambio de app) y volvio -- mismo canal realtime fragil que catchUp() cubre
+      // al reabrir desde chats.ts (ver ThreadController arriba), pero este caso es distinto: acá
+      // nunca se salio del hilo, asi que openThread() nunca vuelve a correr para dispararlo.
+      void catchUpMessages();
       const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
       if (hasUnreadFromOther) void markReadAndRefreshBadge();
     },

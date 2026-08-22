@@ -798,6 +798,19 @@ export const chatsView: ViewModule = {
       { signal: ctx.signal }
     );
 
+    // El canal realtime de arriba puede perder eventos si el navegador suspende el websocket
+    // en segundo plano (pantalla bloqueada, se cambio de app) -- sin esto, la lista se quedaba
+    // pegada hasta un reload manual de la pagina entera. pageshow (arriba) solo cubre volver por
+    // el boton "atras" del navegador desde el cache de bfcache, no este caso mucho mas comun en
+    // mobile de simplemente volver a la pestaña/PWA ya abierta.
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "visible") scheduleConversationsRefresh();
+      },
+      { signal: ctx.signal }
+    );
+
     const initialId = params.get("c");
     if (initialId) openThread(initialId, { pushHistory: false });
 
