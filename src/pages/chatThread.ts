@@ -370,6 +370,24 @@ export async function mountThread(
       },
       { signal: ctx.signal }
     );
+    // La foto del grupo tiene su propio destino (visor a pantalla completa, mismo lightbox
+    // que las fotos de los mensajes) en vez de abrir el panel de info -- se frena antes de
+    // que el click llegue al listener de arriba.
+    avatarEl.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const url = conversation!.group_avatar_url;
+        if (!url) return;
+        openMediaLightbox({
+          queue: [{ url }],
+          startIndex: 0,
+          getMedia: (item) => ({ url: item.url, kind: "image" }),
+        });
+      },
+      { signal: ctx.signal }
+    );
   } else {
     profileLink.href = `profile.html?u=${encodeURIComponent(conversation.other_username ?? "")}`;
   }

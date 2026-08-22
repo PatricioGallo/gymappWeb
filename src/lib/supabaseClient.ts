@@ -9,3 +9,13 @@ if (!url || !anonKey) {
 }
 
 export const supabase = createClient<Database>(url, anonKey);
+
+// La sesion (incluido el refresh token) vive en localStorage -- sin storage persistente,
+// Android/Chrome puede evictarlo bajo presion de espacio (mismo trato que cualquier sitio
+// "best-effort", incluso instalado como PWA), lo que se siente como un logout aleatorio al
+// reabrir la app. persist() es silencioso (sin permiso de por medio) y Chrome lo concede solo
+// con suficiente "site engagement", pero no hace nada si ya esta denegado -- pedirlo de mas
+// no tiene downside.
+if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+  void navigator.storage.persist();
+}
