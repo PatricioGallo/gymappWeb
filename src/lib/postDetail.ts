@@ -105,9 +105,9 @@ function authorHeaderHtml(author: PostAuthor, timestampIso: string, showFollow: 
 }
 
 function paintFollowBtn(btn: HTMLButtonElement, status: FollowStatus): void {
-  btn.textContent = status === "pending" ? "Solicitud enviada" : "Seguir";
-  btn.classList.toggle("btn-primary", status !== "pending");
-  btn.classList.toggle("btn-outline", status === "pending");
+  btn.textContent = status === "pending" ? "Solicitud enviada" : status === "accepted" ? "Siguiendo" : "Seguir";
+  btn.classList.toggle("btn-primary", status === "none");
+  btn.classList.toggle("btn-outline", status !== "none");
 }
 
 /**
@@ -166,26 +166,27 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
 
   async function handleFollowClick(btn: HTMLButtonElement, targetId: string): Promise<void> {
     btn.disabled = true;
-    if (followStatusValue === "pending") {
-      const { error } = await unfollowOrCancel(viewerId, targetId);
+    if (followStatusValue === "none" || followStatusValue == null) {
+      const { status, error } = await followUser(viewerId, targetId);
       btn.disabled = false;
       if (error) {
         alert(error);
         return;
       }
-      followStatusValue = "none";
-      paintFollowBtn(btn, "none");
+      followStatusValue = status ?? "accepted";
+      paintFollowBtn(btn, followStatusValue);
       return;
     }
-    const { status, error } = await followUser(viewerId, targetId);
+    // "Solicitud enviada" -> cancela; "Siguiendo" -> deja de seguir. Misma operacion
+    // (mismo criterio que profile.ts's initFollowButton).
+    const { error } = await unfollowOrCancel(viewerId, targetId);
     btn.disabled = false;
     if (error) {
       alert(error);
       return;
     }
-    followStatusValue = status ?? "accepted";
-    if (followStatusValue === "accepted" || followStatusValue === "self") btn.hidden = true;
-    else paintFollowBtn(btn, followStatusValue);
+    followStatusValue = "none";
+    paintFollowBtn(btn, "none");
   }
 
   function wireAuthorHeader(root: ParentNode, author: PostAuthor): void {
@@ -197,7 +198,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     if (!followBtn) return;
 
     function applyStatus(status: FollowStatus): void {
-      if (status === "accepted" || status === "self") {
+      if (status === "self") {
         followBtn!.hidden = true;
         return;
       }

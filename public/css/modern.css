@@ -6636,6 +6636,8 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .post-detail-author-handle { color: var(--text-muted); font-size: 13px; }
 
 .post-detail-follow-btn { flex-shrink: 0; padding: 7px 16px; font-size: 13px; }
+/* [hidden] pierde contra el display:inline-flex de .btn sin esto (misma especificidad, .btn gana por orden) */
+.post-detail-follow-btn[hidden] { display: none; }
 
 /* ---- Comentarios: fila completa con separador, nombre + @usuario + fecha ---- */
 
