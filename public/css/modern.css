@@ -5838,10 +5838,15 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   .chat-preview-cancel:hover { color: var(--text); border-color: var(--text-muted); }
 }
 
+.chat-preview-bar {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .chat-preview-bar img,
 .chat-preview-bar video {
-  width: 40px;
-  height: 40px;
+  width: 84px;
+  height: 84px;
   border-radius: 8px;
   object-fit: cover;
 }
