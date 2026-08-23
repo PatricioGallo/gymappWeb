@@ -412,14 +412,22 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     }
   }
 
-  async function handleComment(post: GymPostFull, input: HTMLTextAreaElement, refresh: () => void): Promise<void> {
+  async function handleComment(post: GymPostFull, input: HTMLTextAreaElement, submitBtn: HTMLButtonElement, refresh: () => void): Promise<void> {
     if (!viewerId) return;
     const validationError = validateGymPostComment(input.value);
     if (validationError) {
       alert(validationError);
       return;
     }
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="btn-spinner"></span> Comentando...`;
     const { comment, error } = await addGymPostComment(post.id, viewerId, input.value);
+    // Reseteo incondicional (no solo en error): a diferencia del modal de comentarios de los
+    // Reps (que se cierra al comentar bien y descarta el boton), el composer mobile de este
+    // visor sigue vivo despues de comentar (su refresh() solo repinta la lista, no reconstruye
+    // el composer) -- sin esto el boton se queda pegado en "Comentando..." para siempre ahi.
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Comentar";
     if (error || !comment) {
       alert(error || "No se pudo comentar.");
       return;
@@ -483,7 +491,7 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
                       <textarea id="gymPostViewerCommentInput" class="post-comment-modal-textarea" rows="1" maxlength="500" placeholder="Agregá un comentario..."></textarea>
                     </div>
                     <div class="post-comment-modal-footer">
-                      <button type="button" class="btn btn-primary btn-sm" id="gymPostViewerCommentSubmit">Publicar</button>
+                      <button type="button" class="btn btn-primary btn-sm" id="gymPostViewerCommentSubmit">Comentar</button>
                     </div>
                   </div>`
                 : ""
@@ -524,7 +532,8 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     });
     document.getElementById("gymPostViewerCommentSubmit")?.addEventListener("click", () => {
       const input = document.getElementById("gymPostViewerCommentInput") as HTMLTextAreaElement;
-      void handleComment(post, input, () => renderDesktop());
+      const submitBtn = document.getElementById("gymPostViewerCommentSubmit") as HTMLButtonElement;
+      void handleComment(post, input, submitBtn, () => renderDesktop());
     });
 
     if (isOwner) {
@@ -603,7 +612,7 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
                     <textarea id="gymPostMobileCommentInput" class="post-comment-modal-textarea" rows="1" maxlength="500" placeholder="Agregá un comentario..."></textarea>
                   </div>
                   <div class="post-comment-modal-footer">
-                    <button type="button" class="btn btn-primary btn-sm" id="gymPostMobileCommentSubmit">Publicar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="gymPostMobileCommentSubmit">Comentar</button>
                   </div>
                 </div>`
               : ""
@@ -656,8 +665,9 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     document.getElementById("gymPostMobileCommentSubmit")?.addEventListener("click", () => {
       const post = posts.find((p) => p.id === openPostId);
       const input = document.getElementById("gymPostMobileCommentInput") as HTMLTextAreaElement | null;
-      if (!post || !input) return;
-      void handleComment(post, input, () => {
+      const submitBtn = document.getElementById("gymPostMobileCommentSubmit") as HTMLButtonElement | null;
+      if (!post || !input || !submitBtn) return;
+      void handleComment(post, input, submitBtn, () => {
         updateCommentsLabel(post);
         void getComments(post.id).then((comments) => paintComments(post, comments));
       });

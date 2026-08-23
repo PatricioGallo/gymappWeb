@@ -2621,6 +2621,12 @@ a.profile-stat:hover { color: var(--accent-2); }
   white-space: nowrap;
 }
 
+.profile-business-hours { margin-top: 14px; }
+.profile-business-hours[hidden] { display: none; }
+.profile-business-hours-title { font-size: 12.5px; font-weight: 700; margin: 0 0 4px; }
+.profile-business-hours-list { list-style: none; padding: 0; margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.profile-business-hours-list li { display: flex; justify-content: space-between; gap: 16px; max-width: 260px; padding: 1px 0; }
+
 .profile-actions { display: flex; gap: 10px; }
 .profile-actions .btn { flex: 1; padding: 11px 20px; font-size: 13.5px; }
 .profile-actions .btn-outline { background: var(--surface-2); }
@@ -3387,6 +3393,31 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 /* ---------- Clases de gimnasio ---------- */
 
 .gym-class-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 10px; }
+.gym-class-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 110px;
+  background: linear-gradient(135deg, var(--accent-soft), var(--surface-2));
+  color: var(--accent-2);
+}
+.gym-class-image-placeholder svg { width: 34px; height: 34px; opacity: 0.65; }
+
+/* Cartel de cupo (vacio/medio/lleno) -- mismo shape que .member-status-badge, colores identicos
+   a issue-severity-badge-low/medium/high, solo con nombres de clase propios. */
+.class-capacity-badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.class-capacity-badge-ok { color: #6fb56f; border-color: #6fb56f55; background: #6fb56f1a; }
+.class-capacity-badge-mid { color: #e0a63c; border-color: #e0a63c55; background: #e0a63c1a; }
+.class-capacity-badge-full { color: #e05c5c; border-color: #e05c5c55; background: #e05c5c1a; }
 
 .class-session-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .class-session-form .field { margin-bottom: 0; }
@@ -3422,9 +3453,141 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .gym-class-enroll-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
 
+/* ---------- Seccion "Nuestras clases" del perfil de gimnasio ---------- */
+
+/* Misma clase .steps que ya usa la seccion "Rutinas" del perfil (#rutinas): fondo a todo el
+   ancho de la ventana, no una tarjeta contenida con bordes redondeados, y mismo margin-top para
+   separarla de las quick-actions de arriba -- misma distancia visual que en cualquier otro perfil.
+   Las tarjetas de clases adentro suben un escalon (--surface-2) para no perderse contra ese mismo
+   fondo (.steps usa --surface, igual que el default de .clase-slider-card). "Nuestros entrenadores"
+   vive en su propia seccion .features (sin este fondo gris), ver #gymEntrenadoresSection debajo. */
+#gymClasesSection { margin-top: 40px; }
+#gymClasesSection .clase-slider-card {
+  background: var(--surface-2);
+}
+
+.gym-subsection-title { text-align: center; font-size: 19px; margin: 0 0 16px; }
+
+/* ---------- Slider de clases populares (perfil publico) ---------- */
+
+.clase-slider-wrap { position: relative; }
+.clase-slider { overflow-x: auto; scrollbar-width: none; }
+.clase-slider::-webkit-scrollbar { display: none; }
+/* justify-content: safe center -- centrado cuando entran todas las tarjetas sin scrollear (el
+   caso reportado: 2 clases quedaban pegadas a la izquierda), pero "safe" evita que el centrado
+   corte el principio de la tira cuando SI hay que scrollear (mas clases de las que entran). */
+.clase-slider-track { display: flex; justify-content: safe center; gap: 14px; padding-bottom: 4px; scroll-snap-type: x proximity; }
+
+/* Flechas del slider: solo en desktop (hover:hover descarta touch/mobile, donde ya se navega
+   con swipe y las flechas superpuestas solo estorbarian). profile.ts las prende/apaga segun haga
+   falta scrollear en cada punta (ver setupGymClasesSlider), por eso conviven con [hidden]. */
+.clase-slider-arrow {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.clase-slider-arrow svg { width: 18px; height: 18px; }
+.clase-slider-arrow-prev { left: -4px; }
+.clase-slider-arrow-next { right: -4px; }
+@media (hover: hover) {
+  .clase-slider-arrow { display: flex; }
+  .clase-slider-arrow[hidden] { display: none; }
+  .clase-slider-arrow:hover { background: var(--surface-2); border-color: var(--accent); }
+}
+.clase-slider-card {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.clase-slider-card.is-clickable { cursor: pointer; }
+.clase-slider-image { width: 100%; height: 110px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 8px; }
+.clase-slider-card h4 { font-size: 14.5px; margin: 0 0 4px; }
+.clase-slider-meta { font-size: 12.5px; color: var(--text-muted); margin: 0 0 6px; }
+.clase-slider-footer { text-align: center; margin-top: 18px; }
+
+/* ---------- Calendario semanal de clases (clases.html en modo visitante) ---------- */
+
+.class-calendar-scroll { overflow-x: auto; }
+.class-calendar-grid {
+  display: grid;
+  grid-template-columns: 50px repeat(7, minmax(110px, 1fr));
+  min-width: 830px;
+}
+.class-calendar-corner { position: sticky; left: 0; z-index: 3; background: var(--bg); }
+.class-calendar-day-head {
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.class-calendar-time-axis {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+.class-calendar-hour-label {
+  position: absolute;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  right: 6px;
+}
+.class-calendar-day-col { position: relative; border-left: 1px solid var(--border); }
+.class-calendar-block {
+  position: absolute;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  border: none;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.25;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+.class-calendar-block strong { display: block; font-size: 11.5px; }
+.class-calendar-block span { display: block; opacity: 0.85; }
+
+/* ---------- Modal de detalle/inscripcion de una clase (compartido slider + calendario) ---------- */
+
+.class-detail-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 12px; }
+.class-detail-sessions { list-style: none; padding: 0; margin: 8px 0; font-size: 13.5px; color: var(--text-muted); }
+.class-detail-sessions li { padding: 2px 0; }
+
 /* ---------- Calificacion de entrenadores (handles) de gimnasio ---------- */
 
 .gym-gated-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
+
+/* Antes usaba .search-page-list (flex-column, pensada para filas de ancho completo tipo
+   resultados de busqueda) -- las tarjetas de entrenador quedaban estiradas a los ~1140px del
+   .container en desktop. auto-fit (no auto-fill) + minmax con techo fijo (no 1fr): las columnas
+   vacias colapsan en vez de quedar reservadas, asi con pocas tarjetas (ej. 2) el grupo entero
+   queda centrado por justify-content en vez de pegado a la izquierda con hueco a la derecha --
+   auto-fill hubiera mantenido esas columnas vacias "reservando" el hueco. El techo de 320px evita
+   que 1-2 tarjetas se estiren a la mitad del contenedor (que es lo que 1fr sin techo haria). */
+.gym-entrenadores-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 320px)); justify-content: center; gap: 16px; }
+.gym-entrenadores-grid .routine-card + .routine-card { margin-top: 0; }
 
 .trainer-rating-summary { display: flex; align-items: center; gap: 6px; margin: 10px 0; font-size: 13.5px; color: var(--text-muted); flex-wrap: wrap; }
 .trainer-rating-summary strong { color: var(--text); font-size: 14px; font-weight: 700; }

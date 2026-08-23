@@ -72,6 +72,7 @@ export async function updateProfileFields(
       | "is_public"
       | "bio"
       | "links"
+      | "business_hours"
       | "notification_prefs"
       | "zoom_enabled"
       | "show_last_seen"

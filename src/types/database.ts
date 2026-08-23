@@ -565,6 +565,7 @@ export type Database = {
       gym_classes: {
         Row: {
           allow_enrollment: boolean
+          capacity: number | null
           created_at: string
           description: string | null
           gym_id: string
@@ -576,6 +577,7 @@ export type Database = {
         }
         Insert: {
           allow_enrollment?: boolean
+          capacity?: number | null
           created_at?: string
           description?: string | null
           gym_id: string
@@ -587,6 +589,7 @@ export type Database = {
         }
         Update: {
           allow_enrollment?: boolean
+          capacity?: number | null
           created_at?: string
           description?: string | null
           gym_id?: string
@@ -1637,6 +1640,7 @@ export type Database = {
           apellido: string
           avatar_url: string | null
           bio: string | null
+          business_hours: Json | null
           ciudad: string | null
           created_at: string
           email: string
@@ -1666,6 +1670,7 @@ export type Database = {
           apellido: string
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           ciudad?: string | null
           created_at?: string
           email: string
@@ -1695,6 +1700,7 @@ export type Database = {
           apellido?: string
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           ciudad?: string | null
           created_at?: string
           email?: string
@@ -2512,6 +2518,7 @@ export type Database = {
           apellido: string | null
           avatar_url: string | null
           bio: string | null
+          business_hours: Json | null
           fecha_nacimiento: string | null
           id: string | null
           is_public: boolean | null
@@ -2528,6 +2535,7 @@ export type Database = {
           apellido?: string | null
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
@@ -2544,6 +2552,7 @@ export type Database = {
           apellido?: string | null
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
@@ -2917,6 +2926,7 @@ export type Database = {
         Args: { p_gym_id: string }
         Returns: {
           allow_enrollment: boolean
+          capacity: number
           description: string
           enrolled_count: number
           id: string

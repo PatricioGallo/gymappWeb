@@ -97,10 +97,17 @@ export function registerShellRoutes(): void {
     view: entrenadoresView,
     auth: "required",
   });
+  // keyFor: clases.html ahora tiene dos modos (dueño de gimnasio administrando lo propio, o
+  // visitante viendo el calendario de "?u=<gimnasio>") -- sin esto, navegar de un gimnasio a
+  // otro (o de tu propia gestion a la de otro) pegaba en el fast-path de "misma instancia" del
+  // router y se quedaba mostrando el primer gimnasio para siempre. Mismo patron que profileKeyFor.
+  // auth "optional" (no "required"): un visitante anonimo tiene que poder ver el calendario de
+  // un gimnasio publico sin loguearse, igual que puede ver su perfil.
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/clases.html") ? new URLSearchParams() : null),
     view: clasesView,
-    auth: "required",
+    auth: "optional",
+    keyFor: (params) => params.get("u") ?? "__self__",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/progress.html") ? new URLSearchParams() : null),
