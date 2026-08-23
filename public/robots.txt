@@ -1,0 +1,32 @@
+User-agent: *
+Allow: /
+Allow: /pages/about.html
+Allow: /pages/services.html
+Allow: /pages/contact.html
+Allow: /pages/terms.html
+Allow: /pages/login.html
+Allow: /pages/register.html
+Allow: /pages/profile.html
+Allow: /pages/post.html
+
+Disallow: /pages/admin.html
+Disallow: /pages/settings.html
+Disallow: /pages/chat.html
+Disallow: /pages/chats.html
+Disallow: /pages/notifications.html
+Disallow: /pages/followRequests.html
+Disallow: /pages/followers.html
+Disallow: /pages/subscriptionRequests.html
+Disallow: /pages/alumnos.html
+Disallow: /pages/socios.html
+Disallow: /pages/entrenadores.html
+Disallow: /pages/pesos.html
+Disallow: /pages/progress.html
+Disallow: /pages/rutinsView.html
+Disallow: /pages/addExc.html
+Disallow: /pages/excView.html
+Disallow: /pages/showExc.html
+Disallow: /pages/search.html
+Disallow: /pages/exit.html
+
+Sitemap: https://gymsocial.com.ar/sitemap.xml
