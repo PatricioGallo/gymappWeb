@@ -1019,7 +1019,7 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
       userType === "entrenador"
         ? `<a class="quick-card reveal" href="/pages/alumnos.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-      <div><h3>Tus alumnos</h3><p>Rutinas, progreso y comentarios de tus suscriptores</p></div>
+      <div><h3>Tus alumnos</h3><p>Rutinas, progreso y comentarios de tus alumnos</p></div>
     </a>`
         : ""
     }
@@ -2618,7 +2618,17 @@ async function main(ctx: ViewContext) {
   if (isGym) {
     document.getElementById("rutinas")?.remove();
     routinesCtx = null;
-    const isActiveSocio = !isOwner && myId ? (await getGymMembershipStatus(displayProfile.id!).catch(() => "none")) === "active" : false;
+    // Un entrenador que es handle activo de este gimnasio tiene los mismos beneficios que un
+    // socio activo (inscribirse a clases, calificar a otros entrenadores) -- ver
+    // gym_class_enrollments_before_insert/gym_trainer_ratings_before_write, que ya aceptan
+    // ambas relaciones del lado del servidor.
+    const isActiveSocio =
+      !isOwner && myId
+        ? await Promise.all([
+            getGymMembershipStatus(displayProfile.id!).catch(() => "none" as GymMembershipStatus),
+            getGymTrainerHandleStatus(displayProfile.id!).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy })),
+          ]).then(([socioStatus, handle]) => socioStatus === "active" || handle.status === "active")
+        : false;
     void renderGymClasses(displayProfile.id!, displayProfile.username ?? "", isActiveSocio, myId, isOwner);
     void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId, isOwner);
   } else {

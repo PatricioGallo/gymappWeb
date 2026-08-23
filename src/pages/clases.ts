@@ -11,7 +11,13 @@ import {
   type ClassSession,
   type ClassFormInput,
 } from "../services/gymClass.service";
-import { listGymTrainers, type GymTrainerRow } from "../services/gymTrainer.service";
+import {
+  listGymTrainers,
+  getGymTrainerHandleStatus,
+  type GymTrainerRow,
+  type GymTrainerHandleStatus,
+  type HandleInitiatedBy,
+} from "../services/gymTrainer.service";
 import { getGymMembershipStatus } from "../services/gymMember.service";
 import { getProfileBasicByUsername } from "../services/profile.service";
 import { CLASS_DAY_LABELS, CLASS_DAY_ABBR, classFormatTime, classImageHtml } from "../lib/gymClassMarkup";
@@ -183,8 +189,15 @@ async function mountClasesView(
   }
 
   let trainers: GymTrainerRow[] = [];
+  // Un entrenador que es handle activo de este gimnasio tiene los mismos beneficios que un
+  // socio activo para inscribirse a clases -- ver el mismo comentario en profile.ts.
   const isActiveSocio =
-    !isOwner && authUserId ? (await getGymMembershipStatus(gymId).catch(() => "none")) === "active" : false;
+    !isOwner && authUserId
+      ? await Promise.all([
+          getGymMembershipStatus(gymId).catch(() => "none" as const),
+          getGymTrainerHandleStatus(gymId).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy })),
+        ]).then(([socioStatus, handle]) => socioStatus === "active" || handle.status === "active")
+      : false;
 
   function closeOverlay(): void {
     const loaderBody = document.getElementById("loaderBody");

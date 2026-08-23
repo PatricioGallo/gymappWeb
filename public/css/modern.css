@@ -2868,6 +2868,20 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .student-card-head { margin-bottom: 14px; }
 
+.student-source-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 14px; }
+
+.student-source-tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.student-source-tag a { color: inherit; }
+
 .student-comments {
   display: flex;
   flex-direction: column;

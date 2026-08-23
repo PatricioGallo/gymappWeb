@@ -176,6 +176,48 @@ export async function listMyGymTrainerHandles(trainerId: string): Promise<MyGymT
   }));
 }
 
+export interface GymStudentRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: Tables<"profiles">["user_type"];
+  isVerified: boolean;
+  gymId: string;
+  gymUsername: string;
+  gymName: string;
+  since: string;
+}
+
+/** Socios activos de cada gimnasio donde este entrenador es handle activo -- son "alumnos" del
+ * entrenador igual que sus suscriptores aceptados (ver alumnos.ts, que combina ambos origenes).
+ * La RPC gatea por identidad (auth.uid() = trainerId), no por is_profile_public: es data
+ * operativa propia del entrenador, no un listado publico. p_gym_id filtra a un solo gimnasio
+ * (chip de filtro "Todos"/"Gimnasio X" en Tus alumnos). */
+export async function listGymStudentsForTrainer(trainerId: string, opts: { search?: string; gymId?: string } = {}): Promise<GymStudentRow[]> {
+  const { data, error } = await supabase.rpc("list_gym_students_for_trainer", {
+    p_trainer_id: trainerId,
+    p_search: opts.search?.trim() || undefined,
+    p_gym_id: opts.gymId ?? undefined,
+    p_limit: 200,
+  });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    userType: r.user_type,
+    isVerified: r.is_verified,
+    gymId: r.gym_id,
+    gymUsername: r.gym_username ?? "",
+    gymName: `${r.gym_nombre ?? ""} ${r.gym_apellido ?? ""}`.trim() || (r.gym_username ?? ""),
+    since: r.since,
+  }));
+}
+
 export async function getPendingGymTrainerRequestCount(gymId: string): Promise<number> {
   const { count, error } = await supabase
     .from("gym_trainers")
