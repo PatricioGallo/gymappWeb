@@ -2627,6 +2627,11 @@ a.profile-stat:hover { color: var(--accent-2); }
 .profile-business-hours-list { list-style: none; padding: 0; margin: 0; font-size: 12.5px; color: var(--text-muted); }
 .profile-business-hours-list li { display: flex; justify-content: space-between; gap: 16px; max-width: 260px; padding: 1px 0; }
 
+.profile-trabaja-en { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+.profile-trabaja-en[hidden] { display: none; }
+.profile-trabaja-en a { color: var(--accent-2); font-weight: 600; text-decoration: none; }
+.profile-trabaja-en a:hover { text-decoration: underline; }
+
 .profile-actions { display: flex; gap: 10px; }
 .profile-actions .btn { flex: 1; padding: 11px 20px; font-size: 13.5px; }
 .profile-actions .btn-outline { background: var(--surface-2); }

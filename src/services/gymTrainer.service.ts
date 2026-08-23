@@ -151,6 +151,31 @@ export async function listGymTrainers(gymId: string, opts: { search?: string; st
   }));
 }
 
+export interface MyGymTrainerHandleRow {
+  gymId: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  isVerified: boolean;
+}
+
+/** Gimnasios donde este entrenador trabaja (handle activo) -- se usa para mostrar "Trabaja en"
+ * en su propio perfil (ver profile.ts). La RPC ya filtra por privacidad (tanto del entrenador
+ * como de cada gimnasio) del lado del servidor, asi que lo que vuelve aca es siempre mostrable. */
+export async function listMyGymTrainerHandles(trainerId: string): Promise<MyGymTrainerHandleRow[]> {
+  const { data, error } = await supabase.rpc("list_my_gym_trainer_handles", { p_trainer_id: trainerId });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    gymId: r.gym_id,
+    username: r.username ?? "",
+    nombre: r.nombre ?? "",
+    apellido: r.apellido ?? "",
+    avatarUrl: r.avatar_url,
+    isVerified: r.is_verified,
+  }));
+}
+
 export async function getPendingGymTrainerRequestCount(gymId: string): Promise<number> {
   const { count, error } = await supabase
     .from("gym_trainers")

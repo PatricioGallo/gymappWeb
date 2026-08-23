@@ -3062,6 +3062,17 @@ export type Database = {
           username: string
         }[]
       }
+      list_my_gym_trainer_handles: {
+        Args: { p_trainer_id: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          gym_id: string
+          is_verified: boolean
+          nombre: string
+          username: string
+        }[]
+      }
       list_subscribers: {
         Args: {
           p_limit?: number

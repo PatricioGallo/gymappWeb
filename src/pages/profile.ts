@@ -43,6 +43,7 @@ import {
   requestGymTrainerHandle,
   acceptGymTrainerInvite,
   leaveGymAsTrainer,
+  listMyGymTrainerHandles,
   type GymTrainerHandleStatus,
   type HandleInitiatedBy,
 } from "../services/gymTrainer.service";
@@ -357,6 +358,31 @@ function renderProfileBusinessHours(raw: Profile["business_hours"], userType: Pr
   `;
 }
 
+/** Solo aplica a perfiles de entrenador -- en que gimnasio(s) trabaja (handle activo),
+ * clickeable a cada uno. La RPC ya filtra por privacidad (propia y de cada gimnasio) del lado
+ * del servidor. */
+async function renderProfileTrabajaEn(userId: string, userType: Profile["user_type"] | null): Promise<void> {
+  const el = document.getElementById("profileTrabajaEn");
+  if (!el) return;
+  if (userType !== "entrenador") {
+    el.hidden = true;
+    return;
+  }
+  let gyms: Awaited<ReturnType<typeof listMyGymTrainerHandles>>;
+  try {
+    gyms = await listMyGymTrainerHandles(userId);
+  } catch {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = gyms.length === 0;
+  if (gyms.length === 0) return;
+  const links = gyms
+    .map((g) => `<a href="profile.html?u=${encodeURIComponent(g.username)}">${escapeHtml(`${g.nombre} ${g.apellido}`.trim() || g.username)}</a>`)
+    .join(", ");
+  el.innerHTML = `Trabaja en ${links}`;
+}
+
 function followButtonLabel(status: FollowStatus): string {
   if (status === "pending") return "Solicitud enviada";
   if (status === "accepted") return "Siguiendo";
@@ -508,7 +534,14 @@ async function renderProfileActions(
   const showFollowBtn = !ownerView && viewerLoggedIn && blockStatus === "none";
   // Suscripcion solo tiene sentido contra un entrenador; "socio" solo contra un gimnasio.
   const showSubscribeBtn = showFollowBtn && targetUserType === "entrenador";
-  const showSocioBtn = showFollowBtn && targetUserType === "gimnasio";
+  const showSocioBtnBase = showFollowBtn && targetUserType === "gimnasio";
+  // Un entrenador que ya es handle activo de este gimnasio (o sea, que trabaja ahi -- ver
+  // "Trabaja en" en el perfil) no tiene sentido que ademas le aparezca "Ser socio": son dos
+  // roles distintos, pero mezclarlos en la misma pantalla confunde mas de lo que suma.
+  const viewerIsActiveHandleHere = showSocioBtnBase
+    ? (await getGymTrainerHandleStatus(targetId).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy }))).status === "active"
+    : false;
+  const showSocioBtn = showSocioBtnBase && !viewerIsActiveHandleHere;
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
   // "ended" (fue alumno/socio, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
   // suscribirse/hacerse socio, y la RPC reactiva ese mismo vinculo historico si corresponde.
@@ -2540,6 +2573,7 @@ async function main(ctx: ViewContext) {
     renderProfileBio(displayProfile.bio ?? null);
     document.getElementById("profileLinks")?.remove();
     document.getElementById("profileBusinessHours")?.remove();
+    document.getElementById("profileTrabajaEn")?.remove();
     renderPrivateNotice(nombre);
     return;
   }
@@ -2547,6 +2581,7 @@ async function main(ctx: ViewContext) {
   renderProfileBio(displayProfile.bio ?? null);
   renderProfileLinks(parseProfileLinks(displayProfile.links ?? []));
   renderProfileBusinessHours(displayProfile.business_hours, displayProfile.user_type ?? null);
+  void renderProfileTrabajaEn(displayProfile.id!, displayProfile.user_type ?? null);
 
   // El resto de la pagina habla en tercera persona cuando no es el dueño.
   const statsEyebrow = document.getElementById("statsEyebrow");
@@ -2623,6 +2658,7 @@ const VIEW_MARKUP = `
           <p class="profile-bio profile-bio-clamped" id="profileBio"></p>
           <div class="profile-links" id="profileLinks"></div>
           <div class="profile-business-hours" id="profileBusinessHours" hidden></div>
+          <p class="profile-trabaja-en" id="profileTrabajaEn" hidden></p>
         </div>
       </div>
 
