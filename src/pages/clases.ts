@@ -19,7 +19,7 @@ import {
   type HandleInitiatedBy,
 } from "../services/gymTrainer.service";
 import { getGymMembershipStatus } from "../services/gymMember.service";
-import { getProfileBasicByUsername } from "../services/profile.service";
+import { getProfileBasicById, getProfileBasicByUsername } from "../services/profile.service";
 import { CLASS_DAY_LABELS, CLASS_DAY_ABBR, classFormatTime, classImageHtml } from "../lib/gymClassMarkup";
 import { openClassDetailModal } from "../lib/gymClassEnrollModal";
 
@@ -537,6 +537,14 @@ export const clasesView: ViewModule = {
     if (!uParam) {
       const myId = authUserId ?? (await requireAuth().catch(() => null));
       if (!myId) return; // requireAuth ya redirigio a login.html
+      // Sin ?u=, esta vista es "mi gestion de clases" -- solo tiene sentido para una cuenta
+      // gimnasio. Sin este chequeo cualquier entrenador/usuario logueado quedaba tratado como
+      // dueño de un gimnasio inexistente (el suyo propio, que no es tal).
+      const me = await getProfileBasicById(myId).catch(() => null);
+      if (me?.user_type !== "gimnasio") {
+        container.innerHTML = `<section class="features"><div class="container"><p class="exc-pick-empty">Esta página es solo para cuentas de gimnasio.</p></div></section>`;
+        return;
+      }
       return mountClasesView(container, myId, null, ctx, myId, true);
     }
     const gym = await getProfileBasicByUsername(uParam).catch(() => null);
