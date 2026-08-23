@@ -27,7 +27,14 @@ async function getRegistration(): Promise<ServiceWorkerRegistration> {
   // abierta la PWA (sobre todo en iOS al reabrirla despues de cerrarla del todo), y ahi
   // pushManager.getSubscription() puede devolver null aunque la suscripcion siga viva.
   await navigator.serviceWorker.register(SW_PATH);
-  return navigator.serviceWorker.ready;
+  // "ready" no tiene timeout propio -- si el service worker se queda trabado instalando/activando
+  // (visto en algunos Android/Chrome), esta promesa nunca resuelve y el boton "Activando..." se
+  // queda colgado para siempre sin ningun error visible. Con este timeout, al menos se corta y se
+  // ve un mensaje concreto en vez de quedar en el limbo.
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<ServiceWorkerRegistration>((_, reject) => setTimeout(() => reject(new Error("service worker no llegó a estar listo (timeout)")), 8000)),
+  ]);
 }
 
 /**
@@ -71,8 +78,15 @@ async function subscribeAndStore(userId: string): Promise<{ error?: string }> {
       });
     }
     return await upsertPushSubscription(userId, subscription);
-  } catch {
-    return { error: "No se pudo activar las notificaciones. Probá de nuevo." };
+  } catch (err) {
+    // Antes esto se tragaba el error real y siempre mostraba el mismo mensaje generico --
+    // sin acceso a devtools remoto en el celular que falla, no habia forma de saber POR QUE
+    // fallaba subscribe()/register() ahi. Mostrar nombre+mensaje de la excepcion en el banner
+    // (visible directo en el telefono, sin depuracion remota) es lo que permite diagnosticar
+    // la proxima vez que pase.
+    console.error("push subscribeAndStore failed", err);
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return { error: `No se pudo activar las notificaciones (${detail}).` };
   }
 }
 

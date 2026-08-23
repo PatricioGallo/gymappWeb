@@ -73,6 +73,11 @@ self.addEventListener("push", (event) => {
         // es ese mismo logo pero solo la silueta blanca sobre fondo transparente -- pensado
         // especificamente para esto (ver public/images/icon-badge.png).
         badge: "/images/icon-badge.png",
+        // Android no deja que una web fuerce el banner "heads-up" (nivel de importancia del
+        // canal, solo lo puede subir el usuario a mano en Ajustes) -- la vibracion es lo unico
+        // que SI podemos pedir desde acá para que se note que llegó algo aunque no aparezca
+        // el banner. Patron corto: vibra, pausa, vibra (200ms/100ms/200ms).
+        vibrate: [200, 100, 200],
         data: { url: data.url || "/pages/notifications.html" },
       });
     })()
