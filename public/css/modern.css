@@ -5719,6 +5719,12 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 .chat-bubble-video-play svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)); }
 
+/* Embed de YouTube dentro de una burbuja (ver bubbleBodyHtml en chatThread.ts) -- mismo iframe
+   que .post-youtube-embed de los Reps, acotado a un ancho fijo en vez de 100% de la burbuja
+   (que en desktop puede llegar a ser bastante ancha). */
+.chat-bubble-youtube-embed { max-width: 260px; margin-top: 6px; }
+.chat-bubble-youtube-embed .post-youtube-embed { margin-top: 0; }
+
 .chat-audio-player {
   display: flex;
   align-items: center;
@@ -5841,6 +5847,17 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .chat-preview-bar span:not(.chat-preview-cancel) { flex: 1; }
+
+/* Vista previa en vivo del link de YouTube pegado en el composer (ver updateYoutubePreview en
+   chatThread.ts) -- mismo iframe que .post-youtube-embed, pero acotado en ancho: el composer del
+   chat ocupa todo el hilo, y un embed a full width ahi se siente gigante comparado con una burbuja. */
+.chat-composer-youtube-preview {
+  max-width: 280px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.chat-composer-youtube-preview[hidden] { display: none; }
+.chat-composer-youtube-preview .post-youtube-embed { margin-top: 0; }
 
 .chat-reply-bar {
   display: flex;

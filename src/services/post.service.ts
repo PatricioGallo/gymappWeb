@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../types/database";
+import { extractFirstUrl, extractYouTubeVideoId } from "../lib/youtube";
 
 export type Post = Tables<"posts">;
 export type PostComment = Tables<"post_comments">;
@@ -43,18 +44,8 @@ const POST_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // x-matroska = .mkv, mpeg/ogg = formatos legacy de descargas. Cubre la gran mayoria de clips.
 const POST_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/3gpp", "video/x-msvideo", "video/x-matroska", "video/mpeg", "video/ogg"];
 
-const URL_RE = /https?:\/\/[^\s]+/i;
-const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 // Mismo charset que valida el username al registrarse (ver USERNAME_RE en auth.service.ts).
 const MENTION_RE = /@([a-z0-9_]{3,30})/gi;
-
-/** Primera URL http(s) encontrada en el texto del Rep, o null si no hay ninguna. */
-export function extractFirstUrl(content: string): string | null {
-  const match = content.match(URL_RE);
-  if (!match) return null;
-  // Sacamos puntuacion de cierre pegada al final ("mirá esto: https://x.com." o "(https://x.com)").
-  return match[0].replace(/[.,;:!?)\]}'"]+$/, "");
-}
 
 /** @usuarios unicos (en minuscula, sin el "@") mencionados en el texto de un Rep. No valida que existan. */
 function extractMentionedUsernames(content: string): string[] {
@@ -79,12 +70,6 @@ async function tagMentionedUsers(postId: string, authorId: string, content: stri
   await supabase
     .from("post_mentions")
     .insert(mentionedIds.map((mentionedUserId) => ({ post_id: postId, mentioned_user_id: mentionedUserId })));
-}
-
-/** Id del video si la URL es de YouTube (watch/youtu.be/embed/shorts), o null. No pega a la red: es solo un parseo. */
-export function extractYouTubeVideoId(url: string): string | null {
-  const match = url.match(YOUTUBE_RE);
-  return match ? match[1] : null;
 }
 
 interface LinkPreviewFields {

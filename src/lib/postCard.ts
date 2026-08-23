@@ -3,6 +3,7 @@ import { linkifyHtml } from "./linkify";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
 import { openMediaLightbox } from "./postModals";
+import { youtubeEmbedHtml } from "./youtube";
 import type { FeedPost, Post, PostAuthor } from "../services/post.service";
 
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
@@ -69,22 +70,6 @@ function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   if (mediaType === "video")
     return `<video class="post-card-media" src="${escapeHtml(mediaUrl)}" playsinline muted loop preload="metadata"></video>`;
   return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="" draggable="false">`;
-}
-
-// nocookie: no larga cookies de tracking hasta que se le da play, buen default sin pedirle nada al usuario.
-export function youtubeEmbedHtml(videoId: string): string {
-  return `
-    <div class="post-youtube-embed">
-      <iframe
-        src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}"
-        title="Video de YouTube"
-        loading="lazy"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowfullscreen
-      ></iframe>
-    </div>
-  `;
 }
 
 function domainOf(url: string): string {

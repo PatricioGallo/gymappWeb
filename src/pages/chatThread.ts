@@ -1,5 +1,6 @@
 import { escapeHtml } from "../lib/dom";
 import { linkifyHtml } from "../lib/linkify";
+import { extractFirstUrl, extractYouTubeVideoId, youtubeEmbedHtml } from "../lib/youtube";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { supabase } from "../lib/supabaseClient";
 import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
@@ -135,6 +136,8 @@ const THREAD_MARKUP = `
     <button type="button" class="chat-reply-bar-cancel" id="chatEditBarCancel" aria-label="Cancelar edición">✕</button>
   </div>
 
+  <div class="chat-composer-youtube-preview" id="chatComposerYoutubePreview" hidden></div>
+
   <div class="chat-composer" id="chatComposer">
     <label class="chat-composer-btn" title="Adjuntar foto o video">
       <input type="file" id="chatImageInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/3gpp,video/x-msvideo,video/x-matroska,video/mpeg,video/ogg" hidden>
@@ -247,6 +250,7 @@ export async function mountThread(
   const previewAudioLabel = container.querySelector("#chatPreviewAudioLabel") as HTMLSpanElement;
   const previewAudioDuration = container.querySelector("#chatPreviewAudioDuration")!;
   const previewCancelBtn = container.querySelector("#chatPreviewCancel") as HTMLButtonElement;
+  const youtubePreviewWrap = container.querySelector("#chatComposerYoutubePreview") as HTMLDivElement;
   const stickerBtn = container.querySelector("#chatStickerBtn") as HTMLButtonElement;
   const stickerPanel = container.querySelector("#chatStickerPanel") as HTMLDivElement;
   const pinnedBanner = container.querySelector("#chatPinnedBanner") as HTMLDivElement;
@@ -816,6 +820,11 @@ export async function mountThread(
     const isSticker = m.attachment_type === "sticker";
     const stickerHtml = isSticker ? `<span class="chat-bubble-sticker">${escapeHtml(m.content ?? "")}</span>` : "";
     const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${linkifyHtml(m.content)}</p>` : "";
+    // Sin adjunto/Rep compartido de por medio (mediaHtml vacio) y con un link de YouTube en el
+    // texto: mismo criterio que postCard.ts, el embed va debajo del texto linkificado (que
+    // sigue mostrando la URL como link normal, por si el iframe no carga).
+    const youtubeId = !mediaHtml && m.content ? extractYouTubeVideoId(extractFirstUrl(m.content) ?? "") : null;
+    const youtubeHtml = youtubeId ? `<div class="chat-bubble-youtube-embed">${youtubeEmbedHtml(youtubeId)}</div>` : "";
     const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
     const editedHtml = m.edited_at ? `<span class="chat-bubble-edited">editado</span>` : "";
     return `
@@ -824,6 +833,7 @@ export async function mountThread(
       ${mediaHtml}
       ${stickerHtml}
       ${textHtml}
+      ${youtubeHtml}
       <span class="chat-bubble-time">${editedHtml}${timeLabel(m.created_at)}${isMe && !isGroup ? ticksHtml(m) : ""}</span>
       ${reactionsHtml(m)}
     `;
@@ -1795,6 +1805,7 @@ export async function mountThread(
     previewVideo.src = "";
     previewAudioLabel.hidden = true;
     updateSendState();
+    updateYoutubePreview();
   }
 
   function showPreview(): void {
@@ -1814,6 +1825,24 @@ export async function mountThread(
       previewAudioDuration.textContent = formatDuration(pendingAttachment.durationSeconds);
     }
     updateSendState();
+    updateYoutubePreview();
+  }
+
+  // Vista previa en vivo del video de YouTube apenas se pega el link en el composer -- mismo
+  // criterio que el composer de Reps (ver updateYoutubePreview en feed.ts): nunca convive con
+  // un adjunto, si hay uno esa es la intencion mas explicita.
+  function updateYoutubePreview(): void {
+    const videoId = !pendingAttachment ? extractYouTubeVideoId(extractFirstUrl(composerInput.value) ?? "") : null;
+    if (!videoId) {
+      youtubePreviewWrap.hidden = true;
+      youtubePreviewWrap.innerHTML = "";
+      delete youtubePreviewWrap.dataset.videoId;
+      return;
+    }
+    if (youtubePreviewWrap.dataset.videoId === videoId) return; // mismo video que ya se esta mostrando, no re-crear el iframe
+    youtubePreviewWrap.dataset.videoId = videoId;
+    youtubePreviewWrap.hidden = false;
+    youtubePreviewWrap.innerHTML = youtubeEmbedHtml(videoId);
   }
 
   composerInput.addEventListener(
@@ -1822,6 +1851,7 @@ export async function mountThread(
       composerInput.style.height = "auto";
       composerInput.style.height = `${Math.min(composerInput.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
       updateSendState();
+      updateYoutubePreview();
     },
     { signal: ctx.signal }
   );
@@ -2093,7 +2123,7 @@ export async function mountThread(
 
     composerInput.value = "";
     composerInput.style.height = "auto";
-    clearPendingAttachment();
+    clearPendingAttachment(); // tambien limpia la vista previa de YouTube, ver updateYoutubePreview()
     replyTarget = null;
     replyBar.hidden = true;
     void appendMessage(message);
