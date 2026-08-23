@@ -2833,6 +2833,10 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   justify-content: flex-end;
   margin-bottom: 14px;
 }
+/* [hidden] pierde contra el display:flex de arriba sin esto (mismo motivo que .post-feed-list[hidden]
+   y el resto de esta hoja de estilos) -- sin este override, clases.ts's #clasesHeaderActions
+   ("+ Nueva clase") queda visible para cualquier visitante, no solo el dueño del gimnasio. */
+.routines-header-actions[hidden] { display: none; }
 
 /* .routine-tabs trae un margin-top negativo pensado para pegarse contra un .section-head
    inmediatamente arriba (ver profile.ts) -- cuando en cambio lo que hay arriba es un boton de
