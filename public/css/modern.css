@@ -2621,6 +2621,17 @@ a.profile-stat:hover { color: var(--accent-2); }
   white-space: nowrap;
 }
 
+.profile-business-hours { margin-top: 14px; }
+.profile-business-hours[hidden] { display: none; }
+.profile-business-hours-title { font-size: 12.5px; font-weight: 700; margin: 0 0 4px; }
+.profile-business-hours-list { list-style: none; padding: 0; margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.profile-business-hours-list li { display: flex; justify-content: space-between; gap: 16px; max-width: 260px; padding: 1px 0; }
+
+.profile-trabaja-en { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+.profile-trabaja-en[hidden] { display: none; }
+.profile-trabaja-en a { color: var(--accent-2); font-weight: 600; text-decoration: none; }
+.profile-trabaja-en a:hover { text-decoration: underline; }
+
 .profile-actions { display: flex; gap: 10px; }
 .profile-actions .btn { flex: 1; padding: 11px 20px; font-size: 13.5px; }
 .profile-actions .btn-outline { background: var(--surface-2); }
@@ -2856,6 +2867,20 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 /* ---------- Tus alumnos ---------- */
 
 .student-card-head { margin-bottom: 14px; }
+
+.student-source-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 14px; }
+
+.student-source-tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.student-source-tag a { color: inherit; }
 
 .student-comments {
   display: flex;
@@ -3387,6 +3412,31 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 /* ---------- Clases de gimnasio ---------- */
 
 .gym-class-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 10px; }
+.gym-class-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 110px;
+  background: linear-gradient(135deg, var(--accent-soft), var(--surface-2));
+  color: var(--accent-2);
+}
+.gym-class-image-placeholder svg { width: 34px; height: 34px; opacity: 0.65; }
+
+/* Cartel de cupo (vacio/medio/lleno) -- mismo shape que .member-status-badge, colores identicos
+   a issue-severity-badge-low/medium/high, solo con nombres de clase propios. */
+.class-capacity-badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.class-capacity-badge-ok { color: #6fb56f; border-color: #6fb56f55; background: #6fb56f1a; }
+.class-capacity-badge-mid { color: #e0a63c; border-color: #e0a63c55; background: #e0a63c1a; }
+.class-capacity-badge-full { color: #e05c5c; border-color: #e05c5c55; background: #e05c5c1a; }
 
 .class-session-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .class-session-form .field { margin-bottom: 0; }
@@ -3422,9 +3472,141 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .gym-class-enroll-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
 
+/* ---------- Seccion "Nuestras clases" del perfil de gimnasio ---------- */
+
+/* Misma clase .steps que ya usa la seccion "Rutinas" del perfil (#rutinas): fondo a todo el
+   ancho de la ventana, no una tarjeta contenida con bordes redondeados, y mismo margin-top para
+   separarla de las quick-actions de arriba -- misma distancia visual que en cualquier otro perfil.
+   Las tarjetas de clases adentro suben un escalon (--surface-2) para no perderse contra ese mismo
+   fondo (.steps usa --surface, igual que el default de .clase-slider-card). "Nuestros entrenadores"
+   vive en su propia seccion .features (sin este fondo gris), ver #gymEntrenadoresSection debajo. */
+#gymClasesSection { margin-top: 40px; }
+#gymClasesSection .clase-slider-card {
+  background: var(--surface-2);
+}
+
+.gym-subsection-title { text-align: center; font-size: 19px; margin: 0 0 16px; }
+
+/* ---------- Slider de clases populares (perfil publico) ---------- */
+
+.clase-slider-wrap { position: relative; }
+.clase-slider { overflow-x: auto; scrollbar-width: none; }
+.clase-slider::-webkit-scrollbar { display: none; }
+/* justify-content: safe center -- centrado cuando entran todas las tarjetas sin scrollear (el
+   caso reportado: 2 clases quedaban pegadas a la izquierda), pero "safe" evita que el centrado
+   corte el principio de la tira cuando SI hay que scrollear (mas clases de las que entran). */
+.clase-slider-track { display: flex; justify-content: safe center; gap: 14px; padding-bottom: 4px; scroll-snap-type: x proximity; }
+
+/* Flechas del slider: solo en desktop (hover:hover descarta touch/mobile, donde ya se navega
+   con swipe y las flechas superpuestas solo estorbarian). profile.ts las prende/apaga segun haga
+   falta scrollear en cada punta (ver setupGymClasesSlider), por eso conviven con [hidden]. */
+.clase-slider-arrow {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.clase-slider-arrow svg { width: 18px; height: 18px; stroke: currentColor; }
+.clase-slider-arrow-prev { left: -4px; }
+.clase-slider-arrow-next { right: -4px; }
+@media (hover: hover) {
+  .clase-slider-arrow { display: flex; }
+  .clase-slider-arrow[hidden] { display: none; }
+  .clase-slider-arrow:hover { background: var(--surface-2); border-color: var(--accent); }
+}
+.clase-slider-card {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.clase-slider-card.is-clickable { cursor: pointer; }
+.clase-slider-image { width: 100%; height: 110px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 8px; }
+.clase-slider-card h4 { font-size: 14.5px; margin: 0 0 4px; }
+.clase-slider-meta { font-size: 12.5px; color: var(--text-muted); margin: 0 0 6px; }
+.clase-slider-footer { text-align: center; margin-top: 18px; }
+
+/* ---------- Calendario semanal de clases (clases.html en modo visitante) ---------- */
+
+.class-calendar-scroll { overflow-x: auto; }
+.class-calendar-grid {
+  display: grid;
+  grid-template-columns: 50px repeat(7, minmax(110px, 1fr));
+  min-width: 830px;
+}
+.class-calendar-corner { position: sticky; left: 0; z-index: 3; background: var(--bg); }
+.class-calendar-day-head {
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.class-calendar-time-axis {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+.class-calendar-hour-label {
+  position: absolute;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  right: 6px;
+}
+.class-calendar-day-col { position: relative; border-left: 1px solid var(--border); }
+.class-calendar-block {
+  position: absolute;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  border: none;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.25;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+.class-calendar-block strong { display: block; font-size: 11.5px; }
+.class-calendar-block span { display: block; opacity: 0.85; }
+
+/* ---------- Modal de detalle/inscripcion de una clase (compartido slider + calendario) ---------- */
+
+.class-detail-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 12px; }
+.class-detail-sessions { list-style: none; padding: 0; margin: 8px 0; font-size: 13.5px; color: var(--text-muted); }
+.class-detail-sessions li { padding: 2px 0; }
+
 /* ---------- Calificacion de entrenadores (handles) de gimnasio ---------- */
 
 .gym-gated-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
+
+/* Antes usaba .search-page-list (flex-column, pensada para filas de ancho completo tipo
+   resultados de busqueda) -- las tarjetas de entrenador quedaban estiradas a los ~1140px del
+   .container en desktop. auto-fit (no auto-fill) + minmax con techo fijo (no 1fr): las columnas
+   vacias colapsan en vez de quedar reservadas, asi con pocas tarjetas (ej. 2) el grupo entero
+   queda centrado por justify-content en vez de pegado a la izquierda con hueco a la derecha --
+   auto-fill hubiera mantenido esas columnas vacias "reservando" el hueco. El techo de 320px evita
+   que 1-2 tarjetas se estiren a la mitad del contenedor (que es lo que 1fr sin techo haria). */
+.gym-entrenadores-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 320px)); justify-content: center; gap: 16px; }
+.gym-entrenadores-grid .routine-card + .routine-card { margin-top: 0; }
 
 .trainer-rating-summary { display: flex; align-items: center; gap: 6px; margin: 10px 0; font-size: 13.5px; color: var(--text-muted); flex-wrap: wrap; }
 .trainer-rating-summary strong { color: var(--text); font-size: 14px; font-weight: 700; }
@@ -3649,27 +3831,115 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .gym-post-viewer-mobile { position: fixed; inset: 0; z-index: 200; background: var(--bg); }
 .gym-post-viewer-close-mobile { top: 14px; left: 14px; right: auto; }
-.gym-post-viewer-mobile-scroller { height: 100dvh; overflow-y: auto; scroll-snap-type: y proximity; scrollbar-width: none; }
+/* mandatory (no proximity) + scroll-snap-stop:always en cada seccion (mas abajo): un swipe cae
+   siempre exactamente en la publicacion siguiente/anterior, nunca a mitad de camino ni salteando
+   una de largo en un swipe rapido. Todo esto es scroll nativo del navegador, sin JS de por medio
+   -- la inercia/fluidez del gesto la resuelve el motor de scroll del celular, el mismo que usa
+   cualquier app nativa, por eso se siente igual de suave que Instagram/Facebook sin necesitar
+   fisica ni animaciones propias. */
+.gym-post-viewer-mobile-scroller { height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; }
 .gym-post-viewer-mobile-scroller::-webkit-scrollbar { display: none; }
-.gym-post-viewer-mobile-section { position: relative; scroll-snap-align: start; display: flex; flex-direction: column; background: var(--bg); padding-bottom: 8px; border-bottom: 8px solid var(--surface-2); }
+/* Cada publicacion ocupa la pantalla completa (una "pagina" por publicacion, como el visor de
+   posts de Instagram) en vez de una tarjeta de alto variable con la siguiente asomando debajo.
+   El media usa flex:1 para estirarse y absorber lo que le sobra a la seccion despues de
+   header/acciones/likes/caption/fecha (todos flex-shrink:0, alto fijo) -- asi la seccion suma
+   siempre exactos 100dvh sin importar el alto de la foto/video ni cuanto texto tenga el caption
+   (que ademas se clampea a 2 lineas, ver mas abajo, para no descuadrar la cuenta). */
+.gym-post-viewer-mobile-section {
+  position: relative;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
 
-.gym-post-viewer-mobile-header { display: flex; align-items: center; gap: 10px; padding: 56px 14px 10px; }
+.gym-post-viewer-mobile-header { display: flex; align-items: center; gap: 10px; padding: 56px 14px 10px; flex-shrink: 0; }
 .gym-post-viewer-mobile-header .gym-post-comment-avatar { width: 34px; height: 34px; }
 .gym-post-viewer-mobile-header-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .gym-post-viewer-mobile-header .gym-post-viewer-location { font-size: 11.5px; }
 .gym-post-viewer-mobile-header .profile-menu-btn { color: var(--text); }
 
-.gym-post-viewer-mobile-section .gym-post-viewer-media-wrap { height: 62dvh; background: #000; }
-.gym-post-viewer-mobile-section .gym-post-viewer-carousel-track { height: 62dvh; }
+.gym-post-viewer-mobile-section .gym-post-viewer-media-wrap { flex: 1; min-height: 0; background: #000; }
+/* cover (no contain) por defecto en mobile: llena el recuadro entero sin franjas vacias. Para
+   video se queda asi (ver comentario junto a .gym-post-viewer-video-wrap mas abajo); para foto
+   se pisa mas abajo con .gym-post-viewer-photo-fg, que nunca recorta. */
+.gym-post-viewer-mobile-section .gym-post-viewer-media { object-fit: cover; }
 
-.gym-post-viewer-mobile-actions { display: flex; align-items: center; gap: 2px; padding: 4px 4px 0; }
+/* Foto del visor mobile: la nitida (.gym-post-viewer-photo-fg) usa contain, nunca se recorta --
+   detras se ve la misma foto agrandada (scale 1.15, para que el desenfoque no deje un borde claro
+   filtrando "nada" fuera del recuadro) y desenfocada, llenando todo el hueco. Asi no queda espacio
+   vacio sin perder informacion de la imagen, misma idea que usa Instagram en Stories. El video
+   sigue usando cover arriba (no este truco): recortar un video vertical pierde bastante menos que
+   recortar una foto cualquiera, y clonar+desenfocar un <video> en loop es mucho mas caro. */
+.gym-post-viewer-photo-wrap { position: relative; width: 100%; height: 100%; overflow: hidden; background: #000; }
+.gym-post-viewer-photo-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(30px) brightness(0.55);
+  transform: scale(1.15);
+}
+.gym-post-viewer-mobile-section .gym-post-viewer-photo-fg { position: relative; object-fit: contain; z-index: 1; }
+
+/* Video del visor mobile: sin controles nativos, tap en cualquier parte pausa/reproduce (con un
+   flash de icono al centro) y un boton de mute propio abajo a la derecha, mismo lenguaje que
+   Instagram. autoplay/loop/pausado-al-salir-de-vista se maneja en JS (ver renderMobile). */
+.gym-post-viewer-video-wrap { position: relative; width: 100%; height: 100%; }
+.gym-post-viewer-video-mute {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.gym-post-viewer-video-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+}
+.gym-post-viewer-video-flash.is-flashing { animation: gymPostVideoFlash 0.65s ease forwards; }
+@keyframes gymPostVideoFlash {
+  0% { opacity: 0; transform: scale(0.8); }
+  18% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+.gym-post-viewer-mobile-actions { display: flex; align-items: center; gap: 2px; padding: 4px 4px 0; flex-shrink: 0; }
 .gym-post-viewer-mobile-actions .post-action svg { width: 24px; height: 24px; }
 
-.gym-post-viewer-mobile-likes { font-weight: 700; font-size: 13.5px; padding: 4px 14px 0; margin: 0; }
-.gym-post-viewer-mobile-caption-row { font-size: 13.5px; line-height: 1.4; padding: 4px 14px 0; margin: 0; }
-.gym-post-viewer-view-comments { display: block; border: none; background: none; color: var(--text-muted); font-size: 13px; padding: 6px 14px 0; margin: 0; cursor: pointer; text-align: left; }
+.gym-post-viewer-mobile-likes { font-weight: 700; font-size: 13.5px; padding: 4px 14px 0; margin: 0; flex-shrink: 0; }
+.gym-post-viewer-mobile-caption-row {
+  font-size: 13.5px;
+  line-height: 1.4;
+  padding: 4px 14px 0;
+  margin: 0;
+  flex-shrink: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gym-post-viewer-view-comments { display: block; border: none; background: none; color: var(--text-muted); font-size: 13px; padding: 6px 14px 0; margin: 0; cursor: pointer; text-align: left; flex-shrink: 0; }
 .gym-post-viewer-view-comments[hidden] { display: none; }
-.gym-post-viewer-mobile-date { font-size: 11px; color: var(--text-muted); letter-spacing: 0.03em; padding: 4px 14px 4px; margin: 0; }
+.gym-post-viewer-mobile-date { font-size: 11px; color: var(--text-muted); letter-spacing: 0.03em; padding: 4px 14px 4px; margin: 0; flex-shrink: 0; }
 
 .gym-post-comments-sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 220; }
 .gym-post-comments-sheet {

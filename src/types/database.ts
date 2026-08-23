@@ -565,6 +565,7 @@ export type Database = {
       gym_classes: {
         Row: {
           allow_enrollment: boolean
+          capacity: number | null
           created_at: string
           description: string | null
           gym_id: string
@@ -576,6 +577,7 @@ export type Database = {
         }
         Insert: {
           allow_enrollment?: boolean
+          capacity?: number | null
           created_at?: string
           description?: string | null
           gym_id: string
@@ -587,6 +589,7 @@ export type Database = {
         }
         Update: {
           allow_enrollment?: boolean
+          capacity?: number | null
           created_at?: string
           description?: string | null
           gym_id?: string
@@ -1637,6 +1640,7 @@ export type Database = {
           apellido: string
           avatar_url: string | null
           bio: string | null
+          business_hours: Json | null
           ciudad: string | null
           created_at: string
           email: string
@@ -1666,6 +1670,7 @@ export type Database = {
           apellido: string
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           ciudad?: string | null
           created_at?: string
           email: string
@@ -1695,6 +1700,7 @@ export type Database = {
           apellido?: string
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           ciudad?: string | null
           created_at?: string
           email?: string
@@ -2512,6 +2518,7 @@ export type Database = {
           apellido: string | null
           avatar_url: string | null
           bio: string | null
+          business_hours: Json | null
           fecha_nacimiento: string | null
           id: string | null
           is_public: boolean | null
@@ -2528,6 +2535,7 @@ export type Database = {
           apellido?: string | null
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
@@ -2544,6 +2552,7 @@ export type Database = {
           apellido?: string | null
           avatar_url?: string | null
           bio?: string | null
+          business_hours?: Json | null
           fecha_nacimiento?: string | null
           id?: string | null
           is_public?: boolean | null
@@ -2837,6 +2846,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      is_active_gym_student_of: {
+        Args: { p_student: string; p_trainer: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
       is_conversation_admin: {
         Args: { p_conversation_id: string }
@@ -2917,6 +2930,7 @@ export type Database = {
         Args: { p_gym_id: string }
         Returns: {
           allow_enrollment: boolean
+          capacity: number
           description: string
           enrolled_count: number
           id: string
@@ -2974,6 +2988,29 @@ export type Database = {
           pinned: boolean
           pinned_at: string
           visibility: string
+        }[]
+      }
+      list_gym_students_for_trainer: {
+        Args: {
+          p_gym_id?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_trainer_id: string
+        }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          gym_apellido: string
+          gym_id: string
+          gym_nombre: string
+          gym_username: string
+          id: string
+          is_verified: boolean
+          nombre: string
+          since: string
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
         }[]
       }
       list_gym_trainer_ratings: {
@@ -3049,6 +3086,17 @@ export type Database = {
           nombre: string
           subscribed_at: string
           user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
+      list_my_gym_trainer_handles: {
+        Args: { p_trainer_id: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          gym_id: string
+          is_verified: boolean
+          nombre: string
           username: string
         }[]
       }

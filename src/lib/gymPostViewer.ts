@@ -22,6 +22,13 @@ import {
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
 const DESKTOP_QUERY = "(min-width: 900px)";
 
+// ---------- Controles de video del visor mobile (play/pausa por tap + mute, estilo Instagram) ----------
+
+const ICON_PLAY_FLASH = `<svg viewBox="0 0 24 24" width="42" height="42" fill="#fff" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>`;
+const ICON_PAUSE_FLASH = `<svg viewBox="0 0 24 24" width="42" height="42" fill="#fff" stroke="none"><rect x="5" y="3" width="5" height="18" rx="1.5"/><rect x="14" y="3" width="5" height="18" rx="1.5"/></svg>`;
+const ICON_VOLUME_ON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>`;
+const ICON_VOLUME_OFF = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+
 function closeOverlay(): void {
   const loaderBody = document.getElementById("loaderBody");
   if (loaderBody) loaderBody.innerHTML = "";
@@ -39,20 +46,41 @@ export function buildGymPostUrl(gymUsername: string, postId: string): string {
 
 // ---------- Media: una sola foto/video, o un carrusel horizontal con scroll-snap nativo ----------
 
-function singleMediaHtml(m: GymPostMedia): string {
-  return m.type === "video"
-    ? `<video class="gym-post-viewer-media" src="${escapeHtml(m.url)}" controls playsinline></video>`
-    : `<img class="gym-post-viewer-media" src="${escapeHtml(m.url)}" alt="">`;
+/** mobileFullscreen=true (visor mobile): sin controles nativos del navegador -- solo tap para
+ * play/pausa (con flash de icono al centro) y un boton de mute propio, igual que Instagram. El
+ * video arranca muted (autoplay lo exige) y loopea solo mientras su publicacion este a pantalla
+ * completa, ver renderMobile. En desktop se deja el <video controls> nativo tal cual estaba. */
+function singleMediaHtml(m: GymPostMedia, mobileFullscreen: boolean): string {
+  if (m.type !== "video") {
+    if (!mobileFullscreen) return `<img class="gym-post-viewer-media" src="${escapeHtml(m.url)}" alt="">`;
+    // Foto de fondo agrandada + desenfocada detras de la nitida (que nunca se recorta, object-fit
+    // contain): asi no queda espacio vacio sin perder nada de la imagen -- misma idea que usa
+    // Instagram en Stories para fotos que no matchean la relacion de aspecto de la pantalla.
+    return `
+      <div class="gym-post-viewer-photo-wrap">
+        <img class="gym-post-viewer-photo-bg" src="${escapeHtml(m.url)}" alt="" aria-hidden="true">
+        <img class="gym-post-viewer-media gym-post-viewer-photo-fg" src="${escapeHtml(m.url)}" alt="">
+      </div>
+    `;
+  }
+  if (!mobileFullscreen) return `<video class="gym-post-viewer-media" src="${escapeHtml(m.url)}" controls playsinline></video>`;
+  return `
+    <div class="gym-post-viewer-video-wrap">
+      <video class="gym-post-viewer-media" src="${escapeHtml(m.url)}" playsinline loop muted data-video></video>
+      <div class="gym-post-viewer-video-flash" data-flash></div>
+      <button type="button" class="gym-post-viewer-video-mute" data-action="toggle-mute" aria-label="Activar sonido">${ICON_VOLUME_OFF}</button>
+    </div>
+  `;
 }
 
-function mediaCarouselHtml(media: GymPostMedia[], idPrefix: string): string {
+function mediaCarouselHtml(media: GymPostMedia[], idPrefix: string, mobileFullscreen: boolean): string {
   if (media.length <= 1) {
-    return `<div class="gym-post-viewer-media-wrap">${media[0] ? singleMediaHtml(media[0]) : ""}</div>`;
+    return `<div class="gym-post-viewer-media-wrap">${media[0] ? singleMediaHtml(media[0], mobileFullscreen) : ""}</div>`;
   }
   return `
     <div class="gym-post-viewer-media-wrap">
       <div class="gym-post-viewer-carousel-track" id="${idPrefix}Track">
-        ${media.map((m) => `<div class="gym-post-viewer-carousel-item">${singleMediaHtml(m)}</div>`).join("")}
+        ${media.map((m) => `<div class="gym-post-viewer-carousel-item">${singleMediaHtml(m, mobileFullscreen)}</div>`).join("")}
       </div>
       <div class="gym-post-viewer-dots" id="${idPrefix}Dots">
         ${media.map((_, i) => `<span class="gym-post-viewer-dot${i === 0 ? " active" : ""}" data-i="${i}"></span>`).join("")}
@@ -61,7 +89,9 @@ function mediaCarouselHtml(media: GymPostMedia[], idPrefix: string): string {
   `;
 }
 
-function wireCarousel(root: ParentNode, idPrefix: string): void {
+/** onIndexChange (solo lo usa el visor mobile): resincroniza que video esta activo cuando el
+ * usuario desliza horizontalmente el carrusel dentro de una misma publicacion. */
+function wireCarousel(root: ParentNode, idPrefix: string, onIndexChange?: (i: number) => void): void {
   const track = root.querySelector<HTMLElement>(`#${idPrefix}Track`);
   const dots = root.querySelectorAll<HTMLElement>(`#${idPrefix}Dots .gym-post-viewer-dot`);
   if (!track || dots.length === 0) return;
@@ -70,6 +100,7 @@ function wireCarousel(root: ParentNode, idPrefix: string): void {
     () => {
       const i = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
       dots.forEach((d, di) => d.classList.toggle("active", di === i));
+      onIndexChange?.(i);
     },
     { passive: true }
   );
@@ -412,14 +443,22 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     }
   }
 
-  async function handleComment(post: GymPostFull, input: HTMLTextAreaElement, refresh: () => void): Promise<void> {
+  async function handleComment(post: GymPostFull, input: HTMLTextAreaElement, submitBtn: HTMLButtonElement, refresh: () => void): Promise<void> {
     if (!viewerId) return;
     const validationError = validateGymPostComment(input.value);
     if (validationError) {
       alert(validationError);
       return;
     }
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="btn-spinner"></span> Comentando...`;
     const { comment, error } = await addGymPostComment(post.id, viewerId, input.value);
+    // Reseteo incondicional (no solo en error): a diferencia del modal de comentarios de los
+    // Reps (que se cierra al comentar bien y descarta el boton), el composer mobile de este
+    // visor sigue vivo despues de comentar (su refresh() solo repinta la lista, no reconstruye
+    // el composer) -- sin esto el boton se queda pegado en "Comentando..." para siempre ahi.
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Comentar";
     if (error || !comment) {
       alert(error || "No se pudo comentar.");
       return;
@@ -458,7 +497,7 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
         <button type="button" class="gym-post-viewer-nav gym-post-viewer-nav-next" id="gymPostViewerNext" aria-label="Publicación siguiente" ${index === posts.length - 1 ? "disabled" : ""}>›</button>
 
         <div class="gym-post-viewer-card">
-          <div class="gym-post-viewer-media-col">${mediaCarouselHtml(post.media, "gymPostViewer")}</div>
+          <div class="gym-post-viewer-media-col">${mediaCarouselHtml(post.media, "gymPostViewer", false)}</div>
           <div class="gym-post-viewer-side-col">
             <div class="gym-post-viewer-header">
               <img class="gym-post-comment-avatar" src="${escapeHtml(author.avatarUrl || DEFAULT_AVATAR)}" alt="">
@@ -483,7 +522,7 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
                       <textarea id="gymPostViewerCommentInput" class="post-comment-modal-textarea" rows="1" maxlength="500" placeholder="Agregá un comentario..."></textarea>
                     </div>
                     <div class="post-comment-modal-footer">
-                      <button type="button" class="btn btn-primary btn-sm" id="gymPostViewerCommentSubmit">Publicar</button>
+                      <button type="button" class="btn btn-primary btn-sm" id="gymPostViewerCommentSubmit">Comentar</button>
                     </div>
                   </div>`
                 : ""
@@ -524,7 +563,8 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     });
     document.getElementById("gymPostViewerCommentSubmit")?.addEventListener("click", () => {
       const input = document.getElementById("gymPostViewerCommentInput") as HTMLTextAreaElement;
-      void handleComment(post, input, () => renderDesktop());
+      const submitBtn = document.getElementById("gymPostViewerCommentSubmit") as HTMLButtonElement;
+      void handleComment(post, input, submitBtn, () => renderDesktop());
     });
 
     if (isOwner) {
@@ -603,7 +643,7 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
                     <textarea id="gymPostMobileCommentInput" class="post-comment-modal-textarea" rows="1" maxlength="500" placeholder="Agregá un comentario..."></textarea>
                   </div>
                   <div class="post-comment-modal-footer">
-                    <button type="button" class="btn btn-primary btn-sm" id="gymPostMobileCommentSubmit">Publicar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="gymPostMobileCommentSubmit">Comentar</button>
                   </div>
                 </div>`
               : ""
@@ -611,8 +651,6 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
         </div>
       </div>
     `;
-
-    document.getElementById("gymPostViewerMobileClose")?.addEventListener("click", closeOverlay);
 
     const scroller = document.getElementById("gymPostViewerMobileScroller")!;
     const backdrop = document.getElementById("gymPostMobileCommentsBackdrop")!;
@@ -656,18 +694,107 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
     document.getElementById("gymPostMobileCommentSubmit")?.addEventListener("click", () => {
       const post = posts.find((p) => p.id === openPostId);
       const input = document.getElementById("gymPostMobileCommentInput") as HTMLTextAreaElement | null;
-      if (!post || !input) return;
-      void handleComment(post, input, () => {
+      const submitBtn = document.getElementById("gymPostMobileCommentSubmit") as HTMLButtonElement | null;
+      if (!post || !input || !submitBtn) return;
+      void handleComment(post, input, submitBtn, () => {
         updateCommentsLabel(post);
         void getComments(post.id).then((comments) => paintComments(post, comments));
       });
     });
 
+    // ---------- Autoplay/loop de video: solo el item de media a pantalla completa en este
+    // momento reproduce, todo lo demas queda pausado. "A pantalla completa" tiene dos capas:
+    // que publicacion (IntersectionObserver sobre cada section, threshold 0.6) y, dentro de esa
+    // publicacion, que item del carrusel (onIndexChange de wireCarousel, si tiene mas de un
+    // media). El mute es una preferencia global pegajosa (como Instagram): si el usuario le da
+    // sonido a un video, el siguiente que arranca hereda esa preferencia en vez de volver a
+    // muted por defecto.
+    let activeSectionEl: HTMLElement | null = null;
+    let activeVideo: HTMLVideoElement | null = null;
+    let globalMuted = true;
+
+    function setActiveVideo(v: HTMLVideoElement | null): void {
+      if (activeVideo && activeVideo !== v) activeVideo.pause();
+      activeVideo = v;
+      if (v) {
+        v.muted = globalMuted;
+        void v.play().catch(() => {});
+      }
+    }
+
+    function activeVideoInSection(section: HTMLElement): HTMLVideoElement | null {
+      const track = section.querySelector<HTMLElement>(".gym-post-viewer-carousel-track");
+      const item = track
+        ? track.querySelectorAll<HTMLElement>(".gym-post-viewer-carousel-item")[Math.round(track.scrollLeft / Math.max(track.clientWidth, 1))]
+        : section;
+      return item?.querySelector<HTMLVideoElement>("video[data-video]") ?? null;
+    }
+
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const section = entry.target as HTMLElement;
+          if (entry.intersectionRatio >= 0.6) {
+            activeSectionEl = section;
+            setActiveVideo(activeVideoInSection(section));
+          } else {
+            section.querySelectorAll<HTMLVideoElement>("video[data-video]").forEach((v) => v.pause());
+            if (activeSectionEl === section) activeSectionEl = null;
+          }
+        });
+      },
+      { root: scroller, threshold: [0, 0.6, 1] }
+    );
+
+    function wireVideoControls(wrap: HTMLElement): void {
+      const video = wrap.querySelector<HTMLVideoElement>("video[data-video]");
+      const flash = wrap.querySelector<HTMLElement>("[data-flash]");
+      const muteBtn = wrap.querySelector<HTMLButtonElement>('[data-action="toggle-mute"]');
+      if (!video) return;
+
+      function showFlash(icon: string): void {
+        if (!flash) return;
+        flash.innerHTML = icon;
+        flash.classList.remove("is-flashing");
+        void flash.offsetWidth; // fuerza reflow para poder reiniciar la animacion si se togglea rapido
+        flash.classList.add("is-flashing");
+      }
+
+      wrap.addEventListener("click", () => {
+        if (video.paused) {
+          void video.play();
+          showFlash(ICON_PLAY_FLASH);
+        } else {
+          video.pause();
+          showFlash(ICON_PAUSE_FLASH);
+        }
+      });
+
+      muteBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        video.muted = !video.muted;
+        globalMuted = video.muted;
+        muteBtn.innerHTML = video.muted ? ICON_VOLUME_OFF : ICON_VOLUME_ON;
+        muteBtn.setAttribute("aria-label", video.muted ? "Activar sonido" : "Silenciar");
+      });
+    }
+
+    function closeMobile(): void {
+      sectionObserver.disconnect();
+      activeVideo?.pause();
+      closeOverlay();
+    }
+    document.getElementById("gymPostViewerMobileClose")?.addEventListener("click", closeMobile);
+
     posts.forEach((post, i) => {
       const section = scroller.querySelector<HTMLElement>(`[data-post-id="${post.id}"]`);
       if (!section) return;
-      wireCarousel(section, `gymPostViewerM${i}`);
+      wireCarousel(section, `gymPostViewerM${i}`, () => {
+        if (section === activeSectionEl) setActiveVideo(activeVideoInSection(section));
+      });
       wireMobileSection(section, post);
+      section.querySelectorAll<HTMLElement>(".gym-post-viewer-video-wrap").forEach(wireVideoControls);
+      sectionObserver.observe(section);
     });
 
     function wireMobileSection(section: HTMLElement, post: GymPostFull): void {
@@ -731,7 +858,7 @@ export function openGymPostViewer(options: GymPostViewerOptions): void {
               : ""
           }
         </div>
-        ${mediaCarouselHtml(post.media, `gymPostViewerM${i}`)}
+        ${mediaCarouselHtml(post.media, `gymPostViewerM${i}`, true)}
         <div class="gym-post-viewer-mobile-actions">
           <button type="button" class="post-action post-action-like${post.likedByMe ? " is-active" : ""}" data-action="like" aria-label="Me gusta">${post.likedByMe ? ICON_HEART_FILLED : ICON_HEART}</button>
           <button type="button" class="post-action" data-action="comments" aria-label="Comentarios">${ICON_COMMENT}</button>

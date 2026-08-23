@@ -16,6 +16,7 @@ import {
   type ProfileLink,
 } from "../services/profile.service";
 import { listBlockedUsers, unblockUser, type BlockedUserRow } from "../services/block.service";
+import { DAY_LABELS as HOURS_DAY_LABELS, DAY_ABBR as HOURS_DAY_ABBR, formatHoursTime, parseBusinessHours, serializeBusinessHours, type BusinessHoursEntry } from "../lib/businessHours";
 import { listTrainedExercises, type TrainedExercise } from "../services/weightLog.service";
 import {
   STAT_WIDGET_CATALOG,
@@ -233,6 +234,26 @@ export const settingsView: ViewModule = {
             <div class="settings-link-picker" id="linkPicker"></div>
           </div>
 
+          ${
+            profile!.user_type === "gimnasio"
+              ? `
+          <div class="field">
+            <label>Horario</label>
+            <p class="chart-sub" style="margin:0 0 10px;">Se muestra en tu perfil público.</p>
+            <div class="class-session-chips" id="hoursChips"></div>
+            <div class="class-session-form">
+              <div class="field"><label for="hoursDay">Día</label>
+                <select id="hoursDay">${HOURS_DAY_LABELS.map((d, i) => `<option value="${i}">${d}</option>`).join("")}</select>
+              </div>
+              <div class="field"><label for="hoursOpens">Desde</label><input type="time" id="hoursOpens" value="08:00"></div>
+              <div class="field"><label for="hoursCloses">Hasta</label><input type="time" id="hoursCloses" value="22:00"></div>
+              <button type="button" class="btn btn-outline btn-sm" id="addHoursBtn">+ Agregar</button>
+            </div>
+          </div>
+          `
+              : ""
+          }
+
           <div class="alert_message" id="editAlert"></div>
           <div class="settings-actions"><button class="btn btn-primary btn-sm" id="saveEditBtn" type="button">Guardar cambios</button></div>
         </div>
@@ -248,6 +269,42 @@ export const settingsView: ViewModule = {
 
       const currentLinks: ProfileLink[] = [...initialLinks];
       renderLinksEditor();
+
+      const businessHours: BusinessHoursEntry[] = parseBusinessHours(profile!.business_hours);
+
+      function renderHoursChips(): void {
+        const chipsEl = container.querySelector("#hoursChips");
+        if (!chipsEl) return;
+        chipsEl.innerHTML = businessHours
+          .map(
+            (h, i) => `
+          <span class="class-session-chip" data-i="${i}">
+            ${HOURS_DAY_ABBR[h.dayOfWeek]} ${formatHoursTime(h.opens)}-${formatHoursTime(h.closes)}
+            <button type="button" data-i="${i}" aria-label="Quitar horario">×</button>
+          </span>
+        `
+          )
+          .join("");
+        chipsEl.querySelectorAll<HTMLButtonElement>("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            businessHours.splice(Number(btn.dataset.i), 1);
+            renderHoursChips();
+          });
+        });
+      }
+      renderHoursChips();
+
+      container.querySelector("#addHoursBtn")?.addEventListener("click", () => {
+        const day = Number((container.querySelector("#hoursDay") as HTMLSelectElement).value);
+        const opens = (container.querySelector("#hoursOpens") as HTMLInputElement).value;
+        const closes = (container.querySelector("#hoursCloses") as HTMLInputElement).value;
+        if (!opens || !closes || opens >= closes) {
+          alert("El horario de cierre tiene que ser después del de apertura.");
+          return;
+        }
+        businessHours.push({ dayOfWeek: day, opens, closes });
+        renderHoursChips();
+      });
 
       function iconSvg(platform: SocialPlatform): string {
         return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${platform.icon}</svg>`;
@@ -393,6 +450,7 @@ export const settingsView: ViewModule = {
           ciudad: ciudad || null,
           bio: bio || null,
           links: newLinks as unknown as Profile["links"],
+          ...(profile!.user_type === "gimnasio" ? { business_hours: serializeBusinessHours(businessHours) as unknown as Profile["business_hours"] } : {}),
         });
         if (error) {
           alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
@@ -409,6 +467,7 @@ export const settingsView: ViewModule = {
           ciudad: ciudad || null,
           bio: bio || null,
           links: newLinks,
+          ...(profile!.user_type === "gimnasio" ? { business_hours: serializeBusinessHours(businessHours) } : {}),
         });
         showSavedAnimation();
       });

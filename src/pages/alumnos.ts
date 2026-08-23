@@ -18,6 +18,7 @@ import {
   type SubscriberListRow,
   type HistoricSubscriberRow,
 } from "../services/subscription.service";
+import { listMyGymTrainerHandles, listGymStudentsForTrainer, type MyGymTrainerHandleRow, type GymStudentRow } from "../services/gymTrainer.service";
 import { listRecentComments, type RecentCommentRow } from "../services/comment.service";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 
@@ -27,7 +28,7 @@ const VIEW_MARKUP = `
       <a href="profile.html" class="back-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
       <span class="eyebrow">Entrenador</span>
       <h1>Tus alumnos</h1>
-      <p>Rutina activa, progreso y comentarios de cada suscriptor aceptado.</p>
+      <p>Rutina activa, progreso y comentarios de cada alumno: suscriptores aceptados y socios de los gimnasios donde sos handle.</p>
     </div>
   </section>
 
@@ -40,13 +41,33 @@ const VIEW_MARKUP = `
       <form class="search-page-form" id="alumnosSearchForm">
         <input type="search" id="alumnosSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
       </form>
+      <div class="member-filter-chips" id="alumnosGymFilterChips" hidden></div>
       <p class="chart-sub" id="alumnosSummary">Cargando...</p>
       <div class="search-page-list" id="alumnosList"></div>
     </div>
   </section>
 `;
 
-interface StudentRow extends SubscriberListRow {
+// Un "alumno actual" puede venir de dos origenes, no excluyentes: suscriptor directo (acepto
+// una suscripcion a este entrenador) y/o socio activo de un gimnasio donde este entrenador es
+// handle activo (mismo nivel de acceso que un suscriptor, ver la migracion
+// gym_trainer_full_student_access). `since` es la fecha mas antigua entre ambos origenes, para
+// que "Alumno desde" siempre muestre la relacion mas vieja que el entrenador tiene con esa persona.
+interface StudentSourceRow {
+  id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatarUrl: string | null;
+  userType: SubscriberListRow["userType"];
+  isVerified: boolean;
+  isSubscriber: boolean;
+  subscribedAt: string | null;
+  gyms: { gymId: string; gymUsername: string; gymName: string; since: string }[];
+  since: string;
+}
+
+interface StudentRow extends StudentSourceRow {
   activeRoutine: RoutineWithCounts | null;
   activeRoutinePct: number;
   lastTrained: string | null;
@@ -57,6 +78,23 @@ interface StudentRow extends SubscriberListRow {
 type AlumnosTab = "current" | "historic";
 
 const STUDENT_MENU_GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
+
+// La fecha mas antigua entre suscripcion directa y cada relacion de socio-de-gimnasio: "Alumno
+// desde" siempre refleja el vinculo mas viejo, sea cual sea el origen.
+function earliestSince(subscribedAt: string | null, gyms: { since: string }[]): string {
+  const dates = [subscribedAt, ...gyms.map((g) => g.since)].filter((d): d is string => !!d);
+  return dates.reduce((a, b) => (new Date(a).getTime() <= new Date(b).getTime() ? a : b));
+}
+
+function studentSourceTagsMarkup(s: StudentRow): string {
+  const tags = [
+    s.isSubscriber ? `<span class="student-source-tag">Suscriptor</span>` : "",
+    ...s.gyms.map(
+      (g) => `<span class="student-source-tag">Alumno de <a href="profile.html?u=${encodeURIComponent(g.gymUsername)}">${escapeHtml(g.gymName)}</a></span>`
+    ),
+  ].join("");
+  return tags ? `<div class="student-source-tags">${tags}</div>` : "";
+}
 
 function studentCardMarkup(s: StudentRow): string {
   const nombreCompleto = `${s.nombre} ${s.apellido}`.trim();
@@ -98,7 +136,11 @@ function studentCardMarkup(s: StudentRow): string {
               : ""
           }
           <button type="button" class="profile-menu-item historicRoutinesBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Rutinas históricas asignadas</button>
-          <button type="button" class="profile-menu-item profile-menu-item-danger cancelSubBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Cancelar suscripción</button>
+          ${
+            s.isSubscriber
+              ? `<button type="button" class="profile-menu-item profile-menu-item-danger cancelSubBtn" data-id="${s.id}" data-nombre="${escapeHtml(nombreCompleto)}">Cancelar suscripción</button>`
+              : ""
+          }
         </div>
       </div>
       <div class="student-card-head">
@@ -110,6 +152,7 @@ function studentCardMarkup(s: StudentRow): string {
           </span>
         </a>
       </div>
+      ${studentSourceTagsMarkup(s)}
       <div class="routine-stats">
         <div><span>Rutina activa</span><strong>${s.activeRoutine ? `<a href="showExc.html?rid=${s.activeRoutine.id}">${escapeHtml(s.activeRoutine.nombre)}</a>` : "Sin rutina activa"}</strong></div>
         ${
@@ -119,7 +162,7 @@ function studentCardMarkup(s: StudentRow): string {
         }
         <div><span>Último entreno</span><strong>${s.lastTrained ? escapeHtml(formatFechaCorta(s.lastTrained)) : "Nunca entrenó"}</strong></div>
         <div><span>Rutinas asignadas</span><strong>${s.assignedRoutinesCount}</strong></div>
-        <div><span>Alumno desde</span><strong>${escapeHtml(formatFechaCorta(s.subscribedAt))}</strong></div>
+        <div><span>Alumno desde</span><strong>${escapeHtml(formatFechaCorta(s.since))}</strong></div>
       </div>
       ${commentsMarkup}
       ${
@@ -209,14 +252,123 @@ export const alumnosView: ViewModule = {
     const tabsWrap = container.querySelector("#alumnosTabs")!;
     const searchForm = container.querySelector("#alumnosSearchForm") as HTMLFormElement;
     const searchInput = container.querySelector("#alumnosSearchInput") as HTMLInputElement;
+    const gymFilterChipsWrap = container.querySelector("#alumnosGymFilterChips") as HTMLElement;
 
     let activeTab: AlumnosTab = "current";
+    let gymHandles: MyGymTrainerHandleRow[] = [];
+    // "todos" | "suscriptor" | un gymId puntual.
+    let studentFilter = "todos";
     const DEBOUNCE_MS = 250;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let requestId = 0;
     ctx.addCleanup(() => clearTimeout(debounceTimer));
 
-    async function loadStudent(s: SubscriberListRow): Promise<StudentRow> {
+    function gymHandleName(g: MyGymTrainerHandleRow): string {
+      return `${g.nombre} ${g.apellido}`.trim() || g.username;
+    }
+
+    function selectedGymId(): string | undefined {
+      return studentFilter !== "todos" && studentFilter !== "suscriptor" ? studentFilter : undefined;
+    }
+
+    // El filtro solo tiene sentido en la pestaña Actuales, y solo si el entrenador es handle
+    // activo de al menos un gimnasio (item 2 del pedido: "si es uno, dos o mas") -- sin eso,
+    // "Todos"/"Suscriptor" siempre coinciden, no hay nada que distinguir.
+    function syncFilterUi(): void {
+      gymFilterChipsWrap.hidden = activeTab !== "current" || gymHandles.length === 0;
+      gymFilterChipsWrap.querySelectorAll<HTMLButtonElement>(".member-filter-chip").forEach((b) => b.classList.toggle("active", b.dataset.filter === studentFilter));
+    }
+
+    function renderFilterChips(): void {
+      if (gymHandles.length === 0) {
+        gymFilterChipsWrap.innerHTML = "";
+        syncFilterUi();
+        return;
+      }
+      gymFilterChipsWrap.innerHTML = [
+        `<button class="member-filter-chip" data-filter="todos" type="button">Todos</button>`,
+        `<button class="member-filter-chip" data-filter="suscriptor" type="button">Suscriptor</button>`,
+        ...gymHandles.map((g) => `<button class="member-filter-chip" data-filter="${g.gymId}" type="button">${escapeHtml(gymHandleName(g))}</button>`),
+      ].join("");
+      gymFilterChipsWrap.querySelectorAll<HTMLButtonElement>(".member-filter-chip").forEach((btn) => {
+        btn.addEventListener(
+          "click",
+          () => {
+            const filter = btn.dataset.filter!;
+            if (filter === studentFilter) return;
+            studentFilter = filter;
+            syncFilterUi();
+            void runSearch(searchInput.value.trim());
+          },
+          { signal: ctx.signal }
+        );
+      });
+      syncFilterUi();
+    }
+
+    // "Alumnos actuales" combina dos origenes no excluyentes: suscriptores directos aceptados,
+    // y socios activos de cualquier gimnasio donde este entrenador sea handle activo. El filtro
+    // decide que union mostrar: "Todos" (ambos origenes completos), "Suscriptor" (solo
+    // suscriptores directos, pero igual con la etiqueta de gimnasio si tambien lo son) o un
+    // gimnasio puntual (solo socios de ese gimnasio, con la etiqueta "Suscriptor" si aplica).
+    async function fetchCurrentStudents(query: string): Promise<StudentSourceRow[]> {
+      const gymId = selectedGymId();
+      const [subscribers, gymRows] = await Promise.all([
+        listSubscribers(myId, query),
+        gymHandles.length > 0 ? listGymStudentsForTrainer(myId, { search: query, gymId }) : Promise.resolve([] as GymStudentRow[]),
+      ]);
+      const subscriberById = new Map(subscribers.map((s) => [s.id, s]));
+      const merged = new Map<string, StudentSourceRow>();
+
+      if (!gymId) {
+        subscribers.forEach((s) => {
+          merged.set(s.id, {
+            id: s.id,
+            username: s.username,
+            nombre: s.nombre,
+            apellido: s.apellido,
+            avatarUrl: s.avatarUrl,
+            userType: s.userType,
+            isVerified: s.isVerified,
+            isSubscriber: true,
+            subscribedAt: s.subscribedAt,
+            gyms: [],
+            since: s.subscribedAt,
+          });
+        });
+      }
+
+      gymRows.forEach((g) => {
+        const gymEntry = { gymId: g.gymId, gymUsername: g.gymUsername, gymName: g.gymName, since: g.since };
+        const existing = merged.get(g.id);
+        if (existing) {
+          existing.gyms.push(gymEntry);
+          existing.since = earliestSince(existing.subscribedAt, existing.gyms);
+          return;
+        }
+        // "Suscriptor" solo suma la etiqueta de gimnasio a quienes ya entraron como
+        // suscriptores arriba -- no agrega alumnos nuevos que vengan solo del gimnasio.
+        if (studentFilter === "suscriptor") return;
+        const sub = subscriberById.get(g.id);
+        merged.set(g.id, {
+          id: g.id,
+          username: g.username,
+          nombre: g.nombre,
+          apellido: g.apellido,
+          avatarUrl: g.avatarUrl,
+          userType: g.userType,
+          isVerified: g.isVerified,
+          isSubscriber: !!sub,
+          subscribedAt: sub?.subscribedAt ?? null,
+          gyms: [gymEntry],
+          since: earliestSince(sub?.subscribedAt ?? null, [gymEntry]),
+        });
+      });
+
+      return [...merged.values()];
+    }
+
+    async function loadStudent(s: StudentSourceRow): Promise<StudentRow> {
       const [activeRoutines, lastTrained, recentComments, assignedRoutinesCount] = await Promise.all([
         listRoutines(s.id, "active").catch(() => []),
         getLastTrainedDate(s.id).catch(() => null),
@@ -509,8 +661,8 @@ export const alumnosView: ViewModule = {
       summaryEl.textContent = "Cargando...";
       try {
         if (activeTab === "current") {
-          const subscribers = await listSubscribers(myId, query);
-          const students = await Promise.all(subscribers.map(loadStudent));
+          const sourceRows = await fetchCurrentStudents(query);
+          const students = await Promise.all(sourceRows.map(loadStudent));
           if (myRequestId !== requestId) return;
           renderCurrentList(students, query);
         } else {
@@ -532,7 +684,9 @@ export const alumnosView: ViewModule = {
           const tab = btn.dataset.tab as AlumnosTab;
           if (tab === activeTab) return;
           activeTab = tab;
+          studentFilter = "todos";
           tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b === btn));
+          syncFilterUi();
           searchInput.value = "";
           void runSearch("");
         },
@@ -559,6 +713,8 @@ export const alumnosView: ViewModule = {
       { signal: ctx.signal }
     );
 
+    gymHandles = await listMyGymTrainerHandles(myId).catch(() => []);
+    renderFilterChips();
     void runSearch("");
   },
 };

@@ -43,10 +43,13 @@ import {
   requestGymTrainerHandle,
   acceptGymTrainerInvite,
   leaveGymAsTrainer,
+  listMyGymTrainerHandles,
   type GymTrainerHandleStatus,
   type HandleInitiatedBy,
 } from "../services/gymTrainer.service";
-import { listGymClasses, enrollInClass, unenrollFromClass, type GymClassRow, type ClassSession } from "../services/gymClass.service";
+import { listGymClasses, type GymClassRow } from "../services/gymClass.service";
+import { classImageHtml, classCapacityBadgeHtml, classSessionsSummary } from "../lib/gymClassMarkup";
+import { openClassDetailModal } from "../lib/gymClassEnrollModal";
 import { listGymTrainerRatings, type GymTrainerRatingRow } from "../services/gymTrainerRating.service";
 import { openRateTrainerModal, openTrainerReviewsModal } from "../lib/gymTrainerRatingModal";
 import { listGymPostsFull, type GymPostFull } from "../services/gymPost.service";
@@ -57,6 +60,7 @@ import { submitErrorReport, validateErrorReport } from "../services/errorReport.
 import { submitUserReport, validateUserReport } from "../services/userReport.service";
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
+import { DAY_LABELS as HOURS_DAY_LABELS, formatHoursTime, parseBusinessHours } from "../lib/businessHours";
 import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import { openPostDetailModal } from "../lib/postDetailModal";
@@ -334,6 +338,51 @@ function renderProfileLinks(links: ProfileLink[]) {
     .join("");
 }
 
+/** Solo aplica a perfiles de gimnasio -- el resto de user_types no tiene business_hours cargado. */
+function renderProfileBusinessHours(raw: Profile["business_hours"], userType: Profile["user_type"] | null) {
+  const el = document.getElementById("profileBusinessHours");
+  if (!el) return;
+  const entries = userType === "gimnasio" ? parseBusinessHours(raw).sort((a, b) => a.dayOfWeek - b.dayOfWeek) : [];
+  el.hidden = entries.length === 0;
+  if (entries.length === 0) return;
+  el.innerHTML = `
+    <h4 class="profile-business-hours-title">Horario</h4>
+    <ul class="profile-business-hours-list">
+      ${entries
+        .map(
+          (e) =>
+            `<li><span>${escapeHtml(HOURS_DAY_LABELS[e.dayOfWeek])}</span><span>${escapeHtml(formatHoursTime(e.opens))}–${escapeHtml(formatHoursTime(e.closes))}</span></li>`
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+/** Solo aplica a perfiles de entrenador -- en que gimnasio(s) trabaja (handle activo),
+ * clickeable a cada uno. La RPC ya filtra por privacidad (propia y de cada gimnasio) del lado
+ * del servidor. */
+async function renderProfileTrabajaEn(userId: string, userType: Profile["user_type"] | null): Promise<void> {
+  const el = document.getElementById("profileTrabajaEn");
+  if (!el) return;
+  if (userType !== "entrenador") {
+    el.hidden = true;
+    return;
+  }
+  let gyms: Awaited<ReturnType<typeof listMyGymTrainerHandles>>;
+  try {
+    gyms = await listMyGymTrainerHandles(userId);
+  } catch {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = gyms.length === 0;
+  if (gyms.length === 0) return;
+  const links = gyms
+    .map((g) => `<a href="profile.html?u=${encodeURIComponent(g.username)}">${escapeHtml(`${g.nombre} ${g.apellido}`.trim() || g.username)}</a>`)
+    .join(", ");
+  el.innerHTML = `Trabaja en ${links}`;
+}
+
 function followButtonLabel(status: FollowStatus): string {
   if (status === "pending") return "Solicitud enviada";
   if (status === "accepted") return "Siguiendo";
@@ -485,7 +534,14 @@ async function renderProfileActions(
   const showFollowBtn = !ownerView && viewerLoggedIn && blockStatus === "none";
   // Suscripcion solo tiene sentido contra un entrenador; "socio" solo contra un gimnasio.
   const showSubscribeBtn = showFollowBtn && targetUserType === "entrenador";
-  const showSocioBtn = showFollowBtn && targetUserType === "gimnasio";
+  const showSocioBtnBase = showFollowBtn && targetUserType === "gimnasio";
+  // Un entrenador que ya es handle activo de este gimnasio (o sea, que trabaja ahi -- ver
+  // "Trabaja en" en el perfil) no tiene sentido que ademas le aparezca "Ser socio": son dos
+  // roles distintos, pero mezclarlos en la misma pantalla confunde mas de lo que suma.
+  const viewerIsActiveHandleHere = showSocioBtnBase
+    ? (await getGymTrainerHandleStatus(targetId).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy }))).status === "active"
+    : false;
+  const showSocioBtn = showSocioBtnBase && !viewerIsActiveHandleHere;
   const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
   // "ended" (fue alumno/socio, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
   // suscribirse/hacerse socio, y la RPC reactiva ese mismo vinculo historico si corresponde.
@@ -963,64 +1019,61 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
       userType === "entrenador"
         ? `<a class="quick-card reveal" href="/pages/alumnos.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-      <div><h3>Tus alumnos</h3><p>Rutinas, progreso y comentarios de tus suscriptores</p></div>
+      <div><h3>Tus alumnos</h3><p>Rutinas, progreso y comentarios de tus alumnos</p></div>
     </a>`
         : ""
     }
   `;
 }
 
-// ---------- Clases (solo perfiles de gimnasio) ----------
+// ---------- Clases (solo perfiles de gimnasio): slider con todas las clases + "Ver todas" ----------
 
-const CLASE_DAY_ABBR = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+/** Flechas de navegacion del slider (solo desktop, en mobile ya se navega con swipe/touch --
+ * ver el media query de .clase-slider-arrow). Wireado una sola vez por mount() (no dentro de
+ * renderGymClasses, que puede llamarse varias veces en el mismo mount tras inscribirse/
+ * desinscribirse de una clase -- volver a atar los listeners ahi duplicaria los clicks). El
+ * MutationObserver dispara el primer chequeo de visibilidad apenas el track se llena de forma
+ * asincronica (renderGymClasses trae las clases por red despues de que esto ya corrio). */
+function setupGymClasesSlider(ctx: ViewContext) {
+  const slider = document.getElementById("gymClasesSlider");
+  const trackEl = document.getElementById("gymClasesTrack");
+  const prevBtn = document.getElementById("gymClasesPrev") as HTMLButtonElement | null;
+  const nextBtn = document.getElementById("gymClasesNext") as HTMLButtonElement | null;
+  if (!slider || !trackEl || !prevBtn || !nextBtn) return;
 
-function claseFormatTime(t: string): string {
-  return t.slice(0, 5);
-}
-
-function claseSessionsSummary(sessions: ClassSession[]): string {
-  if (sessions.length === 0) return "Sin horario definido";
-  return sessions.map((s) => `${CLASE_DAY_ABBR[s.dayOfWeek]} ${claseFormatTime(s.startTime)}-${claseFormatTime(s.endTime)}`).join(", ");
-}
-
-function claseCardMarkup(c: GymClassRow, isActiveSocio: boolean): string {
-  const instructorName = c.instructorId ? `${c.instructorNombre ?? ""} ${c.instructorApellido ?? ""}`.trim() || c.instructorUsername : null;
-  const instructorLine = instructorName
-    ? c.instructorUsername
-      ? `<a href="profile.html?u=${encodeURIComponent(c.instructorUsername)}">${escapeHtml(instructorName)}</a>`
-      : escapeHtml(instructorName)
-    : "Sin asignar";
-
-  let enrollArea = "";
-  if (c.allowEnrollment) {
-    if (isActiveSocio) {
-      enrollArea = c.isEnrolled
-        ? `<div class="routine-actions"><button class="btn btn-outline btn-sm unenrollClassBtn" data-id="${c.id}" type="button">Cancelar inscripción</button></div>`
-        : `<div class="routine-actions"><button class="btn btn-primary btn-sm enrollClassBtn" data-id="${c.id}" type="button">Inscribirme</button></div>`;
-    } else {
-      enrollArea = `<p class="gym-class-enroll-note">Hacete socio del gimnasio para inscribirte.</p>`;
-    }
+  function updateArrows(): void {
+    const hasOverflow = slider!.scrollWidth > slider!.clientWidth + 4;
+    prevBtn!.hidden = !hasOverflow || slider!.scrollLeft <= 4;
+    nextBtn!.hidden = !hasOverflow || slider!.scrollLeft >= slider!.scrollWidth - slider!.clientWidth - 4;
   }
 
+  prevBtn.addEventListener("click", () => slider.scrollBy({ left: -slider.clientWidth * 0.9, behavior: "smooth" }), { signal: ctx.signal });
+  nextBtn.addEventListener("click", () => slider.scrollBy({ left: slider.clientWidth * 0.9, behavior: "smooth" }), { signal: ctx.signal });
+  slider.addEventListener("scroll", updateArrows, { signal: ctx.signal, passive: true });
+  window.addEventListener("resize", updateArrows, { signal: ctx.signal });
+
+  const observer = new MutationObserver(updateArrows);
+  observer.observe(trackEl, { childList: true });
+  ctx.addCleanup(() => observer.disconnect());
+}
+
+function claseSliderCardMarkup(c: GymClassRow, isOwner: boolean): string {
   return `
-    <div class="routine-card reveal" data-id="${c.id}">
-      ${c.imageUrl ? `<img src="${escapeHtml(c.imageUrl)}" alt="" class="gym-class-image">` : ""}
-      <h3>${escapeHtml(c.name)}</h3>
-      ${c.description ? `<p>${escapeHtml(c.description)}</p>` : ""}
-      <div class="routine-stats">
-        <div><span>Profesor</span><strong>${instructorLine}</strong></div>
-        <div><span>Horarios</span><strong>${escapeHtml(claseSessionsSummary(c.sessions))}</strong></div>
-      </div>
-      ${enrollArea}
+    <div class="clase-slider-card${isOwner ? "" : " is-clickable"}" data-id="${c.id}">
+      ${classImageHtml(c.imageUrl, "clase-slider-image")}
+      <h4>${escapeHtml(c.name)}</h4>
+      <p class="clase-slider-meta">${escapeHtml(classSessionsSummary(c.sessions))}</p>
+      ${classCapacityBadgeHtml(c.enrolledCount, c.capacity)}
     </div>
   `;
 }
 
-async function renderGymClasses(gymId: string, isActiveSocio: boolean, myUserId: string | null): Promise<void> {
+async function renderGymClasses(gymId: string, gymUsername: string, isActiveSocio: boolean, myUserId: string | null, isOwner: boolean): Promise<void> {
   const section = document.getElementById("gymClasesSection");
   const summaryEl = document.getElementById("gymClasesSummary");
-  const listEl = document.getElementById("gymClasesList");
-  if (!section || !summaryEl || !listEl) return;
+  const trackEl = document.getElementById("gymClasesTrack");
+  const verTodas = document.getElementById("gymClasesVerTodas") as HTMLAnchorElement | null;
+  if (!section || !summaryEl || !trackEl) return;
 
   let classes: GymClassRow[];
   try {
@@ -1028,52 +1081,27 @@ async function renderGymClasses(gymId: string, isActiveSocio: boolean, myUserId:
   } catch {
     return;
   }
-  // Sin clases publicadas, la seccion entera no tiene nada que mostrar -- se mantiene
-  // oculta (arranca hidden en el markup) en vez de mostrar un estado vacio.
+  // Sin clases publicadas, esta seccion no tiene nada que mostrar -- se mantiene oculta (arranca
+  // hidden en el markup).
   if (classes.length === 0) return;
   section.hidden = false;
   summaryEl.textContent = "";
 
-  function paint(): void {
-    listEl!.innerHTML = classes.map((c) => claseCardMarkup(c, isActiveSocio)).join("");
-    listEl!.querySelectorAll<HTMLButtonElement>(".enrollClassBtn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (!myUserId) return;
-        btn.disabled = true;
-        const { error } = await enrollInClass(btn.dataset.id!, myUserId);
-        if (error) {
-          alert(error);
-          btn.disabled = false;
-          return;
-        }
-        const c = classes.find((x) => x.id === btn.dataset.id);
-        if (c) {
-          c.isEnrolled = true;
-          c.enrolledCount += 1;
-        }
-        paint();
-      });
+  const sorted = [...classes].sort((a, b) => b.enrolledCount - a.enrolledCount);
+  trackEl.innerHTML = sorted.map((c) => claseSliderCardMarkup(c, isOwner)).join("");
+  if (verTodas) verTodas.href = isOwner ? "clases.html" : `clases.html?u=${encodeURIComponent(gymUsername)}`;
+
+  // El dueño viendo su propio gimnasio: la tira es solo informativa, sin accion (nada tiene
+  // sentido -- no puede inscribirse a si mismo). Ver punto 7: nada de nota "hacete socio" tampoco.
+  if (isOwner) return;
+
+  trackEl.querySelectorAll<HTMLElement>(".clase-slider-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const c = sorted.find((x) => x.id === card.dataset.id);
+      if (!c) return;
+      openClassDetailModal(c, { myId: myUserId, isActiveSocio }, () => void renderGymClasses(gymId, gymUsername, isActiveSocio, myUserId, isOwner));
     });
-    listEl!.querySelectorAll<HTMLButtonElement>(".unenrollClassBtn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (!myUserId) return;
-        btn.disabled = true;
-        const { error } = await unenrollFromClass(btn.dataset.id!, myUserId);
-        if (error) {
-          alert(error);
-          btn.disabled = false;
-          return;
-        }
-        const c = classes.find((x) => x.id === btn.dataset.id);
-        if (c) {
-          c.isEnrolled = false;
-          c.enrolledCount = Math.max(0, c.enrolledCount - 1);
-        }
-        paint();
-      });
-    });
-  }
-  paint();
+  });
 }
 
 // ---------- Entrenadores (solo perfiles de gimnasio, calificacion de handles activos) ----------
@@ -1090,14 +1118,21 @@ function trainerRatingStarsMarkup(avg: number): string {
 
 const TRAINER_STAR_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l2.76 5.6 6.18.9-4.47 4.36 1.06 6.16L12 16.6l-5.53 2.92 1.06-6.16-4.47-4.36 6.18-.9L12 2.5z"/></svg>`;
 
-function entrenadorRatingCardMarkup(t: GymTrainerRatingRow, isActiveSocio: boolean): string {
+function entrenadorRatingCardMarkup(t: GymTrainerRatingRow, isActiveSocio: boolean, isOwner: boolean): string {
   const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
   const myRatingLabel = t.myRating != null ? `Tu calificación: ${t.myRating}★ · Editar` : "Calificar";
 
   const reviewsBtn = t.ratingCount > 0 ? `<button class="btn btn-outline btn-sm viewReviewsBtn" data-trainer="${t.trainerId}" type="button">Ver reseñas</button>` : "";
-  const ratingArea = isActiveSocio
-    ? `<div class="routine-actions"><button class="btn btn-outline btn-sm rateTrainerBtn" data-trainer="${t.trainerId}" type="button">${escapeHtml(myRatingLabel)}</button>${reviewsBtn}</div>`
-    : `${reviewsBtn ? `<div class="routine-actions">${reviewsBtn}</div>` : ""}<p class="gym-gated-note">Hacete socio del gimnasio para calificar.</p>`;
+  // El gimnasio viendo su propio plantel no puede calificarse a si mismo: ni boton "Calificar"
+  // ni la nota de "hacete socio" (no aplica, ya es el gimnasio) -- "Ver reseñas" si sigue
+  // teniendo sentido para el dueño.
+  const ratingArea = isOwner
+    ? reviewsBtn
+      ? `<div class="routine-actions">${reviewsBtn}</div>`
+      : ""
+    : isActiveSocio
+      ? `<div class="routine-actions"><button class="btn btn-outline btn-sm rateTrainerBtn" data-trainer="${t.trainerId}" type="button">${escapeHtml(myRatingLabel)}</button>${reviewsBtn}</div>`
+      : `${reviewsBtn ? `<div class="routine-actions">${reviewsBtn}</div>` : ""}<p class="gym-gated-note">Hacete socio del gimnasio para calificar.</p>`;
 
   return `
     <div class="routine-card reveal" data-trainer="${t.trainerId}">
@@ -1118,7 +1153,7 @@ function entrenadorRatingCardMarkup(t: GymTrainerRatingRow, isActiveSocio: boole
   `;
 }
 
-async function renderGymEntrenadores(gymId: string, isActiveSocio: boolean, myUserId: string | null): Promise<void> {
+async function renderGymEntrenadores(gymId: string, isActiveSocio: boolean, myUserId: string | null, isOwner: boolean): Promise<void> {
   const section = document.getElementById("gymEntrenadoresSection");
   const summaryEl = document.getElementById("gymEntrenadoresSummary");
   const listEl = document.getElementById("gymEntrenadoresList");
@@ -1130,13 +1165,13 @@ async function renderGymEntrenadores(gymId: string, isActiveSocio: boolean, myUs
   } catch {
     return;
   }
-  // Sin handles activos, la seccion no tiene nada que mostrar -- se mantiene oculta.
+  // Sin handles activos, esta seccion no tiene nada que mostrar -- se mantiene oculta.
   if (trainers.length === 0) return;
   section.hidden = false;
   summaryEl.textContent = "";
 
   function paint(): void {
-    listEl!.innerHTML = trainers.map((t) => entrenadorRatingCardMarkup(t, isActiveSocio)).join("");
+    listEl!.innerHTML = trainers.map((t) => entrenadorRatingCardMarkup(t, isActiveSocio, isOwner)).join("");
     listEl!.querySelectorAll<HTMLButtonElement>(".rateTrainerBtn").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (!myUserId) return;
@@ -1144,7 +1179,7 @@ async function renderGymEntrenadores(gymId: string, isActiveSocio: boolean, myUs
         if (!t) return;
         const nombreCompleto = `${t.nombre} ${t.apellido}`.trim() || t.username;
         openRateTrainerModal(gymId, t.trainerId, myUserId, nombreCompleto, { rating: t.myRating, comment: t.myComment }, () => {
-          void renderGymEntrenadores(gymId, isActiveSocio, myUserId);
+          void renderGymEntrenadores(gymId, isActiveSocio, myUserId, isOwner);
         });
       });
     });
@@ -2446,6 +2481,7 @@ function paintCachedProfile(cached: ProfileBasic): void {
   if (avatarImg && cached.avatar_url) avatarImg.src = cached.avatar_url;
   renderProfileBio(cached.bio ?? null);
   renderProfileLinks(parseProfileLinks(cached.links ?? []));
+  renderProfileBusinessHours(cached.business_hours, cached.user_type ?? null);
 }
 
 async function main(ctx: ViewContext) {
@@ -2490,6 +2526,7 @@ async function main(ctx: ViewContext) {
     avatar_url: displayProfile.avatar_url,
     bio: displayProfile.bio,
     links: displayProfile.links,
+    business_hours: displayProfile.business_hours,
     nacionalidad: displayProfile.nacionalidad,
     fecha_nacimiento: displayProfile.fecha_nacimiento,
     is_public: displayProfile.is_public,
@@ -2535,12 +2572,16 @@ async function main(ctx: ViewContext) {
   if (isPrivateForViewer) {
     renderProfileBio(displayProfile.bio ?? null);
     document.getElementById("profileLinks")?.remove();
+    document.getElementById("profileBusinessHours")?.remove();
+    document.getElementById("profileTrabajaEn")?.remove();
     renderPrivateNotice(nombre);
     return;
   }
 
   renderProfileBio(displayProfile.bio ?? null);
   renderProfileLinks(parseProfileLinks(displayProfile.links ?? []));
+  renderProfileBusinessHours(displayProfile.business_hours, displayProfile.user_type ?? null);
+  void renderProfileTrabajaEn(displayProfile.id!, displayProfile.user_type ?? null);
 
   // El resto de la pagina habla en tercera persona cuando no es el dueño.
   const statsEyebrow = document.getElementById("statsEyebrow");
@@ -2577,9 +2618,19 @@ async function main(ctx: ViewContext) {
   if (isGym) {
     document.getElementById("rutinas")?.remove();
     routinesCtx = null;
-    const isActiveSocio = !isOwner && myId ? (await getGymMembershipStatus(displayProfile.id!).catch(() => "none")) === "active" : false;
-    void renderGymClasses(displayProfile.id!, isActiveSocio, myId);
-    void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId);
+    // Un entrenador que es handle activo de este gimnasio tiene los mismos beneficios que un
+    // socio activo (inscribirse a clases, calificar a otros entrenadores) -- ver
+    // gym_class_enrollments_before_insert/gym_trainer_ratings_before_write, que ya aceptan
+    // ambas relaciones del lado del servidor.
+    const isActiveSocio =
+      !isOwner && myId
+        ? await Promise.all([
+            getGymMembershipStatus(displayProfile.id!).catch(() => "none" as GymMembershipStatus),
+            getGymTrainerHandleStatus(displayProfile.id!).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy })),
+          ]).then(([socioStatus, handle]) => socioStatus === "active" || handle.status === "active")
+        : false;
+    void renderGymClasses(displayProfile.id!, displayProfile.username ?? "", isActiveSocio, myId, isOwner);
+    void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId, isOwner);
   } else {
     const logs = await listWeightLogsWithContext(displayProfile.id!);
     routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
@@ -2616,6 +2667,8 @@ const VIEW_MARKUP = `
           <div class="profile-stats" id="profileStats"></div>
           <p class="profile-bio profile-bio-clamped" id="profileBio"></p>
           <div class="profile-links" id="profileLinks"></div>
+          <div class="profile-business-hours" id="profileBusinessHours" hidden></div>
+          <p class="profile-trabaja-en" id="profileTrabajaEn" hidden></p>
         </div>
       </div>
 
@@ -2629,14 +2682,25 @@ const VIEW_MARKUP = `
     </div>
   </section>
 
-  <section class="features" id="gymClasesSection" hidden>
+  <section class="steps" id="gymClasesSection" hidden>
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow">Gimnasio</span>
-        <h2>Clases</h2>
       </div>
+      <h3 class="gym-subsection-title">Nuestras clases</h3>
       <p class="chart-sub" id="gymClasesSummary"></p>
-      <div class="search-page-list" id="gymClasesList"></div>
+      <div class="clase-slider-wrap">
+        <button type="button" class="clase-slider-arrow clase-slider-arrow-prev" id="gymClasesPrev" aria-label="Ver clases anteriores" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="clase-slider" id="gymClasesSlider"><div class="clase-slider-track" id="gymClasesTrack"></div></div>
+        <button type="button" class="clase-slider-arrow clase-slider-arrow-next" id="gymClasesNext" aria-label="Ver clases siguientes" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+      <div class="clase-slider-footer">
+        <a class="btn btn-outline btn-sm" id="gymClasesVerTodas" href="clases.html">Ver todas</a>
+      </div>
     </div>
   </section>
 
@@ -2644,10 +2708,10 @@ const VIEW_MARKUP = `
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow">Gimnasio</span>
-        <h2>Entrenadores</h2>
       </div>
+      <h3 class="gym-subsection-title">Nuestros entrenadores</h3>
       <p class="chart-sub" id="gymEntrenadoresSummary"></p>
-      <div class="search-page-list" id="gymEntrenadoresList"></div>
+      <div class="gym-entrenadores-grid" id="gymEntrenadoresList"></div>
     </div>
   </section>
 
@@ -2704,6 +2768,7 @@ export const profileView: ViewModule = {
     setupAutoHideHeader(ctx);
     setupProfileMenuToggle(ctx);
     setupRoutineMenuOutsideClick(ctx);
+    setupGymClasesSlider(ctx);
 
     // pages/profile.html (nav "Perfil") es siempre TU perfil salvo que le pasen ?u=. La ruta
     // catch-all (gymsocial.com.ar/<username>) manda el username ya extraido en pathUsername

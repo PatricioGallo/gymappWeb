@@ -15,6 +15,7 @@ export interface GymClassRow {
   description: string | null;
   imageUrl: string | null;
   allowEnrollment: boolean;
+  capacity: number | null;
   instructorId: string | null;
   instructorUsername: string | null;
   instructorNombre: string | null;
@@ -31,7 +32,16 @@ export interface ClassFormInput {
   imageUrl?: string | null;
   instructorId?: string | null;
   allowEnrollment: boolean;
+  capacity?: number | null;
   sessions: ClassSession[];
+}
+
+/** null = sin limite. <60% ocupado = vacio, 60-99% = medio, >=100% = lleno (bloquea inscripcion). */
+export type ClassCapacityStatus = "unlimited" | "vacio" | "medio" | "lleno";
+export function getClassCapacityStatus(enrolledCount: number, capacity: number | null): ClassCapacityStatus {
+  if (capacity == null) return "unlimited";
+  if (enrolledCount >= capacity) return "lleno";
+  return enrolledCount / capacity >= 0.6 ? "medio" : "vacio";
 }
 
 const CLASS_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
@@ -69,6 +79,7 @@ export async function listGymClasses(gymId: string): Promise<GymClassRow[]> {
     description: r.description,
     imageUrl: r.image_url,
     allowEnrollment: r.allow_enrollment,
+    capacity: r.capacity,
     instructorId: r.instructor_id,
     instructorUsername: r.instructor_username,
     instructorNombre: r.instructor_nombre,
@@ -102,6 +113,7 @@ export async function createGymClass(gymId: string, input: ClassFormInput): Prom
       image_url: input.imageUrl || null,
       instructor_id: input.instructorId || null,
       allow_enrollment: input.allowEnrollment,
+      capacity: input.capacity ?? null,
     })
     .select("id")
     .single();
@@ -121,6 +133,7 @@ export async function updateGymClass(classId: string, input: ClassFormInput): Pr
       image_url: input.imageUrl || null,
       instructor_id: input.instructorId || null,
       allow_enrollment: input.allowEnrollment,
+      capacity: input.capacity ?? null,
     })
     .eq("id", classId);
   if (error) {
@@ -141,6 +154,7 @@ export async function enrollInClass(classId: string, memberId: string): Promise<
   if (error) {
     if (error.message?.includes("not an active member")) return { error: "Tenés que ser socio de este gimnasio para inscribirte." };
     if (error.message?.includes("enrollment not allowed")) return { error: "Esta clase no tiene inscripción habilitada." };
+    if (error.message?.includes("class is full")) return { error: "Esta clase ya está completa." };
     if (error.code === "23505") return { error: "Ya estás inscripto en esta clase." };
     return { error: "No se pudo completar la inscripción. Probá de nuevo." };
   }
