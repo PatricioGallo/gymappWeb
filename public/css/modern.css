@@ -3844,6 +3844,64 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .gym-post-viewer-mobile-header .profile-menu-btn { color: var(--text); }
 
 .gym-post-viewer-mobile-section .gym-post-viewer-media-wrap { flex: 1; min-height: 0; background: #000; }
+/* cover (no contain) por defecto en mobile: llena el recuadro entero sin franjas vacias. Para
+   video se queda asi (ver comentario junto a .gym-post-viewer-video-wrap mas abajo); para foto
+   se pisa mas abajo con .gym-post-viewer-photo-fg, que nunca recorta. */
+.gym-post-viewer-mobile-section .gym-post-viewer-media { object-fit: cover; }
+
+/* Foto del visor mobile: la nitida (.gym-post-viewer-photo-fg) usa contain, nunca se recorta --
+   detras se ve la misma foto agrandada (scale 1.15, para que el desenfoque no deje un borde claro
+   filtrando "nada" fuera del recuadro) y desenfocada, llenando todo el hueco. Asi no queda espacio
+   vacio sin perder informacion de la imagen, misma idea que usa Instagram en Stories. El video
+   sigue usando cover arriba (no este truco): recortar un video vertical pierde bastante menos que
+   recortar una foto cualquiera, y clonar+desenfocar un <video> en loop es mucho mas caro. */
+.gym-post-viewer-photo-wrap { position: relative; width: 100%; height: 100%; overflow: hidden; background: #000; }
+.gym-post-viewer-photo-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(30px) brightness(0.55);
+  transform: scale(1.15);
+}
+.gym-post-viewer-mobile-section .gym-post-viewer-photo-fg { position: relative; object-fit: contain; z-index: 1; }
+
+/* Video del visor mobile: sin controles nativos, tap en cualquier parte pausa/reproduce (con un
+   flash de icono al centro) y un boton de mute propio abajo a la derecha, mismo lenguaje que
+   Instagram. autoplay/loop/pausado-al-salir-de-vista se maneja en JS (ver renderMobile). */
+.gym-post-viewer-video-wrap { position: relative; width: 100%; height: 100%; }
+.gym-post-viewer-video-mute {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.gym-post-viewer-video-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+}
+.gym-post-viewer-video-flash.is-flashing { animation: gymPostVideoFlash 0.65s ease forwards; }
+@keyframes gymPostVideoFlash {
+  0% { opacity: 0; transform: scale(0.8); }
+  18% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
 
 .gym-post-viewer-mobile-actions { display: flex; align-items: center; gap: 2px; padding: 4px 4px 0; flex-shrink: 0; }
 .gym-post-viewer-mobile-actions .post-action svg { width: 24px; height: 24px; }
