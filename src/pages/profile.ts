@@ -90,6 +90,12 @@ import type { WeightUnit } from "../services/weightLog.service";
 // todas dentro de mount().
 let myId: string | null = null;
 let usernameParam: string | null = null;
+// Se vuelve a pedir list_gym_classes cada vez que se vuelve a este perfil desde otra vista (ej.
+// clases.html) -- ver onShow. La instancia del router queda viva en cache y onShow es lo unico
+// que corre en ese caso (no mount()), asi que sin esto el slider se queda mostrando clases ya
+// eliminadas o editadas hasta que se recargue la pagina entera.
+let gymClasesRefreshCtx: { gymId: string; gymUsername: string; isActiveSocio: boolean; myId: string | null; isOwner: boolean } | null = null;
+let gymClasesShown = false;
 let freqChartInstance: ChartInstance | null = null;
 // Con el picker de widgets puede haber mas de un grafico "Progreso por ejercicio" a la vez
 // (uno por ejercicio elegido) -- por eso es un array y no una sola instancia como freqChart.
@@ -2629,7 +2635,8 @@ async function main(ctx: ViewContext) {
             getGymTrainerHandleStatus(displayProfile.id!).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy })),
           ]).then(([socioStatus, handle]) => socioStatus === "active" || handle.status === "active")
         : false;
-    void renderGymClasses(displayProfile.id!, displayProfile.username ?? "", isActiveSocio, myId, isOwner);
+    gymClasesRefreshCtx = { gymId: displayProfile.id!, gymUsername: displayProfile.username ?? "", isActiveSocio, myId, isOwner };
+    void renderGymClasses(gymClasesRefreshCtx.gymId, gymClasesRefreshCtx.gymUsername, gymClasesRefreshCtx.isActiveSocio, gymClasesRefreshCtx.myId, gymClasesRefreshCtx.isOwner);
     void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId, isOwner);
   } else {
     const logs = await listWeightLogsWithContext(displayProfile.id!);
@@ -2762,6 +2769,8 @@ export const profileView: ViewModule = {
     activityTabsController = null;
     freqChartInstance = null;
     progressChartInstances = [];
+    gymClasesRefreshCtx = null;
+    gymClasesShown = false;
 
     container.innerHTML = VIEW_MARKUP;
 
@@ -2795,6 +2804,13 @@ export const profileView: ViewModule = {
   },
   onShow() {
     document.body.classList.add("profile-page", "header-autohide");
+    // La primera vez (justo despues de mount()) las clases ya se pidieron desde main() -- solo
+    // hace falta re-pedirlas cuando se vuelve a este perfil ya cacheado desde otra vista.
+    if (gymClasesShown && gymClasesRefreshCtx) {
+      const c = gymClasesRefreshCtx;
+      void renderGymClasses(c.gymId, c.gymUsername, c.isActiveSocio, c.myId, c.isOwner);
+    }
+    gymClasesShown = true;
   },
   onHide() {
     document.body.classList.remove("profile-page", "header-autohide");
