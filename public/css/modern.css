@@ -3499,7 +3499,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.clase-slider-arrow svg { width: 18px; height: 18px; }
+.clase-slider-arrow svg { width: 18px; height: 18px; stroke: currentColor; }
 .clase-slider-arrow-prev { left: -4px; }
 .clase-slider-arrow-next { right: -4px; }
 @media (hover: hover) {
