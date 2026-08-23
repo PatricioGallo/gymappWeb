@@ -30,8 +30,6 @@ export async function listIssueReports(): Promise<IssueReportWithReporter[]> {
   const { data, error } = await supabase
     .from("issue_reports")
     .select("*, profiles ( username, nombre, apellido )")
-    .order("status", { ascending: true })
-    .order("severity", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row: any) => {
