@@ -196,6 +196,13 @@ export interface MountThreadOptions {
    * mark_conversation_read no la toca (solo conversation_participants.last_read_at).
    */
   onRead?(): void;
+  /** chats.ts necesita el scrollTop de #chatMessages para devolver al usuario a donde estaba al
+   * reabrir un hilo ya visitado (ver hideActiveInstance/openThread ahi) -- pero leerlo recien AL
+   * ocultar llega tarde: un `display:none` en un ancestro (el que pone el router al navegar a
+   * otra pagina, no solo el propio hide interno de chats.ts entre hilos) resetea scrollTop a 0
+   * antes de que cualquier callback de "se oculto" alcance a leerlo. Por eso se reporta en cada
+   * scroll, no una sola vez al final -- chats.ts siempre tiene el ultimo valor bueno a mano. */
+  onScrollTopChange?(scrollTop: number): void;
   /** chats.ts ya tiene la lista de conversaciones cargada en memoria (la usa para pintar la
    * lista) -- si la conversacion que se abre esta ahi, se la pasamos para no volver a pedirla
    * de cero aca adentro (ver el `await listConversations()` que reemplaza mas abajo). Solo tiene
@@ -991,6 +998,7 @@ export async function mountThread(
   }
 
   messagesEl.addEventListener("scroll", updateScrollBottomBtn, { signal: ctx.signal });
+  messagesEl.addEventListener("scroll", () => opts.onScrollTopChange?.(messagesEl.scrollTop), { signal: ctx.signal });
   scrollBottomBtn.addEventListener("click", () => scrollToBottom(), { signal: ctx.signal });
 
   const SENTINEL_HTML = `<div class="chat-load-sentinel" id="chatLoadSentinel"><div class="modern-spinner" id="chatLoadSpinner" hidden></div></div>`;
@@ -1073,12 +1081,19 @@ export async function mountThread(
     await hydrateSharedPosts(ascendingOlder);
 
     olderExhausted = older.length < MESSAGES_PAGE_SIZE;
+    // Reemplazar innerHTML reinicia el scrollTop a 0 -- sin guardar donde estaba ANTES del
+    // swap (no solo el alto previo), la cuenta de mas abajo pierde la posicion real del
+    // usuario y lo tira a "altura de lo que se acaba de agregar arriba", ignorando cuanto
+    // habia scrolleado el ya. Con historiales largos (o al reabrir un hilo cacheado con
+    // scrollTop grande, ver hideActiveInstance/openThread en chats.ts) el salto es enorme.
+    const prevScrollTop = messagesEl.scrollTop;
     const prevScrollHeight = messagesEl.scrollHeight;
     messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
     await hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
-    messagesEl.scrollTo({ top: messagesEl.scrollHeight - prevScrollHeight, left: 0, behavior: "instant" });
+    const target = prevScrollTop + (messagesEl.scrollHeight - prevScrollHeight);
+    messagesEl.scrollTo({ top: target, left: 0, behavior: "instant" });
     if (olderExhausted) olderMessagesObserver.disconnect();
     else observeLoadSentinel();
   }

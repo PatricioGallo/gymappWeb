@@ -156,12 +156,15 @@ export const chatsView: ViewModule = {
       threadInstances.clear();
     });
 
+    // El scrollTop de cada hilo se trackea en vivo via onScrollTopChange (ver mountThread mas
+    // abajo) -- leerlo recien aca, al ocultar, llega tarde: el router.ts oculta esta vista ENTERA
+    // con display:none al navegar a otra pagina (ej. el perfil), y eso resetea a 0 el scrollTop
+    // de #chatMessages ANTES de que onHide llegue a correr. threadInstances ya tiene el ultimo
+    // valor bueno reportado mientras el hilo todavia estaba visible, asi que no hace falta re-leer.
     function hideActiveInstance(): void {
       if (!activeConversationId) return;
       const instance = threadInstances.get(activeConversationId);
       if (!instance) return;
-      const messagesEl = instance.el.querySelector<HTMLElement>(".chat-messages");
-      instance.scrollTop = messagesEl?.scrollTop ?? 0;
       instance.el.hidden = true;
     }
 
@@ -333,6 +336,10 @@ export const chatsView: ViewModule = {
         },
         onBack: () => navigate("chats.html"),
         onRead: () => markLocalRead(conversationId),
+        onScrollTopChange: (scrollTop) => {
+          const instance = threadInstances.get(conversationId);
+          if (instance) instance.scrollTop = scrollTop;
+        },
       })
         .then((controller) => {
           const instance = threadInstances.get(conversationId);
