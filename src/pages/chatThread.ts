@@ -1127,7 +1127,8 @@ export async function mountThread(
     const spinner = messagesEl.querySelector<HTMLElement>("#chatLoadSpinner");
     if (spinner) spinner.hidden = false;
 
-    const older = await listMessages(conversationId, messages[0].created_at);
+    const oldFirstMessage = messages[0];
+    const older = await listMessages(conversationId, oldFirstMessage.created_at);
     isLoadingOlder = false;
 
     if (older.length === 0) {
@@ -1143,21 +1144,67 @@ export async function mountThread(
     await hydrateMyViewOnceOpens(ascendingOlder);
 
     olderExhausted = older.length < MESSAGES_PAGE_SIZE;
-    // Reemplazar innerHTML reinicia el scrollTop a 0 -- sin guardar donde estaba ANTES del
-    // swap (no solo el alto previo), la cuenta de mas abajo pierde la posicion real del
-    // usuario y lo tira a "altura de lo que se acaba de agregar arriba", ignorando cuanto
-    // habia scrolleado el ya. Con historiales largos (o al reabrir un hilo cacheado con
-    // scrollTop grande, ver hideActiveInstance/openThread en chats.ts) el salto es enorme.
+
+    // A diferencia de antes, esto NO vuelve a pintar messagesEl entero -- con historiales
+    // largos (sobre todo grupos con fotos/videos/embeds de YouTube ya hidratados) reemplazar
+    // TODO el innerHTML de vuelta destruye y recrea cada burbuja ya renderizada, incluidos
+    // <iframe> de YouTube y <img>/<video> ya cargados (hydrateMedia() los vuelve a "hidratar"
+    // desde cero porque quedan sin .src otra vez). Cada iframe de YouTube que se recrea le
+    // cuesta al hilo principal ~100-300ms (visto con PerformanceObserver longtask real,
+    // atribuido a "cross-origin-descendant"), y con varios mensajes con link de YouTube ya
+    // cargados el freeze de "unos segundos" al hacer scroll hacia arriba en un grupo activo
+    // es justamente la suma de esas tareas largas. Ahora solo se arma el HTML de la tanda
+    // nueva (ascendingOlder) y se inserta con insertAdjacentHTML, dejando intactos los nodos
+    // ya renderizados (mismo criterio que appendMessage ya usaba para mensajes nuevos abajo).
+    const lastOlder = ascendingOlder[ascendingOlder.length - 1];
+    // Tanda de remitente que sigue del ultimo mensaje viejo hacia el que antes era el primero
+    // visible (mismo dia, mismo remitente): a ese primero visible ya no le corresponde mostrar
+    // nombre (isFirstInRun) ni el margen superior de tanda -- mismo principio que appendMessage
+    // usa al reves (le saca el avatar al anterior ultimo-de-tanda cuando el nuevo mensaje
+    // continua esa tanda).
+    const continuesIntoOldFirst = lastOlder.sender_id === oldFirstMessage.sender_id && sameDay(lastOlder, oldFirstMessage);
+    if (continuesIntoOldFirst && isGroup && oldFirstMessage.sender_id !== userId) {
+      const oldFirstRow = messagesEl.querySelector(`.chat-bubble[data-id="${oldFirstMessage.id}"]`)?.closest(".chat-bubble-row");
+      oldFirstRow?.querySelector(".chat-bubble-sender-name")?.remove();
+      oldFirstRow?.classList.remove("chat-bubble-row-first");
+    }
+
+    let html = "";
+    let lastDay: string | null = null;
+    for (let i = 0; i < ascendingOlder.length; i++) {
+      const m = ascendingOlder[i];
+      const day = new Date(m.created_at).toDateString();
+      if (day !== lastDay) {
+        html += `<div class="chat-date-divider"><span>${dayLabel(m.created_at)}</span></div>`;
+        lastDay = day;
+      }
+      const prev = ascendingOlder[i - 1];
+      const isLastOfBatch = i === ascendingOlder.length - 1;
+      const next = isLastOfBatch ? null : ascendingOlder[i + 1];
+      const isFirstInRun = !prev || prev.sender_id !== m.sender_id || !sameDay(prev, m);
+      const isLastInRun = isLastOfBatch ? !continuesIntoOldFirst : !next || next.sender_id !== m.sender_id || !sameDay(next, m);
+      html += bubbleHtml(m, m.sender_id === userId, isFirstInRun, isLastInRun);
+    }
+    if (!sameDay(lastOlder, oldFirstMessage)) {
+      html += `<div class="chat-date-divider"><span>${dayLabel(oldFirstMessage.created_at)}</span></div>`;
+    }
+
+    // Reemplazar innerHTML reiniciaba el scrollTop a 0 -- con insertAdjacentHTML el scroll no
+    // se toca solo, pero insertar contenido arriba SI corre visualmente lo que se estaba
+    // mirando, asi que igual hay que compensar por la diferencia de alto agregada.
     const prevScrollTop = messagesEl.scrollTop;
     const prevScrollHeight = messagesEl.scrollHeight;
-    messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
+    const sentinelEl = messagesEl.querySelector("#chatLoadSentinel");
+    if (sentinelEl) sentinelEl.insertAdjacentHTML("afterend", html);
+    else messagesEl.insertAdjacentHTML("afterbegin", html);
+    if (olderExhausted) sentinelEl?.remove();
+    else if (spinner) spinner.hidden = true;
     await hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
     const target = prevScrollTop + (messagesEl.scrollHeight - prevScrollHeight);
     messagesEl.scrollTo({ top: target, left: 0, behavior: "instant" });
     if (olderExhausted) olderMessagesObserver.disconnect();
-    else observeLoadSentinel();
   }
 
   async function appendMessage(m: ChatMessage): Promise<void> {
