@@ -1536,25 +1536,31 @@ export async function mountThread(
       const blobUrl = URL.createObjectURL(blob);
       // El marcado server-side de "visto" pasa primero (arriba, atomico) para que abrir dos
       // veces seguidas no descargue el archivo dos veces -- pero el re-render de la burbuja
-      // (el tick de "visto" que ve el otro lado) se retiene hasta aca, recien cuando la foto ya
-      // esta lista para mostrarse. Antes se pintaba apenas volvia el RPC, varios cientos de ms
-      // antes de que openMediaLightbox de abajo realmente abriera algo -- el chat mostraba
-      // "visto" mientras el usuario seguia mirando una burbuja con un spinner.
-      // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para siempre) --
-      // mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES de re-pintar
-      // la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
-      if (isGroup) myGroupViewOnceOpened.add(message.id);
-      applyMessageContentUpdate(opened);
-      // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recien
-      // da true cuando TODOS los integrantes activos ya la abrieron cada uno la suya -- borrar
-      // antes le arruinaria la foto a quien todavia no le tocó verla.
-      if (fullyViewed) void deleteChatAttachment(path);
+      // (el tick de "visto" que ve el otro lado) se retiene hasta que el visor termino de
+      // deslizarse a la vista. openMediaLightbox inserta el overlay ya, pero .media-lightbox
+      // anima ese overlay con una entrada de 280ms (translateY 100% -> 0, ver
+      // @keyframes media-lightbox-slide-up en modern.css); el reemplazo de HTML de la burbuja
+      // en cambio es instantaneo. Si se pintaban juntos (como quedo en el fix anterior, que
+      // solo saco la espera de red de por medio) el usuario igual veia la burbuja saltar a
+      // "visto" un instante antes de que la foto terminara de aparecer en pantalla -- por eso
+      // el re-render se demora esos mismos 280ms, sincronizado con la animacion.
       openMediaLightbox({
         queue: [{ url: blobUrl }],
         startIndex: 0,
         getMedia: (item) => ({ url: item.url, kind: opened.attachment_type === "video" ? "video" : "image" }),
         onClose: () => URL.revokeObjectURL(blobUrl),
       });
+      setTimeout(() => {
+        // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para
+        // siempre) -- mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES
+        // de re-pintar la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
+        if (isGroup) myGroupViewOnceOpened.add(message.id);
+        applyMessageContentUpdate(opened);
+      }, 280);
+      // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recien
+      // da true cuando TODOS los integrantes activos ya la abrieron cada uno la suya -- borrar
+      // antes le arruinaria la foto a quien todavia no le tocó verla.
+      if (fullyViewed) void deleteChatAttachment(path);
     } finally {
       btn?.classList.remove("is-loading");
       openingViewOnceId = null;
