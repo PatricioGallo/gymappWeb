@@ -41,7 +41,7 @@ import {
 import { listFollowers, type FollowListRow } from "../services/follow.service";
 import { openMediaLightbox } from "../lib/mediaLightbox";
 import { refreshChatBadge } from "../lib/chat";
-import { watchPeerOnline } from "../lib/presence";
+import { watchPeerOnline, unwatchPeerOnline } from "../lib/presence";
 import { getCachedMessages, cacheMessages } from "../lib/chatDb";
 import { openGroupInfoPanel } from "./chatGroupInfo";
 import type { ViewContext } from "../shell/viewContext";
@@ -542,11 +542,17 @@ export async function mountThread(
     peerLastSeenAt = peerMeta.lastSeenAt;
     statusEl.textContent = peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
     if (peerLastSeenAt) {
-      watchPeerOnline(conversation.other_user_id, (online) => {
+      const onPeerOnlineChange = (online: boolean): void => {
         if (!online && peerOnline) peerLastSeenAt = new Date().toISOString();
         peerOnline = online;
         statusEl.textContent = online ? "En línea" : peerLastSeenAt ? lastSeenLabel(peerLastSeenAt) : "";
-      });
+      };
+      watchPeerOnline(conversation.other_user_id, onPeerOnlineChange);
+      // Este hilo puede quedar vivo (oculto) durante toda la sesion, o ser desalojado antes si
+      // se abrieron muchas conversaciones (ver evictStaleThreadInstances en chats.ts) -- sin
+      // este cleanup, el callback quedaba enganchado para siempre en el Set global de
+      // presence.ts aunque el hilo ya no exista.
+      ctx.addCleanup(() => unwatchPeerOnline(conversation!.other_user_id, onPeerOnlineChange));
     }
   }
   pinnedMessageId = resolvedPinnedId;

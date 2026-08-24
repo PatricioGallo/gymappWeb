@@ -55,3 +55,17 @@ export function watchPeerOnline(peerUserId: string, onChange: (online: boolean) 
   watchers.get(peerUserId)!.add(onChange);
   onChange(isOnline(peerUserId));
 }
+
+/** Contraparte de watchPeerOnline -- sin esto, cada hilo de chat 1 a 1 alguna vez abierto en la
+ * sesion dejaba su callback enganchado para siempre en `watchers` (nunca se llamaba solo), asi
+ * que notifyWatchers() iteraba una lista que solo crecia durante toda la sesion, y un hilo
+ * desalojado (ver evictStaleThreadInstances en chats.ts) seguia recibiendo actualizaciones de
+ * presencia de un peer que ya ni se esta mostrando. Llamar dos veces con la misma referencia de
+ * funcion (o para un peer que ya no tiene watchers) no rompe nada -- Set/Map.delete son no-op si
+ * no esta. */
+export function unwatchPeerOnline(peerUserId: string, onChange: (online: boolean) => void): void {
+  const set = watchers.get(peerUserId);
+  if (!set) return;
+  set.delete(onChange);
+  if (set.size === 0) watchers.delete(peerUserId);
+}

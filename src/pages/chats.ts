@@ -155,6 +155,57 @@ export const chatsView: ViewModule = {
       threadInstances.clear();
     });
 
+    // Sin este limite, threadInstances crecia sin techo durante toda la sesion: cada
+    // conversacion abierta alguna vez (mensaje directo o grupo) quedaba con su canal realtime
+    // (3 listeners postgres_changes), su IntersectionObserver de paginacion, su watcher de
+    // presencia (chats 1 a 1) y todo su DOM ya renderizado vivos para siempre en memoria, solo
+    // ocultos -- nunca se liberaba nada mientras la pestaña siguiera abierta. Para alguien que
+    // va entrando a varias conversaciones (sobre todo grupos, mas pesados: mas participantes,
+    // mas fotos/audios/embeds ya hidratados) a lo largo de una sesion larga, eso significaba
+    // mas y mas trabajo de fondo acumulado -- consistente con que la app se sintiera cada vez
+    // menos fluida cuanto mas se la usaba, no solo al abrir un chat puntual. Ahora se desaloja
+    // (dispose completo: canal realtime, observers, audio, watchers de presencia -- todo lo que
+    // ya esta enganchado via ctx.addCleanup/ctx.signal en mountThread) la conversacion oculta
+    // menos usada recientemente apenas se supera el limite. Reabrirla despues no es peor que
+    // abrirla por primera vez en el dia: sigue pintando instantaneo desde el cache de
+    // IndexedDB (ver chatDb.ts, hasta 80 conversaciones) y reconciliando con la red atras, el
+    // mismo camino que ya usaba cualquier conversacion "nueva" en la sesion.
+    const MAX_LIVE_THREAD_INSTANCES = 6;
+    const threadMru: string[] = []; // mas reciente primero
+
+    function touchThreadMru(conversationId: string): void {
+      const idx = threadMru.indexOf(conversationId);
+      if (idx !== -1) threadMru.splice(idx, 1);
+      threadMru.unshift(conversationId);
+    }
+
+    function forgetThreadMru(conversationId: string): void {
+      const idx = threadMru.indexOf(conversationId);
+      if (idx !== -1) threadMru.splice(idx, 1);
+    }
+
+    function evictStaleThreadInstances(): void {
+      for (let i = threadMru.length - 1; i >= 0 && threadMru.length > MAX_LIVE_THREAD_INSTANCES; i--) {
+        const candidateId = threadMru[i];
+        if (candidateId === activeConversationId) continue;
+        const instance = threadInstances.get(candidateId);
+        if (!instance) {
+          threadMru.splice(i, 1);
+          continue;
+        }
+        // Si mountThread todavia esta resolviendo (controller sin asignar todavia) se lo deja
+        // para la proxima pasada -- desalojarlo a mitad de camino dejaria listeners sin
+        // enganchar (el AbortSignal ya abortado hace que los addEventListener de mas abajo en
+        // mountThread simplemente no hagan nada) sin ahorrar el trabajo de red que ya esta en
+        // vuelo de cualquier forma.
+        if (!instance.controller) continue;
+        instance.ctx.dispose();
+        instance.el.remove();
+        threadInstances.delete(candidateId);
+        threadMru.splice(i, 1);
+      }
+    }
+
     // El scrollTop de cada hilo se trackea en vivo via onScrollTopChange (ver mountThread mas
     // abajo) -- leerlo recien aca, al ocultar, llega tarde: el router.ts oculta esta vista ENTERA
     // con display:none al navegar a otra pagina (ej. el perfil), y eso resetea a 0 el scrollTop
@@ -288,6 +339,8 @@ export const chatsView: ViewModule = {
 
       hideActiveInstance();
       activeConversationId = conversationId;
+      touchThreadMru(conversationId);
+      evictStaleThreadInstances();
       highlightActiveRow();
       threadPlaceholder.hidden = true;
       threadPage.hidden = false;
@@ -330,6 +383,7 @@ export const chatsView: ViewModule = {
         initialConversation: conversations.find((c) => c.conversation_id === conversationId),
         onMissingConversation: () => {
           threadInstances.delete(conversationId);
+          forgetThreadMru(conversationId);
           threadCtx.dispose();
           el.remove();
           closeThread({ updateUrl: true });
@@ -353,6 +407,9 @@ export const chatsView: ViewModule = {
         .then((controller) => {
           const instance = threadInstances.get(conversationId);
           if (instance) instance.controller = controller;
+          // Recien montado del todo: si quedo pendiente un desalojo porque este mismo hilo
+          // todavia no tenia controller la ultima vez, ahora ya puede resolverse.
+          evictStaleThreadInstances();
         })
         .catch((err) => {
           // Si mountThread explota a mitad de camino (ej. un hiccup de red en list_conversations)
@@ -360,6 +417,7 @@ export const chatsView: ViewModule = {
           // mejor cerrar el hilo y avisar que abrirlo de nuevo.
           console.error("No se pudo abrir la conversación", err);
           threadInstances.delete(conversationId);
+          forgetThreadMru(conversationId);
           threadCtx.dispose();
           el.remove();
           closeThread({ updateUrl: true });
