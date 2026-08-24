@@ -67,6 +67,11 @@ function unitOf(entries: LatestWeightEntry[] | undefined): WeightUnit {
 // reuse sin desmontar toda la vista.
 let updateHandler: ((params: URLSearchParams) => void) | null = null;
 
+// Día de carga de pesos que quedó abierto: sobrevive a que el router vuelva a invocar render()
+// (ej. el usuario se va al chat y vuelve) para reabrir en el mismo lugar en vez de caer siempre
+// en la selección de semana/día. Se limpia al guardar o al tocar "Volver".
+let resumeWeightScreen: { routineId: string; targetUserId: string; week: number; dia: number } | null = null;
+
 export const pesosView: ViewModule = {
   async mount(container, params, ctx, authUserId) {
     const myId = authUserId!; // la ruta se registra con requiresAuth:true
@@ -697,6 +702,7 @@ export const pesosView: ViewModule = {
         (container.querySelector("#weekStatus") as HTMLElement).style.display = "";
         activeDraftWeek = null;
         activeDraftDia = null;
+        resumeWeightScreen = null;
         renderWeek(weekIndex);
       }
 
@@ -743,6 +749,7 @@ export const pesosView: ViewModule = {
         (container.querySelector("#weekStatus") as HTMLElement).style.display = "none";
         activeDraftWeek = weekIndex;
         activeDraftDia = diaIndex;
+        resumeWeightScreen = { routineId: routineId!, targetUserId, week: weekIndex, dia: diaIndex };
 
         const trackable = dia.ejercicios.filter((e) => e.es_medible);
 
@@ -948,7 +955,7 @@ export const pesosView: ViewModule = {
           [latestWeights, exerciseHistory] = await Promise.all([getLatestWeights(allExerciseIds), getExerciseHistory(allCatalogExerciseIds)]);
           const t = setTimeout(() => {
             loaderBody.innerHTML = "";
-            openDay(weekIndex, diaIndex);
+            backToWeek(weekIndex);
           }, 1500);
           ctx.addCleanup(() => clearTimeout(t));
         } catch {
@@ -1001,7 +1008,21 @@ export const pesosView: ViewModule = {
       weekSelect.value = String(startWeek);
       weekSelect.addEventListener("change", () => renderWeek(Number(weekSelect.value)));
 
-      renderWeek(startWeek);
+      const resume =
+        resumeWeightScreen &&
+        resumeWeightScreen.routineId === routineId &&
+        resumeWeightScreen.targetUserId === targetUserId &&
+        resumeWeightScreen.week < routine.semanas.length &&
+        resumeWeightScreen.dia < routine.semanas[resumeWeightScreen.week].dias.length
+          ? resumeWeightScreen
+          : null;
+
+      if (resume) {
+        weekSelect.value = String(resume.week);
+        openDay(resume.week, resume.dia);
+      } else {
+        renderWeek(startWeek);
+      }
     }
 
     await render(params);
