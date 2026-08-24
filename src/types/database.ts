@@ -1078,6 +1078,46 @@ export type Database = {
           },
         ]
       }
+      message_view_once_opens: {
+        Row: {
+          message_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          message_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          message_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_view_once_opens_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_view_once_opens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_view_once_opens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachment_duration_seconds: number | null
@@ -1097,6 +1137,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         Insert: {
           attachment_duration_seconds?: number | null
@@ -1116,6 +1159,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
+          view_once?: boolean
+          viewed_once_at?: string | null
+          viewed_once_by?: string | null
         }
         Update: {
           attachment_duration_seconds?: number | null
@@ -1135,6 +1181,9 @@ export type Database = {
           sender_id?: string
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
+          view_once?: boolean
+          viewed_once_at?: string | null
+          viewed_once_by?: string | null
         }
         Relationships: [
           {
@@ -1177,6 +1226,20 @@ export type Database = {
             columns: ["shared_post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_viewed_once_by_fkey"
+            columns: ["viewed_once_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_viewed_once_by_fkey"
+            columns: ["viewed_once_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
             referencedColumns: ["id"]
           },
         ]
@@ -2686,6 +2749,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -2714,6 +2780,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3129,6 +3198,13 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      open_view_once_message: {
+        Args: { p_message_id: string }
+        Returns: {
+          fully_viewed: boolean
+          msg: Database["public"]["Tables"]["messages"]["Row"]
+        }[]
+      }
       pin_message: {
         Args: { p_conversation_id: string; p_message_id: string }
         Returns: undefined
@@ -3153,6 +3229,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3244,45 +3323,92 @@ export type Database = {
           username: string
         }[]
       }
-      send_message: {
-        Args: {
-          p_attachment_duration_seconds?: number
-          p_attachment_filename?: string
-          p_attachment_path?: string
-          p_attachment_type?: string
-          p_content?: string
-          p_conversation_id: string
-          p_is_forwarded?: boolean
-          p_reply_to_message_id?: string
-          p_shared_gym_post_id?: string
-          p_shared_post_id?: string
-        }
-        Returns: {
-          attachment_duration_seconds: number | null
-          attachment_filename: string | null
-          attachment_path: string | null
-          attachment_type: string | null
-          content: string | null
-          conversation_id: string
-          created_at: string
-          deleted_at: string | null
-          edited_at: string | null
-          id: string
-          is_forwarded: boolean
-          reactions: Json
-          read_at: string | null
-          reply_to_message_id: string | null
-          sender_id: string
-          shared_gym_post_id: string | null
-          shared_post_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "messages"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      send_message:
+        | {
+            Args: {
+              p_attachment_duration_seconds?: number
+              p_attachment_filename?: string
+              p_attachment_path?: string
+              p_attachment_type?: string
+              p_content?: string
+              p_conversation_id: string
+              p_is_forwarded?: boolean
+              p_reply_to_message_id?: string
+              p_shared_gym_post_id?: string
+              p_shared_post_id?: string
+            }
+            Returns: {
+              attachment_duration_seconds: number | null
+              attachment_filename: string | null
+              attachment_path: string | null
+              attachment_type: string | null
+              content: string | null
+              conversation_id: string
+              created_at: string
+              deleted_at: string | null
+              edited_at: string | null
+              id: string
+              is_forwarded: boolean
+              reactions: Json
+              read_at: string | null
+              reply_to_message_id: string | null
+              sender_id: string
+              shared_gym_post_id: string | null
+              shared_post_id: string | null
+              view_once: boolean
+              viewed_once_at: string | null
+              viewed_once_by: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "messages"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_attachment_duration_seconds?: number
+              p_attachment_filename?: string
+              p_attachment_path?: string
+              p_attachment_type?: string
+              p_content?: string
+              p_conversation_id: string
+              p_is_forwarded?: boolean
+              p_reply_to_message_id?: string
+              p_shared_gym_post_id?: string
+              p_shared_post_id?: string
+              p_view_once?: boolean
+            }
+            Returns: {
+              attachment_duration_seconds: number | null
+              attachment_filename: string | null
+              attachment_path: string | null
+              attachment_type: string | null
+              content: string | null
+              conversation_id: string
+              created_at: string
+              deleted_at: string | null
+              edited_at: string | null
+              id: string
+              is_forwarded: boolean
+              reactions: Json
+              read_at: string | null
+              reply_to_message_id: string | null
+              sender_id: string
+              shared_gym_post_id: string | null
+              shared_post_id: string | null
+              view_once: boolean
+              viewed_once_at: string | null
+              viewed_once_by: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "messages"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       set_group_avatar: {
         Args: { p_avatar_url: string; p_conversation_id: string }
         Returns: undefined

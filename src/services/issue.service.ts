@@ -4,7 +4,7 @@ import type { Tables } from "../types/database";
 export type IssueReport = Tables<"issue_reports">;
 
 export type IssueSeverity = "low" | "medium" | "high";
-export type IssueStatus = "open" | "in_progress" | "resolved";
+export type IssueStatus = "open" | "in_progress" | "blocked" | "resolved";
 
 export const ISSUE_SEVERITY_OPTIONS: IssueSeverity[] = ["low", "medium", "high"];
 
@@ -14,11 +14,12 @@ export const ISSUE_SEVERITY_LABELS: Record<IssueSeverity, string> = {
   high: "Alta",
 };
 
-export const ISSUE_STATUS_OPTIONS: IssueStatus[] = ["open", "in_progress", "resolved"];
+export const ISSUE_STATUS_OPTIONS: IssueStatus[] = ["open", "in_progress", "blocked", "resolved"];
 
 export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
   open: "Abierto",
   in_progress: "En progreso",
+  blocked: "Bloqueado",
   resolved: "Resuelto",
 };
 
@@ -30,8 +31,6 @@ export async function listIssueReports(): Promise<IssueReportWithReporter[]> {
   const { data, error } = await supabase
     .from("issue_reports")
     .select("*, profiles ( username, nombre, apellido )")
-    .order("status", { ascending: true })
-    .order("severity", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row: any) => {

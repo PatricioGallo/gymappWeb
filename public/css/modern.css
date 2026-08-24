@@ -2833,6 +2833,10 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   justify-content: flex-end;
   margin-bottom: 14px;
 }
+/* [hidden] pierde contra el display:flex de arriba sin esto (mismo motivo que .post-feed-list[hidden]
+   y el resto de esta hoja de estilos) -- sin este override, clases.ts's #clasesHeaderActions
+   ("+ Nueva clase") queda visible para cualquier visitante, no solo el dueño del gimnasio. */
+.routines-header-actions[hidden] { display: none; }
 
 /* .routine-tabs trae un margin-top negativo pensado para pegarse contra un .section-head
    inmediatamente arriba (ver profile.ts) -- cuando en cambio lo que hay arriba es un boton de
@@ -4952,7 +4956,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .chat-list-search {
   position: relative;
   flex: 1;
-  min-width: 220px;
+  min-width: 120px;
+}
+
+.chat-list-toolbar .chat-requests-toggle,
+.chat-list-toolbar .btn {
+  flex-shrink: 0;
 }
 
 .chat-list-search svg {
@@ -5054,10 +5063,15 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 /* Layout de dos paneles (lista + hilo) al estilo WhatsApp Web, solo desktop.
    En mobile .chat-thread-pane queda oculto y chats.ts nunca lo puebla, asi
-   que el panel derecho no aparece: la pagina se ve exactamente igual que hoy. */
+   que el panel derecho no aparece: la pagina se ve exactamente igual que hoy.
+   Ya no hay pestañas "Tus mensajes"/"Solicitudes" arriba (ver .chat-requests-toggle
+   en el toolbar de busqueda) -- .chat-split es el unico hijo flex:1 de
+   .chat-page-container, asi que ocupa toda la altura disponible sin que nada
+   le robe espacio arriba. */
 .chat-split {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
 }
 
@@ -5084,19 +5098,6 @@ body.chats-page .features {
   padding-bottom: 12px;
 }
 
-#chatTabs { flex-shrink: 0; margin-top: 0; }
-
-#chatMessagesPanel,
-#chatRequestsList {
-  flex: 1;
-  min-height: 0;
-}
-
-#chatMessagesPanel { display: flex; flex-direction: column; }
-#chatMessagesPanel[hidden] { display: none; }
-
-.chat-requests-list { overflow-y: auto; }
-
 .chat-list-pane {
   flex: 1;
   min-height: 0;
@@ -5113,12 +5114,18 @@ body.chats-page .features {
     padding-bottom: 20px;
   }
 
+  /* Antes era un rectangulo con solo un borde gris de 1px sobre el fondo de la
+     pagina (mismo --bg de siempre), lo que se veia como una caja perdida en el
+     medio de la nada. Ahora es una superficie propia (--surface, un tono mas
+     clara) con sombra suave -- se lee como una tarjeta elevada, consistente
+     con el resto de paneles flotantes del sitio (.modal-card, .notif-dropdown). */
   .chat-split {
     flex-direction: row;
     align-items: stretch;
-    height: 100%;
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
     overflow: hidden;
   }
 
@@ -5162,6 +5169,11 @@ body.chats-page .features {
   flex-direction: column;
   gap: 2px;
 }
+
+/* Toggleada con .chat-requests-list via .chat-requests-toggle -- necesita
+   ganarle en especificidad al display:flex de arriba, mismo motivo que el
+   resto de los [hidden] de esta hoja de estilos. */
+.chat-list[hidden] { display: none; }
 
 .chat-row {
   display: flex;
@@ -5487,34 +5499,30 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 .chat-load-sentinel { display: flex; justify-content: center; padding: 10px 0; flex-shrink: 0; }
 .chat-load-sentinel .modern-spinner { width: 22px; height: 22px; }
 
-/* Scrollbars minimalistas para las areas que scrollean dentro del chat (lista
-   de conversaciones, solicitudes): finas y gris oscuro, en vez del scrollbar
-   grueso por defecto del navegador. Los mensajes (.chat-messages) van sin
-   scrollbar visible -- para volver al final ahi esta chat-scroll-bottom-btn. */
-.chat-list-pane,
-.chat-requests-list {
+/* Scrollbar minimalista para la lista de conversaciones (que ahora tambien
+   contiene las solicitudes, ver .chat-requests-toggle mas arriba -- comparten
+   el mismo scroll): fina y gris oscura, en vez del scrollbar grueso por
+   defecto del navegador. Los mensajes (.chat-messages) van sin scrollbar
+   visible -- para volver al final ahi esta chat-scroll-bottom-btn. */
+.chat-list-pane {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
-.chat-list-pane::-webkit-scrollbar,
-.chat-requests-list::-webkit-scrollbar {
+.chat-list-pane::-webkit-scrollbar {
   width: 6px;
 }
 
-.chat-list-pane::-webkit-scrollbar-track,
-.chat-requests-list::-webkit-scrollbar-track {
+.chat-list-pane::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.chat-list-pane::-webkit-scrollbar-thumb,
-.chat-requests-list::-webkit-scrollbar-thumb {
+.chat-list-pane::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 999px;
 }
 
-.chat-list-pane::-webkit-scrollbar-thumb:hover,
-.chat-requests-list::-webkit-scrollbar-thumb:hover {
+.chat-list-pane::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
@@ -5522,12 +5530,10 @@ body.chat-embedded .chat-thread-container { max-width: none; }
    dos paneles solo aplica desde 860px) -- ahi el scrollbar fino de arriba se ve
    pegado al borde del telefono, se saca del todo (el scroll sigue funcionando). */
 @media (max-width: 859px) {
-  .chat-list-pane,
-  .chat-requests-list {
+  .chat-list-pane {
     scrollbar-width: none;
   }
-  .chat-list-pane::-webkit-scrollbar,
-  .chat-requests-list::-webkit-scrollbar {
+  .chat-list-pane::-webkit-scrollbar {
     display: none;
   }
 }
@@ -5715,6 +5721,61 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 .chat-bubble-video-play svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)); }
 
+/* Placeholder de foto/video efímero (ver viewOnceMediaHtml en chatThread.ts): mismo ancho que
+   una foto normal pero sin thumbnail -- nunca se hidrata como <img>, ni el storage la deja leer
+   todavía. Tres variantes por clase modificadora: sin abrir (clickeable), ya vista y "la mande
+   yo" comparten el mismo look apagado, solo cambia si es <button> o <div>. */
+.chat-bubble-viewonce {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 240px;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.chat-bubble-viewonce-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #fff;
+}
+
+.chat-bubble-viewonce-unseen { cursor: pointer; }
+.chat-bubble-viewonce-unseen.is-loading { opacity: 0.6; pointer-events: none; }
+
+.chat-bubble-viewonce-seen,
+.chat-bubble-viewonce-sent {
+  font-style: italic;
+  opacity: 0.7;
+}
+.chat-bubble-viewonce-seen .chat-bubble-viewonce-badge,
+.chat-bubble-viewonce-sent .chat-bubble-viewonce-badge {
+  background: rgba(0, 0, 0, 0.18);
+  color: inherit;
+}
+
+/* Embed de YouTube dentro de una burbuja (ver bubbleBodyHtml en chatThread.ts) -- mismo iframe
+   que .post-youtube-embed de los Reps, acotado a un ancho fijo en vez de 100% de la burbuja
+   (que en desktop puede llegar a ser bastante ancha). */
+.chat-bubble-youtube-embed { max-width: 260px; margin-top: 6px; }
+.chat-bubble-youtube-embed .post-youtube-embed { margin-top: 0; }
+
 .chat-audio-player {
   display: flex;
   align-items: center;
@@ -5828,15 +5889,59 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   .chat-preview-cancel:hover { color: var(--text); border-color: var(--text-muted); }
 }
 
+.chat-preview-bar {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .chat-preview-bar img,
 .chat-preview-bar video {
-  width: 40px;
-  height: 40px;
+  width: 84px;
+  height: 84px;
   border-radius: 8px;
   object-fit: cover;
 }
 
 .chat-preview-bar span:not(.chat-preview-cancel) { flex: 1; }
+
+/* Toggle "se ve una vez" en la barra de vista previa del composer -- circulo con un "1" adentro,
+   mismo lenguaje visual que WhatsApp. Gris cuando esta apagado, se llena con el gradiente
+   accent/accent-2 (mismo par que el resto de la web) cuando esta activo. */
+.chat-preview-viewonce-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chat-preview-viewonce-btn[hidden] { display: none; }
+
+.chat-preview-viewonce-btn.is-active {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  border-color: transparent;
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .chat-preview-viewonce-btn:hover:not(.is-active) { color: var(--text); border-color: var(--text-muted); }
+}
+
+/* Vista previa en vivo del link de YouTube pegado en el composer (ver updateYoutubePreview en
+   chatThread.ts) -- mismo iframe que .post-youtube-embed, pero acotado en ancho: el composer del
+   chat ocupa todo el hilo, y un embed a full width ahi se siente gigante comparado con una burbuja. */
+.chat-composer-youtube-preview {
+  max-width: 280px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.chat-composer-youtube-preview[hidden] { display: none; }
+.chat-composer-youtube-preview .post-youtube-embed { margin-top: 0; }
 
 .chat-reply-bar {
   display: flex;
@@ -6175,8 +6280,12 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 @media (max-width: 639px) {
   .chat-bubble { max-width: 84%; }
   .chat-bubble-row { max-width: 88%; }
-  .chat-list-toolbar { flex-direction: column; align-items: stretch; }
-  .chat-list-toolbar .btn { width: 100%; }
+  /* Buscador en su propia fila (flex-basis:100% lo empuja a ocupar todo el
+     ancho, empujando al resto al siguiente renglon); el toggle de solicitudes
+     y "+ Grupo" comparten la fila de abajo en vez de cada uno ocupar una
+     fila entera propia -- son 2 filas en vez de 3, menos alto perdido. */
+  .chat-list-search { flex-basis: 100%; }
+  .chat-list-toolbar .btn { flex: 1; }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -7235,11 +7344,10 @@ body.feed-page .site-footer { display: none; }
 }
 
 @media (max-width: 859px) {
+  /* .chat-list-toolbar y #chatSearchPeople viven adentro de .chat-list-pane
+     (ver markup en chats.ts), asi que ocultar el panel ya alcanza para los tres. */
   body.chats-thread-open .site-header,
-  body.chats-thread-open .chat-list-pane,
-  body.chats-thread-open .chat-list-toolbar,
-  body.chats-thread-open #chatSearchPeople,
-  body.chats-thread-open #chatTabs {
+  body.chats-thread-open .chat-list-pane {
     display: none;
   }
 

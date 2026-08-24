@@ -1,5 +1,6 @@
 import { escapeHtml } from "../lib/dom";
 import { linkifyHtml } from "../lib/linkify";
+import { extractFirstUrl, extractYouTubeVideoId, youtubeEmbedHtml } from "../lib/youtube";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { supabase } from "../lib/supabaseClient";
 import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
@@ -26,6 +27,9 @@ import {
   editMessage,
   deleteMessage,
   copyChatAttachment,
+  openViewOnceMessage,
+  listMyViewOnceOpens,
+  deleteChatAttachment,
   groupParticipantsOf,
   MESSAGES_PAGE_SIZE,
   AUDIO_MAX_SECONDS,
@@ -116,6 +120,7 @@ const THREAD_MARKUP = `
     <img id="chatPreviewImg" alt="" hidden>
     <video id="chatPreviewVideo" muted playsinline preload="metadata" hidden></video>
     <span id="chatPreviewAudioLabel" hidden>🎤 Audio listo (<span id="chatPreviewAudioDuration"></span>)</span>
+    <button type="button" class="chat-preview-viewonce-btn" id="chatPreviewViewOnceBtn" title="Se ve una sola vez" aria-pressed="false" hidden>1</button>
     <button type="button" class="chat-preview-cancel" id="chatPreviewCancel" aria-label="Quitar adjunto">✕</button>
   </div>
 
@@ -134,6 +139,8 @@ const THREAD_MARKUP = `
     </div>
     <button type="button" class="chat-reply-bar-cancel" id="chatEditBarCancel" aria-label="Cancelar edición">✕</button>
   </div>
+
+  <div class="chat-composer-youtube-preview" id="chatComposerYoutubePreview" hidden></div>
 
   <div class="chat-composer" id="chatComposer">
     <label class="chat-composer-btn" title="Adjuntar foto o video">
@@ -193,6 +200,13 @@ export interface MountThreadOptions {
    * mark_conversation_read no la toca (solo conversation_participants.last_read_at).
    */
   onRead?(): void;
+  /** chats.ts necesita el scrollTop de #chatMessages para devolver al usuario a donde estaba al
+   * reabrir un hilo ya visitado (ver hideActiveInstance/openThread ahi) -- pero leerlo recien AL
+   * ocultar llega tarde: un `display:none` en un ancestro (el que pone el router al navegar a
+   * otra pagina, no solo el propio hide interno de chats.ts entre hilos) resetea scrollTop a 0
+   * antes de que cualquier callback de "se oculto" alcance a leerlo. Por eso se reporta en cada
+   * scroll, no una sola vez al final -- chats.ts siempre tiene el ultimo valor bueno a mano. */
+  onScrollTopChange?(scrollTop: number): void;
   /** chats.ts ya tiene la lista de conversaciones cargada en memoria (la usa para pintar la
    * lista) -- si la conversacion que se abre esta ahi, se la pasamos para no volver a pedirla
    * de cero aca adentro (ver el `await listConversations()` que reemplaza mas abajo). Solo tiene
@@ -246,7 +260,9 @@ export async function mountThread(
   const previewVideo = container.querySelector("#chatPreviewVideo") as HTMLVideoElement;
   const previewAudioLabel = container.querySelector("#chatPreviewAudioLabel") as HTMLSpanElement;
   const previewAudioDuration = container.querySelector("#chatPreviewAudioDuration")!;
+  const previewViewOnceBtn = container.querySelector("#chatPreviewViewOnceBtn") as HTMLButtonElement;
   const previewCancelBtn = container.querySelector("#chatPreviewCancel") as HTMLButtonElement;
+  const youtubePreviewWrap = container.querySelector("#chatComposerYoutubePreview") as HTMLDivElement;
   const stickerBtn = container.querySelector("#chatStickerBtn") as HTMLButtonElement;
   const stickerPanel = container.querySelector("#chatStickerPanel") as HTMLDivElement;
   const pinnedBanner = container.querySelector("#chatPinnedBanner") as HTMLDivElement;
@@ -265,6 +281,12 @@ export async function mountThread(
 
   let messages: ChatMessage[] = [];
   const renderedIds = new Set<string>();
+  // Fotos/videos efímeros de GRUPO que YO ya abrí (ver open_view_once_message): a diferencia
+  // de 1 a 1, donde messages.viewed_once_at/by alcanza (un unico espectador posible para toda
+  // la conversacion), en grupo cada integrante tiene su propio estado "ya la vi" -- no vive en
+  // la fila del mensaje (esa nunca cambia para mensajes de grupo), se trackea aparte y se
+  // hidrata con listMyViewOnceOpens al cargar/paginar el hilo (ver hydrateMyViewOnceOpens).
+  const myGroupViewOnceOpened = new Set<string>();
   // Mientras esperamos la respuesta de react_to_message para un mensaje, un UPDATE por
   // realtime ajeno a la reacción (ej. el mark-as-read automático al abrir el hilo, que
   // pisa toda la fila) puede llegar de vuelta con las reactions *previas* a la que
@@ -694,6 +716,18 @@ export async function mountThread(
     gymMap.forEach((post, id) => sharedGymPostsCache.set(id, post));
   }
 
+  /** Completa myGroupViewOnceOpened para los mensajes efímeros de grupo recién cargados que
+   * todavía no sabemos si YO ya abrí (ver esa constante mas arriba). Devuelve true si encontró
+   * algo nuevo, para que el caller sepa si vale la pena volver a pintar. */
+  async function hydrateMyViewOnceOpens(list: ChatMessage[]): Promise<boolean> {
+    if (!isGroup) return false;
+    const ids = list.filter((m) => m.view_once && m.sender_id !== userId && !myGroupViewOnceOpened.has(m.id)).map((m) => m.id);
+    if (ids.length === 0) return false;
+    const opened = await listMyViewOnceOpens(ids);
+    opened.forEach((id) => myGroupViewOnceOpened.add(id));
+    return opened.length > 0;
+  }
+
   function sharedPostPreviewHtml(postId: string): string {
     const post = sharedPostsCache.get(postId);
     if (!post) return `<div class="chat-shared-post chat-shared-post-missing">Rep no disponible</div>`;
@@ -747,8 +781,8 @@ export async function mountThread(
     if (m.content) return m.content;
     if (m.shared_post_id) return "🔁 Rep compartido";
     if (m.shared_gym_post_id) return "📌 Publicación compartida";
-    if (m.attachment_type === "image") return "📷 Foto";
-    if (m.attachment_type === "video") return "🎥 Video";
+    if (m.attachment_type === "image") return m.view_once ? "📷 Foto efímera" : "📷 Foto";
+    if (m.attachment_type === "video") return m.view_once ? "🎥 Video efímero" : "🎥 Video";
     if (m.attachment_type === "audio") return "🎤 Audio";
     return "Mensaje";
   }
@@ -775,6 +809,42 @@ export async function mountThread(
     `;
   }
 
+  // Foto/video efímero: nunca se hidrata como <img>/<video> con data-path (hydrateMedia los
+  // ignora, y de paso el storage tampoco dejaría leerlos todavía -- ver policy
+  // chat_attachments_select). Tres estados: sin abrir (destinatario ve un botón "Toca para
+  // ver"), ya visto, o soy quien lo mandó (nunca puedo verlo yo mismo, ni antes ni después de
+  // que lo abran). En 1 a 1 hay un unico destinatario posible, asi que m.viewed_once_at (en la
+  // fila del mensaje) ya dice si "ya se vio" para cualquiera de los dos. En grupo cada
+  // integrante tiene su propio estado -- la fila nunca cambia, se consulta myGroupViewOnceOpened
+  // (ver mas arriba) en su lugar, y por eso el sender siempre queda en "enviada" (nunca abre la
+  // suya propia) sin importar cuántos del grupo ya la vieron.
+  function viewOnceMediaHtml(m: ChatMessage, isMe: boolean, kind: "image" | "video"): string {
+    const noun = kind === "image" ? "Foto" : "Video";
+    const viewedByMe = isGroup ? myGroupViewOnceOpened.has(m.id) : !!m.viewed_once_at;
+    if (viewedByMe) {
+      return `
+        <div class="chat-bubble-viewonce chat-bubble-viewonce-seen">
+          <span class="chat-bubble-viewonce-badge">✓</span>
+          <span>${noun} vista</span>
+        </div>
+      `;
+    }
+    if (isMe) {
+      return `
+        <div class="chat-bubble-viewonce chat-bubble-viewonce-sent">
+          <span class="chat-bubble-viewonce-badge">1</span>
+          <span>${noun}</span>
+        </div>
+      `;
+    }
+    return `
+      <button type="button" class="chat-bubble-viewonce chat-bubble-viewonce-unseen" data-viewonce-id="${m.id}">
+        <span class="chat-bubble-viewonce-badge">1</span>
+        <span>${noun}</span>
+      </button>
+    `;
+  }
+
   function bubbleBodyHtml(m: ChatMessage, isMe: boolean): string {
     if (m.deleted_at) {
       return `
@@ -788,13 +858,13 @@ export async function mountThread(
     } else if (m.shared_gym_post_id) {
       mediaHtml = sharedGymPostPreviewHtml(m.shared_gym_post_id);
     } else if (m.attachment_type === "image" && m.attachment_path) {
-      mediaHtml = `
+      mediaHtml = m.view_once ? viewOnceMediaHtml(m, isMe, "image") : `
         <button type="button" class="chat-bubble-image" data-path="${escapeHtml(m.attachment_path)}">
           <img data-path="${escapeHtml(m.attachment_path)}" alt="Foto" class="chat-bubble-img-el">
         </button>
       `;
     } else if (m.attachment_type === "video" && m.attachment_path) {
-      mediaHtml = `
+      mediaHtml = m.view_once ? viewOnceMediaHtml(m, isMe, "video") : `
         <button type="button" class="chat-bubble-image chat-bubble-video" data-path="${escapeHtml(m.attachment_path)}" data-kind="video">
           <video data-path="${escapeHtml(m.attachment_path)}" muted playsinline preload="metadata" class="chat-bubble-img-el chat-bubble-video-el"></video>
           <span class="chat-bubble-video-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
@@ -816,6 +886,11 @@ export async function mountThread(
     const isSticker = m.attachment_type === "sticker";
     const stickerHtml = isSticker ? `<span class="chat-bubble-sticker">${escapeHtml(m.content ?? "")}</span>` : "";
     const textHtml = !isSticker && m.content ? `<p class="chat-bubble-text">${linkifyHtml(m.content)}</p>` : "";
+    // Sin adjunto/Rep compartido de por medio (mediaHtml vacio) y con un link de YouTube en el
+    // texto: mismo criterio que postCard.ts, el embed va debajo del texto linkificado (que
+    // sigue mostrando la URL como link normal, por si el iframe no carga).
+    const youtubeId = !mediaHtml && m.content ? extractYouTubeVideoId(extractFirstUrl(m.content) ?? "") : null;
+    const youtubeHtml = youtubeId ? `<div class="chat-bubble-youtube-embed">${youtubeEmbedHtml(youtubeId)}</div>` : "";
     const forwardedHtml = m.is_forwarded ? `<span class="chat-bubble-forwarded">Reenviado</span>` : "";
     const editedHtml = m.edited_at ? `<span class="chat-bubble-edited">editado</span>` : "";
     return `
@@ -824,6 +899,7 @@ export async function mountThread(
       ${mediaHtml}
       ${stickerHtml}
       ${textHtml}
+      ${youtubeHtml}
       <span class="chat-bubble-time">${editedHtml}${timeLabel(m.created_at)}${isMe && !isGroup ? ticksHtml(m) : ""}</span>
       ${reactionsHtml(m)}
     `;
@@ -981,6 +1057,7 @@ export async function mountThread(
   }
 
   messagesEl.addEventListener("scroll", updateScrollBottomBtn, { signal: ctx.signal });
+  messagesEl.addEventListener("scroll", () => opts.onScrollTopChange?.(messagesEl.scrollTop), { signal: ctx.signal });
   scrollBottomBtn.addEventListener("click", () => scrollToBottom(), { signal: ctx.signal });
 
   const SENTINEL_HTML = `<div class="chat-load-sentinel" id="chatLoadSentinel"><div class="modern-spinner" id="chatLoadSpinner" hidden></div></div>`;
@@ -1010,6 +1087,7 @@ export async function mountThread(
       messages = cachedMsgs;
       messages.forEach((m) => renderedIds.add(m.id));
       await hydrateSharedPosts(messages);
+      await hydrateMyViewOnceOpens(messages);
       messagesEl.innerHTML = buildMessagesHtml(messages);
       // El scroll no tiene que esperar a que las imagenes/audio terminen de resolver su URL
       // firmada -- el alto de cada media ya esta fijo por CSS (no depende de que cargue), asi
@@ -1027,6 +1105,7 @@ export async function mountThread(
     messages = page.slice().reverse();
     messages.forEach((m) => renderedIds.add(m.id));
     await hydrateSharedPosts(messages);
+    await hydrateMyViewOnceOpens(messages);
     olderExhausted = page.length < MESSAGES_PAGE_SIZE;
     messagesEl.innerHTML = messages.length
       ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
@@ -1061,14 +1140,22 @@ export async function mountThread(
     ascendingOlder.forEach((m) => renderedIds.add(m.id));
     messages = [...ascendingOlder, ...messages];
     await hydrateSharedPosts(ascendingOlder);
+    await hydrateMyViewOnceOpens(ascendingOlder);
 
     olderExhausted = older.length < MESSAGES_PAGE_SIZE;
+    // Reemplazar innerHTML reinicia el scrollTop a 0 -- sin guardar donde estaba ANTES del
+    // swap (no solo el alto previo), la cuenta de mas abajo pierde la posicion real del
+    // usuario y lo tira a "altura de lo que se acaba de agregar arriba", ignorando cuanto
+    // habia scrolleado el ya. Con historiales largos (o al reabrir un hilo cacheado con
+    // scrollTop grande, ver hideActiveInstance/openThread en chats.ts) el salto es enorme.
+    const prevScrollTop = messagesEl.scrollTop;
     const prevScrollHeight = messagesEl.scrollHeight;
     messagesEl.innerHTML = (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages);
     await hydrateMedia();
     void hydrateMissingQuotes();
     void hydrateAudioWaveforms();
-    messagesEl.scrollTo({ top: messagesEl.scrollHeight - prevScrollHeight, left: 0, behavior: "instant" });
+    const target = prevScrollTop + (messagesEl.scrollHeight - prevScrollHeight);
+    messagesEl.scrollTo({ top: target, left: 0, behavior: "instant" });
     if (olderExhausted) olderMessagesObserver.disconnect();
     else observeLoadSentinel();
   }
@@ -1128,7 +1215,12 @@ export async function mountThread(
       const idx = messages.findIndex((m) => m.id === incoming.id);
       const previous = idx !== -1 ? messages[idx] : null;
       const updated = reactionMutationInFlight.has(incoming.id) && idx !== -1 ? { ...incoming, reactions: messages[idx].reactions } : incoming;
-      const contentChanged = previous && (previous.content !== updated.content || previous.deleted_at !== updated.deleted_at || previous.edited_at !== updated.edited_at);
+      const contentChanged =
+        previous &&
+        (previous.content !== updated.content ||
+          previous.deleted_at !== updated.deleted_at ||
+          previous.edited_at !== updated.edited_at ||
+          previous.viewed_once_at !== updated.viewed_once_at);
       if (contentChanged) {
         applyMessageContentUpdate(updated);
       } else {
@@ -1348,10 +1440,61 @@ export async function mountThread(
     });
   }
 
+  let openingViewOnceId: string | null = null;
+
+  /** Abre una foto/video efímero: primero lo marca visto server-side (atómico, una sola vez --
+   * ver open_view_once_message), y solo si eso funcionó descarga los bytes completos (fetch a
+   * blob, no un <img src> directo) antes de mostrarlo, para poder borrar el archivo del bucket
+   * apenas termina de bajar sin arriesgarse a cortar la descarga a mitad de camino. */
+  async function openViewOnceAttachment(message: ChatMessage): Promise<void> {
+    if (openingViewOnceId) return;
+    openingViewOnceId = message.id;
+    const btn = messagesEl.querySelector<HTMLButtonElement>(`.chat-bubble-viewonce-unseen[data-viewonce-id="${message.id}"]`);
+    btn?.classList.add("is-loading");
+    try {
+      const { message: opened, fullyViewed, error } = await openViewOnceMessage(message.id);
+      if (error || !opened) {
+        alert(error || "Ya no está disponible.");
+        return;
+      }
+      // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para siempre) --
+      // mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES de re-pintar
+      // la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
+      if (isGroup) myGroupViewOnceOpened.add(message.id);
+      applyMessageContentUpdate(opened);
+      const path = opened.attachment_path!;
+      const url = await resolveAttachmentUrl(path);
+      if (!url) return;
+      const resp = await fetch(url);
+      if (!resp.ok) return;
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recien
+      // da true cuando TODOS los integrantes activos ya la abrieron cada uno la suya -- borrar
+      // antes le arruinaria la foto a quien todavia no le tocó verla.
+      if (fullyViewed) void deleteChatAttachment(path);
+      openMediaLightbox({
+        queue: [{ url: blobUrl }],
+        startIndex: 0,
+        getMedia: (item) => ({ url: item.url, kind: opened.attachment_type === "video" ? "video" : "image" }),
+        onClose: () => URL.revokeObjectURL(blobUrl),
+      });
+    } finally {
+      btn?.classList.remove("is-loading");
+      openingViewOnceId = null;
+    }
+  }
+
   messagesEl.addEventListener(
     "click",
     (e) => {
       const target = e.target as HTMLElement;
+      const viewOnceBtn = target.closest<HTMLButtonElement>(".chat-bubble-viewonce-unseen");
+      if (viewOnceBtn?.dataset.viewonceId) {
+        const message = messages.find((m) => m.id === viewOnceBtn.dataset.viewonceId);
+        if (message) void openViewOnceAttachment(message);
+        return;
+      }
       const imageBtn = target.closest<HTMLButtonElement>(".chat-bubble-image");
       if (imageBtn) {
         void openLightbox(imageBtn.dataset.path!, imageBtn.dataset.kind === "video" ? "video" : "image");
@@ -1412,7 +1555,7 @@ export async function mountThread(
         ${QUICK_REACTIONS.map((emoji) => `<button type="button" class="chat-reaction-option${emoji === myEmoji ? " is-active" : ""}" data-emoji="${emoji}">${emoji}</button>`).join("")}
       </div>
       <button type="button" data-action="reply">Responder</button>
-      <button type="button" data-action="forward">Reenviar</button>
+      ${message.view_once ? "" : `<button type="button" data-action="forward">Reenviar</button>`}
       ${message.content ? `<button type="button" data-action="copy">Copiar</button>` : ""}
       <button type="button" data-action="pin">${isPinned ? "Desanclar" : "Anclar"}</button>
       ${canEdit ? `<button type="button" data-action="edit">Editar</button>` : ""}
@@ -1683,6 +1826,7 @@ export async function mountThread(
     | { kind: "audio"; blob: Blob; durationSeconds: number };
 
   let pendingAttachment: PendingAttachment | null = null;
+  let pendingViewOnce = false;
   let sending = false;
   const recorder = new AudioRecorder();
   let recordTimer: ReturnType<typeof setInterval> | undefined;
@@ -1789,12 +1933,17 @@ export async function mountThread(
   function clearPendingAttachment(): void {
     if (pendingAttachment?.kind === "image" || pendingAttachment?.kind === "video") URL.revokeObjectURL(pendingAttachment.previewUrl);
     pendingAttachment = null;
+    pendingViewOnce = false;
     previewBar.hidden = true;
     previewImg.hidden = true;
     previewVideo.hidden = true;
     previewVideo.src = "";
     previewAudioLabel.hidden = true;
+    previewViewOnceBtn.hidden = true;
+    previewViewOnceBtn.classList.remove("is-active");
+    previewViewOnceBtn.setAttribute("aria-pressed", "false");
     updateSendState();
+    updateYoutubePreview();
   }
 
   function showPreview(): void {
@@ -1813,7 +1962,26 @@ export async function mountThread(
       previewAudioLabel.hidden = false;
       previewAudioDuration.textContent = formatDuration(pendingAttachment.durationSeconds);
     }
+    previewViewOnceBtn.hidden = pendingAttachment?.kind !== "image" && pendingAttachment?.kind !== "video";
     updateSendState();
+    updateYoutubePreview();
+  }
+
+  // Vista previa en vivo del video de YouTube apenas se pega el link en el composer -- mismo
+  // criterio que el composer de Reps (ver updateYoutubePreview en feed.ts): nunca convive con
+  // un adjunto, si hay uno esa es la intencion mas explicita.
+  function updateYoutubePreview(): void {
+    const videoId = !pendingAttachment ? extractYouTubeVideoId(extractFirstUrl(composerInput.value) ?? "") : null;
+    if (!videoId) {
+      youtubePreviewWrap.hidden = true;
+      youtubePreviewWrap.innerHTML = "";
+      delete youtubePreviewWrap.dataset.videoId;
+      return;
+    }
+    if (youtubePreviewWrap.dataset.videoId === videoId) return; // mismo video que ya se esta mostrando, no re-crear el iframe
+    youtubePreviewWrap.dataset.videoId = videoId;
+    youtubePreviewWrap.hidden = false;
+    youtubePreviewWrap.innerHTML = youtubeEmbedHtml(videoId);
   }
 
   composerInput.addEventListener(
@@ -1822,6 +1990,7 @@ export async function mountThread(
       composerInput.style.height = "auto";
       composerInput.style.height = `${Math.min(composerInput.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
       updateSendState();
+      updateYoutubePreview();
     },
     { signal: ctx.signal }
   );
@@ -1850,6 +2019,16 @@ export async function mountThread(
       const kind = file.type.startsWith("video/") ? "video" : "image";
       pendingAttachment = { kind, file, previewUrl: URL.createObjectURL(file) };
       showPreview();
+    },
+    { signal: ctx.signal }
+  );
+
+  previewViewOnceBtn.addEventListener(
+    "click",
+    () => {
+      pendingViewOnce = !pendingViewOnce;
+      previewViewOnceBtn.classList.toggle("is-active", pendingViewOnce);
+      previewViewOnceBtn.setAttribute("aria-pressed", String(pendingViewOnce));
     },
     { signal: ctx.signal }
   );
@@ -2041,6 +2220,7 @@ export async function mountThread(
     let attachmentPath: string | undefined;
     let attachmentType: "image" | "video" | "audio" | undefined;
     let attachmentDurationSeconds: number | undefined;
+    const viewOnce = pendingViewOnce && (pendingAttachment?.kind === "image" || pendingAttachment?.kind === "video");
 
     if (pendingAttachment?.kind === "image") {
       const { path, error } = await uploadChatImage(conversationId, pendingAttachment.file);
@@ -2081,6 +2261,7 @@ export async function mountThread(
       attachmentType,
       attachmentDurationSeconds,
       replyToMessageId: replyTarget?.id,
+      viewOnce,
     });
 
     sending = false;
@@ -2093,7 +2274,7 @@ export async function mountThread(
 
     composerInput.value = "";
     composerInput.style.height = "auto";
-    clearPendingAttachment();
+    clearPendingAttachment(); // tambien limpia la vista previa de YouTube, ver updateYoutubePreview()
     replyTarget = null;
     replyBar.hidden = true;
     void appendMessage(message);

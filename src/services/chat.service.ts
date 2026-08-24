@@ -96,6 +96,8 @@ export interface SendMessageInput {
   sharedGymPostId?: string;
   replyToMessageId?: string;
   isForwarded?: boolean;
+  /** Foto/video que se puede abrir una sola vez -- solo se respeta en chats 1 a 1 (ver send_message). */
+  viewOnce?: boolean;
 }
 
 export async function sendMessage(conversationId: string, input: SendMessageInput): Promise<{ message?: ChatMessage; error?: string }> {
@@ -109,9 +111,42 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_shared_gym_post_id: input.sharedGymPostId,
     p_reply_to_message_id: input.replyToMessageId,
     p_is_forwarded: input.isForwarded,
+    p_view_once: input.viewOnce,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };
+}
+
+/**
+ * Abre un mensaje efímero (atómico server-side -- ver open_view_once_message). Solo un
+ * destinatario puede llamarlo, nunca el remitente, y solo mientras no la haya abierto ya.
+ * En 1 a 1 hay un unico destinatario posible, asi que fullyViewed siempre da true; en grupo
+ * da true recien cuando TODOS los integrantes activos (menos quien la mando) ya la abrieron
+ * cada uno la suya -- solo ahi es seguro borrar el archivo del bucket (ver deleteChatAttachment,
+ * llamado desde chatThread.ts únicamente cuando esto da true).
+ */
+export async function openViewOnceMessage(messageId: string): Promise<{ message?: ChatMessage; fullyViewed?: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc("open_view_once_message", { p_message_id: messageId });
+  const row = data?.[0];
+  if (error || !row) return { error: friendlyError(error, "Ya no está disponible.") };
+  return { message: row.msg, fullyViewed: row.fully_viewed };
+}
+
+/** IDs de mensajes efímeros de grupo que el usuario actual ya abrió, entre los pasados --
+ * usado al cargar/reabrir un hilo para saber cuáles ya vio (ver myGroupViewOnceOpened en
+ * chatThread.ts). En 1 a 1 no hace falta: alcanza con messages.viewed_once_at. */
+export async function listMyViewOnceOpens(messageIds: string[]): Promise<string[]> {
+  if (messageIds.length === 0) return [];
+  const { data, error } = await supabase.from("message_view_once_opens").select("message_id").in("message_id", messageIds);
+  if (error) return [];
+  return data.map((r) => r.message_id);
+}
+
+/** Borra el adjunto del bucket apenas se termina de descargar en el visor -- así una foto
+ * efímera queda realmente inaccesible después de verse, no solo oculta en la UI. Best-effort:
+ * si falla, viewed_once_at ya quedó seteado y nadie puede volver a abrirla igual. */
+export async function deleteChatAttachment(path: string): Promise<void> {
+  await supabase.storage.from(BUCKET).remove([path]);
 }
 
 /** Ancla (o reemplaza el anclado) o desancla el mensaje destacado de la conversación, visible para ambos participantes. */

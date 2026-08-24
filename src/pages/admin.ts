@@ -157,6 +157,7 @@ export const adminView: ViewModule = {
 
     let issueReports: IssueReportWithReporter[] = [];
     let issuesLoaded = false;
+    let issuesSubTab: "open" | "in_progress" | "blocked" | "closed" = "open";
 
     let contactMessages: ContactMessageWithReader[] = [];
     let contactMessagesLoaded = false;
@@ -1106,21 +1107,48 @@ export const adminView: ViewModule = {
       renderIssuesTab();
     }
 
+    const ISSUE_SEVERITY_RANK: Record<IssueSeverity, number> = { high: 3, medium: 2, low: 1 };
+
+    function sortIssuesByPriority(list: IssueReportWithReporter[]): IssueReportWithReporter[] {
+      return [...list].sort((a, b) => {
+        const rankDiff = ISSUE_SEVERITY_RANK[b.severity as IssueSeverity] - ISSUE_SEVERITY_RANK[a.severity as IssueSeverity];
+        if (rankDiff !== 0) return rankDiff;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    }
+
     function renderIssuesTab(): void {
       const issuesTab = container.querySelector("#issuesTab")!;
-      const openCount = issueReports.filter((i) => i.status !== "resolved").length;
+      const openIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "open"));
+      const inProgressIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "in_progress"));
+      const blockedIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "blocked"));
+      const closedIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "resolved"));
+      const activeList =
+        issuesSubTab === "open"
+          ? openIssues
+          : issuesSubTab === "in_progress"
+            ? inProgressIssues
+            : issuesSubTab === "blocked"
+              ? blockedIssues
+              : closedIssues;
 
       issuesTab.innerHTML = `
         <div class="exc-admin-toolbar">
           <div>
             <h3>Issues reportados</h3>
-            <p class="chart-sub">${openCount} sin resolver de ${issueReports.length} en total.</p>
+            <p class="chart-sub">${openIssues.length + inProgressIssues.length + blockedIssues.length} sin resolver de ${issueReports.length} en total.</p>
           </div>
           <button class="btn btn-primary btn-sm" id="issueAddBtn" type="button">+ Reportar issue</button>
         </div>
+        <div class="exc-pick-chips" id="issuesSubTabs">
+          <button type="button" class="exc-pick-chip ${issuesSubTab === "open" ? "active" : ""}" data-sub="open">Abiertas (${openIssues.length})</button>
+          <button type="button" class="exc-pick-chip ${issuesSubTab === "in_progress" ? "active" : ""}" data-sub="in_progress">En progreso (${inProgressIssues.length})</button>
+          <button type="button" class="exc-pick-chip ${issuesSubTab === "blocked" ? "active" : ""}" data-sub="blocked">Bloqueadas (${blockedIssues.length})</button>
+          <button type="button" class="exc-pick-chip ${issuesSubTab === "closed" ? "active" : ""}" data-sub="closed">Cerradas (${closedIssues.length})</button>
+        </div>
         <div class="roadmap-tasks">
           ${
-            issueReports
+            activeList
               .map(
                 (i) => `
             <div class="roadmap-task issue-severity-${i.severity} roadmap-status-${i.status === "resolved" ? "done" : i.status}" data-id="${i.id}">
@@ -1141,12 +1169,28 @@ export const adminView: ViewModule = {
             </div>
           `
               )
-              .join("") || `<p class="exc-pick-empty">Todavía no reportaste ningún issue. ¡Buena señal!</p>`
+              .join("") ||
+            `<p class="exc-pick-empty">${
+              issuesSubTab === "open"
+                ? "No hay issues abiertos. ¡Buena señal!"
+                : issuesSubTab === "in_progress"
+                  ? "No hay issues en progreso."
+                  : issuesSubTab === "blocked"
+                    ? "No hay issues bloqueados."
+                    : "Todavía no hay issues cerrados."
+            }</p>`
           }
         </div>
       `;
 
       container.querySelector("#issueAddBtn")?.addEventListener("click", () => openIssueFormModal(null));
+
+      container.querySelector("#issuesSubTabs")?.addEventListener("click", (event) => {
+        const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
+        if (!btn) return;
+        issuesSubTab = btn.dataset.sub as "open" | "in_progress" | "blocked" | "closed";
+        renderIssuesTab();
+      });
 
       issuesTab.querySelectorAll<HTMLSelectElement>(".issue-status-select").forEach((sel) => {
         sel.addEventListener("change", async () => {

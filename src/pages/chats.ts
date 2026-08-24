@@ -69,41 +69,37 @@ function setAppViewportHeight(): void {
 const VIEW_MARKUP = `
   <section class="features">
     <div class="container chat-page-container">
-      <div class="routine-tabs" id="chatTabs">
-        <button class="routine-tab active" data-tab="messages" type="button">Tus mensajes</button>
-        <button class="routine-tab" data-tab="requests" type="button">Solicitudes<span class="notif-badge" id="chatRequestsCount" hidden>0</span></button>
-      </div>
-
-      <div id="chatMessagesPanel">
-        <div class="chat-split">
-          <div class="chat-list-pane">
-            <div class="pull-refresh-indicator" id="chatPullRefreshIndicator" aria-hidden="true"><div class="modern-spinner"></div></div>
-            <div class="chat-list-toolbar">
-              <div class="chat-list-search">
-                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
-              </div>
-              <button type="button" class="btn btn-outline btn-sm" id="chatNewGroupBtn">+ Grupo</button>
+      <div class="chat-split">
+        <div class="chat-list-pane">
+          <div class="pull-refresh-indicator" id="chatPullRefreshIndicator" aria-hidden="true"><div class="modern-spinner"></div></div>
+          <div class="chat-list-toolbar">
+            <div class="chat-list-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="search" id="chatSearchInput" placeholder="Buscar conversaciones o personas..." autocomplete="off">
             </div>
-
-            <div id="chatSearchPeople" hidden></div>
-
-            <div class="chat-list" id="chatList"></div>
+            <button type="button" class="notif-bell-btn chat-requests-toggle" id="chatRequestsToggleBtn" aria-label="Solicitudes de mensaje" aria-expanded="false" title="Solicitudes de mensaje">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></svg>
+              <span class="notif-badge" id="chatRequestsCount" hidden>0</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="chatNewGroupBtn">+ Grupo</button>
           </div>
 
-          <div class="chat-thread-pane" id="chatThreadPane">
-            <div class="chat-thread-placeholder" id="chatThreadPlaceholder">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-              <p>Elegí una conversación para empezar a chatear</p>
-            </div>
-            <section class="chat-thread-page" id="chatThreadPage" hidden>
-              <div class="container chat-thread-container" id="chatThreadContent"></div>
-            </section>
+          <div id="chatSearchPeople" hidden></div>
+
+          <div class="chat-list" id="chatList"></div>
+          <div class="chat-requests-list" id="chatRequestsList" hidden></div>
+        </div>
+
+        <div class="chat-thread-pane" id="chatThreadPane">
+          <div class="chat-thread-placeholder" id="chatThreadPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <p>Elegí una conversación para empezar a chatear</p>
           </div>
+          <section class="chat-thread-page" id="chatThreadPage" hidden>
+            <div class="container chat-thread-container" id="chatThreadContent"></div>
+          </section>
         </div>
       </div>
-
-      <div class="chat-requests-list" id="chatRequestsList" hidden></div>
     </div>
   </section>
 `;
@@ -129,11 +125,10 @@ export const chatsView: ViewModule = {
     let conversations: ConversationSummary[] = [];
     let searchQuery = "";
 
-    const listEl = container.querySelector("#chatList")!;
+    const listEl = container.querySelector("#chatList") as HTMLDivElement;
     const chatListPane = container.querySelector(".chat-list-pane") as HTMLDivElement;
     const pullIndicator = container.querySelector("#chatPullRefreshIndicator") as HTMLDivElement;
-    const tabsWrap = container.querySelector("#chatTabs")!;
-    const messagesPanel = container.querySelector("#chatMessagesPanel") as HTMLDivElement;
+    const requestsToggleBtn = container.querySelector("#chatRequestsToggleBtn") as HTMLButtonElement;
     const requestsCountEl = container.querySelector("#chatRequestsCount") as HTMLElement;
     const requestsListEl = container.querySelector("#chatRequestsList") as HTMLDivElement;
     const searchInput = container.querySelector("#chatSearchInput") as HTMLInputElement;
@@ -156,12 +151,15 @@ export const chatsView: ViewModule = {
       threadInstances.clear();
     });
 
+    // El scrollTop de cada hilo se trackea en vivo via onScrollTopChange (ver mountThread mas
+    // abajo) -- leerlo recien aca, al ocultar, llega tarde: el router.ts oculta esta vista ENTERA
+    // con display:none al navegar a otra pagina (ej. el perfil), y eso resetea a 0 el scrollTop
+    // de #chatMessages ANTES de que onHide llegue a correr. threadInstances ya tiene el ultimo
+    // valor bueno reportado mientras el hilo todavia estaba visible, asi que no hace falta re-leer.
     function hideActiveInstance(): void {
       if (!activeConversationId) return;
       const instance = threadInstances.get(activeConversationId);
       if (!instance) return;
-      const messagesEl = instance.el.querySelector<HTMLElement>(".chat-messages");
-      instance.scrollTop = messagesEl?.scrollTop ?? 0;
       instance.el.hidden = true;
     }
 
@@ -212,6 +210,15 @@ export const chatsView: ViewModule = {
       requestsListEl.querySelectorAll<HTMLButtonElement>(".reject-btn").forEach((btn) => {
         btn.addEventListener("click", () => void handleRequestAction(btn.dataset.id!, "decline"));
       });
+    }
+
+    let requestsMode = false;
+    function setRequestsMode(active: boolean): void {
+      requestsMode = active;
+      listEl.hidden = active;
+      requestsListEl.hidden = !active;
+      requestsToggleBtn.classList.toggle("open", active);
+      requestsToggleBtn.setAttribute("aria-expanded", String(active));
     }
 
     function renderList(): void {
@@ -333,6 +340,10 @@ export const chatsView: ViewModule = {
         },
         onBack: () => navigate("chats.html"),
         onRead: () => markLocalRead(conversationId),
+        onScrollTopChange: (scrollTop) => {
+          const instance = threadInstances.get(conversationId);
+          if (instance) instance.scrollTop = scrollTop;
+        },
       })
         .then((controller) => {
           const instance = threadInstances.get(conversationId);
@@ -380,9 +391,7 @@ export const chatsView: ViewModule = {
         if (convo) convo.status = "accepted";
         renderRequests();
         renderList();
-        tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "messages"));
-        messagesPanel.hidden = false;
-        requestsListEl.hidden = true;
+        setRequestsMode(false);
         openThread(id, { pushHistory: true });
         return;
       }
@@ -657,18 +666,7 @@ export const chatsView: ViewModule = {
       { signal: ctx.signal }
     );
 
-    tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((btn) => {
-      btn.addEventListener(
-        "click",
-        () => {
-          const tab = btn.dataset.tab;
-          tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b === btn));
-          messagesPanel.hidden = tab !== "messages";
-          requestsListEl.hidden = tab !== "requests";
-        },
-        { signal: ctx.signal }
-      );
-    });
+    requestsToggleBtn.addEventListener("click", () => setRequestsMode(!requestsMode), { signal: ctx.signal });
 
     // ---------------------------------------------------------------------------
     // Pull-to-refresh (gesto táctil): arrastrar hacia abajo estando ya arriba del todo de la

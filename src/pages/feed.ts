@@ -2,9 +2,10 @@ import type { ViewModule } from "../shell/router";
 import { navigate } from "../shell/router";
 import { setupAutoHideHeader } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { renderPostCard, wirePostCard, youtubeEmbedHtml, type PostCardHandlers } from "../lib/postCard";
+import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import { openPostDetailModal } from "../lib/postDetailModal";
+import { extractFirstUrl, extractYouTubeVideoId, youtubeEmbedHtml } from "../lib/youtube";
 import {
   getPersonalizedFeed,
   createPost,
@@ -14,8 +15,6 @@ import {
   validatePostVideoDuration,
   uploadPostMedia,
   deletePostMedia,
-  extractFirstUrl,
-  extractYouTubeVideoId,
   recordPostView,
   getPost,
   type FeedPost,

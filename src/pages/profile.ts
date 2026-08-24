@@ -44,12 +44,15 @@ import {
   acceptGymTrainerInvite,
   leaveGymAsTrainer,
   listMyGymTrainerHandles,
+  listGymTrainers,
   type GymTrainerHandleStatus,
   type HandleInitiatedBy,
+  type GymTrainerRow,
 } from "../services/gymTrainer.service";
 import { listGymClasses, type GymClassRow } from "../services/gymClass.service";
 import { classImageHtml, classCapacityBadgeHtml, classSessionsSummary } from "../lib/gymClassMarkup";
 import { openClassDetailModal } from "../lib/gymClassEnrollModal";
+import { openClassManageForm, confirmDeleteGymClass } from "../lib/gymClassManageModal";
 import { listGymTrainerRatings, type GymTrainerRatingRow } from "../services/gymTrainerRating.service";
 import { openRateTrainerModal, openTrainerReviewsModal } from "../lib/gymTrainerRatingModal";
 import { listGymPostsFull, type GymPostFull } from "../services/gymPost.service";
@@ -90,6 +93,12 @@ import type { WeightUnit } from "../services/weightLog.service";
 // todas dentro de mount().
 let myId: string | null = null;
 let usernameParam: string | null = null;
+// Se vuelve a pedir list_gym_classes cada vez que se vuelve a este perfil desde otra vista (ej.
+// clases.html) -- ver onShow. La instancia del router queda viva en cache y onShow es lo unico
+// que corre en ese caso (no mount()), asi que sin esto el slider se queda mostrando clases ya
+// eliminadas o editadas hasta que se recargue la pagina entera.
+let gymClasesRefreshCtx: { gymId: string; gymUsername: string; isActiveSocio: boolean; myId: string | null; isOwner: boolean; ctx: ViewContext } | null = null;
+let gymClasesShown = false;
 let freqChartInstance: ChartInstance | null = null;
 // Con el picker de widgets puede haber mas de un grafico "Progreso por ejercicio" a la vez
 // (uno por ejercicio elegido) -- por eso es un array y no una sola instancia como freqChart.
@@ -1057,9 +1066,9 @@ function setupGymClasesSlider(ctx: ViewContext) {
   ctx.addCleanup(() => observer.disconnect());
 }
 
-function claseSliderCardMarkup(c: GymClassRow, isOwner: boolean): string {
+function claseSliderCardMarkup(c: GymClassRow): string {
   return `
-    <div class="clase-slider-card${isOwner ? "" : " is-clickable"}" data-id="${c.id}">
+    <div class="clase-slider-card is-clickable" data-id="${c.id}">
       ${classImageHtml(c.imageUrl, "clase-slider-image")}
       <h4>${escapeHtml(c.name)}</h4>
       <p class="clase-slider-meta">${escapeHtml(classSessionsSummary(c.sessions))}</p>
@@ -1068,7 +1077,7 @@ function claseSliderCardMarkup(c: GymClassRow, isOwner: boolean): string {
   `;
 }
 
-async function renderGymClasses(gymId: string, gymUsername: string, isActiveSocio: boolean, myUserId: string | null, isOwner: boolean): Promise<void> {
+async function renderGymClasses(gymId: string, gymUsername: string, isActiveSocio: boolean, myUserId: string | null, isOwner: boolean, ctx: ViewContext): Promise<void> {
   const section = document.getElementById("gymClasesSection");
   const summaryEl = document.getElementById("gymClasesSummary");
   const trackEl = document.getElementById("gymClasesTrack");
@@ -1076,8 +1085,17 @@ async function renderGymClasses(gymId: string, gymUsername: string, isActiveSoci
   if (!section || !summaryEl || !trackEl) return;
 
   let classes: GymClassRow[];
+  // El dueño necesita ademas la lista de handles activos para el selector de profesor del
+  // formulario de editar/crear clase -- ver openClassManageForm, mismo dato que clases.ts.
+  let trainers: GymTrainerRow[] = [];
   try {
-    classes = await listGymClasses(gymId);
+    if (isOwner) {
+      const [classRows, trainerRows] = await Promise.all([listGymClasses(gymId), listGymTrainers(gymId, { statusFilter: "all" })]);
+      classes = classRows;
+      trainers = trainerRows;
+    } else {
+      classes = await listGymClasses(gymId);
+    }
   } catch {
     return;
   }
@@ -1088,18 +1106,26 @@ async function renderGymClasses(gymId: string, gymUsername: string, isActiveSoci
   summaryEl.textContent = "";
 
   const sorted = [...classes].sort((a, b) => b.enrolledCount - a.enrolledCount);
-  trackEl.innerHTML = sorted.map((c) => claseSliderCardMarkup(c, isOwner)).join("");
+  trackEl.innerHTML = sorted.map(claseSliderCardMarkup).join("");
   if (verTodas) verTodas.href = isOwner ? "clases.html" : `clases.html?u=${encodeURIComponent(gymUsername)}`;
 
-  // El dueño viendo su propio gimnasio: la tira es solo informativa, sin accion (nada tiene
-  // sentido -- no puede inscribirse a si mismo). Ver punto 7: nada de nota "hacete socio" tampoco.
-  if (isOwner) return;
+  const refresh = () => void renderGymClasses(gymId, gymUsername, isActiveSocio, myUserId, isOwner, ctx);
 
   trackEl.querySelectorAll<HTMLElement>(".clase-slider-card").forEach((card) => {
     card.addEventListener("click", () => {
       const c = sorted.find((x) => x.id === card.dataset.id);
       if (!c) return;
-      openClassDetailModal(c, { myId: myUserId, isActiveSocio }, () => void renderGymClasses(gymId, gymUsername, isActiveSocio, myUserId, isOwner));
+      openClassDetailModal(
+        c,
+        { myId: myUserId, isActiveSocio, isOwner },
+        refresh,
+        isOwner
+          ? {
+              onEdit: (row) => openClassManageForm({ gymId, trainers, ctx, existing: row, onSaved: refresh }),
+              onDelete: (row) => confirmDeleteGymClass(row.id, row.name, refresh),
+            }
+          : undefined
+      );
     });
   });
 }
@@ -2629,7 +2655,8 @@ async function main(ctx: ViewContext) {
             getGymTrainerHandleStatus(displayProfile.id!).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy })),
           ]).then(([socioStatus, handle]) => socioStatus === "active" || handle.status === "active")
         : false;
-    void renderGymClasses(displayProfile.id!, displayProfile.username ?? "", isActiveSocio, myId, isOwner);
+    gymClasesRefreshCtx = { gymId: displayProfile.id!, gymUsername: displayProfile.username ?? "", isActiveSocio, myId, isOwner, ctx };
+    void renderGymClasses(gymClasesRefreshCtx.gymId, gymClasesRefreshCtx.gymUsername, gymClasesRefreshCtx.isActiveSocio, gymClasesRefreshCtx.myId, gymClasesRefreshCtx.isOwner, gymClasesRefreshCtx.ctx);
     void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId, isOwner);
   } else {
     const logs = await listWeightLogsWithContext(displayProfile.id!);
@@ -2762,6 +2789,8 @@ export const profileView: ViewModule = {
     activityTabsController = null;
     freqChartInstance = null;
     progressChartInstances = [];
+    gymClasesRefreshCtx = null;
+    gymClasesShown = false;
 
     container.innerHTML = VIEW_MARKUP;
 
@@ -2795,6 +2824,13 @@ export const profileView: ViewModule = {
   },
   onShow() {
     document.body.classList.add("profile-page", "header-autohide");
+    // La primera vez (justo despues de mount()) las clases ya se pidieron desde main() -- solo
+    // hace falta re-pedirlas cuando se vuelve a este perfil ya cacheado desde otra vista.
+    if (gymClasesShown && gymClasesRefreshCtx) {
+      const c = gymClasesRefreshCtx;
+      void renderGymClasses(c.gymId, c.gymUsername, c.isActiveSocio, c.myId, c.isOwner, c.ctx);
+    }
+    gymClasesShown = true;
   },
   onHide() {
     document.body.classList.remove("profile-page", "header-autohide");
