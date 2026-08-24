@@ -45,6 +45,8 @@ export interface OpenMediaLightboxOptions<T> {
   getMedia: (item: T) => { url: string; kind: MediaLightboxKind };
   /** Opcional: si no se pasa, el visor queda sin pie, solo el media a pantalla completa (uso del chat). */
   renderFooter?: (item: T, footerEl: HTMLElement, controller: MediaLightboxController) => void;
+  /** Opcional: se llama al cerrarse el visor (cruz, Escape, fondo, o gesto de deslizar hacia abajo) -- ej. revocar un object URL creado solo para esta vista. */
+  onClose?: () => void;
 }
 
 /**
@@ -83,6 +85,7 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
     document.removeEventListener("keydown", onKeydown);
     unlockBodyScroll();
     closeOverlay();
+    options.onClose?.();
   }
   function onKeydown(e: KeyboardEvent): void {
     if (e.key === "Escape") close();

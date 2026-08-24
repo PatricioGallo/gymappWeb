@@ -27,6 +27,8 @@ import {
   editMessage,
   deleteMessage,
   copyChatAttachment,
+  openViewOnceMessage,
+  deleteChatAttachment,
   groupParticipantsOf,
   MESSAGES_PAGE_SIZE,
   AUDIO_MAX_SECONDS,
@@ -117,6 +119,7 @@ const THREAD_MARKUP = `
     <img id="chatPreviewImg" alt="" hidden>
     <video id="chatPreviewVideo" muted playsinline preload="metadata" hidden></video>
     <span id="chatPreviewAudioLabel" hidden>🎤 Audio listo (<span id="chatPreviewAudioDuration"></span>)</span>
+    <button type="button" class="chat-preview-viewonce-btn" id="chatPreviewViewOnceBtn" title="Se ve una sola vez" aria-pressed="false" hidden>1</button>
     <button type="button" class="chat-preview-cancel" id="chatPreviewCancel" aria-label="Quitar adjunto">✕</button>
   </div>
 
@@ -256,6 +259,7 @@ export async function mountThread(
   const previewVideo = container.querySelector("#chatPreviewVideo") as HTMLVideoElement;
   const previewAudioLabel = container.querySelector("#chatPreviewAudioLabel") as HTMLSpanElement;
   const previewAudioDuration = container.querySelector("#chatPreviewAudioDuration")!;
+  const previewViewOnceBtn = container.querySelector("#chatPreviewViewOnceBtn") as HTMLButtonElement;
   const previewCancelBtn = container.querySelector("#chatPreviewCancel") as HTMLButtonElement;
   const youtubePreviewWrap = container.querySelector("#chatComposerYoutubePreview") as HTMLDivElement;
   const stickerBtn = container.querySelector("#chatStickerBtn") as HTMLButtonElement;
@@ -758,8 +762,8 @@ export async function mountThread(
     if (m.content) return m.content;
     if (m.shared_post_id) return "🔁 Rep compartido";
     if (m.shared_gym_post_id) return "📌 Publicación compartida";
-    if (m.attachment_type === "image") return "📷 Foto";
-    if (m.attachment_type === "video") return "🎥 Video";
+    if (m.attachment_type === "image") return m.view_once ? "📷 Foto efímera" : "📷 Foto";
+    if (m.attachment_type === "video") return m.view_once ? "🎥 Video efímero" : "🎥 Video";
     if (m.attachment_type === "audio") return "🎤 Audio";
     return "Mensaje";
   }
@@ -786,6 +790,37 @@ export async function mountThread(
     `;
   }
 
+  // Foto/video efímero: nunca se hidrata como <img>/<video> con data-path (hydrateMedia los
+  // ignora, y de paso el storage tampoco dejaría leerlos todavía -- ver policy
+  // chat_attachments_select). Tres estados: sin abrir (destinatario ve un botón "Toca para
+  // ver"), ya visto (nadie puede reabrirlo, ver open_view_once_message), o soy quien lo mandó
+  // (nunca puedo verlo yo mismo, ni antes ni después de que lo abran).
+  function viewOnceMediaHtml(m: ChatMessage, isMe: boolean, kind: "image" | "video"): string {
+    const noun = kind === "image" ? "Foto" : "Video";
+    if (m.viewed_once_at) {
+      return `
+        <div class="chat-bubble-viewonce chat-bubble-viewonce-seen">
+          <span class="chat-bubble-viewonce-badge">✓</span>
+          <span>${noun} vista</span>
+        </div>
+      `;
+    }
+    if (isMe) {
+      return `
+        <div class="chat-bubble-viewonce chat-bubble-viewonce-sent">
+          <span class="chat-bubble-viewonce-badge">1</span>
+          <span>${noun} enviada · se ve una vez</span>
+        </div>
+      `;
+    }
+    return `
+      <button type="button" class="chat-bubble-viewonce chat-bubble-viewonce-unseen" data-viewonce-id="${m.id}">
+        <span class="chat-bubble-viewonce-badge">1</span>
+        <span>Toca para ver la ${noun.toLowerCase()}</span>
+      </button>
+    `;
+  }
+
   function bubbleBodyHtml(m: ChatMessage, isMe: boolean): string {
     if (m.deleted_at) {
       return `
@@ -799,13 +834,13 @@ export async function mountThread(
     } else if (m.shared_gym_post_id) {
       mediaHtml = sharedGymPostPreviewHtml(m.shared_gym_post_id);
     } else if (m.attachment_type === "image" && m.attachment_path) {
-      mediaHtml = `
+      mediaHtml = m.view_once ? viewOnceMediaHtml(m, isMe, "image") : `
         <button type="button" class="chat-bubble-image" data-path="${escapeHtml(m.attachment_path)}">
           <img data-path="${escapeHtml(m.attachment_path)}" alt="Foto" class="chat-bubble-img-el">
         </button>
       `;
     } else if (m.attachment_type === "video" && m.attachment_path) {
-      mediaHtml = `
+      mediaHtml = m.view_once ? viewOnceMediaHtml(m, isMe, "video") : `
         <button type="button" class="chat-bubble-image chat-bubble-video" data-path="${escapeHtml(m.attachment_path)}" data-kind="video">
           <video data-path="${escapeHtml(m.attachment_path)}" muted playsinline preload="metadata" class="chat-bubble-img-el chat-bubble-video-el"></video>
           <span class="chat-bubble-video-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
@@ -1153,7 +1188,12 @@ export async function mountThread(
       const idx = messages.findIndex((m) => m.id === incoming.id);
       const previous = idx !== -1 ? messages[idx] : null;
       const updated = reactionMutationInFlight.has(incoming.id) && idx !== -1 ? { ...incoming, reactions: messages[idx].reactions } : incoming;
-      const contentChanged = previous && (previous.content !== updated.content || previous.deleted_at !== updated.deleted_at || previous.edited_at !== updated.edited_at);
+      const contentChanged =
+        previous &&
+        (previous.content !== updated.content ||
+          previous.deleted_at !== updated.deleted_at ||
+          previous.edited_at !== updated.edited_at ||
+          previous.viewed_once_at !== updated.viewed_once_at);
       if (contentChanged) {
         applyMessageContentUpdate(updated);
       } else {
@@ -1373,10 +1413,54 @@ export async function mountThread(
     });
   }
 
+  let openingViewOnceId: string | null = null;
+
+  /** Abre una foto/video efímero: primero lo marca visto server-side (atómico, una sola vez --
+   * ver open_view_once_message), y solo si eso funcionó descarga los bytes completos (fetch a
+   * blob, no un <img src> directo) antes de mostrarlo, para poder borrar el archivo del bucket
+   * apenas termina de bajar sin arriesgarse a cortar la descarga a mitad de camino. */
+  async function openViewOnceAttachment(message: ChatMessage): Promise<void> {
+    if (openingViewOnceId) return;
+    openingViewOnceId = message.id;
+    const btn = messagesEl.querySelector<HTMLButtonElement>(`.chat-bubble-viewonce-unseen[data-viewonce-id="${message.id}"]`);
+    btn?.classList.add("is-loading");
+    try {
+      const { message: opened, error } = await openViewOnceMessage(message.id);
+      if (error || !opened) {
+        alert(error || "Ya no está disponible.");
+        return;
+      }
+      applyMessageContentUpdate(opened);
+      const path = opened.attachment_path!;
+      const url = await resolveAttachmentUrl(path);
+      if (!url) return;
+      const resp = await fetch(url);
+      if (!resp.ok) return;
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      void deleteChatAttachment(path);
+      openMediaLightbox({
+        queue: [{ url: blobUrl }],
+        startIndex: 0,
+        getMedia: (item) => ({ url: item.url, kind: opened.attachment_type === "video" ? "video" : "image" }),
+        onClose: () => URL.revokeObjectURL(blobUrl),
+      });
+    } finally {
+      btn?.classList.remove("is-loading");
+      openingViewOnceId = null;
+    }
+  }
+
   messagesEl.addEventListener(
     "click",
     (e) => {
       const target = e.target as HTMLElement;
+      const viewOnceBtn = target.closest<HTMLButtonElement>(".chat-bubble-viewonce-unseen");
+      if (viewOnceBtn?.dataset.viewonceId) {
+        const message = messages.find((m) => m.id === viewOnceBtn.dataset.viewonceId);
+        if (message) void openViewOnceAttachment(message);
+        return;
+      }
       const imageBtn = target.closest<HTMLButtonElement>(".chat-bubble-image");
       if (imageBtn) {
         void openLightbox(imageBtn.dataset.path!, imageBtn.dataset.kind === "video" ? "video" : "image");
@@ -1437,7 +1521,7 @@ export async function mountThread(
         ${QUICK_REACTIONS.map((emoji) => `<button type="button" class="chat-reaction-option${emoji === myEmoji ? " is-active" : ""}" data-emoji="${emoji}">${emoji}</button>`).join("")}
       </div>
       <button type="button" data-action="reply">Responder</button>
-      <button type="button" data-action="forward">Reenviar</button>
+      ${message.view_once ? "" : `<button type="button" data-action="forward">Reenviar</button>`}
       ${message.content ? `<button type="button" data-action="copy">Copiar</button>` : ""}
       <button type="button" data-action="pin">${isPinned ? "Desanclar" : "Anclar"}</button>
       ${canEdit ? `<button type="button" data-action="edit">Editar</button>` : ""}
@@ -1708,6 +1792,9 @@ export async function mountThread(
     | { kind: "audio"; blob: Blob; durationSeconds: number };
 
   let pendingAttachment: PendingAttachment | null = null;
+  // Solo disponible en chats 1 a 1 (ver send_message: v_view_once exige kind = 'direct'), asi
+  // que el toggle ni se ofrece en un grupo.
+  let pendingViewOnce = false;
   let sending = false;
   const recorder = new AudioRecorder();
   let recordTimer: ReturnType<typeof setInterval> | undefined;
@@ -1814,11 +1901,15 @@ export async function mountThread(
   function clearPendingAttachment(): void {
     if (pendingAttachment?.kind === "image" || pendingAttachment?.kind === "video") URL.revokeObjectURL(pendingAttachment.previewUrl);
     pendingAttachment = null;
+    pendingViewOnce = false;
     previewBar.hidden = true;
     previewImg.hidden = true;
     previewVideo.hidden = true;
     previewVideo.src = "";
     previewAudioLabel.hidden = true;
+    previewViewOnceBtn.hidden = true;
+    previewViewOnceBtn.classList.remove("is-active");
+    previewViewOnceBtn.setAttribute("aria-pressed", "false");
     updateSendState();
     updateYoutubePreview();
   }
@@ -1839,6 +1930,7 @@ export async function mountThread(
       previewAudioLabel.hidden = false;
       previewAudioDuration.textContent = formatDuration(pendingAttachment.durationSeconds);
     }
+    previewViewOnceBtn.hidden = isGroup || (pendingAttachment?.kind !== "image" && pendingAttachment?.kind !== "video");
     updateSendState();
     updateYoutubePreview();
   }
@@ -1895,6 +1987,16 @@ export async function mountThread(
       const kind = file.type.startsWith("video/") ? "video" : "image";
       pendingAttachment = { kind, file, previewUrl: URL.createObjectURL(file) };
       showPreview();
+    },
+    { signal: ctx.signal }
+  );
+
+  previewViewOnceBtn.addEventListener(
+    "click",
+    () => {
+      pendingViewOnce = !pendingViewOnce;
+      previewViewOnceBtn.classList.toggle("is-active", pendingViewOnce);
+      previewViewOnceBtn.setAttribute("aria-pressed", String(pendingViewOnce));
     },
     { signal: ctx.signal }
   );
@@ -2086,6 +2188,7 @@ export async function mountThread(
     let attachmentPath: string | undefined;
     let attachmentType: "image" | "video" | "audio" | undefined;
     let attachmentDurationSeconds: number | undefined;
+    const viewOnce = pendingViewOnce && (pendingAttachment?.kind === "image" || pendingAttachment?.kind === "video");
 
     if (pendingAttachment?.kind === "image") {
       const { path, error } = await uploadChatImage(conversationId, pendingAttachment.file);
@@ -2126,6 +2229,7 @@ export async function mountThread(
       attachmentType,
       attachmentDurationSeconds,
       replyToMessageId: replyTarget?.id,
+      viewOnce,
     });
 
     sending = false;

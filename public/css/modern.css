@@ -5719,6 +5719,55 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 .chat-bubble-video-play svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)); }
 
+/* Placeholder de foto/video efímero (ver viewOnceMediaHtml en chatThread.ts): mismo ancho que
+   una foto normal pero sin thumbnail -- nunca se hidrata como <img>, ni el storage la deja leer
+   todavía. Tres variantes por clase modificadora: sin abrir (clickeable), ya vista y "la mande
+   yo" comparten el mismo look apagado, solo cambia si es <button> o <div>. */
+.chat-bubble-viewonce {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 240px;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.chat-bubble-viewonce-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #fff;
+}
+
+.chat-bubble-viewonce-unseen { cursor: pointer; }
+.chat-bubble-viewonce-unseen.is-loading { opacity: 0.6; pointer-events: none; }
+
+.chat-bubble-viewonce-seen,
+.chat-bubble-viewonce-sent {
+  font-style: italic;
+  opacity: 0.7;
+}
+.chat-bubble-viewonce-seen .chat-bubble-viewonce-badge,
+.chat-bubble-viewonce-sent .chat-bubble-viewonce-badge {
+  background: rgba(0, 0, 0, 0.18);
+  color: inherit;
+}
+
 /* Embed de YouTube dentro de una burbuja (ver bubbleBodyHtml en chatThread.ts) -- mismo iframe
    que .post-youtube-embed de los Reps, acotado a un ancho fijo en vez de 100% de la burbuja
    (que en desktop puede llegar a ser bastante ancha). */
@@ -5852,6 +5901,34 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .chat-preview-bar span:not(.chat-preview-cancel) { flex: 1; }
+
+/* Toggle "se ve una vez" en la barra de vista previa del composer -- circulo con un "1" adentro,
+   mismo lenguaje visual que WhatsApp. Gris cuando esta apagado, se llena con el gradiente
+   accent/accent-2 (mismo par que el resto de la web) cuando esta activo. */
+.chat-preview-viewonce-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chat-preview-viewonce-btn[hidden] { display: none; }
+
+.chat-preview-viewonce-btn.is-active {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  border-color: transparent;
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .chat-preview-viewonce-btn:hover:not(.is-active) { color: var(--text); border-color: var(--text-muted); }
+}
 
 /* Vista previa en vivo del link de YouTube pegado en el composer (ver updateYoutubePreview en
    chatThread.ts) -- mismo iframe que .post-youtube-embed, pero acotado en ancho: el composer del

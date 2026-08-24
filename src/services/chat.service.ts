@@ -96,6 +96,8 @@ export interface SendMessageInput {
   sharedGymPostId?: string;
   replyToMessageId?: string;
   isForwarded?: boolean;
+  /** Foto/video que se puede abrir una sola vez -- solo se respeta en chats 1 a 1 (ver send_message). */
+  viewOnce?: boolean;
 }
 
 export async function sendMessage(conversationId: string, input: SendMessageInput): Promise<{ message?: ChatMessage; error?: string }> {
@@ -109,9 +111,28 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_shared_gym_post_id: input.sharedGymPostId,
     p_reply_to_message_id: input.replyToMessageId,
     p_is_forwarded: input.isForwarded,
+    p_view_once: input.viewOnce,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };
+}
+
+/**
+ * Abre un mensaje efímero (una sola vez, atómico server-side -- ver open_view_once_message).
+ * Solo el destinatario puede llamarlo, nunca el remitente, y solo mientras nadie lo haya
+ * abierto todavía. Devuelve el mensaje actualizado (con viewed_once_at/by ya seteados).
+ */
+export async function openViewOnceMessage(messageId: string): Promise<{ message?: ChatMessage; error?: string }> {
+  const { data, error } = await supabase.rpc("open_view_once_message", { p_message_id: messageId });
+  if (error) return { error: friendlyError(error, "Ya no está disponible.") };
+  return { message: data as ChatMessage };
+}
+
+/** Borra el adjunto del bucket apenas se termina de descargar en el visor -- así una foto
+ * efímera queda realmente inaccesible después de verse, no solo oculta en la UI. Best-effort:
+ * si falla, viewed_once_at ya quedó seteado y nadie puede volver a abrirla igual. */
+export async function deleteChatAttachment(path: string): Promise<void> {
+  await supabase.storage.from(BUCKET).remove([path]);
 }
 
 /** Ancla (o reemplaza el anclado) o desancla el mensaje destacado de la conversación, visible para ambos participantes. */

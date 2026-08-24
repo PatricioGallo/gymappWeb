@@ -1097,6 +1097,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         Insert: {
           attachment_duration_seconds?: number | null
@@ -1116,6 +1119,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
+          view_once?: boolean
+          viewed_once_at?: string | null
+          viewed_once_by?: string | null
         }
         Update: {
           attachment_duration_seconds?: number | null
@@ -1135,6 +1141,9 @@ export type Database = {
           sender_id?: string
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
+          view_once?: boolean
+          viewed_once_at?: string | null
+          viewed_once_by?: string | null
         }
         Relationships: [
           {
@@ -1177,6 +1186,13 @@ export type Database = {
             columns: ["shared_post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_viewed_once_by_fkey"
+            columns: ["viewed_once_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2686,6 +2702,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -2714,6 +2733,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3129,6 +3151,37 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      open_view_once_message: {
+        Args: { p_message_id: string }
+        Returns: {
+          attachment_duration_seconds: number | null
+          attachment_filename: string | null
+          attachment_path: string | null
+          attachment_type: string | null
+          content: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          is_forwarded: boolean
+          reactions: Json
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          shared_gym_post_id: string | null
+          shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       pin_message: {
         Args: { p_conversation_id: string; p_message_id: string }
         Returns: undefined
@@ -3153,6 +3206,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3256,6 +3312,7 @@ export type Database = {
           p_reply_to_message_id?: string
           p_shared_gym_post_id?: string
           p_shared_post_id?: string
+          p_view_once?: boolean
         }
         Returns: {
           attachment_duration_seconds: number | null
@@ -3275,6 +3332,9 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          view_once: boolean
+          viewed_once_at: string | null
+          viewed_once_by: string | null
         }
         SetofOptions: {
           from: "*"
