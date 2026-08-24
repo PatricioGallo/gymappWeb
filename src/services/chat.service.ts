@@ -111,7 +111,12 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_shared_gym_post_id: input.sharedGymPostId,
     p_reply_to_message_id: input.replyToMessageId,
     p_is_forwarded: input.isForwarded,
-    p_view_once: input.viewOnce,
+    // Siempre boolean real, nunca undefined: la base tiene dos versiones superpuestas de
+    // send_message (una vieja sin p_view_once, ver migracion pendiente para limpiarla) y si
+    // esta clave se cae del JSON (undefined), Postgres no puede elegir entre ambas y tira
+    // "could not choose the best candidate function" -- rompe CUALQUIER mensaje de texto/emoji
+    // normal, no solo los efimeros.
+    p_view_once: input.viewOnce ?? false,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };
