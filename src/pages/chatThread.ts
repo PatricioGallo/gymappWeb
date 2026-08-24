@@ -840,7 +840,7 @@ export async function mountThread(
     return `
       <button type="button" class="chat-bubble-viewonce chat-bubble-viewonce-unseen" data-viewonce-id="${m.id}">
         <span class="chat-bubble-viewonce-badge">1</span>
-        <span>Toca para ver la ${noun.toLowerCase()}</span>
+        <span>${noun}</span>
       </button>
     `;
   }
