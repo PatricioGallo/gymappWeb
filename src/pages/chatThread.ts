@@ -223,6 +223,10 @@ export interface ThreadController {
    * (ver openThread en chats.ts) para traer la ultima pagina de la red y agregar lo que todavia
    * no se haya renderizado, sin tocar lo que ya esta pintado. */
   catchUp(): Promise<void>;
+  /** Pausa cualquier audio de este hilo que haya quedado sonando -- ver la nota junto a
+   * pauseActiveMedia mas abajo. chats.ts la llama al ocultar el hilo (cambio de conversacion o
+   * salida de chats.html), no solo al desmontarlo del todo. */
+  pauseMedia(): void;
 }
 
 export async function mountThread(
@@ -1083,12 +1087,17 @@ export async function mountThread(
     // vivo el DOM del hilo y solo lo oculta/muestra al cambiar de conversacion, nunca lo
     // vuelve a montar) -- este pintado inicial pasa una unica vez, no en cada reapertura.
     const cachedMsgs = await getCachedMessages(conversationId);
+    let paintedFromCache = false;
     if (cachedMsgs.length > 0) {
       messages = cachedMsgs;
       messages.forEach((m) => renderedIds.add(m.id));
       await hydrateSharedPosts(messages);
       await hydrateMyViewOnceOpens(messages);
-      messagesEl.innerHTML = buildMessagesHtml(messages);
+      // Sentinel siempre presente aca: todavia no sabemos si hay mas historial (eso lo confirma
+      // recien la respuesta de red de abajo) -- barato de corregir si sobra (prependOlderMessages
+      // se auto-desconecta apenas encuentra 0 resultados) y evita mostrarle al usuario "no hay
+      // mas mensajes" de arranque en un chat que en realidad tiene historial mas viejo.
+      messagesEl.innerHTML = SENTINEL_HTML + buildMessagesHtml(messages);
       // El scroll no tiene que esperar a que las imagenes/audio terminen de resolver su URL
       // firmada -- el alto de cada media ya esta fijo por CSS (no depende de que cargue), asi
       // que hacerlo esperar solo se sentia como "aparece arriba y recien despues salta al
@@ -1097,24 +1106,60 @@ export async function mountThread(
       void hydrateMedia();
       void hydrateMissingQuotes();
       void hydrateAudioWaveforms();
+      observeLoadSentinel();
+      paintedFromCache = true;
     } else {
       messagesEl.innerHTML = `<div class="chat-messages-loading"><div class="modern-spinner"></div></div>`;
     }
 
     const page = await listMessages(conversationId);
-    messages = page.slice().reverse();
-    messages.forEach((m) => renderedIds.add(m.id));
-    await hydrateSharedPosts(messages);
-    await hydrateMyViewOnceOpens(messages);
+    const freshMessages = page.slice().reverse();
     olderExhausted = page.length < MESSAGES_PAGE_SIZE;
-    messagesEl.innerHTML = messages.length
-      ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
-      : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
-    scrollToBottom("instant");
-    void hydrateMedia();
-    void hydrateMissingQuotes();
-    void hydrateAudioWaveforms();
-    if (!olderExhausted) observeLoadSentinel();
+
+    // chats.ts prefetchea (y cachea) los ultimos mensajes de las ~30 conversaciones mas
+    // recientes apenas se abre la lista de chats -- asi que para la inmensa mayoria de las
+    // aperturas, lo que acaba de pintar el cache de arriba ya es exactamente igual a lo que
+    // vuelve la red. Si es asi, no hay que rehacer nada: reconstruir el innerHTML entero de
+    // vuelta destruye y recrea cada burbuja ya renderizada -- incluidos <iframe> de YouTube ya
+    // cargados y waveforms de audio ya dibujados -- el mismo costo (~100-300ms por iframe,
+    // ver prependOlderMessages) que ya se evito ahi para el scroll-hacia-arriba, pero disparado
+    // en el peor momento posible: la primera vez que se abre un grupo activo en la sesion.
+    const sameAsCache =
+      paintedFromCache &&
+      messages.length === freshMessages.length &&
+      messages.every((m, i) => {
+        const f = freshMessages[i];
+        return (
+          m.id === f.id &&
+          m.content === f.content &&
+          m.edited_at === f.edited_at &&
+          m.deleted_at === f.deleted_at &&
+          m.read_at === f.read_at &&
+          m.viewed_once_at === f.viewed_once_at &&
+          JSON.stringify(m.reactions) === JSON.stringify(f.reactions)
+        );
+      });
+
+    messages = freshMessages;
+    messages.forEach((m) => renderedIds.add(m.id));
+
+    if (sameAsCache) {
+      if (olderExhausted) {
+        olderMessagesObserver.disconnect();
+        messagesEl.querySelector("#chatLoadSentinel")?.remove();
+      }
+    } else {
+      await hydrateSharedPosts(messages);
+      await hydrateMyViewOnceOpens(messages);
+      messagesEl.innerHTML = messages.length
+        ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
+        : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
+      scrollToBottom("instant");
+      void hydrateMedia();
+      void hydrateMissingQuotes();
+      void hydrateAudioWaveforms();
+      if (!olderExhausted) observeLoadSentinel();
+    }
     void cacheMessages(conversationId, page);
 
     const hasUnreadFromOther = messages.some((m) => m.sender_id !== userId && !m.read_at);
@@ -1238,59 +1283,21 @@ export async function mountThread(
     else updateScrollBottomBtn();
   }
 
-  await renderInitialMessages();
-
-  // ---------------------------------------------------------------------------
-  // Realtime: mensajes nuevos + actualizaciones de lectura (doble check)
-  // ---------------------------------------------------------------------------
-
-  const channel = supabase
-    .channel(`chat-thread-${conversationId}`)
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
-      const msg = payload.new as ChatMessage;
-      void appendMessage(msg);
-      if (msg.sender_id !== userId && isThreadOnScreen()) {
-        void markReadAndRefreshBadge();
-      }
-      if (msg.sender_id !== userId && conversationStatus === "pending" && isInitiator) {
-        conversationStatus = "accepted";
-        renderBanners();
-      }
-    })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
-      const incoming = payload.new as ChatMessage;
-      const idx = messages.findIndex((m) => m.id === incoming.id);
-      const previous = idx !== -1 ? messages[idx] : null;
-      const updated = reactionMutationInFlight.has(incoming.id) && idx !== -1 ? { ...incoming, reactions: messages[idx].reactions } : incoming;
-      const contentChanged =
-        previous &&
-        (previous.content !== updated.content ||
-          previous.deleted_at !== updated.deleted_at ||
-          previous.edited_at !== updated.edited_at ||
-          previous.viewed_once_at !== updated.viewed_once_at);
-      if (contentChanged) {
-        applyMessageContentUpdate(updated);
-      } else {
-        if (idx !== -1) messages[idx] = updated;
-        refreshBubbleTicks(updated);
-        refreshBubbleReactions(updated);
-      }
-    })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` }, (payload) => {
-      const updatedConversation = payload.new as { pinned_message_id: string | null; group_name: string | null; group_avatar_url: string | null };
-      if (updatedConversation.pinned_message_id !== pinnedMessageId) {
-        pinnedMessageId = updatedConversation.pinned_message_id;
-        void renderPinnedBanner();
-        refreshPinnedBubbleClass();
-      }
-      if (isGroup && (updatedConversation.group_name !== conversation!.group_name || updatedConversation.group_avatar_url !== conversation!.group_avatar_url)) {
-        conversation!.group_name = updatedConversation.group_name as string;
-        conversation!.group_avatar_url = updatedConversation.group_avatar_url as string;
-        renderHeaderIdentity();
-      }
-    })
-    .subscribe();
-  ctx.addCleanup(() => void supabase.removeChannel(channel));
+  // OJO: a proposito NO se espera aca (se espera mas abajo, justo antes del return, ver
+  // initialRenderReady). Todo lo que sigue en esta funcion -- composer, click-delegation de
+  // mensajes, mic, stickers, reacciones, menu de mensaje, etc. -- son puros addEventListener
+  // sobre nodos que YA existen en el DOM (armados mas arriba, antes de este punto). Si se
+  // esperaba aca, esos listeners no quedaban conectados hasta que se resolvia el fetch de red
+  // inicial de renderInitialMessages: durante esa ventana el hilo se veia listo (ya pintado
+  // desde el cache) pero escribir, abrir una foto o tocar play en un audio no hacia nada --
+  // exactamente la sensacion de "se traba al entrar al grupo" en una red lenta o un dispositivo
+  // con la CPU limitada (medido con Playwright: en un hilo con mensajes/fotos/YouTube ya
+  // cacheados, esa ventana de "se ve pero no responde" se estiraba varios segundos bajo un
+  // throttle de CPU 4x). El canal realtime de abajo SI se sigue suscribiendo despues de esperar
+  // el render inicial (sin cambios respecto de antes) -- un INSERT/UPDATE que llegue antes de
+  // que `messages`/`renderedIds` esten poblados por renderInitialMessages podria pisarse con su
+  // propio render.
+  const initialRenderReady = renderInitialMessages();
 
   document.addEventListener(
     "visibilitychange",
@@ -1477,6 +1484,22 @@ export async function mountThread(
     audioPlayers.forEach((audio) => audio.pause());
   });
 
+  /** chats.ts llama esto al ocultar este hilo (cambiar de conversación, o navegar afuera de
+   * chats.html del todo) -- sin esto, un audio que quedó sonando seguía reproduciéndose (y su
+   * loop de requestAnimationFrame dibujando la onda en un canvas invisible, sin parar nunca)
+   * en segundo plano indefinidamente, ya que el único lugar que lo pausaba antes era el propio
+   * toggle (arrancar otro audio) o el dispose final del ctx, que con hilos que quedan vivos en
+   * memoria toda la sesión (ver mountThread arriba) puede tardar en llegar o no llegar nunca. */
+  function pauseActiveMedia(): void {
+    if (!currentlyPlayingId) return;
+    stopPlaybackLoop();
+    const audio = audioPlayers.get(currentlyPlayingId);
+    audio?.pause();
+    const btn = messagesEl.querySelector<HTMLButtonElement>(`.chat-audio-toggle[data-id="${currentlyPlayingId}"]`);
+    if (btn) setPlayIcon(btn, true);
+    currentlyPlayingId = null;
+  }
+
   async function openLightbox(path: string, kind: "image" | "video"): Promise<void> {
     const url = await resolveAttachmentUrl(path);
     if (!url) return;
@@ -1504,11 +1527,6 @@ export async function mountThread(
         alert(error || "Ya no está disponible.");
         return;
       }
-      // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para siempre) --
-      // mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES de re-pintar
-      // la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
-      if (isGroup) myGroupViewOnceOpened.add(message.id);
-      applyMessageContentUpdate(opened);
       const path = opened.attachment_path!;
       const url = await resolveAttachmentUrl(path);
       if (!url) return;
@@ -1516,6 +1534,17 @@ export async function mountThread(
       if (!resp.ok) return;
       const blob = await resp.blob();
       const blobUrl = URL.createObjectURL(blob);
+      // El marcado server-side de "visto" pasa primero (arriba, atomico) para que abrir dos
+      // veces seguidas no descargue el archivo dos veces -- pero el re-render de la burbuja
+      // (el tick de "visto" que ve el otro lado) se retiene hasta aca, recien cuando la foto ya
+      // esta lista para mostrarse. Antes se pintaba apenas volvia el RPC, varios cientos de ms
+      // antes de que openMediaLightbox de abajo realmente abriera algo -- el chat mostraba
+      // "visto" mientras el usuario seguia mirando una burbuja con un spinner.
+      // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para siempre) --
+      // mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES de re-pintar
+      // la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
+      if (isGroup) myGroupViewOnceOpened.add(message.id);
+      applyMessageContentUpdate(opened);
       // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recien
       // da true cuando TODOS los integrantes activos ya la abrieron cada uno la suya -- borrar
       // antes le arruinaria la foto a quien todavia no le tocó verla.
@@ -2343,5 +2372,60 @@ export async function mountThread(
     }
   }
 
-  return { catchUp: catchUpMessages };
+  // ---------------------------------------------------------------------------
+  // Realtime: mensajes nuevos + actualizaciones de lectura (doble check)
+  // ---------------------------------------------------------------------------
+  // Se espera initialRenderReady antes de suscribirse (ver la nota junto a esa constante, mas
+  // arriba) -- todo lo demas en esta funcion ya quedo interactivo desde mucho antes.
+  await initialRenderReady;
+
+  const channel = supabase
+    .channel(`chat-thread-${conversationId}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      const msg = payload.new as ChatMessage;
+      void appendMessage(msg);
+      if (msg.sender_id !== userId && isThreadOnScreen()) {
+        void markReadAndRefreshBadge();
+      }
+      if (msg.sender_id !== userId && conversationStatus === "pending" && isInitiator) {
+        conversationStatus = "accepted";
+        renderBanners();
+      }
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      const incoming = payload.new as ChatMessage;
+      const idx = messages.findIndex((m) => m.id === incoming.id);
+      const previous = idx !== -1 ? messages[idx] : null;
+      const updated = reactionMutationInFlight.has(incoming.id) && idx !== -1 ? { ...incoming, reactions: messages[idx].reactions } : incoming;
+      const contentChanged =
+        previous &&
+        (previous.content !== updated.content ||
+          previous.deleted_at !== updated.deleted_at ||
+          previous.edited_at !== updated.edited_at ||
+          previous.viewed_once_at !== updated.viewed_once_at);
+      if (contentChanged) {
+        applyMessageContentUpdate(updated);
+      } else {
+        if (idx !== -1) messages[idx] = updated;
+        refreshBubbleTicks(updated);
+        refreshBubbleReactions(updated);
+      }
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `id=eq.${conversationId}` }, (payload) => {
+      const updatedConversation = payload.new as { pinned_message_id: string | null; group_name: string | null; group_avatar_url: string | null };
+      if (updatedConversation.pinned_message_id !== pinnedMessageId) {
+        pinnedMessageId = updatedConversation.pinned_message_id;
+        void renderPinnedBanner();
+        refreshPinnedBubbleClass();
+      }
+      if (isGroup && (updatedConversation.group_name !== conversation!.group_name || updatedConversation.group_avatar_url !== conversation!.group_avatar_url)) {
+        conversation!.group_name = updatedConversation.group_name as string;
+        conversation!.group_avatar_url = updatedConversation.group_avatar_url as string;
+        renderHeaderIdentity();
+      }
+    })
+    .subscribe();
+  ctx.addCleanup(() => void supabase.removeChannel(channel));
+
+  return { catchUp: catchUpMessages, pauseMedia: pauseActiveMedia };
 }

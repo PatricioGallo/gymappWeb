@@ -108,6 +108,10 @@ const VIEW_MARKUP = `
 // (que el router necesita tener siempre definido, incluso antes del primer mount) para poder
 // delegarle los cambios de ?c=ID sin desmontar toda la vista de chats.
 let updateHandler: ((params: URLSearchParams) => void) | null = null;
+// Reflejado por mount() -- onHide lo usa para pausar cualquier audio que haya quedado sonando
+// en el hilo activo cuando esta vista ENTERA pasa a segundo plano (ej. se navega a un perfil),
+// no solo al cambiar de conversacion adentro de chats.ts (eso ya lo cubre hideActiveInstance).
+let pauseActiveThreadMedia: (() => void) | null = null;
 // Reflejado por openThread/closeThread -- onShow lo usa para restaurar la clase de <body> que
 // pone en pantalla completa el hilo en mobile, si justo eso era lo que se estaba viendo antes
 // de que esta vista pasara a segundo plano (ver onHide, que siempre la saca al ocultarse).
@@ -161,6 +165,7 @@ export const chatsView: ViewModule = {
       const instance = threadInstances.get(activeConversationId);
       if (!instance) return;
       instance.el.hidden = true;
+      instance.controller?.pauseMedia();
     }
 
     function matchesQuery(c: ConversationSummary): boolean {
@@ -817,8 +822,12 @@ export const chatsView: ViewModule = {
       if (id) openThread(id, { pushHistory: false });
       else closeThread({ updateUrl: false });
     };
+    pauseActiveThreadMedia = () => {
+      if (activeConversationId) threadInstances.get(activeConversationId)?.controller?.pauseMedia();
+    };
     ctx.addCleanup(() => {
       updateHandler = null;
+      pauseActiveThreadMedia = null;
     });
   },
   update(params) {
@@ -830,5 +839,6 @@ export const chatsView: ViewModule = {
   },
   onHide() {
     document.body.classList.remove("chats-page", "chats-thread-open");
+    pauseActiveThreadMedia?.();
   },
 };
