@@ -129,6 +129,19 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
 
+/** Manda el mail de "restablecer contraseña". Supabase no distingue si el mail existe o no
+ * (misma respuesta en ambos casos) para evitar enumeracion de cuentas, asi que solo devolvemos
+ * error ante un problema real (rate limit, red, etc.) -- no ante "ese mail no existe". */
+export async function requestPasswordReset(email: string): Promise<{ error?: string }> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: `${window.location.origin}/pages/reset-password.html`,
+  });
+  if (error) {
+    return { error: "No se pudo enviar el mail. Intentá de nuevo en unos minutos." };
+  }
+  return {};
+}
+
 export async function getCurrentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
