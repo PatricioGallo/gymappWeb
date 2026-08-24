@@ -28,6 +28,7 @@ import {
   deleteMessage,
   copyChatAttachment,
   openViewOnceMessage,
+  listMyViewOnceOpens,
   deleteChatAttachment,
   groupParticipantsOf,
   MESSAGES_PAGE_SIZE,
@@ -280,6 +281,12 @@ export async function mountThread(
 
   let messages: ChatMessage[] = [];
   const renderedIds = new Set<string>();
+  // Fotos/videos efímeros de GRUPO que YO ya abrí (ver open_view_once_message): a diferencia
+  // de 1 a 1, donde messages.viewed_once_at/by alcanza (un unico espectador posible para toda
+  // la conversacion), en grupo cada integrante tiene su propio estado "ya la vi" -- no vive en
+  // la fila del mensaje (esa nunca cambia para mensajes de grupo), se trackea aparte y se
+  // hidrata con listMyViewOnceOpens al cargar/paginar el hilo (ver hydrateMyViewOnceOpens).
+  const myGroupViewOnceOpened = new Set<string>();
   // Mientras esperamos la respuesta de react_to_message para un mensaje, un UPDATE por
   // realtime ajeno a la reacción (ej. el mark-as-read automático al abrir el hilo, que
   // pisa toda la fila) puede llegar de vuelta con las reactions *previas* a la que
@@ -709,6 +716,18 @@ export async function mountThread(
     gymMap.forEach((post, id) => sharedGymPostsCache.set(id, post));
   }
 
+  /** Completa myGroupViewOnceOpened para los mensajes efímeros de grupo recién cargados que
+   * todavía no sabemos si YO ya abrí (ver esa constante mas arriba). Devuelve true si encontró
+   * algo nuevo, para que el caller sepa si vale la pena volver a pintar. */
+  async function hydrateMyViewOnceOpens(list: ChatMessage[]): Promise<boolean> {
+    if (!isGroup) return false;
+    const ids = list.filter((m) => m.view_once && m.sender_id !== userId && !myGroupViewOnceOpened.has(m.id)).map((m) => m.id);
+    if (ids.length === 0) return false;
+    const opened = await listMyViewOnceOpens(ids);
+    opened.forEach((id) => myGroupViewOnceOpened.add(id));
+    return opened.length > 0;
+  }
+
   function sharedPostPreviewHtml(postId: string): string {
     const post = sharedPostsCache.get(postId);
     if (!post) return `<div class="chat-shared-post chat-shared-post-missing">Rep no disponible</div>`;
@@ -793,11 +812,16 @@ export async function mountThread(
   // Foto/video efímero: nunca se hidrata como <img>/<video> con data-path (hydrateMedia los
   // ignora, y de paso el storage tampoco dejaría leerlos todavía -- ver policy
   // chat_attachments_select). Tres estados: sin abrir (destinatario ve un botón "Toca para
-  // ver"), ya visto (nadie puede reabrirlo, ver open_view_once_message), o soy quien lo mandó
-  // (nunca puedo verlo yo mismo, ni antes ni después de que lo abran).
+  // ver"), ya visto, o soy quien lo mandó (nunca puedo verlo yo mismo, ni antes ni después de
+  // que lo abran). En 1 a 1 hay un unico destinatario posible, asi que m.viewed_once_at (en la
+  // fila del mensaje) ya dice si "ya se vio" para cualquiera de los dos. En grupo cada
+  // integrante tiene su propio estado -- la fila nunca cambia, se consulta myGroupViewOnceOpened
+  // (ver mas arriba) en su lugar, y por eso el sender siempre queda en "enviada" (nunca abre la
+  // suya propia) sin importar cuántos del grupo ya la vieron.
   function viewOnceMediaHtml(m: ChatMessage, isMe: boolean, kind: "image" | "video"): string {
     const noun = kind === "image" ? "Foto" : "Video";
-    if (m.viewed_once_at) {
+    const viewedByMe = isGroup ? myGroupViewOnceOpened.has(m.id) : !!m.viewed_once_at;
+    if (viewedByMe) {
       return `
         <div class="chat-bubble-viewonce chat-bubble-viewonce-seen">
           <span class="chat-bubble-viewonce-badge">✓</span>
@@ -809,7 +833,7 @@ export async function mountThread(
       return `
         <div class="chat-bubble-viewonce chat-bubble-viewonce-sent">
           <span class="chat-bubble-viewonce-badge">1</span>
-          <span>${noun} enviada · se ve una vez</span>
+          <span>${noun}</span>
         </div>
       `;
     }
@@ -1063,6 +1087,7 @@ export async function mountThread(
       messages = cachedMsgs;
       messages.forEach((m) => renderedIds.add(m.id));
       await hydrateSharedPosts(messages);
+      await hydrateMyViewOnceOpens(messages);
       messagesEl.innerHTML = buildMessagesHtml(messages);
       // El scroll no tiene que esperar a que las imagenes/audio terminen de resolver su URL
       // firmada -- el alto de cada media ya esta fijo por CSS (no depende de que cargue), asi
@@ -1080,6 +1105,7 @@ export async function mountThread(
     messages = page.slice().reverse();
     messages.forEach((m) => renderedIds.add(m.id));
     await hydrateSharedPosts(messages);
+    await hydrateMyViewOnceOpens(messages);
     olderExhausted = page.length < MESSAGES_PAGE_SIZE;
     messagesEl.innerHTML = messages.length
       ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
@@ -1114,6 +1140,7 @@ export async function mountThread(
     ascendingOlder.forEach((m) => renderedIds.add(m.id));
     messages = [...ascendingOlder, ...messages];
     await hydrateSharedPosts(ascendingOlder);
+    await hydrateMyViewOnceOpens(ascendingOlder);
 
     olderExhausted = older.length < MESSAGES_PAGE_SIZE;
     // Reemplazar innerHTML reinicia el scrollTop a 0 -- sin guardar donde estaba ANTES del
@@ -1425,11 +1452,15 @@ export async function mountThread(
     const btn = messagesEl.querySelector<HTMLButtonElement>(`.chat-bubble-viewonce-unseen[data-viewonce-id="${message.id}"]`);
     btn?.classList.add("is-loading");
     try {
-      const { message: opened, error } = await openViewOnceMessage(message.id);
+      const { message: opened, fullyViewed, error } = await openViewOnceMessage(message.id);
       if (error || !opened) {
         alert(error || "Ya no está disponible.");
         return;
       }
+      // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para siempre) --
+      // mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES de re-pintar
+      // la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
+      if (isGroup) myGroupViewOnceOpened.add(message.id);
       applyMessageContentUpdate(opened);
       const path = opened.attachment_path!;
       const url = await resolveAttachmentUrl(path);
@@ -1438,7 +1469,10 @@ export async function mountThread(
       if (!resp.ok) return;
       const blob = await resp.blob();
       const blobUrl = URL.createObjectURL(blob);
-      void deleteChatAttachment(path);
+      // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recien
+      // da true cuando TODOS los integrantes activos ya la abrieron cada uno la suya -- borrar
+      // antes le arruinaria la foto a quien todavia no le tocó verla.
+      if (fullyViewed) void deleteChatAttachment(path);
       openMediaLightbox({
         queue: [{ url: blobUrl }],
         startIndex: 0,
@@ -1792,8 +1826,6 @@ export async function mountThread(
     | { kind: "audio"; blob: Blob; durationSeconds: number };
 
   let pendingAttachment: PendingAttachment | null = null;
-  // Solo disponible en chats 1 a 1 (ver send_message: v_view_once exige kind = 'direct'), asi
-  // que el toggle ni se ofrece en un grupo.
   let pendingViewOnce = false;
   let sending = false;
   const recorder = new AudioRecorder();
@@ -1930,7 +1962,7 @@ export async function mountThread(
       previewAudioLabel.hidden = false;
       previewAudioDuration.textContent = formatDuration(pendingAttachment.durationSeconds);
     }
-    previewViewOnceBtn.hidden = isGroup || (pendingAttachment?.kind !== "image" && pendingAttachment?.kind !== "video");
+    previewViewOnceBtn.hidden = pendingAttachment?.kind !== "image" && pendingAttachment?.kind !== "video";
     updateSendState();
     updateYoutubePreview();
   }

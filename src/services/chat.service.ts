@@ -118,14 +118,28 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
 }
 
 /**
- * Abre un mensaje efímero (una sola vez, atómico server-side -- ver open_view_once_message).
- * Solo el destinatario puede llamarlo, nunca el remitente, y solo mientras nadie lo haya
- * abierto todavía. Devuelve el mensaje actualizado (con viewed_once_at/by ya seteados).
+ * Abre un mensaje efímero (atómico server-side -- ver open_view_once_message). Solo un
+ * destinatario puede llamarlo, nunca el remitente, y solo mientras no la haya abierto ya.
+ * En 1 a 1 hay un unico destinatario posible, asi que fullyViewed siempre da true; en grupo
+ * da true recien cuando TODOS los integrantes activos (menos quien la mando) ya la abrieron
+ * cada uno la suya -- solo ahi es seguro borrar el archivo del bucket (ver deleteChatAttachment,
+ * llamado desde chatThread.ts únicamente cuando esto da true).
  */
-export async function openViewOnceMessage(messageId: string): Promise<{ message?: ChatMessage; error?: string }> {
+export async function openViewOnceMessage(messageId: string): Promise<{ message?: ChatMessage; fullyViewed?: boolean; error?: string }> {
   const { data, error } = await supabase.rpc("open_view_once_message", { p_message_id: messageId });
-  if (error) return { error: friendlyError(error, "Ya no está disponible.") };
-  return { message: data as ChatMessage };
+  const row = data?.[0];
+  if (error || !row) return { error: friendlyError(error, "Ya no está disponible.") };
+  return { message: row.msg, fullyViewed: row.fully_viewed };
+}
+
+/** IDs de mensajes efímeros de grupo que el usuario actual ya abrió, entre los pasados --
+ * usado al cargar/reabrir un hilo para saber cuáles ya vio (ver myGroupViewOnceOpened en
+ * chatThread.ts). En 1 a 1 no hace falta: alcanza con messages.viewed_once_at. */
+export async function listMyViewOnceOpens(messageIds: string[]): Promise<string[]> {
+  if (messageIds.length === 0) return [];
+  const { data, error } = await supabase.from("message_view_once_opens").select("message_id").in("message_id", messageIds);
+  if (error) return [];
+  return data.map((r) => r.message_id);
 }
 
 /** Borra el adjunto del bucket apenas se termina de descargar en el visor -- así una foto
