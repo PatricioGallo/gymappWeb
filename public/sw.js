@@ -52,12 +52,25 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       // Si ya está mirando la webapp (pestaña al frente y con foco), no hace falta la
       // notificación del sistema -- lo que llega por push ya se refleja en vivo adentro
       // (badge, mensajes nuevos, etc. via realtime). Si la tiene abierta pero de fondo
       // (otra pestaña/app encima), igual le mostramos la notificación.
-      if (clients.some((c) => c.focused)) return;
+      //
+      // En iOS esto NO se chequea: WebKit tiene un bug conocido donde una ventana de la PWA
+      // instalada sigue reportando client.focused=true aunque la pantalla esté bloqueada o
+      // la app este en segundo plano -- confirmado en la práctica (push_subscriptions
+      // muestra decenas de suscripciones nuevas por dia para el mismo iPhone, siempre con
+      // "sent" exitoso del lado del servidor, y ninguna notificación visible). Esto no es
+      // solo "se pierde el aviso": la suscripción se pidió con userVisibleOnly:true, que
+      // exige mostrar una notificación en CADA push -- no hacerlo es lo que probablemente
+      // dispara que Safari invalide la suscripción tan seguido (ver ensurePushSubscription
+      // en pushNotifications.ts), un problema aparte que este mismo chequeo roto explica.
+      const isIos = /iphone|ipad|ipod/i.test(self.navigator.userAgent);
+      if (!isIos) {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        if (clients.some((c) => c.focused)) return;
+      }
 
       // El logo por defecto (avisos del sistema, sin actor) ya viene diseñado cuadrado,
       // así que solo redondeamos cuando el icon es una foto de perfil real.
