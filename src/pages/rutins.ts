@@ -712,6 +712,7 @@ export const rutinsView: ViewModule = {
                 target.textContent = exc.name;
                 block.querySelector<HTMLInputElement>(".excSelectInput")!.value = exc.id;
               },
+              myId,
               ctx
             );
           }
