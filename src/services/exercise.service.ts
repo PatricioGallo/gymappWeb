@@ -12,6 +12,7 @@ export const EXERCISE_CATEGORIES: ExerciseCategory[] = [
   "abdominales",
   "piernas",
   "estiramiento",
+  "cuerpo_completo",
 ];
 
 export const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
@@ -22,6 +23,7 @@ export const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
   abdominales: "Abdominales",
   piernas: "Piernas",
   estiramiento: "Estiramiento",
+  cuerpo_completo: "Cuerpo completo",
 };
 
 export async function listExercises(): Promise<Exercise[]> {

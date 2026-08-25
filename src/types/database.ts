@@ -3453,6 +3453,7 @@ export type Database = {
         | "abdominales"
         | "piernas"
         | "estiramiento"
+        | "cuerpo_completo"
       user_type: "admin" | "gimnasio" | "entrenador" | "usuario" | "colaborador"
       weight_unit: "kg" | "lb" | "bloques"
     }
@@ -3590,6 +3591,7 @@ export const Constants = {
         "abdominales",
         "piernas",
         "estiramiento",
+        "cuerpo_completo",
       ],
       user_type: ["admin", "gimnasio", "entrenador", "usuario", "colaborador"],
       weight_unit: ["kg", "lb", "bloques"],

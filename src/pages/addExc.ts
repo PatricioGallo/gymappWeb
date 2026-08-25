@@ -42,6 +42,7 @@ const VIEW_MARKUP = `
               <option value="abdominales">Abdominales</option>
               <option value="piernas">Piernas</option>
               <option value="estiramiento">Estiramiento</option>
+              <option value="cuerpo_completo">Cuerpo completo</option>
             </select>
           </div>
 
