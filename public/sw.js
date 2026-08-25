@@ -52,25 +52,27 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      // Si ya está mirando la webapp (pestaña al frente y con foco), no hace falta la
+      // Si ya está mirando la webapp (pestaña realmente en pantalla), no hace falta la
       // notificación del sistema -- lo que llega por push ya se refleja en vivo adentro
       // (badge, mensajes nuevos, etc. via realtime). Si la tiene abierta pero de fondo
-      // (otra pestaña/app encima), igual le mostramos la notificación.
+      // (otra pestaña/app encima, o el celular bloqueado), igual le mostramos la notificación.
       //
-      // En iOS esto NO se chequea: WebKit tiene un bug conocido donde una ventana de la PWA
-      // instalada sigue reportando client.focused=true aunque la pantalla esté bloqueada o
-      // la app este en segundo plano -- confirmado en la práctica (push_subscriptions
-      // muestra decenas de suscripciones nuevas por dia para el mismo iPhone, siempre con
-      // "sent" exitoso del lado del servidor, y ninguna notificación visible). Esto no es
-      // solo "se pierde el aviso": la suscripción se pidió con userVisibleOnly:true, que
-      // exige mostrar una notificación en CADA push -- no hacerlo es lo que probablemente
-      // dispara que Safari invalide la suscripción tan seguido (ver ensurePushSubscription
-      // en pushNotifications.ts), un problema aparte que este mismo chequeo roto explica.
-      const isIos = /iphone|ipad|ipod/i.test(self.navigator.userAgent);
-      if (!isIos) {
-        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-        if (clients.some((c) => c.focused)) return;
-      }
+      // OJO: esto usaba client.focused antes, no visibilityState -- en iOS, WebKit tiene un
+      // bug conocido donde una ventana de la PWA instalada sigue reportando focused=true
+      // aunque la pantalla esté bloqueada o la app este en segundo plano (confirmado en la
+      // práctica: push_subscriptions mostraba decenas de suscripciones nuevas por dia para el
+      // mismo iPhone, siempre con "sent" exitoso del lado del servidor, y ninguna notificación
+      // visible -- la suscripción se pidió con userVisibleOnly:true, que exige mostrar una
+      // notificación en CADA push, asi que no hacerlo tambien explica esa rotación tan
+      // seguida). "focused" es una señal de foco de teclado/input, no de si la pestaña esta
+      // realmente en pantalla -- visibilityState es la señal correcta para esto (spec de
+      // WindowClient) y WebKit SI la reporta bien: "visible" solo cuando la pagina esta
+      // realmente al frente, "hidden" apenas se bloquea la pantalla o se pasa a otra app. Si
+      // algun cliente no expusiera visibilityState (navegador viejo), se cae a focused para
+      // no perder la supresión ahi, aunque en la práctica todo lo que soporta Push la expone.
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const isClientVisible = (c) => (typeof c.visibilityState === "string" ? c.visibilityState === "visible" : c.focused);
+      if (clients.some(isClientVisible)) return;
 
       // El logo por defecto (avisos del sistema, sin actor) ya viene diseñado cuadrado,
       // así que solo redondeamos cuando el icon es una foto de perfil real.
