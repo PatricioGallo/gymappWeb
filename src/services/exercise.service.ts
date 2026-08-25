@@ -32,6 +32,18 @@ export async function listExercises(): Promise<Exercise[]> {
   return data ?? [];
 }
 
+export async function hasMyExercises(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.from("exercises").select("id").eq("author_id", userId).limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+export async function listMyExercises(userId: string): Promise<Exercise[]> {
+  const { data, error } = await supabase.from("exercises").select("*").eq("author_id", userId).order("name", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export interface AdminExerciseRow extends Exercise {
   authorName: string | null;
 }

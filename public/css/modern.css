@@ -4851,6 +4851,22 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .quick-grid-2 { grid-template-columns: repeat(2, 1fr); max-width: 640px; margin: 0 auto; }
 }
 
+/* ---------- Mis ejercicios: pagina completa, mas aire que el picker/admin (que van
+   comprimidos dentro de un modal de altura acotada) ---------- */
+#myExcAddBtn { margin: 4px 0 32px; }
+
+#myExcResults .exc-pick-section + .exc-pick-section { margin-top: 36px; }
+#myExcResults .exc-pick-section h4 { font-size: 13.5px; margin-bottom: 16px; }
+
+#myExcResults .exc-pick-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; }
+
+#myExcResults .exc-admin-card { padding: 14px; gap: 12px; }
+#myExcResults .exc-pick-thumb { cursor: pointer; }
+#myExcResults .exc-admin-name { font-size: 14px; }
+#myExcResults .exc-pick-thumb svg { width: 32px; height: 32px; }
+#myExcResults .exc-admin-actions { gap: 8px; }
+#myExcResults .exc-admin-actions button { padding: 8px 10px; font-size: 12.5px; }
+
 /* ---------- Reveal on scroll ---------- */
 
 .reveal {

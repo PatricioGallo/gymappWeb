@@ -25,6 +25,7 @@ import {
 } from "../services/profile.service";
 import { getCachedProfileById, getCachedProfileByUsername, cacheProfile } from "../lib/profileDb";
 import { setRoutinePublic, deleteRoutine } from "../services/routine.service";
+import { hasMyExercises } from "../services/exercise.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
 import { getOrCreateConversation } from "../services/chat.service";
@@ -982,7 +983,7 @@ function renderPrivateNotice(nombre: string) {
 
 // Solo se llama para el dueño del perfil: para un visitante estos accesos
 // directos (rutinas propias, progreso completo) no aplican.
-function renderQuickActions(userId: string, userType: Profile["user_type"]) {
+async function renderQuickActions(userId: string, userType: Profile["user_type"]) {
   const quickActions = document.getElementById("quickActions");
   if (!quickActions) return;
 
@@ -1011,6 +1012,8 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
     return;
   }
 
+  const showMyExercises = await hasMyExercises(userId);
+
   quickActions.innerHTML = `
     <a class="quick-card reveal" href="#rutinas">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4M8 8v8M16 8v8M4 10v4M20 10v4"/></svg></div>
@@ -1024,6 +1027,14 @@ function renderQuickActions(userId: string, userType: Profile["user_type"]) {
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
       <div><h3>Nueva rutina</h3><p>Armá una rutina desde cero</p></div>
     </a>
+    ${
+      showMyExercises
+        ? `<a class="quick-card reveal" href="/pages/misEjercicios.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg></div>
+      <div><h3>Mis ejercicios</h3><p>Editá, eliminá o creá tus ejercicios</p></div>
+    </a>`
+        : ""
+    }
     ${
       userType === "entrenador"
         ? `<a class="quick-card reveal" href="/pages/alumnos.html">
@@ -2618,7 +2629,7 @@ async function main(ctx: ViewContext) {
   }
 
   if (isOwner) {
-    renderQuickActions(displayProfile.id!, targetUserType);
+    await renderQuickActions(displayProfile.id!, targetUserType);
   } else {
     document.getElementById("quickActionsSection")?.remove();
   }

@@ -1,5 +1,14 @@
 import { escapeHtml } from "./dom";
-import { EXERCISE_CATEGORIES, CATEGORY_LABELS, validateNewExercise, addExercise, uploadExerciseImage, type ExerciseCategory } from "../services/exercise.service";
+import {
+  EXERCISE_CATEGORIES,
+  CATEGORY_LABELS,
+  validateNewExercise,
+  addExercise,
+  updateExercise,
+  uploadExerciseImage,
+  type Exercise,
+  type ExerciseCategory,
+} from "../services/exercise.service";
 import { imageDropzoneMarkup, wireImageDropzone } from "./imageDropzone";
 import type { ViewContext } from "../shell/viewContext";
 
@@ -11,42 +20,49 @@ const ERROR_LABELS: Record<string, string> = {
   category_missing: "Elegí una categoría para el ejercicio.",
 };
 
-/** Modal para crear un ejercicio propio sin salir de la pantalla actual (ver addExc.ts para la version de pagina completa). */
-export function openCreateExerciseModal(userId: string, ctx?: ViewContext, onCreated?: () => void): void {
+/**
+ * Modal para crear o editar un ejercicio propio sin salir de la pantalla actual (ver
+ * addExc.ts para la version de pagina completa, usada solo para crear). Pasar `existing`
+ * lo pone en modo edicion: precarga los campos y llama a updateExercise en vez de addExercise.
+ */
+export function openCreateExerciseModal(userId: string, existing: Exercise | null, ctx?: ViewContext, onSaved?: () => void): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
+
+  const currentImageStartUrl = existing?.image_start_url ?? null;
+  const currentImageExecutionUrl = existing?.image_execution_url ?? null;
 
   loaderBody.innerHTML = `
     <div class="success-check-container">
       <div class="modal-card modal-card-lg">
-        <h2>Crear un ejercicio</h2>
+        <h2>${existing ? "Editar ejercicio" : "Crear un ejercicio"}</h2>
         <p class="subtitle">Se guarda con tu nombre como autor. Elegís si lo pueden usar todos o solo vos.</p>
 
-        <div class="field"><label for="createExcName">Nombre del ejercicio</label><input type="text" id="createExcName" placeholder="Ej: Press inclinado con mancuernas"></div>
-        <div class="field"><label for="createExcInfo">Descripción</label><textarea id="createExcInfo" rows="5" placeholder="Cómo se hace, en qué fijarse (mínimo 100 caracteres)"></textarea></div>
+        <div class="field"><label for="createExcName">Nombre del ejercicio</label><input type="text" id="createExcName" placeholder="Ej: Press inclinado con mancuernas" value="${escapeHtml(existing?.name ?? "")}"></div>
+        <div class="field"><label for="createExcInfo">Descripción</label><textarea id="createExcInfo" rows="5" placeholder="Cómo se hace, en qué fijarse (mínimo 100 caracteres)">${escapeHtml(existing?.info ?? "")}</textarea></div>
         <div class="field">
           <label for="createExcCategory">Categoría</label>
           <select id="createExcCategory">
             <option value="">Elegí una categoría</option>
-            ${EXERCISE_CATEGORIES.map((c) => `<option value="${c}">${escapeHtml(CATEGORY_LABELS[c])}</option>`).join("")}
+            ${EXERCISE_CATEGORIES.map((c) => `<option value="${c}" ${existing?.category === c ? "selected" : ""}>${escapeHtml(CATEGORY_LABELS[c])}</option>`).join("")}
           </select>
         </div>
 
-        ${imageDropzoneMarkup({ idPrefix: "createExcImgStart", label: "Foto: principio del ejercicio (opcional)" })}
-        ${imageDropzoneMarkup({ idPrefix: "createExcImgExec", label: "Foto: ejecución del ejercicio (opcional)" })}
+        ${imageDropzoneMarkup({ idPrefix: "createExcImgStart", label: "Foto: principio del ejercicio (opcional)", currentUrl: currentImageStartUrl })}
+        ${imageDropzoneMarkup({ idPrefix: "createExcImgExec", label: "Foto: ejecución del ejercicio (opcional)", currentUrl: currentImageExecutionUrl })}
         <p class="field-hint">Si no subís ninguna de las dos, se usa el logo de Gym Social.</p>
 
         <div class="field">
           <label for="createExcVisibility">Visibilidad</label>
           <select id="createExcVisibility">
-            <option value="false" selected>Privado (solo vos lo vas a poder agregar a tus rutinas)</option>
-            <option value="true">Público (cualquiera lo puede agregar a las suyas)</option>
+            <option value="false" ${existing?.is_public === false || !existing ? "selected" : ""}>Privado (solo vos lo vas a poder agregar a tus rutinas)</option>
+            <option value="true" ${existing?.is_public === true ? "selected" : ""}>Público (cualquiera lo puede agregar a las suyas)</option>
           </select>
         </div>
 
         <div class="alert_message" id="createExcAlert"></div>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="createExcSave" type="button">Crear ejercicio</button>
+          <button class="btn btn-primary" id="createExcSave" type="button">${existing ? "Guardar cambios" : "Crear ejercicio"}</button>
           <button class="btn btn-outline" id="createExcClose" type="button">Cancelar</button>
         </div>
       </div>
@@ -85,7 +101,7 @@ export function openCreateExerciseModal(userId: string, ctx?: ViewContext, onCre
       const saveBtn = document.getElementById("createExcSave") as HTMLButtonElement;
       saveBtn.disabled = true;
 
-      let imageStartUrl: string | undefined;
+      let imageStartUrl: string | null | undefined = currentImageStartUrl;
       const startFile = startDropzone.getFile();
       if (startFile) {
         const { url, error: uploadError } = await uploadExerciseImage(userId, startFile);
@@ -94,10 +110,12 @@ export function openCreateExerciseModal(userId: string, ctx?: ViewContext, onCre
           saveBtn.disabled = false;
           return;
         }
-        imageStartUrl = url;
+        imageStartUrl = url ?? null;
+      } else if (startDropzone.wasRemoved()) {
+        imageStartUrl = null;
       }
 
-      let imageExecutionUrl: string | undefined;
+      let imageExecutionUrl: string | null | undefined = currentImageExecutionUrl;
       const execFile = execDropzone.getFile();
       if (execFile) {
         const { url, error: uploadError } = await uploadExerciseImage(userId, execFile);
@@ -106,10 +124,21 @@ export function openCreateExerciseModal(userId: string, ctx?: ViewContext, onCre
           saveBtn.disabled = false;
           return;
         }
-        imageExecutionUrl = url;
+        imageExecutionUrl = url ?? null;
+      } else if (execDropzone.wasRemoved()) {
+        imageExecutionUrl = null;
       }
 
-      const { error } = await addExercise(userId, name, info, category as ExerciseCategory, isPublic, imageStartUrl, imageExecutionUrl);
+      const { error } = existing
+        ? await updateExercise(existing.id, {
+            name,
+            info,
+            category: category as ExerciseCategory,
+            image_start_url: imageStartUrl,
+            image_execution_url: imageExecutionUrl,
+            is_public: isPublic,
+          })
+        : await addExercise(userId, name, info, category as ExerciseCategory, isPublic, imageStartUrl ?? undefined, imageExecutionUrl ?? undefined);
       if (error) {
         alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
         saveBtn.disabled = false;
@@ -126,12 +155,12 @@ export function openCreateExerciseModal(userId: string, ctx?: ViewContext, onCre
               <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
             </svg>
           </div>
-          <p>¡Ejercicio creado con éxito!</p>
+          <p>${existing ? "¡Cambios guardados!" : "¡Ejercicio creado con éxito!"}</p>
         </div>
       `;
       const t = setTimeout(() => {
         loaderBody!.innerHTML = "";
-        onCreated?.();
+        onSaved?.();
       }, 1400);
       ctx?.addCleanup(() => clearTimeout(t));
     },

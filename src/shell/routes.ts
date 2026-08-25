@@ -16,6 +16,7 @@ import { entrenadoresView } from "../pages/entrenadores";
 import { clasesView } from "../pages/clases";
 import { progressView } from "../pages/progress";
 import { rutinsView } from "../pages/rutins";
+import { misEjerciciosView } from "../pages/misEjercicios";
 import { feedView } from "../pages/feed";
 import { pesosView } from "../pages/pesos";
 import { settingsView } from "../pages/settings";
@@ -60,6 +61,11 @@ export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/addExc.html") ? new URLSearchParams() : null),
     view: addExcView,
+    auth: "required",
+  });
+  registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/misEjercicios.html") ? new URLSearchParams() : null),
+    view: misEjerciciosView,
     auth: "required",
   });
   registerRoute({

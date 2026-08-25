@@ -306,7 +306,7 @@ export const rutinsView: ViewModule = {
 
         contentEl.querySelector("#chooseScratch")?.addEventListener("click", () => renderSetupForm());
         contentEl.querySelector("#chooseBrowse")?.addEventListener("click", () => renderBrowseRoutines());
-        contentEl.querySelector("#chooseCreateExercise")?.addEventListener("click", () => openCreateExerciseModal(myId, ctx));
+        contentEl.querySelector("#chooseCreateExercise")?.addEventListener("click", () => openCreateExerciseModal(myId, null, ctx));
       }
 
       // ---------- Ver rutinas ----------
