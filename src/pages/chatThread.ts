@@ -44,6 +44,7 @@ import { refreshChatBadge } from "../lib/chat";
 import { watchPeerOnline, unwatchPeerOnline } from "../lib/presence";
 import { getCachedMessages, cacheMessages } from "../lib/chatDb";
 import { openGroupInfoPanel } from "./chatGroupInfo";
+import { attachChatMentionAutocomplete } from "../lib/chatMentionAutocomplete";
 import type { ViewContext } from "../shell/viewContext";
 
 /** Se re-firma una URL de adjunto si le quedan menos de estos minutos de vida. Importa porque
@@ -2086,6 +2087,18 @@ export async function mountThread(
   composerInput.addEventListener("focus", () => document.body.classList.add("keyboard-open"), { signal: ctx.signal });
   composerInput.addEventListener("blur", () => document.body.classList.remove("keyboard-open"), { signal: ctx.signal });
   ctx.addCleanup(() => document.body.classList.remove("keyboard-open"));
+
+  // Autocompletado de @usuario solo en grupos (en 1 a 1 no hay a quien mas etiquetar que al
+  // otro participante, y participantsById ni se arma ahi -- ver mas arriba). Registrado ANTES
+  // que el "Enter para enviar" de abajo a propósito: ver el comentario junto a
+  // stopImmediatePropagation() en chatMentionAutocomplete.ts.
+  if (isGroup) {
+    attachChatMentionAutocomplete(
+      composerInput,
+      () => [...participantsById.values()].filter((p) => !p.left_at && p.user_id !== userId).map((p) => ({ username: p.username, avatar_url: p.avatar_url })),
+      ctx.signal
+    );
+  }
 
   composerInput.addEventListener(
     "keydown",
