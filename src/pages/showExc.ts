@@ -168,7 +168,7 @@ export const showExcView: ViewModule = {
             event.stopPropagation();
             const dia = diasBase[Number(button.dataset.dia)];
             const exc = dia.ejercicios[Number(button.dataset.exc)];
-            openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_url);
+            openExerciseModal(exc.nombre_snapshot, exc.info_snapshot, exc.nota, exc.authorName ?? "Gym Social", exc.category, exc.image_start_url, exc.image_execution_url);
           },
           { signal: ctx.signal }
         );
@@ -233,7 +233,7 @@ export const showExcView: ViewModule = {
               event.stopPropagation();
               const dia = diasBase[Number(button.dataset.dia)];
               const exc = dia.ejercicios[Number(button.dataset.exc)];
-              openExerciseModal(exc.nombre, exc.info, exc.nota, "Gym Social", exc.category, exc.image_url);
+              openExerciseModal(exc.nombre, exc.info, exc.nota, "Gym Social", exc.category, exc.image_start_url, exc.image_execution_url);
             },
             { signal: ctx.signal }
           );

@@ -386,7 +386,8 @@ export type Database = {
           category: Database["public"]["Enums"]["exercise_category"]
           created_at: string
           id: string
-          image_url: string | null
+          image_execution_url: string | null
+          image_start_url: string | null
           info: string
           is_builtin: boolean
           is_public: boolean
@@ -397,7 +398,8 @@ export type Database = {
           category: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
-          image_url?: string | null
+          image_execution_url?: string | null
+          image_start_url?: string | null
           info: string
           is_builtin?: boolean
           is_public?: boolean
@@ -408,7 +410,8 @@ export type Database = {
           category?: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
-          image_url?: string | null
+          image_execution_url?: string | null
+          image_start_url?: string | null
           info?: string
           is_builtin?: boolean
           is_public?: boolean

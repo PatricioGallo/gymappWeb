@@ -39,13 +39,41 @@ function statsHtml(stats: ExerciseStats | null): string {
  * sin sesión iniciada, o mirando la rutina de otra persona vía link compartido, así que ni
  * corresponde mostrar "tu" historial ahí -- y el modal simplemente no muestra esa sección.
  */
+const DEFAULT_EXERCISE_IMAGE = "/images/icon-512.png";
+
+function exerciseImagesHtml(nombre: string, imageStartUrl: string | null | undefined, imageExecutionUrl: string | null | undefined): string {
+  const items: { url: string; label: string | null }[] = [];
+  if (imageStartUrl) items.push({ url: imageStartUrl, label: imageExecutionUrl ? "Posición inicial" : null });
+  if (imageExecutionUrl) items.push({ url: imageExecutionUrl, label: imageStartUrl ? "Ejecución" : null });
+  // Ninguna de las dos fotos subida: se usa el logo de Gym Social como imagen genérica en
+  // vez de dejar el modal sin foto -- si se subió al menos una, se muestra tal cual (sin
+  // rellenar el otro casillero con el logo, ver pedido del usuario).
+  if (items.length === 0) items.push({ url: DEFAULT_EXERCISE_IMAGE, label: null });
+
+  return `
+    <div class="exc-modal-images">
+      ${items
+        .map(
+          (item) => `
+        <div class="exc-modal-image-item">
+          ${item.label ? `<span class="exc-modal-image-label">${escapeHtml(item.label)}</span>` : ""}
+          <img class="exc-modal-image${item.url === DEFAULT_EXERCISE_IMAGE ? " exc-modal-image-default" : ""}" src="${escapeHtml(item.url)}" alt="${escapeHtml(item.label ? `${item.label} de ${nombre}` : nombre)}" loading="lazy">
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 export function openExerciseModal(
   nombre: string,
   info: string,
   nota: string | null,
   authorLabel: string,
   category: string | null | undefined,
-  imageUrl: string | null | undefined,
+  imageStartUrl: string | null | undefined,
+  imageExecutionUrl: string | null | undefined,
   userId?: string,
   exerciseId?: string
 ): void {
@@ -57,7 +85,7 @@ export function openExerciseModal(
       <div class="modal-card exc-modal-card">
         <h2>${escapeHtml(nombre)}</h2>
         ${categoryLabel ? `<span class="hero-badge">${escapeHtml(categoryLabel)}</span>` : ""}
-        ${imageUrl ? `<img class="exc-modal-image" src="${escapeHtml(imageUrl)}" alt="Ejecución de ${escapeHtml(nombre)}" loading="lazy">` : ""}
+        ${exerciseImagesHtml(nombre, imageStartUrl, imageExecutionUrl)}
         <p class="subtitle">${escapeHtml(info || "Sin descripción cargada.")}</p>
         ${
           nota

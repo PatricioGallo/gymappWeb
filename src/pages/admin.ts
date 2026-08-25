@@ -19,6 +19,7 @@ import {
   type UserType,
 } from "../services/admin.service";
 import { renderVerifiedBadge, getVerifiedBadgeColor } from "../lib/verifiedBadge";
+import { imageDropzoneMarkup, wireImageDropzone } from "../lib/imageDropzone";
 import {
   listExercisesAdmin,
   addExercise,
@@ -630,7 +631,7 @@ export const adminView: ViewModule = {
                 .map(
                   (exc) => `
                 <div class="exc-admin-card" data-id="${exc.id}">
-                  <span class="exc-pick-thumb">${exc.image_url ? `<img src="${escapeHtml(exc.image_url)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
+                  <span class="exc-pick-thumb">${exc.image_start_url || exc.image_execution_url ? `<img src="${escapeHtml(exc.image_start_url || exc.image_execution_url!)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
                   <span class="exc-admin-name">${escapeHtml(exc.name)}</span>
                   ${exc.authorName ? `<span class="exc-admin-author">${escapeHtml(exc.authorName)}</span>` : ""}
                   <div class="exc-admin-actions">
@@ -669,7 +670,8 @@ export const adminView: ViewModule = {
       if (!loaderBody) return;
 
       const isBuiltin = existing ? existing.is_builtin : excAdminSubTab === "builtin";
-      const currentImageUrl = existing?.image_url ?? null;
+      const currentImageStartUrl = existing?.image_start_url ?? null;
+      const currentImageExecutionUrl = existing?.image_execution_url ?? null;
 
       loaderBody.innerHTML = `
         <div class="success-check-container">
@@ -686,22 +688,9 @@ export const adminView: ViewModule = {
               </select>
             </div>
 
-            <div class="field">
-              <label for="excFormImage">Imagen ilustrativa (opcional)</label>
-              <div class="dropzone ${currentImageUrl ? "has-file" : ""}" id="excFormDropzone">
-                <input type="file" id="excFormImage" accept="image/*" class="dropzone-input" aria-label="Imagen ilustrativa del ejercicio">
-                <div class="dropzone-empty" id="excFormDropzoneEmpty" ${currentImageUrl ? "hidden" : ""}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-                  <p><strong>Hacé clic para subir</strong> o arrastrá una imagen acá</p>
-                  <span class="field-hint">JPG, PNG o WEBP · hasta 2MB</span>
-                </div>
-                <div class="dropzone-preview" id="excFormDropzonePreview" ${currentImageUrl ? "" : "hidden"}>
-                  <img id="excFormDropzonePreviewImg" alt="" src="${currentImageUrl ? escapeHtml(currentImageUrl) : ""}">
-                  <span class="dropzone-filename" id="excFormDropzoneFileName">${currentImageUrl ? "Imagen actual" : ""}</span>
-                  <button type="button" class="dropzone-remove" id="excFormDropzoneRemove" title="Quitar imagen">×</button>
-                </div>
-              </div>
-            </div>
+            ${imageDropzoneMarkup({ idPrefix: "excFormImgStart", label: "Foto: principio del ejercicio (opcional)", currentUrl: currentImageStartUrl })}
+            ${imageDropzoneMarkup({ idPrefix: "excFormImgExec", label: "Foto: ejecución del ejercicio (opcional)", currentUrl: currentImageExecutionUrl })}
+            <p class="field-hint">Si no se sube ninguna de las dos, se usa el logo de Gym Social.</p>
 
             ${
               !isBuiltin
@@ -725,63 +714,12 @@ export const adminView: ViewModule = {
         </div>
       `;
 
-      let selectedFile: File | null = null;
-      let imageRemoved = false;
-      let objectUrl: string | null = null;
-
-      const dropzone = document.getElementById("excFormDropzone");
-      const imageInput = document.getElementById("excFormImage") as HTMLInputElement | null;
-      const dzEmpty = document.getElementById("excFormDropzoneEmpty");
-      const dzPreview = document.getElementById("excFormDropzonePreview");
-      const dzPreviewImg = document.getElementById("excFormDropzonePreviewImg") as HTMLImageElement | null;
-      const dzFileName = document.getElementById("excFormDropzoneFileName");
-
-      function showPreview(file: File): void {
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-        objectUrl = URL.createObjectURL(file);
-        if (dzPreviewImg) dzPreviewImg.src = objectUrl;
-        if (dzFileName) dzFileName.textContent = file.name;
-        dropzone?.classList.add("has-file");
-        dzEmpty?.setAttribute("hidden", "");
-        dzPreview?.removeAttribute("hidden");
-        selectedFile = file;
-        imageRemoved = false;
-      }
-
-      function clearPreview(): void {
-        if (objectUrl) {
-          URL.revokeObjectURL(objectUrl);
-          objectUrl = null;
-        }
-        if (imageInput) imageInput.value = "";
-        dropzone?.classList.remove("has-file");
-        dzPreview?.setAttribute("hidden", "");
-        dzEmpty?.removeAttribute("hidden");
-        selectedFile = null;
-        imageRemoved = true;
-      }
-
-      imageInput?.addEventListener("change", () => {
-        const file = imageInput.files?.[0];
-        if (file) showPreview(file);
-      });
-      document.getElementById("excFormDropzoneRemove")?.addEventListener("click", clearPreview);
-      dropzone?.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        dropzone.classList.add("dragover");
-      });
-      dropzone?.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-      dropzone?.addEventListener("drop", (event) => {
-        event.preventDefault();
-        dropzone.classList.remove("dragover");
-        const file = event.dataTransfer?.files?.[0];
-        if (file && imageInput) {
-          imageInput.files = event.dataTransfer!.files;
-          showPreview(file);
-        }
-      });
+      const startDropzone = wireImageDropzone(document, "excFormImgStart");
+      const execDropzone = wireImageDropzone(document, "excFormImgExec");
 
       document.getElementById("excFormClose")?.addEventListener("click", () => {
+        startDropzone.cleanup();
+        execDropzone.cleanup();
         loaderBody.innerHTML = "";
       });
 
@@ -800,16 +738,30 @@ export const adminView: ViewModule = {
           return;
         }
 
-        let imageUrl: string | null = currentImageUrl;
-        if (selectedFile) {
-          const { url, error: uploadError } = await uploadExerciseImage(adminId, selectedFile);
+        let imageStartUrl: string | null = currentImageStartUrl;
+        const startFile = startDropzone.getFile();
+        if (startFile) {
+          const { url, error: uploadError } = await uploadExerciseImage(adminId, startFile);
           if (uploadError) {
             alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
             return;
           }
-          imageUrl = url ?? null;
-        } else if (imageRemoved) {
-          imageUrl = null;
+          imageStartUrl = url ?? null;
+        } else if (startDropzone.wasRemoved()) {
+          imageStartUrl = null;
+        }
+
+        let imageExecutionUrl: string | null = currentImageExecutionUrl;
+        const execFile = execDropzone.getFile();
+        if (execFile) {
+          const { url, error: uploadError } = await uploadExerciseImage(adminId, execFile);
+          if (uploadError) {
+            alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
+            return;
+          }
+          imageExecutionUrl = url ?? null;
+        } else if (execDropzone.wasRemoved()) {
+          imageExecutionUrl = null;
         }
 
         if (existing) {
@@ -817,18 +769,26 @@ export const adminView: ViewModule = {
             name,
             info,
             category: category as ExerciseCategory,
-            image_url: imageUrl,
+            image_start_url: imageStartUrl,
+            image_execution_url: imageExecutionUrl,
             ...(isBuiltin ? {} : { is_public: isPublic }),
           });
           if (error) {
             alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
             return;
           }
-          Object.assign(existing, { name, info, category, image_url: imageUrl, ...(isBuiltin ? {} : { is_public: isPublic }) });
+          Object.assign(existing, {
+            name,
+            info,
+            category,
+            image_start_url: imageStartUrl,
+            image_execution_url: imageExecutionUrl,
+            ...(isBuiltin ? {} : { is_public: isPublic }),
+          });
         } else {
           const { error } = isBuiltin
-            ? await addBuiltinExercise(name, info, category as ExerciseCategory, imageUrl ?? undefined)
-            : await addExercise(adminId, name, info, category as ExerciseCategory, isPublic, imageUrl ?? undefined);
+            ? await addBuiltinExercise(name, info, category as ExerciseCategory, imageStartUrl ?? undefined, imageExecutionUrl ?? undefined)
+            : await addExercise(adminId, name, info, category as ExerciseCategory, isPublic, imageStartUrl ?? undefined, imageExecutionUrl ?? undefined);
           if (error) {
             alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
             return;
@@ -836,6 +796,8 @@ export const adminView: ViewModule = {
           exercises = await listExercisesAdmin();
         }
 
+        startDropzone.cleanup();
+        execDropzone.cleanup();
         loaderBody.innerHTML = "";
         renderExerciseResults();
       });

@@ -2,6 +2,7 @@ import type { ViewModule } from "../shell/router";
 import { navigate } from "../shell/router";
 import { validateNewExercise, addExercise, uploadExerciseImage, type ExerciseCategory } from "../services/exercise.service";
 import { escapeHtml } from "../lib/dom";
+import { imageDropzoneMarkup, wireImageDropzone } from "../lib/imageDropzone";
 
 const ERROR_LABELS: Record<string, string> = {
   name_short: "Nombre del ejercicio muy corto.",
@@ -44,23 +45,9 @@ const VIEW_MARKUP = `
             </select>
           </div>
 
-          <div class="field">
-            <label for="imageFile">Imagen ilustrativa (opcional)</label>
-            <div class="dropzone" id="dropzone">
-              <input type="file" id="imageFile" name="imageFile" accept="image/*" class="dropzone-input" aria-label="Imagen ilustrativa del ejercicio">
-              <div class="dropzone-empty" id="dropzoneEmpty">
-                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-                <p><strong>Hacé clic para subir</strong> o arrastrá una imagen acá</p>
-                <span class="field-hint">JPG, PNG o WEBP · hasta 2MB</span>
-              </div>
-              <div class="dropzone-preview" id="dropzonePreview" hidden>
-                <img id="dropzonePreviewImg" alt="">
-                <span class="dropzone-filename" id="dropzoneFileName"></span>
-                <button type="button" class="dropzone-remove" id="dropzoneRemove" title="Quitar imagen">×</button>
-              </div>
-            </div>
-            <p class="field-hint">Si no subís nada, se usa una imagen genérica.</p>
-          </div>
+          ${imageDropzoneMarkup({ idPrefix: "excImgStart", label: "Foto: principio del ejercicio (opcional)" })}
+          ${imageDropzoneMarkup({ idPrefix: "excImgExec", label: "Foto: ejecución del ejercicio (opcional)" })}
+          <p class="field-hint">Si no subís ninguna de las dos, se usa el logo de Gym Social.</p>
 
           <div class="field">
             <label for="visibility">Visibilidad</label>
@@ -89,74 +76,14 @@ export const addExcView: ViewModule = {
     // #loaderBody vive en el chrome persistente del shell, fuera del container de esta vista.
     const loaderBody = document.getElementById("loaderBody");
 
-    // ---------- Dropzone de imagen ----------
+    // ---------- Dropzones de imagen (principio del ejercicio / ejecución) ----------
 
-    const dropzone = container.querySelector("#dropzone");
-    const imageInput = container.querySelector("#imageFile") as HTMLInputElement | null;
-    const dropzoneEmpty = container.querySelector("#dropzoneEmpty");
-    const dropzonePreview = container.querySelector("#dropzonePreview");
-    const dropzonePreviewImg = container.querySelector("#dropzonePreviewImg") as HTMLImageElement | null;
-    const dropzoneFileName = container.querySelector("#dropzoneFileName");
-    let previewUrl: string | null = null;
-
-    function showPreview(file: File): void {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      previewUrl = URL.createObjectURL(file);
-      if (dropzonePreviewImg) dropzonePreviewImg.src = previewUrl;
-      if (dropzoneFileName) dropzoneFileName.textContent = file.name;
-      dropzone?.classList.add("has-file");
-      dropzoneEmpty?.setAttribute("hidden", "");
-      dropzonePreview?.removeAttribute("hidden");
-    }
-
-    function clearPreview(): void {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        previewUrl = null;
-      }
-      if (imageInput) imageInput.value = "";
-      dropzone?.classList.remove("has-file");
-      dropzonePreview?.setAttribute("hidden", "");
-      dropzoneEmpty?.removeAttribute("hidden");
-    }
-
+    const startDropzone = wireImageDropzone(container, "excImgStart");
+    const execDropzone = wireImageDropzone(container, "excImgExec");
     ctx.addCleanup(() => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      startDropzone.cleanup();
+      execDropzone.cleanup();
     });
-
-    imageInput?.addEventListener(
-      "change",
-      () => {
-        const file = imageInput.files?.[0];
-        if (file) showPreview(file);
-      },
-      { signal: ctx.signal }
-    );
-
-    container.querySelector("#dropzoneRemove")?.addEventListener("click", clearPreview, { signal: ctx.signal });
-
-    dropzone?.addEventListener(
-      "dragover",
-      (event) => {
-        event.preventDefault();
-        dropzone.classList.add("dragover");
-      },
-      { signal: ctx.signal }
-    );
-    dropzone?.addEventListener("dragleave", () => dropzone.classList.remove("dragover"), { signal: ctx.signal });
-    dropzone?.addEventListener(
-      "drop",
-      (event) => {
-        event.preventDefault();
-        dropzone.classList.remove("dragover");
-        const file = (event as DragEvent).dataTransfer?.files?.[0];
-        if (file && imageInput) {
-          imageInput.files = (event as DragEvent).dataTransfer!.files;
-          showPreview(file);
-        }
-      },
-      { signal: ctx.signal }
-    );
 
     form?.addEventListener(
       "submit",
@@ -166,7 +93,8 @@ export const addExcView: ViewModule = {
         const info = (container.querySelector("#description") as HTMLTextAreaElement).value.trim();
         const category = (container.querySelector("#category") as HTMLSelectElement).value;
         const isPublic = (container.querySelector("#visibility") as HTMLSelectElement).value === "true";
-        const imageFile = (container.querySelector("#imageFile") as HTMLInputElement).files?.[0];
+        const startFile = startDropzone.getFile();
+        const execFile = execDropzone.getFile();
 
         if (alertMessage) alertMessage.innerHTML = "";
 
@@ -185,18 +113,29 @@ export const addExcView: ViewModule = {
           `;
         }
 
-        let imageUrl: string | undefined;
-        if (imageFile) {
-          const { url, error: uploadError } = await uploadExerciseImage(userId, imageFile);
+        let imageStartUrl: string | undefined;
+        if (startFile) {
+          const { url, error: uploadError } = await uploadExerciseImage(userId, startFile);
           if (uploadError) {
             if (loaderBody) loaderBody.innerHTML = "";
             if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
             return;
           }
-          imageUrl = url;
+          imageStartUrl = url;
         }
 
-        const { error } = await addExercise(userId, name, info, category as ExerciseCategory, isPublic, imageUrl);
+        let imageExecutionUrl: string | undefined;
+        if (execFile) {
+          const { url, error: uploadError } = await uploadExerciseImage(userId, execFile);
+          if (uploadError) {
+            if (loaderBody) loaderBody.innerHTML = "";
+            if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
+            return;
+          }
+          imageExecutionUrl = url;
+        }
+
+        const { error } = await addExercise(userId, name, info, category as ExerciseCategory, isPublic, imageStartUrl, imageExecutionUrl);
         if (error) {
           if (loaderBody) loaderBody.innerHTML = "";
           if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(error)}</p>`;

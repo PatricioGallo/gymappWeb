@@ -59,7 +59,7 @@ export function openExercisePicker(catalog: Exercise[], onSelect: (exc: Exercise
                 .map(
                   (exc) => `
                 <button type="button" class="exc-pick-card" data-id="${exc.id}">
-                  <span class="exc-pick-thumb">${exc.image_url ? `<img src="${escapeHtml(exc.image_url)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
+                  <span class="exc-pick-thumb">${exc.image_start_url || exc.image_execution_url ? `<img src="${escapeHtml(exc.image_start_url || exc.image_execution_url!)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
                   <span class="exc-pick-name">${escapeHtml(exc.name)}</span>
                 </button>
               `

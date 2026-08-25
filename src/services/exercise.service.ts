@@ -82,11 +82,19 @@ export async function addExercise(
   info: string,
   category: ExerciseCategory,
   isPublic: boolean,
-  imageUrl?: string
+  imageStartUrl?: string,
+  imageExecutionUrl?: string
 ): Promise<{ error?: string }> {
-  const { error } = await supabase
-    .from("exercises")
-    .insert({ name, info, category, image_url: imageUrl || null, author_id: authorId, is_builtin: false, is_public: isPublic });
+  const { error } = await supabase.from("exercises").insert({
+    name,
+    info,
+    category,
+    image_start_url: imageStartUrl || null,
+    image_execution_url: imageExecutionUrl || null,
+    author_id: authorId,
+    is_builtin: false,
+    is_public: isPublic,
+  });
   if (error) {
     if (error.code === "23505") return { error: "Ya existe un ejercicio con ese nombre." };
     return { error: "No se pudo guardar el ejercicio. Probá de nuevo." };
@@ -94,10 +102,23 @@ export async function addExercise(
   return {};
 }
 
-export async function addBuiltinExercise(name: string, info: string, category: ExerciseCategory, imageUrl?: string): Promise<{ error?: string }> {
-  const { error } = await supabase
-    .from("exercises")
-    .insert({ name, info, category, image_url: imageUrl || null, author_id: null, is_builtin: true, is_public: false });
+export async function addBuiltinExercise(
+  name: string,
+  info: string,
+  category: ExerciseCategory,
+  imageStartUrl?: string,
+  imageExecutionUrl?: string
+): Promise<{ error?: string }> {
+  const { error } = await supabase.from("exercises").insert({
+    name,
+    info,
+    category,
+    image_start_url: imageStartUrl || null,
+    image_execution_url: imageExecutionUrl || null,
+    author_id: null,
+    is_builtin: true,
+    is_public: false,
+  });
   if (error) {
     if (error.code === "23505") return { error: "Ya existe un ejercicio con ese nombre." };
     return { error: "No se pudo guardar el ejercicio. Probá de nuevo." };
@@ -109,7 +130,8 @@ export interface EditableExerciseFields {
   name?: string;
   info?: string;
   category?: ExerciseCategory;
-  image_url?: string | null;
+  image_start_url?: string | null;
+  image_execution_url?: string | null;
   is_public?: boolean;
 }
 
