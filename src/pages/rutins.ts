@@ -8,6 +8,7 @@ import { listMyTrainers } from "../services/subscription.service";
 import { escapeHtml } from "../lib/dom";
 import { DIA_LABELS, diaLabel, formatFechaCorta } from "../lib/dias";
 import { openExercisePicker } from "../lib/exercisePicker";
+import { openCreateExerciseModal } from "../lib/createExerciseModal";
 import { ROUTINE_TEMPLATES, LEVEL_LABELS, type RoutineTemplate } from "../lib/routineTemplates";
 import { formatRepe } from "../lib/reps";
 
@@ -287,7 +288,7 @@ export const rutinsView: ViewModule = {
                 : "Podés empezar de cero o elegir una rutina ya armada como base."
             }</p>
           </div>
-          <div class="quick-grid quick-grid-2 reveal">
+          <div class="quick-grid reveal">
             <button type="button" class="quick-card" id="chooseScratch">
               <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
               <div><h3>Empezar desde cero</h3><p>Elegís vos cada ejercicio, serie y repetición</p></div>
@@ -296,11 +297,16 @@ export const rutinsView: ViewModule = {
               <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
               <div><h3>Ver rutinas</h3><p>Rutinas de Gym Social, de gente que seguís o tuyas propias</p></div>
             </button>
+            <button type="button" class="quick-card" id="chooseCreateExercise">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg></div>
+              <div><h3>Crear un ejercicio</h3><p>Sumá un ejercicio propio al catálogo</p></div>
+            </button>
           </div>
         `;
 
         contentEl.querySelector("#chooseScratch")?.addEventListener("click", () => renderSetupForm());
         contentEl.querySelector("#chooseBrowse")?.addEventListener("click", () => renderBrowseRoutines());
+        contentEl.querySelector("#chooseCreateExercise")?.addEventListener("click", () => openCreateExerciseModal(myId, ctx));
       }
 
       // ---------- Ver rutinas ----------
