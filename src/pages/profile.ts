@@ -1246,7 +1246,7 @@ function gymPostGridCellMarkup(p: GymPostFull): string {
   const isVideo = cover?.type === "video";
   return `
     <button type="button" class="gym-post-grid-cell" data-id="${p.id}">
-      ${cover ? (isVideo ? `<video src="${escapeHtml(cover.url)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(cover.url)}" alt="">`) : ""}
+      ${cover ? (isVideo ? `<video src="${escapeHtml(cover.url)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(cover.url)}" alt="" loading="lazy" decoding="async">`) : ""}
       ${p.pinned ? `<span class="gym-post-grid-pin">Fijada</span>` : ""}
       ${p.media.length > 1 ? `<span class="gym-post-grid-icon">${GYM_POST_GRID_ICON_MULTI}</span>` : isVideo ? `<span class="gym-post-grid-icon">${GYM_POST_GRID_ICON_PLAY}</span>` : ""}
     </button>

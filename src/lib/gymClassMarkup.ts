@@ -21,7 +21,7 @@ const BARBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 /** `<img>` si hay foto, si no un placeholder con icono sobre fondo tintado (mismas dimensiones via extraClass). */
 export function classImageHtml(imageUrl: string | null, extraClass = ""): string {
   const cls = `gym-class-image${extraClass ? ` ${extraClass}` : ""}`;
-  if (imageUrl) return `<img src="${escapeHtml(imageUrl)}" alt="" class="${cls}">`;
+  if (imageUrl) return `<img src="${escapeHtml(imageUrl)}" alt="" class="${cls}" loading="lazy" decoding="async">`;
   return `<div class="${cls} gym-class-image-placeholder">${BARBELL_ICON}</div>`;
 }
 

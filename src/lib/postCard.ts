@@ -69,7 +69,7 @@ function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   if (!mediaUrl) return "";
   if (mediaType === "video")
     return `<video class="post-card-media" src="${escapeHtml(mediaUrl)}" playsinline muted loop preload="metadata"></video>`;
-  return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="" draggable="false">`;
+  return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="" draggable="false" loading="lazy" decoding="async">`;
 }
 
 function domainOf(url: string): string {

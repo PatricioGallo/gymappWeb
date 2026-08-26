@@ -1,26 +1,4 @@
 import { registerRoute } from "./router";
-import { notificationsView } from "../pages/notifications";
-import { searchView } from "../pages/search";
-import { chatsView } from "../pages/chats";
-import { profileView } from "../pages/profile";
-import { followRequestsView } from "../pages/followRequests";
-import { subscriptionRequestsView } from "../pages/subscriptionRequests";
-import { addExcView } from "../pages/addExc";
-import { followersView } from "../pages/followers";
-import { modExcView } from "../pages/modExc";
-import { showExcView } from "../pages/showExc";
-import { postView } from "../pages/post";
-import { alumnosView } from "../pages/alumnos";
-import { sociosView } from "../pages/socios";
-import { entrenadoresView } from "../pages/entrenadores";
-import { clasesView } from "../pages/clases";
-import { progressView } from "../pages/progress";
-import { rutinsView } from "../pages/rutins";
-import { misEjerciciosView } from "../pages/misEjercicios";
-import { feedView } from "../pages/feed";
-import { pesosView } from "../pages/pesos";
-import { settingsView } from "../pages/settings";
-import { adminView } from "../pages/admin";
 
 /**
  * Registro central de rutas migradas al shell. Cada pagina migrada se agrega aca a medida que
@@ -30,77 +8,83 @@ import { adminView } from "../pages/admin";
  *
  * Este archivo se importa desde CADA pagina migrada (via startShellPage en shell/boot.ts), asi
  * que cada una conoce todas las rutas migradas y puede navegar client-side hacia cualquiera de
- * ellas -- no solo hacia si misma.
+ * ellas -- no solo hacia si misma. Por eso cada `load` es un import() dinamico en vez de un
+ * import estatico de arriba del archivo: si las 21 paginas se importaran todas de una, Vite las
+ * empaqueta juntas en un solo chunk gigante que se descarga entero apenas se visita CUALQUIERA
+ * de ellas (medido: ~145KB gzip en el primer login, sin importar a que pagina entrás). Con
+ * import() dinamico cada pagina cae en su propio chunk, que solo se pide la primera vez que esa
+ * ruta puntual se visita de verdad -- ver el cache de resolvedViews en router.ts, que evita
+ * re-esperar el import en cada navegacion subsiguiente a una ruta ya visitada.
  */
 export function registerShellRoutes(): void {
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/notifications.html") ? new URLSearchParams() : null),
-    view: notificationsView,
+    load: () => import("../pages/notifications").then((m) => m.notificationsView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/search.html") ? new URLSearchParams() : null),
-    view: searchView,
+    load: () => import("../pages/search").then((m) => m.searchView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/chats.html") ? new URLSearchParams() : null),
-    view: chatsView,
+    load: () => import("../pages/chats").then((m) => m.chatsView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/followRequests.html") ? new URLSearchParams() : null),
-    view: followRequestsView,
+    load: () => import("../pages/followRequests").then((m) => m.followRequestsView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/subscriptionRequests.html") ? new URLSearchParams() : null),
-    view: subscriptionRequestsView,
+    load: () => import("../pages/subscriptionRequests").then((m) => m.subscriptionRequestsView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/addExc.html") ? new URLSearchParams() : null),
-    view: addExcView,
+    load: () => import("../pages/addExc").then((m) => m.addExcView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/misEjercicios.html") ? new URLSearchParams() : null),
-    view: misEjerciciosView,
+    load: () => import("../pages/misEjercicios").then((m) => m.misEjerciciosView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/followers.html") ? new URLSearchParams() : null),
-    view: followersView,
+    load: () => import("../pages/followers").then((m) => m.followersView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/excView.html") ? new URLSearchParams() : null),
-    view: modExcView,
+    load: () => import("../pages/modExc").then((m) => m.modExcView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/showExc.html") ? new URLSearchParams() : null),
-    view: showExcView,
+    load: () => import("../pages/showExc").then((m) => m.showExcView),
     auth: "optional",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/post.html") ? new URLSearchParams() : null),
-    view: postView,
+    load: () => import("../pages/post").then((m) => m.postView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/alumnos.html") ? new URLSearchParams() : null),
-    view: alumnosView,
+    load: () => import("../pages/alumnos").then((m) => m.alumnosView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/socios.html") ? new URLSearchParams() : null),
-    view: sociosView,
+    load: () => import("../pages/socios").then((m) => m.sociosView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/entrenadores.html") ? new URLSearchParams() : null),
-    view: entrenadoresView,
+    load: () => import("../pages/entrenadores").then((m) => m.entrenadoresView),
     auth: "required",
   });
   // keyFor: clases.html ahora tiene dos modos (dueño de gimnasio administrando lo propio, o
@@ -111,38 +95,38 @@ export function registerShellRoutes(): void {
   // un gimnasio publico sin loguearse, igual que puede ver su perfil.
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/clases.html") ? new URLSearchParams() : null),
-    view: clasesView,
+    load: () => import("../pages/clases").then((m) => m.clasesView),
     auth: "optional",
     keyFor: (params) => params.get("u") ?? "__self__",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/progress.html") ? new URLSearchParams() : null),
-    view: progressView,
+    load: () => import("../pages/progress").then((m) => m.progressView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/rutinsView.html") ? new URLSearchParams() : null),
-    view: rutinsView,
+    load: () => import("../pages/rutins").then((m) => m.rutinsView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/feed.html") ? new URLSearchParams() : null),
-    view: feedView,
+    load: () => import("../pages/feed").then((m) => m.feedView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/pesos.html") ? new URLSearchParams() : null),
-    view: pesosView,
+    load: () => import("../pages/pesos").then((m) => m.pesosView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/settings.html") ? new URLSearchParams() : null),
-    view: settingsView,
+    load: () => import("../pages/settings").then((m) => m.settingsView),
     auth: "required",
   });
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/admin.html") ? new URLSearchParams() : null),
-    view: adminView,
+    load: () => import("../pages/admin").then((m) => m.adminView),
     auth: "required",
   });
   // keyFor: cada perfil visitado (propio o de un username distinto) es una "entidad" propia --
@@ -155,7 +139,7 @@ export function registerShellRoutes(): void {
 
   registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/profile.html") ? new URLSearchParams() : null),
-    view: profileView,
+    load: () => import("../pages/profile").then((m) => m.profileView),
     auth: "optional",
     keyFor: profileKeyFor,
   });
@@ -169,7 +153,7 @@ export function registerShellRoutes(): void {
       if (!trimmed || trimmed.includes("/") || trimmed.includes(".")) return null;
       return new URLSearchParams({ pathUsername: trimmed });
     },
-    view: profileView,
+    load: () => import("../pages/profile").then((m) => m.profileView),
     auth: "optional",
     keyFor: profileKeyFor,
   });

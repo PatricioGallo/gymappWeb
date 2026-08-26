@@ -30,7 +30,13 @@ export type AuthMode = "required" | "optional" | "none";
 
 interface RouteDef {
   match(pathname: string): URLSearchParams | null;
-  view: ViewModule;
+  /** Carga perezosa (dynamic import) en vez de un ViewModule ya resuelto -- así Vite separa el
+   * código de cada página en su propio chunk en vez de empaquetar las 21 juntas en uno solo que
+   * se descarga entero apenas se visita cualquiera de ellas (ver el cache de resolvedViews más
+   * abajo: el resultado se memoiza por RouteDef, tanto para no re-esperar el import en cada
+   * navegación como para que el objeto ViewModule sea siempre la misma referencia, que es la key
+   * de instancesByView). */
+  load(): Promise<ViewModule>;
   auth: AuthMode;
   /** Identifica la instancia dentro de esta ruta -- por default todas las visitas a una ruta
    * comparten la misma instancia unica (chats, notificaciones, busqueda: no tiene sentido tener
@@ -50,6 +56,12 @@ interface Instance {
 }
 
 const routes: RouteDef[] = [];
+// Memoiza el ViewModule resuelto de cada ruta -- import() de un modulo ya cargado resuelve
+// practicamente al toque (sin red, el navegador ya lo tiene evaluado), pero igual hay que
+// cachear el VALOR resuelto y no solo confiar en eso: instancesByView usa el objeto ViewModule
+// como key, asi que todo el resto del router necesita la misma referencia sin tener que
+// encadenar .then() en cada lugar que la usa.
+const resolvedViews = new Map<RouteDef, ViewModule>();
 // Todas las instancias vivas de cada VISTA (no ruta -- dos rutas distintas pueden apuntar a la
 // misma vista, ej. perfil exacto y el catch-all de username, y tienen que compartir el mismo
 // cache de instancias para no terminar con dos copias vivas del mismo perfil), aunque esten
@@ -129,7 +141,12 @@ async function renderCurrentLocation(): Promise<void> {
   for (const [k, v] of match.params) params.set(k, v);
 
   const key = match.route.keyFor ? match.route.keyFor(params) : "__default__";
-  const view = match.route.view;
+  let view = resolvedViews.get(match.route);
+  if (!view) {
+    view = await match.route.load();
+    if (myGeneration !== renderGeneration) return; // una navegacion mas nueva ya tomo el control
+    resolvedViews.set(match.route, view);
+  }
 
   // #loaderBody es chrome global (spinners, modales tipo el selector de ejercicios, checks de
   // exito) que vive fuera del container de cualquier vista -- ni ocultar/descartar una instancia
