@@ -32,6 +32,47 @@ export async function listExercises(): Promise<Exercise[]> {
   return data ?? [];
 }
 
+export async function listBuiltinExercises(): Promise<Exercise[]> {
+  const { data, error } = await supabase.from("exercises").select("*").eq("is_builtin", true).order("name", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface ExerciseWithAuthor extends Exercise {
+  authorName: string | null;
+}
+
+/** Ejercicios publicos de autores puntuales (seguidos/entrenadores/gimnasio) -- ver openExercisePicker. */
+export async function listExercisesByAuthorIds(authorIds: string[]): Promise<ExerciseWithAuthor[]> {
+  if (authorIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("*, profiles ( username )")
+    .in("author_id", authorIds)
+    .eq("is_public", true)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => {
+    const { profiles, ...exc } = row;
+    return { ...exc, authorName: profiles ? `@${profiles.username}` : null };
+  });
+}
+
+/** Cualquier ejercicio publico creado por un usuario (no builtin), de cualquier autor. */
+export async function listGlobalPublicExercises(): Promise<ExerciseWithAuthor[]> {
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("*, profiles ( username )")
+    .eq("is_builtin", false)
+    .eq("is_public", true)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => {
+    const { profiles, ...exc } = row;
+    return { ...exc, authorName: profiles ? `@${profiles.username}` : null };
+  });
+}
+
 export async function hasMyExercises(userId: string): Promise<boolean> {
   const { data, error } = await supabase.from("exercises").select("id").eq("author_id", userId).limit(1);
   if (error) throw error;

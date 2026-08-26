@@ -40,6 +40,17 @@ export async function getSocioCount(gymId: string): Promise<number> {
   return data ?? 0;
 }
 
+/** Gimnasios de los que el usuario es socio activo (perspectiva del socio, no del gimnasio). */
+export async function listMyActiveGyms(memberId: string): Promise<{ id: string; username: string }[]> {
+  const { data, error } = await supabase
+    .from("gym_members")
+    .select("profiles!gym_members_gym_id_fkey ( id, username )")
+    .eq("member_id", memberId)
+    .eq("status", "active");
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({ id: row.profiles.id, username: row.profiles.username }));
+}
+
 /** Crea la solicitud de socio (siempre 'pending' hasta que el gimnasio la acepte). Si ya habia
  * sido socio antes y el gimnasio no lo elimino del historico, reactiva esa misma fila 'ended'
  * en vez de duplicarla, para que "socio desde" mantenga la fecha original de alta. */
