@@ -333,6 +333,23 @@ export const adminView: ViewModule = {
 
     function renderUsersTab(filter: string): void {
       const usersTab = container.querySelector("#usersTab")!;
+
+      usersTab.innerHTML = `
+        <input type="search" id="userSearch" class="exc-picker-search admin-search" placeholder="Buscar por nombre, usuario o mail..." value="${escapeHtml(filter)}">
+        <div class="exc-table-scroll" id="usersTableScroll"></div>
+      `;
+
+      const searchInput = usersTab.querySelector<HTMLInputElement>("#userSearch")!;
+      searchInput.addEventListener("input", () => {
+        renderUsersList(searchInput.value);
+      });
+
+      renderUsersList(filter);
+    }
+
+    function renderUsersList(filter: string): void {
+      const scroll = container.querySelector("#usersTableScroll");
+      if (!scroll) return;
       const term = filter.trim().toLowerCase();
       const filtered = term
         ? users.filter((u) =>
@@ -340,39 +357,33 @@ export const adminView: ViewModule = {
           )
         : users;
 
-      usersTab.innerHTML = `
-        <input type="search" id="userSearch" class="exc-picker-search admin-search" placeholder="Buscar por nombre, usuario o mail..." value="${escapeHtml(filter)}">
-        <div class="exc-table-scroll">
-          <div class="admin-table-head">
-            <span>Usuario</span><span>Rol</span><span>Rutinas</span><span>Registrado</span><span>Última conexión</span><span></span>
-          </div>
-          ${filtered
-            .map(
-              (u) => `
-            <div class="admin-table-row admin-table-row-clickable" data-id="${u.id}" title="Ver perfil de @${escapeHtml(u.username)}">
-              <span class="admin-user-cell">
-                <strong>${escapeHtml(u.nombre)} ${escapeHtml(u.apellido)}${renderVerifiedBadge(u.user_type, u.is_verified)}</strong>
-                <small>@${escapeHtml(u.username)} · ${escapeHtml(u.email)}</small>
-              </span>
-              <span class="profile-badge">${USER_TYPE_LABELS[u.user_type]}</span>
-              <span>${u.routines_count}</span>
-              <span>${formatDate(u.created_at)}</span>
-              <span>${formatDateTime(u.last_sign_in_at)}</span>
-              <span class="admin-row-actions">
-                ${isAdmin ? `<button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>` : ""}
-                ${isAdmin && !["admin", "colaborador"].includes(u.user_type) ? `<button class="btn btn-danger btn-sm admin-delete-btn" type="button" data-id="${u.id}">Eliminar</button>` : ""}
-              </span>
-            </div>
-          `
-            )
-            .join("") || `<p class="exc-pick-empty">No encontramos usuarios con ese criterio.</p>`}
+      scroll.innerHTML = `
+        <div class="admin-table-head">
+          <span>Usuario</span><span>Rol</span><span>Rutinas</span><span>Registrado</span><span>Última conexión</span><span></span>
         </div>
+        ${filtered
+          .map(
+            (u) => `
+          <div class="admin-table-row admin-table-row-clickable" data-id="${u.id}" title="Ver perfil de @${escapeHtml(u.username)}">
+            <span class="admin-user-cell">
+              <strong>${escapeHtml(u.nombre)} ${escapeHtml(u.apellido)}${renderVerifiedBadge(u.user_type, u.is_verified)}</strong>
+              <small>@${escapeHtml(u.username)} · ${escapeHtml(u.email)}</small>
+            </span>
+            <span class="profile-badge">${USER_TYPE_LABELS[u.user_type]}</span>
+            <span>${u.routines_count}</span>
+            <span>${formatDate(u.created_at)}</span>
+            <span>${formatDateTime(u.last_sign_in_at)}</span>
+            <span class="admin-row-actions">
+              ${isAdmin ? `<button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>` : ""}
+              ${isAdmin && !["admin", "colaborador"].includes(u.user_type) ? `<button class="btn btn-danger btn-sm admin-delete-btn" type="button" data-id="${u.id}">Eliminar</button>` : ""}
+            </span>
+          </div>
+        `
+          )
+          .join("") || `<p class="exc-pick-empty">No encontramos usuarios con ese criterio.</p>`}
       `;
 
-      container.querySelector("#userSearch")?.addEventListener("input", (e) => {
-        renderUsersTab((e.target as HTMLInputElement).value);
-      });
-
+      const usersTab = container.querySelector("#usersTab")!;
       usersTab.querySelectorAll<HTMLButtonElement>(".admin-edit-btn").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
