@@ -1,6 +1,7 @@
 import { escapeHtml } from "./dom";
 import { CATEGORY_LABELS, type ExerciseCategory } from "../services/exercise.service";
 import { getExerciseStats, type ExerciseStats, type WeightUnit } from "../services/weightLog.service";
+import { isVideoUrl } from "./imageDropzone";
 
 const UNIT_SUFFIX: Record<WeightUnit, string> = { kg: "kg", lb: "lb", bloques: "bloques" };
 
@@ -41,23 +42,22 @@ function statsHtml(stats: ExerciseStats | null): string {
  */
 const DEFAULT_EXERCISE_IMAGE = "/images/icon-512.png";
 
-function exerciseImagesHtml(nombre: string, imageStartUrl: string | null | undefined, imageExecutionUrl: string | null | undefined): string {
-  const items: { url: string; label: string | null }[] = [];
-  if (imageStartUrl) items.push({ url: imageStartUrl, label: imageExecutionUrl ? "Posición inicial" : null });
-  if (imageExecutionUrl) items.push({ url: imageExecutionUrl, label: imageStartUrl ? "Ejecución" : null });
-  // Ninguna de las dos fotos subida: se usa el logo de Gym Social como imagen genérica en
-  // vez de dejar el modal sin foto -- si se subió al menos una, se muestra tal cual (sin
-  // rellenar el otro casillero con el logo, ver pedido del usuario).
-  if (items.length === 0) items.push({ url: DEFAULT_EXERCISE_IMAGE, label: null });
+function exerciseImagesHtml(nombre: string, mediaUrls: string[] | null | undefined): string {
+  // Sin ningun archivo subido: se usa el logo de Gym Social como imagen generica en vez de
+  // dejar el modal sin foto.
+  const urls = mediaUrls && mediaUrls.length > 0 ? mediaUrls : [DEFAULT_EXERCISE_IMAGE];
 
   return `
     <div class="exc-modal-images">
-      ${items
+      ${urls
         .map(
-          (item) => `
+          (url) => `
         <div class="exc-modal-image-item">
-          ${item.label ? `<span class="exc-modal-image-label">${escapeHtml(item.label)}</span>` : ""}
-          <img class="exc-modal-image${item.url === DEFAULT_EXERCISE_IMAGE ? " exc-modal-image-default" : ""}" src="${escapeHtml(item.url)}" alt="${escapeHtml(item.label ? `${item.label} de ${nombre}` : nombre)}" loading="lazy">
+          ${
+            url !== DEFAULT_EXERCISE_IMAGE && isVideoUrl(url)
+              ? `<video class="exc-modal-image" src="${escapeHtml(url)}" controls playsinline loop></video>`
+              : `<img class="exc-modal-image${url === DEFAULT_EXERCISE_IMAGE ? " exc-modal-image-default" : ""}" src="${escapeHtml(url)}" alt="${escapeHtml(nombre)}" loading="lazy">`
+          }
         </div>
       `
         )
@@ -72,8 +72,7 @@ export function openExerciseModal(
   nota: string | null,
   authorLabel: string,
   category: string | null | undefined,
-  imageStartUrl: string | null | undefined,
-  imageExecutionUrl: string | null | undefined,
+  mediaUrls: string[] | null | undefined,
   userId?: string,
   exerciseId?: string
 ): void {
@@ -85,7 +84,7 @@ export function openExerciseModal(
       <div class="modal-card exc-modal-card">
         <h2>${escapeHtml(nombre)}</h2>
         ${categoryLabel ? `<span class="hero-badge">${escapeHtml(categoryLabel)}</span>` : ""}
-        ${exerciseImagesHtml(nombre, imageStartUrl, imageExecutionUrl)}
+        ${exerciseImagesHtml(nombre, mediaUrls)}
         <p class="subtitle">${escapeHtml(info || "Sin descripción cargada.")}</p>
         ${
           nota

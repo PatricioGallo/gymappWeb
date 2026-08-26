@@ -79,7 +79,7 @@ function excBlockMarkup(routine: RoutineDetail, exc?: RoutineExerciseWithAuthor)
       </div>
       <div class="exc-extra">
         <label><input type="checkbox" class="noWeightCheck" ${isNoWeight ? "checked" : ""}> Sin peso</label>
-        <label><input type="checkbox" class="mismoPesoCheck" ${exc ? (exc.mismo_peso ? "checked" : "") : "checked"}> Mismo peso en todas las series</label>
+        <label><input type="checkbox" class="mismoPesoCheck" ${exc?.mismo_peso ? "checked" : ""}> Mismo peso en todas las series</label>
         <input type="text" class="notaInput" placeholder="Nota para este ejercicio (opcional)" maxlength="140" value="${escapeHtml(exc?.nota ?? "")}">
       </div>
     </div>
@@ -370,7 +370,6 @@ export const modExcView: ViewModule = {
           if (target.classList.contains("exc-picker-btn")) {
             const block = target.closest<HTMLElement>(".exc-block")!;
             openExercisePicker(
-              excCatalog,
               (exc) => {
                 if (!excCatalog.some((e) => e.id === exc.id)) excCatalog.push(exc);
                 target.textContent = exc.name;

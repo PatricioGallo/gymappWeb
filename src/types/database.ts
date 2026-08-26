@@ -386,11 +386,10 @@ export type Database = {
           category: Database["public"]["Enums"]["exercise_category"]
           created_at: string
           id: string
-          image_execution_url: string | null
-          image_start_url: string | null
           info: string
           is_builtin: boolean
           is_public: boolean
+          media_urls: string[]
           name: string
         }
         Insert: {
@@ -398,11 +397,10 @@ export type Database = {
           category: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
-          image_execution_url?: string | null
-          image_start_url?: string | null
           info: string
           is_builtin?: boolean
           is_public?: boolean
+          media_urls?: string[]
           name: string
         }
         Update: {
@@ -410,11 +408,10 @@ export type Database = {
           category?: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
-          image_execution_url?: string | null
-          image_start_url?: string | null
           info?: string
           is_builtin?: boolean
           is_public?: boolean
+          media_urls?: string[]
           name?: string
         }
         Relationships: [
@@ -2848,6 +2845,13 @@ export type Database = {
           status: string
         }[]
       }
+      get_my_exercises_usage_counts: {
+        Args: never
+        Returns: {
+          exercise_id: string
+          users_count: number
+        }[]
+      }
       get_or_create_conversation: {
         Args: { p_other_user_id: string }
         Returns: string
@@ -2960,6 +2964,16 @@ export type Database = {
           participants: Json
           status: string
           unread_count: number
+        }[]
+      }
+      list_exercise_users: {
+        Args: { p_exercise_id: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          nombre: string
+          user_id: string
+          username: string
         }[]
       }
       list_followers: {

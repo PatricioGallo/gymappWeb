@@ -1,8 +1,8 @@
 import type { ViewModule } from "../shell/router";
 import { navigate } from "../shell/router";
-import { validateNewExercise, addExercise, uploadExerciseImage, type ExerciseCategory } from "../services/exercise.service";
+import { validateNewExercise, addExercise, type ExerciseCategory } from "../services/exercise.service";
 import { escapeHtml } from "../lib/dom";
-import { imageDropzoneMarkup, wireImageDropzone } from "../lib/imageDropzone";
+import { exerciseMediaPickerMarkup, wireExerciseMediaPicker, resolveExerciseMediaUrls } from "../lib/imageDropzone";
 
 const ERROR_LABELS: Record<string, string> = {
   name_short: "Nombre del ejercicio muy corto.",
@@ -46,9 +46,8 @@ const VIEW_MARKUP = `
             </select>
           </div>
 
-          ${imageDropzoneMarkup({ idPrefix: "excImgStart", label: "Foto: principio del ejercicio (opcional)" })}
-          ${imageDropzoneMarkup({ idPrefix: "excImgExec", label: "Foto: ejecución del ejercicio (opcional)" })}
-          <p class="field-hint">Si no subís ninguna de las dos, se usa el logo de Gym Social.</p>
+          ${exerciseMediaPickerMarkup({ idPrefix: "excMedia", label: "Foto o video del ejercicio (opcional)" })}
+          <p class="field-hint">Si no subís ninguna, se usa el logo de Gym Social.</p>
 
           <div class="field">
             <label for="visibility">Visibilidad</label>
@@ -77,14 +76,8 @@ export const addExcView: ViewModule = {
     // #loaderBody vive en el chrome persistente del shell, fuera del container de esta vista.
     const loaderBody = document.getElementById("loaderBody");
 
-    // ---------- Dropzones de imagen (principio del ejercicio / ejecución) ----------
-
-    const startDropzone = wireImageDropzone(container, "excImgStart");
-    const execDropzone = wireImageDropzone(container, "excImgExec");
-    ctx.addCleanup(() => {
-      startDropzone.cleanup();
-      execDropzone.cleanup();
-    });
+    const mediaPicker = wireExerciseMediaPicker(container, "excMedia");
+    ctx.addCleanup(() => mediaPicker.cleanup());
 
     form?.addEventListener(
       "submit",
@@ -94,8 +87,6 @@ export const addExcView: ViewModule = {
         const info = (container.querySelector("#description") as HTMLTextAreaElement).value.trim();
         const category = (container.querySelector("#category") as HTMLSelectElement).value;
         const isPublic = (container.querySelector("#visibility") as HTMLSelectElement).value === "true";
-        const startFile = startDropzone.getFile();
-        const execFile = execDropzone.getFile();
 
         if (alertMessage) alertMessage.innerHTML = "";
 
@@ -114,29 +105,14 @@ export const addExcView: ViewModule = {
           `;
         }
 
-        let imageStartUrl: string | undefined;
-        if (startFile) {
-          const { url, error: uploadError } = await uploadExerciseImage(userId, startFile);
-          if (uploadError) {
-            if (loaderBody) loaderBody.innerHTML = "";
-            if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
-            return;
-          }
-          imageStartUrl = url;
+        const { urls: mediaUrls, error: mediaError } = await resolveExerciseMediaUrls(userId, mediaPicker);
+        if (mediaError) {
+          if (loaderBody) loaderBody.innerHTML = "";
+          if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(mediaError)}</p>`;
+          return;
         }
 
-        let imageExecutionUrl: string | undefined;
-        if (execFile) {
-          const { url, error: uploadError } = await uploadExerciseImage(userId, execFile);
-          if (uploadError) {
-            if (loaderBody) loaderBody.innerHTML = "";
-            if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
-            return;
-          }
-          imageExecutionUrl = url;
-        }
-
-        const { error } = await addExercise(userId, name, info, category as ExerciseCategory, isPublic, imageStartUrl, imageExecutionUrl);
+        const { error } = await addExercise(userId, name, info, category as ExerciseCategory, isPublic, mediaUrls);
         if (error) {
           if (loaderBody) loaderBody.innerHTML = "";
           if (alertMessage) alertMessage.innerHTML = `<p>${escapeHtml(error)}</p>`;

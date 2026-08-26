@@ -842,8 +842,7 @@ export const pesosView: ViewModule = {
               exc.nota,
               exc.authorName ?? "Gym Social",
               exc.category,
-              exc.image_start_url,
-              exc.image_execution_url,
+              exc.media_urls,
               targetUserId,
               exc.exercise_id
             );

@@ -1517,7 +1517,19 @@ button:focus-visible {
 /* [hidden] pierde contra un display:flex de menor especificidad de origen sin esto */
 .dropzone-empty[hidden], .dropzone-preview[hidden] { display: none; }
 
-.dropzone-preview img {
+.exc-media-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.exc-media-add { align-self: flex-start; }
+.exc-media-add[hidden] { display: none; }
+
+.dropzone-preview-media img,
+.dropzone-preview-media video {
+  display: block;
   width: 48px;
   height: 48px;
   border-radius: 8px;
@@ -3244,6 +3256,30 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-admin-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
 .exc-admin-author { font-size: 11px; color: var(--text-muted); margin-top: -4px; }
 
+.exc-admin-info { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-top: -4px; }
+.exc-admin-meta { font-size: 11px; color: var(--text-muted); }
+
+.exc-admin-usage {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--accent-2);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .exc-admin-usage:not(:disabled):hover { text-decoration: underline; }
+}
+
+.exc-admin-usage:disabled {
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: default;
+}
+
 .exc-admin-actions { display: flex; gap: 6px; }
 
 .exc-admin-actions button {
@@ -4652,21 +4688,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .modal-card h2 { margin: 0 0 4px; font-size: 20px; }
 .modal-card .hero-badge { display: inline-block; margin-bottom: 14px; }
 
-/* Foto(s) del ejercicio en el modal (ver exerciseModal.ts): una o dos (principio/ejecución)
-   lado a lado segun cuantas se hayan subido, o una sola con el logo generico si no se subio
-   ninguna -- ver exerciseImagesHtml/DEFAULT_EXERCISE_IMAGE ahi. */
-.exc-modal-images { display: flex; gap: 10px; margin-bottom: 16px; }
-.exc-modal-image-item { flex: 1; min-width: 0; }
-.exc-modal-image-label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  text-align: center;
-}
+/* Foto(s)/video(s) del ejercicio en el modal (ver exerciseModal.ts): hasta 3, en fila y con
+   wrap si no entran, o una sola con el logo generico si no se subio ninguna -- ver
+   exerciseImagesHtml/DEFAULT_EXERCISE_IMAGE ahi. */
+.exc-modal-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.exc-modal-image-item { flex: 1 1 140px; min-width: 0; }
 .exc-modal-image {
   display: block;
   width: 100%;
@@ -4758,20 +4784,47 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 .exc-picker-search:focus { outline: none; border-color: var(--accent-2); }
 
-.exc-pick-refresh {
+.exc-pick-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.exc-pick-tabs::-webkit-scrollbar { display: none; }
+
+.exc-pick-tab {
   flex-shrink: 0;
-  width: 40px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .exc-pick-tab:hover { border-color: var(--accent-2); color: var(--text); }
+}
+.exc-pick-tab.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: #0a0c0f; }
+
+.exc-pick-category-select {
+  width: 100%;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 16px;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+  margin-bottom: 18px;
 }
-@media (hover: hover) {
-  .exc-pick-refresh:hover { color: var(--accent-2); border-color: var(--accent-2); }
-}
+.exc-pick-category-select:focus { outline: none; border-color: var(--accent-2); }
+
+.exc-pick-author { font-size: 10.5px; color: var(--text-muted); }
 
 .exc-pick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 
@@ -4839,7 +4892,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   overflow: hidden;
   color: var(--text-muted);
 }
-.exc-pick-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.exc-pick-thumb img, .exc-pick-thumb video { width: 100%; height: 100%; object-fit: cover; }
 .exc-pick-thumb svg { width: 28px; height: 28px; stroke: var(--text-muted); }
 
 .exc-pick-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }

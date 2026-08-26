@@ -19,14 +19,13 @@ import {
   type UserType,
 } from "../services/admin.service";
 import { renderVerifiedBadge, getVerifiedBadgeColor } from "../lib/verifiedBadge";
-import { imageDropzoneMarkup, wireImageDropzone } from "../lib/imageDropzone";
+import { exerciseMediaPickerMarkup, wireExerciseMediaPicker, resolveExerciseMediaUrls, exerciseThumbMediaHtml } from "../lib/imageDropzone";
 import {
   listExercisesAdmin,
   addExercise,
   addBuiltinExercise,
   updateExercise,
   deleteExercise,
-  uploadExerciseImage,
   validateNewExercise,
   EXERCISE_CATEGORIES,
   CATEGORY_LABELS,
@@ -631,7 +630,7 @@ export const adminView: ViewModule = {
                 .map(
                   (exc) => `
                 <div class="exc-admin-card" data-id="${exc.id}">
-                  <span class="exc-pick-thumb">${exc.image_start_url || exc.image_execution_url ? `<img src="${escapeHtml(exc.image_start_url || exc.image_execution_url!)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
+                  <span class="exc-pick-thumb">${exerciseThumbMediaHtml(exc.media_urls, DUMBBELL_ICON)}</span>
                   <span class="exc-admin-name">${escapeHtml(exc.name)}</span>
                   ${exc.authorName ? `<span class="exc-admin-author">${escapeHtml(exc.authorName)}</span>` : ""}
                   <div class="exc-admin-actions">
@@ -670,8 +669,6 @@ export const adminView: ViewModule = {
       if (!loaderBody) return;
 
       const isBuiltin = existing ? existing.is_builtin : excAdminSubTab === "builtin";
-      const currentImageStartUrl = existing?.image_start_url ?? null;
-      const currentImageExecutionUrl = existing?.image_execution_url ?? null;
 
       loaderBody.innerHTML = `
         <div class="success-check-container">
@@ -688,9 +685,8 @@ export const adminView: ViewModule = {
               </select>
             </div>
 
-            ${imageDropzoneMarkup({ idPrefix: "excFormImgStart", label: "Foto: principio del ejercicio (opcional)", currentUrl: currentImageStartUrl })}
-            ${imageDropzoneMarkup({ idPrefix: "excFormImgExec", label: "Foto: ejecución del ejercicio (opcional)", currentUrl: currentImageExecutionUrl })}
-            <p class="field-hint">Si no se sube ninguna de las dos, se usa el logo de Gym Social.</p>
+            ${exerciseMediaPickerMarkup({ idPrefix: "excFormMedia", label: "Foto o video del ejercicio (opcional)", currentUrls: existing?.media_urls })}
+            <p class="field-hint">Si no se sube ninguna, se usa el logo de Gym Social.</p>
 
             ${
               !isBuiltin
@@ -714,12 +710,10 @@ export const adminView: ViewModule = {
         </div>
       `;
 
-      const startDropzone = wireImageDropzone(document, "excFormImgStart");
-      const execDropzone = wireImageDropzone(document, "excFormImgExec");
+      const mediaPicker = wireExerciseMediaPicker(document, "excFormMedia", existing?.media_urls ?? []);
 
       document.getElementById("excFormClose")?.addEventListener("click", () => {
-        startDropzone.cleanup();
-        execDropzone.cleanup();
+        mediaPicker.cleanup();
         loaderBody.innerHTML = "";
       });
 
@@ -738,30 +732,10 @@ export const adminView: ViewModule = {
           return;
         }
 
-        let imageStartUrl: string | null = currentImageStartUrl;
-        const startFile = startDropzone.getFile();
-        if (startFile) {
-          const { url, error: uploadError } = await uploadExerciseImage(adminId, startFile);
-          if (uploadError) {
-            alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
-            return;
-          }
-          imageStartUrl = url ?? null;
-        } else if (startDropzone.wasRemoved()) {
-          imageStartUrl = null;
-        }
-
-        let imageExecutionUrl: string | null = currentImageExecutionUrl;
-        const execFile = execDropzone.getFile();
-        if (execFile) {
-          const { url, error: uploadError } = await uploadExerciseImage(adminId, execFile);
-          if (uploadError) {
-            alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
-            return;
-          }
-          imageExecutionUrl = url ?? null;
-        } else if (execDropzone.wasRemoved()) {
-          imageExecutionUrl = null;
+        const { urls: mediaUrls, error: mediaError } = await resolveExerciseMediaUrls(adminId, mediaPicker);
+        if (mediaError) {
+          alertBox.innerHTML = `<p>${escapeHtml(mediaError)}</p>`;
+          return;
         }
 
         if (existing) {
@@ -769,8 +743,7 @@ export const adminView: ViewModule = {
             name,
             info,
             category: category as ExerciseCategory,
-            image_start_url: imageStartUrl,
-            image_execution_url: imageExecutionUrl,
+            media_urls: mediaUrls,
             ...(isBuiltin ? {} : { is_public: isPublic }),
           });
           if (error) {
@@ -781,14 +754,13 @@ export const adminView: ViewModule = {
             name,
             info,
             category,
-            image_start_url: imageStartUrl,
-            image_execution_url: imageExecutionUrl,
+            media_urls: mediaUrls,
             ...(isBuiltin ? {} : { is_public: isPublic }),
           });
         } else {
           const { error } = isBuiltin
-            ? await addBuiltinExercise(name, info, category as ExerciseCategory, imageStartUrl ?? undefined, imageExecutionUrl ?? undefined)
-            : await addExercise(adminId, name, info, category as ExerciseCategory, isPublic, imageStartUrl ?? undefined, imageExecutionUrl ?? undefined);
+            ? await addBuiltinExercise(name, info, category as ExerciseCategory, mediaUrls)
+            : await addExercise(adminId, name, info, category as ExerciseCategory, isPublic, mediaUrls);
           if (error) {
             alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
             return;
@@ -796,8 +768,7 @@ export const adminView: ViewModule = {
           exercises = await listExercisesAdmin();
         }
 
-        startDropzone.cleanup();
-        execDropzone.cleanup();
+        mediaPicker.cleanup();
         loaderBody.innerHTML = "";
         renderExerciseResults();
       });
