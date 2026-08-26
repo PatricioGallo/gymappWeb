@@ -3601,6 +3601,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   display: grid;
   grid-template-columns: 50px repeat(7, minmax(110px, 1fr));
   min-width: 830px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .class-calendar-corner { position: sticky; left: 0; z-index: 3; background: var(--bg); }
 .class-calendar-day-head {
@@ -3641,6 +3643,32 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 .class-calendar-block strong { display: block; font-size: 11.5px; }
 .class-calendar-block span { display: block; opacity: 0.85; }
+
+/* Selector de dia: solo se ve en mobile (abajo) -- en desktop la semana entera ya entra en
+   pantalla y este selector no aporta nada, asi que queda oculto. */
+.class-calendar-dayselect { display: none; }
+
+@media (max-width: 639px) {
+  .class-calendar-dayselect[hidden] { display: none; }
+  .class-calendar-dayselect { display: flex; gap: 4px; margin-bottom: 12px; }
+  .class-calendar-day-pill {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .class-calendar-day-pill.active { color: var(--accent-2); border-color: var(--accent-2); background: var(--accent-soft); }
+
+  .class-calendar-scroll { overflow-x: hidden; }
+  .class-calendar-grid { grid-template-columns: 50px 1fr; min-width: 0; }
+  .class-calendar-day-head.is-hidden-day, .class-calendar-day-col.is-hidden-day { display: none; }
+}
 
 /* ---------- Modal de detalle/inscripcion de una clase (compartido slider + calendario) ---------- */
 

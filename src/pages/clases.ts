@@ -22,6 +22,12 @@ import { openClassManageForm, confirmDeleteGymClass } from "../lib/gymClassManag
 // inscribirse -- misma pagina, mismo componente de calendario para los dos.
 // ---------------------------------------------------------------------------
 
+// Selector de dia (solo visible en mobile via CSS -- ver .class-calendar-dayselect en
+// modern.css): en desktop la semana entera entra en pantalla, pero en mobile el grid de 7
+// columnas obliga a scrollear horizontal y no se entiende nada, asi que ahi se filtra a un
+// solo dia por vez.
+const DAY_SELECT_HTML = CLASS_DAY_LABELS.map((label, day) => `<button type="button" class="class-calendar-day-pill" data-day="${day}">${label.slice(0, 3)}</button>`).join("");
+
 const CALENDAR_VIEW_MARKUP = `
   <section class="page-hero">
     <div class="container">
@@ -37,6 +43,7 @@ const CALENDAR_VIEW_MARKUP = `
         <button class="btn btn-primary btn-sm" id="newClassBtn" type="button">+ Nueva clase</button>
       </div>
       <p class="chart-sub" id="clasesSummary">Cargando...</p>
+      <div class="class-calendar-dayselect" id="clasesDaySelect" hidden>${DAY_SELECT_HTML}</div>
       <div class="class-calendar" id="clasesCalendar" hidden>
         <div class="class-calendar-scroll">
           <div class="class-calendar-grid" id="clasesGrid"></div>
@@ -68,8 +75,12 @@ function noScheduleCardMarkup(c: GymClassRow): string {
 }
 
 const PX_PER_HOUR = 60;
-const FALLBACK_AXIS_START = 8 * 60; // 08:00
-const FALLBACK_AXIS_END = 21 * 60; // 21:00
+const AXIS_START = 6 * 60; // 06:00
+const AXIS_END = 24 * 60; // 00:00
+// Los labels de hora quedan centrados sobre su linea (translateY(-50%) en CSS) -- sin este
+// margen arriba/abajo, el de las 06:00 y el de las 00:00 quedan pegados al borde y se ven
+// cortados a la mitad.
+const AXIS_PADDING_PX = 14;
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -115,21 +126,21 @@ function buildCalendarBlocks(classes: GymClassRow[]): ClassBlock[] {
 }
 
 function calendarGridHtml(blocks: ClassBlock[]): string {
-  const allTimes = blocks.flatMap((b) => [b.startMin, b.endMin]);
-  const axisStart = allTimes.length ? Math.floor((Math.min(...allTimes) - 30) / 60) * 60 : FALLBACK_AXIS_START;
-  const axisEnd = allTimes.length ? Math.ceil((Math.max(...allTimes) + 30) / 60) * 60 : FALLBACK_AXIS_END;
-  const totalPx = ((axisEnd - axisStart) / 60) * PX_PER_HOUR;
+  const axisStart = AXIS_START;
+  const axisEnd = AXIS_END;
+  const totalPx = ((axisEnd - axisStart) / 60) * PX_PER_HOUR + AXIS_PADDING_PX * 2;
 
   const hourLabels: string[] = [];
   for (let m = axisStart; m <= axisEnd; m += 60) {
-    hourLabels.push(`<span class="class-calendar-hour-label" style="top:${((m - axisStart) / 60) * PX_PER_HOUR}px">${String(Math.floor(m / 60)).padStart(2, "0")}:00</span>`);
+    const label = m === 24 * 60 ? "00:00" : `${String(Math.floor(m / 60)).padStart(2, "0")}:00`;
+    hourLabels.push(`<span class="class-calendar-hour-label" style="top:${((m - axisStart) / 60) * PX_PER_HOUR + AXIS_PADDING_PX}px">${label}</span>`);
   }
 
   const dayCols = CLASS_DAY_LABELS.map((_label, day) => {
     const dayBlocks = blocks.filter((b) => b.dayOfWeek === day);
     const blocksHtml = dayBlocks
       .map((b) => {
-        const top = ((b.startMin - axisStart) / 60) * PX_PER_HOUR;
+        const top = ((b.startMin - axisStart) / 60) * PX_PER_HOUR + AXIS_PADDING_PX;
         const height = Math.max(((b.endMin - b.startMin) / 60) * PX_PER_HOUR, 24);
         const widthPct = 100 / b.laneCount;
         const leftPct = b.lane * widthPct;
@@ -141,12 +152,12 @@ function calendarGridHtml(blocks: ClassBlock[]): string {
           </button>`;
       })
       .join("");
-    return `<div class="class-calendar-day-col" style="height:${totalPx}px">${blocksHtml}</div>`;
+    return `<div class="class-calendar-day-col" data-day="${day}" style="height:${totalPx}px">${blocksHtml}</div>`;
   }).join("");
 
   return `
     <div class="class-calendar-corner"></div>
-    ${CLASS_DAY_LABELS.map((l) => `<div class="class-calendar-day-head">${l.slice(0, 3)}</div>`).join("")}
+    ${CLASS_DAY_LABELS.map((l, day) => `<div class="class-calendar-day-head" data-day="${day}">${l.slice(0, 3)}</div>`).join("")}
     <div class="class-calendar-time-axis" style="height:${totalPx}px">${hourLabels.join("")}</div>
     ${dayCols}
   `;
@@ -169,9 +180,32 @@ async function mountClasesView(
   const newClassBtn = container.querySelector("#newClassBtn") as HTMLButtonElement;
   const summaryEl = container.querySelector("#clasesSummary")!;
   const calendarWrap = container.querySelector("#clasesCalendar") as HTMLElement;
+  const daySelectEl = container.querySelector<HTMLElement>("#clasesDaySelect")!;
   const gridEl = container.querySelector("#clasesGrid")!;
   const noScheduleWrap = container.querySelector<HTMLElement>("#clasesNoScheduleWrap")!;
   const noScheduleList = container.querySelector("#clasesNoScheduleList")!;
+
+  // Solo tiene efecto visual en mobile (ver media query en modern.css); en desktop el grid
+  // siempre muestra los 7 dias y estas clases quedan sin uso.
+  let selectedDay = new Date().getDay();
+  function applyDaySelection(): void {
+    gridEl.querySelectorAll<HTMLElement>("[data-day]").forEach((el) => {
+      el.classList.toggle("is-hidden-day", Number(el.dataset.day) !== selectedDay);
+    });
+    daySelectEl.querySelectorAll<HTMLButtonElement>(".class-calendar-day-pill").forEach((btn) => {
+      btn.classList.toggle("active", Number(btn.dataset.day) === selectedDay);
+    });
+  }
+  daySelectEl.addEventListener(
+    "click",
+    (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".class-calendar-day-pill");
+      if (!btn?.dataset.day) return;
+      selectedDay = Number(btn.dataset.day);
+      applyDaySelection();
+    },
+    { signal: ctx.signal }
+  );
 
   backLink.href = isOwner ? "profile.html" : `profile.html?u=${encodeURIComponent(gymUsername ?? "")}`;
   titleEl.textContent = isOwner ? "Tus clases" : `Clases de ${gymUsername}`;
@@ -194,6 +228,7 @@ async function mountClasesView(
   async function refresh(): Promise<void> {
     summaryEl.textContent = "Cargando...";
     calendarWrap.hidden = true;
+    daySelectEl.hidden = true;
     noScheduleWrap.hidden = true;
 
     let classes: GymClassRow[];
@@ -221,8 +256,10 @@ async function mountClasesView(
     if (withSchedule.length > 0) {
       summaryEl.textContent = "";
       calendarWrap.hidden = false;
+      daySelectEl.hidden = false;
       const blocks = buildCalendarBlocks(withSchedule);
       gridEl.innerHTML = calendarGridHtml(blocks);
+      applyDaySelection();
       gridEl.querySelectorAll<HTMLButtonElement>(".class-calendar-block").forEach((btn) => {
         btn.addEventListener(
           "click",
