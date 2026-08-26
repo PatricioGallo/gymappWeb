@@ -1517,7 +1517,19 @@ button:focus-visible {
 /* [hidden] pierde contra un display:flex de menor especificidad de origen sin esto */
 .dropzone-empty[hidden], .dropzone-preview[hidden] { display: none; }
 
-.dropzone-preview img {
+.exc-media-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.exc-media-add { align-self: flex-start; }
+.exc-media-add[hidden] { display: none; }
+
+.dropzone-preview-media img,
+.dropzone-preview-media video {
+  display: block;
   width: 48px;
   height: 48px;
   border-radius: 8px;
@@ -4676,21 +4688,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .modal-card h2 { margin: 0 0 4px; font-size: 20px; }
 .modal-card .hero-badge { display: inline-block; margin-bottom: 14px; }
 
-/* Foto(s) del ejercicio en el modal (ver exerciseModal.ts): una o dos (principio/ejecución)
-   lado a lado segun cuantas se hayan subido, o una sola con el logo generico si no se subio
-   ninguna -- ver exerciseImagesHtml/DEFAULT_EXERCISE_IMAGE ahi. */
-.exc-modal-images { display: flex; gap: 10px; margin-bottom: 16px; }
-.exc-modal-image-item { flex: 1; min-width: 0; }
-.exc-modal-image-label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  text-align: center;
-}
+/* Foto(s)/video(s) del ejercicio en el modal (ver exerciseModal.ts): hasta 3, en fila y con
+   wrap si no entran, o una sola con el logo generico si no se subio ninguna -- ver
+   exerciseImagesHtml/DEFAULT_EXERCISE_IMAGE ahi. */
+.exc-modal-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.exc-modal-image-item { flex: 1 1 140px; min-width: 0; }
 .exc-modal-image {
   display: block;
   width: 100%;
@@ -4890,7 +4892,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   overflow: hidden;
   color: var(--text-muted);
 }
-.exc-pick-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.exc-pick-thumb img, .exc-pick-thumb video { width: 100%; height: 100%; object-fit: cover; }
 .exc-pick-thumb svg { width: 28px; height: 28px; stroke: var(--text-muted); }
 
 .exc-pick-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }

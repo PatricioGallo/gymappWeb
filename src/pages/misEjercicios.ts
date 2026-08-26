@@ -12,6 +12,7 @@ import { escapeHtml } from "../lib/dom";
 import { formatFechaCorta } from "../lib/dias";
 import { openCreateExerciseModal } from "../lib/createExerciseModal";
 import { openExerciseModal } from "../lib/exerciseModal";
+import { exerciseThumbMediaHtml } from "../lib/imageDropzone";
 
 const DUMBBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg>`;
 const BACK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`;
@@ -66,7 +67,7 @@ export const misEjerciciosView: ViewModule = {
                   const count = usageCounts[exc.id] ?? 0;
                   return `
                 <div class="exc-admin-card" data-id="${exc.id}">
-                  <span class="exc-pick-thumb">${exc.image_start_url || exc.image_execution_url ? `<img src="${escapeHtml(exc.image_start_url || exc.image_execution_url!)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
+                  <span class="exc-pick-thumb">${exerciseThumbMediaHtml(exc.media_urls, DUMBBELL_ICON)}</span>
                   <span class="exc-admin-name">${escapeHtml(exc.name)}</span>
                   <div class="exc-admin-info">
                     <span class="exc-admin-meta">Creado el ${escapeHtml(formatFechaCorta(exc.created_at))}</span>
@@ -95,7 +96,7 @@ export const misEjerciciosView: ViewModule = {
           () => {
             const card = thumb.closest<HTMLElement>(".exc-admin-card")!;
             const exc = exercises.find((e) => e.id === card.dataset.id);
-            if (exc) openExerciseModal(exc.name, exc.info, null, "Vos", exc.category, exc.image_start_url, exc.image_execution_url, userId, exc.id);
+            if (exc) openExerciseModal(exc.name, exc.info, null, "Vos", exc.category, exc.media_urls, userId, exc.id);
           },
           { signal: ctx.signal }
         );

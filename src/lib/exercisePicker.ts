@@ -10,6 +10,7 @@ import {
   type ExerciseCategory,
 } from "../services/exercise.service";
 import { openCreateExerciseModal } from "./createExerciseModal";
+import { exerciseThumbMediaHtml } from "./imageDropzone";
 import { listFollowing } from "../services/follow.service";
 import { listMyTrainers } from "../services/subscription.service";
 import { listMyActiveGyms } from "../services/gymMember.service";
@@ -126,7 +127,7 @@ export function openExercisePicker(onSelect: (exc: Exercise) => void, userId: st
                   .map(
                     (exc) => `
                   <button type="button" class="exc-pick-card" data-id="${exc.id}">
-                    <span class="exc-pick-thumb">${exc.image_start_url || exc.image_execution_url ? `<img src="${escapeHtml(exc.image_start_url || exc.image_execution_url!)}" alt="" loading="lazy">` : DUMBBELL_ICON}</span>
+                    <span class="exc-pick-thumb">${exerciseThumbMediaHtml(exc.media_urls, DUMBBELL_ICON)}</span>
                     <span class="exc-pick-name">${escapeHtml(exc.name)}</span>
                     ${exc.authorName ? `<span class="exc-pick-author">${escapeHtml(exc.authorName)}</span>` : ""}
                   </button>

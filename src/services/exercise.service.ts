@@ -138,14 +138,56 @@ export function validateNewExercise(name: string, info: string, category: string
   return null;
 }
 
-const EXERCISE_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
-const EXERCISE_IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const EXERCISE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+const EXERCISE_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
+const EXERCISE_VIDEO_MAX_SECONDS = 120;
+const EXERCISE_IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const EXERCISE_VIDEO_ALLOWED_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+const EXERCISE_FILE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+};
+
+/** Lee la duración de un video sin subirlo, cargando sus metadatos en un <video> off-DOM. */
+function getVideoDurationSeconds(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo leer el video"));
+    };
+    video.src = url;
+  });
+}
 
 export async function uploadExerciseImage(authorId: string, file: File): Promise<{ url?: string; error?: string }> {
-  if (file.size > EXERCISE_IMAGE_MAX_BYTES) return { error: "La imagen es muy pesada. Elegí una de menos de 2MB." };
-  if (!EXERCISE_IMAGE_ALLOWED_TYPES.includes(file.type)) return { error: "Formato no soportado. Usá JPG, PNG o WEBP." };
+  const isVideo = EXERCISE_VIDEO_ALLOWED_TYPES.includes(file.type);
+  if (!isVideo && !EXERCISE_IMAGE_ALLOWED_TYPES.includes(file.type)) {
+    return { error: "Formato no soportado. Usá JPG, PNG, WEBP, GIF o un video MP4/WEBM/MOV." };
+  }
+  const maxBytes = isVideo ? EXERCISE_VIDEO_MAX_BYTES : EXERCISE_IMAGE_MAX_BYTES;
+  if (file.size > maxBytes) {
+    return { error: isVideo ? "El video es muy pesado. Elegí uno de menos de 20MB." : "La imagen es muy pesada. Elegí una de menos de 20MB." };
+  }
+  if (isVideo) {
+    const duration = await getVideoDurationSeconds(file).catch(() => null);
+    if (duration !== null && duration > EXERCISE_VIDEO_MAX_SECONDS) {
+      return { error: "El video es muy largo. Elegí uno de hasta 2 minutos." };
+    }
+  }
 
-  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const ext = EXERCISE_FILE_EXTENSIONS[file.type];
   const path = `${authorId}/${crypto.randomUUID()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage.from("exercise-images").upload(path, file);
@@ -161,15 +203,13 @@ export async function addExercise(
   info: string,
   category: ExerciseCategory,
   isPublic: boolean,
-  imageStartUrl?: string,
-  imageExecutionUrl?: string
+  mediaUrls: string[] = []
 ): Promise<{ error?: string }> {
   const { error } = await supabase.from("exercises").insert({
     name,
     info,
     category,
-    image_start_url: imageStartUrl || null,
-    image_execution_url: imageExecutionUrl || null,
+    media_urls: mediaUrls,
     author_id: authorId,
     is_builtin: false,
     is_public: isPublic,
@@ -181,19 +221,12 @@ export async function addExercise(
   return {};
 }
 
-export async function addBuiltinExercise(
-  name: string,
-  info: string,
-  category: ExerciseCategory,
-  imageStartUrl?: string,
-  imageExecutionUrl?: string
-): Promise<{ error?: string }> {
+export async function addBuiltinExercise(name: string, info: string, category: ExerciseCategory, mediaUrls: string[] = []): Promise<{ error?: string }> {
   const { error } = await supabase.from("exercises").insert({
     name,
     info,
     category,
-    image_start_url: imageStartUrl || null,
-    image_execution_url: imageExecutionUrl || null,
+    media_urls: mediaUrls,
     author_id: null,
     is_builtin: true,
     is_public: false,
@@ -209,8 +242,7 @@ export interface EditableExerciseFields {
   name?: string;
   info?: string;
   category?: ExerciseCategory;
-  image_start_url?: string | null;
-  image_execution_url?: string | null;
+  media_urls?: string[];
   is_public?: boolean;
 }
 

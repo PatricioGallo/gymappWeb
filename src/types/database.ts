@@ -386,11 +386,10 @@ export type Database = {
           category: Database["public"]["Enums"]["exercise_category"]
           created_at: string
           id: string
-          image_execution_url: string | null
-          image_start_url: string | null
           info: string
           is_builtin: boolean
           is_public: boolean
+          media_urls: string[]
           name: string
         }
         Insert: {
@@ -398,11 +397,10 @@ export type Database = {
           category: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
-          image_execution_url?: string | null
-          image_start_url?: string | null
           info: string
           is_builtin?: boolean
           is_public?: boolean
+          media_urls?: string[]
           name: string
         }
         Update: {
@@ -410,11 +408,10 @@ export type Database = {
           category?: Database["public"]["Enums"]["exercise_category"]
           created_at?: string
           id?: string
-          image_execution_url?: string | null
-          image_start_url?: string | null
           info?: string
           is_builtin?: boolean
           is_public?: boolean
+          media_urls?: string[]
           name?: string
         }
         Relationships: [

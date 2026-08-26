@@ -58,8 +58,7 @@ export async function createRoutine(
 export interface RoutineExerciseWithAuthor extends RoutineExercise {
   authorName: string;
   category: string | null;
-  image_start_url: string | null;
-  image_execution_url: string | null;
+  media_urls: string[];
 }
 
 export interface RoutineDetailDay {
@@ -82,7 +81,7 @@ export async function getRoutineDetail(routineId: string): Promise<RoutineDetail
     .from("routines")
     .select(
       `id, user_id, assigned_by, copied_from_user_id, nombre, fecha_inicio, finalizada_at, is_public, is_shareable, share_token, created_at, updated_at,
-       routine_weeks ( id, numero, routine_days ( id, dia_semana, nombre, routine_exercises ( *, exercises ( is_builtin, category, image_start_url, image_execution_url, profiles ( nombre, apellido ) ) ) ) )`
+       routine_weeks ( id, numero, routine_days ( id, dia_semana, nombre, routine_exercises ( *, exercises ( is_builtin, category, media_urls, profiles ( nombre, apellido ) ) ) ) )`
     )
     .eq("id", routineId)
     .maybeSingle();
@@ -115,8 +114,7 @@ export async function getRoutineDetail(routineId: string): Promise<RoutineDetail
                 ...rest,
                 authorName: author,
                 category: exercises?.category ?? null,
-                image_start_url: exercises?.image_start_url ?? null,
-                image_execution_url: exercises?.image_execution_url ?? null,
+                media_urls: exercises?.media_urls ?? [],
               };
             }),
         })),

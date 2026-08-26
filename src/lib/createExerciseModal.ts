@@ -5,11 +5,10 @@ import {
   validateNewExercise,
   addExercise,
   updateExercise,
-  uploadExerciseImage,
   type Exercise,
   type ExerciseCategory,
 } from "../services/exercise.service";
-import { imageDropzoneMarkup, wireImageDropzone } from "./imageDropzone";
+import { exerciseMediaPickerMarkup, wireExerciseMediaPicker, resolveExerciseMediaUrls } from "./imageDropzone";
 import type { ViewContext } from "../shell/viewContext";
 
 const ERROR_LABELS: Record<string, string> = {
@@ -29,9 +28,6 @@ export function openCreateExerciseModal(userId: string, existing: Exercise | nul
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
 
-  const currentImageStartUrl = existing?.image_start_url ?? null;
-  const currentImageExecutionUrl = existing?.image_execution_url ?? null;
-
   loaderBody.innerHTML = `
     <div class="success-check-container">
       <div class="modal-card modal-card-lg">
@@ -48,9 +44,8 @@ export function openCreateExerciseModal(userId: string, existing: Exercise | nul
           </select>
         </div>
 
-        ${imageDropzoneMarkup({ idPrefix: "createExcImgStart", label: "Foto: principio del ejercicio (opcional)", currentUrl: currentImageStartUrl })}
-        ${imageDropzoneMarkup({ idPrefix: "createExcImgExec", label: "Foto: ejecución del ejercicio (opcional)", currentUrl: currentImageExecutionUrl })}
-        <p class="field-hint">Si no subís ninguna de las dos, se usa el logo de Gym Social.</p>
+        ${exerciseMediaPickerMarkup({ idPrefix: "createExcMedia", label: "Foto o video del ejercicio (opcional)", currentUrls: existing?.media_urls })}
+        <p class="field-hint">Si no subís ninguna, se usa el logo de Gym Social.</p>
 
         <div class="field">
           <label for="createExcVisibility">Visibilidad</label>
@@ -69,12 +64,10 @@ export function openCreateExerciseModal(userId: string, existing: Exercise | nul
     </div>
   `;
 
-  const startDropzone = wireImageDropzone(document, "createExcImgStart");
-  const execDropzone = wireImageDropzone(document, "createExcImgExec");
+  const mediaPicker = wireExerciseMediaPicker(document, "createExcMedia", existing?.media_urls ?? []);
 
   function close(): void {
-    startDropzone.cleanup();
-    execDropzone.cleanup();
+    mediaPicker.cleanup();
     loaderBody!.innerHTML = "";
   }
 
@@ -101,32 +94,11 @@ export function openCreateExerciseModal(userId: string, existing: Exercise | nul
       const saveBtn = document.getElementById("createExcSave") as HTMLButtonElement;
       saveBtn.disabled = true;
 
-      let imageStartUrl: string | null | undefined = currentImageStartUrl;
-      const startFile = startDropzone.getFile();
-      if (startFile) {
-        const { url, error: uploadError } = await uploadExerciseImage(userId, startFile);
-        if (uploadError) {
-          alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
-          saveBtn.disabled = false;
-          return;
-        }
-        imageStartUrl = url ?? null;
-      } else if (startDropzone.wasRemoved()) {
-        imageStartUrl = null;
-      }
-
-      let imageExecutionUrl: string | null | undefined = currentImageExecutionUrl;
-      const execFile = execDropzone.getFile();
-      if (execFile) {
-        const { url, error: uploadError } = await uploadExerciseImage(userId, execFile);
-        if (uploadError) {
-          alertBox.innerHTML = `<p>${escapeHtml(uploadError)}</p>`;
-          saveBtn.disabled = false;
-          return;
-        }
-        imageExecutionUrl = url ?? null;
-      } else if (execDropzone.wasRemoved()) {
-        imageExecutionUrl = null;
+      const { urls: mediaUrls, error: mediaError } = await resolveExerciseMediaUrls(userId, mediaPicker);
+      if (mediaError) {
+        alertBox.innerHTML = `<p>${escapeHtml(mediaError)}</p>`;
+        saveBtn.disabled = false;
+        return;
       }
 
       const { error } = existing
@@ -134,19 +106,17 @@ export function openCreateExerciseModal(userId: string, existing: Exercise | nul
             name,
             info,
             category: category as ExerciseCategory,
-            image_start_url: imageStartUrl,
-            image_execution_url: imageExecutionUrl,
+            media_urls: mediaUrls,
             is_public: isPublic,
           })
-        : await addExercise(userId, name, info, category as ExerciseCategory, isPublic, imageStartUrl ?? undefined, imageExecutionUrl ?? undefined);
+        : await addExercise(userId, name, info, category as ExerciseCategory, isPublic, mediaUrls);
       if (error) {
         alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
         saveBtn.disabled = false;
         return;
       }
 
-      startDropzone.cleanup();
-      execDropzone.cleanup();
+      mediaPicker.cleanup();
       loaderBody!.innerHTML = `
         <div class="success-check-container">
           <div class="success-icon">
