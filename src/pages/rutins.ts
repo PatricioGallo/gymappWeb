@@ -145,7 +145,7 @@ function excBlockMarkup(): string {
       </div>
       <div class="exc-extra">
         <label><input type="checkbox" class="noWeightCheck"> Sin peso</label>
-        <label><input type="checkbox" class="mismoPesoCheck" checked> Mismo peso en todas las series</label>
+        <label><input type="checkbox" class="mismoPesoCheck"> Mismo peso en todas las series</label>
         <input type="text" class="notaInput" placeholder="Nota para este ejercicio (opcional)" maxlength="140">
       </div>
     </div>
