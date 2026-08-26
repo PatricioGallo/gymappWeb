@@ -51,7 +51,7 @@ import {
   type GymTrainerRow,
 } from "../services/gymTrainer.service";
 import { listGymClasses, type GymClassRow } from "../services/gymClass.service";
-import { classImageHtml, classCapacityBadgeHtml, classSessionsSummary } from "../lib/gymClassMarkup";
+import { classImageHtml, classSessionsSummary } from "../lib/gymClassMarkup";
 import { openClassDetailModal } from "../lib/gymClassEnrollModal";
 import { openClassManageForm, confirmDeleteGymClass } from "../lib/gymClassManageModal";
 import { listGymTrainerRatings, type GymTrainerRatingRow } from "../services/gymTrainerRating.service";
@@ -1077,13 +1077,19 @@ function setupGymClasesSlider(ctx: ViewContext) {
   ctx.addCleanup(() => observer.disconnect());
 }
 
+// Cada horario tiene su propio cupo/inscriptos -- una sola clase con varios horarios ya no
+// tiene un "inscriptos/capacidad" unico y comparable a una badge, asi que la tarjeta del
+// slider no la muestra (si vive en el detalle, por horario). totalEnrolled solo ordena el slider.
+function totalEnrolled(c: GymClassRow): number {
+  return c.sessions.reduce((sum, s) => sum + s.enrolledCount, 0);
+}
+
 function claseSliderCardMarkup(c: GymClassRow): string {
   return `
     <div class="clase-slider-card is-clickable" data-id="${c.id}">
       ${classImageHtml(c.imageUrl, "clase-slider-image")}
       <h4>${escapeHtml(c.name)}</h4>
       <p class="clase-slider-meta">${escapeHtml(classSessionsSummary(c.sessions))}</p>
-      ${classCapacityBadgeHtml(c.enrolledCount, c.capacity)}
     </div>
   `;
 }
@@ -1116,7 +1122,7 @@ async function renderGymClasses(gymId: string, gymUsername: string, isActiveSoci
   section.hidden = false;
   summaryEl.textContent = "";
 
-  const sorted = [...classes].sort((a, b) => b.enrolledCount - a.enrolledCount);
+  const sorted = [...classes].sort((a, b) => totalEnrolled(b) - totalEnrolled(a));
   trackEl.innerHTML = sorted.map(claseSliderCardMarkup).join("");
   if (verTodas) verTodas.href = isOwner ? "clases.html" : `clases.html?u=${encodeURIComponent(gymUsername)}`;
 

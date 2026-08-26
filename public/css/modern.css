@@ -3672,9 +3672,55 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 /* ---------- Modal de detalle/inscripcion de una clase (compartido slider + calendario) ---------- */
 
-.class-detail-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 12px; }
-.class-detail-sessions { list-style: none; padding: 0; margin: 8px 0; font-size: 13.5px; color: var(--text-muted); }
-.class-detail-sessions li { padding: 2px 0; }
+.class-detail-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: 14px; margin-bottom: 16px; }
+/* Placeholder (sin foto): plano en vez del degrade rojizo de .gym-class-image-placeholder --
+   mas minimalista, y evita que el icono quede flotando sobre un fondo "sangriento" cuando el
+   accent del sitio es rojo/naranja. Selector combinado (no toca .gym-class-image-placeholder
+   en si) para no afectar el slider del perfil ni la grilla de clases, que siguen con el degrade. */
+.class-detail-image.gym-class-image-placeholder { height: 130px; background: var(--surface-2); }
+.class-detail-image.gym-class-image-placeholder svg { opacity: 0.32; }
+
+.class-detail-instructor {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 2px 0 20px;
+}
+.class-detail-instructor span { font-size: 13.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text); }
+.class-detail-instructor a { color: inherit; text-decoration: none; }
+@media (hover: hover) {
+  .class-detail-instructor a:hover { color: var(--accent-2); }
+}
+
+/* Filas de horario con inscripcion propia (una clase puede tener mas de un horario/semana,
+   cada uno con su cupo y su boton) -- ver openClassDetailModal. Cada fila es su propia
+   "tarjeta" chica, con borde+sombra reales (no solo un tono de fondo apenas mas claro que el
+   modal) para que se despeguen del fondo en vez de leerse todas pegadas entre si. Los botones
+   usan .btn-primary/.btn-outline/.btn-sm tal cual estan definidos para el resto del sitio --
+   nada de colores ni sombras propias aca, para no terminar con una variante que desentona. */
+.class-detail-sessions-rows { display: flex; flex-direction: column; gap: 14px; margin: 14px 0 4px; padding: 0; list-style: none; }
+.class-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+.class-session-row-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.class-session-row-time { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.class-session-row-count { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+
+.class-session-row .btn { flex-shrink: 0; }
+.class-session-row .btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 
 /* ---------- Calificacion de entrenadores (handles) de gimnasio ---------- */
 

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -493,18 +493,24 @@ export type Database = {
           enrolled_at: string
           id: string
           member_id: string
+          session_date: string
+          session_id: string
         }
         Insert: {
           class_id: string
           enrolled_at?: string
           id?: string
           member_id: string
+          session_date?: string
+          session_id: string
         }
         Update: {
           class_id?: string
           enrolled_at?: string
           id?: string
           member_id?: string
+          session_date?: string
+          session_id?: string
         }
         Relationships: [
           {
@@ -526,6 +532,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_class_enrollments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "gym_class_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -3018,7 +3031,6 @@ export type Database = {
           allow_enrollment: boolean
           capacity: number
           description: string
-          enrolled_count: number
           id: string
           image_url: string
           instructor_apellido: string
@@ -3026,7 +3038,6 @@ export type Database = {
           instructor_id: string
           instructor_nombre: string
           instructor_username: string
-          is_enrolled: boolean
           name: string
           sessions: Json
         }[]
@@ -3214,6 +3225,10 @@ export type Database = {
       mark_conversation_read: {
         Args: { p_conversation_id: string }
         Returns: undefined
+      }
+      next_session_occurrence: {
+        Args: { p_day_of_week: number; p_end_time: string }
+        Returns: string
       }
       open_view_once_message: {
         Args: { p_message_id: string }

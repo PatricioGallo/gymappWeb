@@ -1,12 +1,23 @@
 import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../types/database";
+import { todayLocalISO } from "../lib/dias";
 
 export type GymClass = Tables<"gym_classes">;
 
-export interface ClassSession {
+/** Lo que se manda al crear/editar horarios -- sin id (todavia no existe) ni datos de
+ * inscripcion (no aplica al formulario). */
+export interface ClassSessionInput {
   dayOfWeek: number; // 0=domingo .. 6=sabado
   startTime: string; // "HH:MM" o "HH:MM:SS"
   endTime: string;
+}
+
+export interface ClassSession extends ClassSessionInput {
+  id: string;
+  // "capacity" (mas abajo, a nivel clase) se aplica por horario -- cada sesion tiene su propio
+  // cupo y su propia lista de inscriptos, no uno compartido entre todos los horarios de la clase.
+  enrolledCount: number;
+  isEnrolled: boolean;
 }
 
 export interface GymClassRow {
@@ -21,8 +32,6 @@ export interface GymClassRow {
   instructorNombre: string | null;
   instructorApellido: string | null;
   instructorAvatarUrl: string | null;
-  enrolledCount: number;
-  isEnrolled: boolean;
   sessions: ClassSession[];
 }
 
@@ -33,7 +42,7 @@ export interface ClassFormInput {
   instructorId?: string | null;
   allowEnrollment: boolean;
   capacity?: number | null;
-  sessions: ClassSession[];
+  sessions: ClassSessionInput[];
 }
 
 /** null = sin limite. <60% ocupado = vacio, 60-99% = medio, >=100% = lleno (bloquea inscripcion). */
@@ -64,9 +73,12 @@ export async function uploadClassImage(gymId: string, file: File): Promise<{ url
 function parseSessions(json: unknown): ClassSession[] {
   if (!Array.isArray(json)) return [];
   return json.map((s) => ({
+    id: (s as { id: string }).id,
     dayOfWeek: (s as { day_of_week: number }).day_of_week,
     startTime: (s as { start_time: string }).start_time,
     endTime: (s as { end_time: string }).end_time,
+    enrolledCount: (s as { enrolled_count: number }).enrolled_count,
+    isEnrolled: (s as { is_enrolled: boolean }).is_enrolled,
   }));
 }
 
@@ -85,13 +97,11 @@ export async function listGymClasses(gymId: string): Promise<GymClassRow[]> {
     instructorNombre: r.instructor_nombre,
     instructorApellido: r.instructor_apellido,
     instructorAvatarUrl: r.instructor_avatar_url,
-    enrolledCount: r.enrolled_count,
-    isEnrolled: r.is_enrolled,
     sessions: parseSessions(r.sessions),
   }));
 }
 
-async function replaceSessions(classId: string, sessions: ClassSession[]): Promise<{ error?: string }> {
+async function replaceSessions(classId: string, sessions: ClassSessionInput[]): Promise<{ error?: string }> {
   const { error: deleteError } = await supabase.from("gym_class_sessions").delete().eq("class_id", classId);
   if (deleteError) return { error: "No se pudieron guardar los horarios. Probá de nuevo." };
   if (sessions.length === 0) return {};
@@ -149,20 +159,32 @@ export async function deleteGymClass(classId: string): Promise<{ error?: string 
   return {};
 }
 
-export async function enrollInClass(classId: string, memberId: string): Promise<{ error?: string }> {
-  const { error } = await supabase.from("gym_class_enrollments").insert({ class_id: classId, member_id: memberId });
+// La inscripcion es por horario individual, no por clase entera (una clase puede tener varios
+// horarios/semana). classId se manda como conveniencia (el caller ya lo tiene a mano) pero el
+// trigger lo vuelve a derivar de session_id y lo pisa sin confiar en el cliente -- session_date
+// tambien lo calcula siempre el trigger server-side (proxima ocurrencia real de ese horario).
+// Eso es lo que hace que se "resetee" sola semana a semana: pasada esa fecha, esa fila deja de
+// ser "la vigente" y una nueva inscripcion apunta a la ocurrencia siguiente -- ver
+// next_session_occurrence en la DB.
+export async function enrollInSession(sessionId: string, classId: string, memberId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from("gym_class_enrollments").insert({ session_id: sessionId, class_id: classId, member_id: memberId });
   if (error) {
     if (error.message?.includes("not an active member")) return { error: "Tenés que ser socio de este gimnasio para inscribirte." };
     if (error.message?.includes("enrollment not allowed")) return { error: "Esta clase no tiene inscripción habilitada." };
-    if (error.message?.includes("class is full")) return { error: "Esta clase ya está completa." };
-    if (error.code === "23505") return { error: "Ya estás inscripto en esta clase." };
+    if (error.message?.includes("class is full")) return { error: "Este horario ya está completo." };
+    if (error.code === "23505") return { error: "Ya estás inscripto en este horario." };
     return { error: "No se pudo completar la inscripción. Probá de nuevo." };
   }
   return {};
 }
 
-export async function unenrollFromClass(classId: string, memberId: string): Promise<{ error?: string }> {
-  const { error } = await supabase.from("gym_class_enrollments").delete().eq("class_id", classId).eq("member_id", memberId);
+export async function unenrollFromSession(sessionId: string, memberId: string): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from("gym_class_enrollments")
+    .delete()
+    .eq("session_id", sessionId)
+    .eq("member_id", memberId)
+    .gte("session_date", todayLocalISO());
   if (error) return { error: "No se pudo cancelar la inscripción. Probá de nuevo." };
   return {};
 }

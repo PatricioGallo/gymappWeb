@@ -7,7 +7,7 @@ import {
   deleteGymClass,
   uploadClassImage,
   type GymClassRow,
-  type ClassSession,
+  type ClassSessionInput,
   type ClassFormInput,
 } from "../services/gymClass.service";
 import type { GymTrainerRow } from "../services/gymTrainer.service";
@@ -65,7 +65,7 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
   const isEdit = !!existing;
-  let sessions: ClassSession[] = existing ? [...existing.sessions] : [];
+  let sessions: ClassSessionInput[] = existing ? [...existing.sessions] : [];
   let imageUrl: string | null = existing?.imageUrl ?? null;
   let pendingFile: File | null = null;
   let previewObjectUrl: string | null = null;
