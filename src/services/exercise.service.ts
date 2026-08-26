@@ -85,6 +85,30 @@ export async function listMyExercises(userId: string): Promise<Exercise[]> {
   return data ?? [];
 }
 
+/** Para cada ejercicio propio, cuantas personas distintas lo tienen hoy en una rutina activa. */
+export async function getMyExercisesUsageCounts(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc("get_my_exercises_usage_counts");
+  if (error) throw error;
+  const map: Record<string, number> = {};
+  for (const row of data ?? []) map[row.exercise_id] = row.users_count;
+  return map;
+}
+
+export interface ExerciseUser {
+  user_id: string;
+  username: string;
+  nombre: string;
+  apellido: string;
+  avatar_url: string | null;
+}
+
+/** Quienes tienen este ejercicio (propio) en una rutina activa ahora mismo. */
+export async function listExerciseUsers(exerciseId: string): Promise<ExerciseUser[]> {
+  const { data, error } = await supabase.rpc("list_exercise_users", { p_exercise_id: exerciseId });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export interface AdminExerciseRow extends Exercise {
   authorName: string | null;
 }

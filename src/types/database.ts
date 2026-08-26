@@ -2848,6 +2848,13 @@ export type Database = {
           status: string
         }[]
       }
+      get_my_exercises_usage_counts: {
+        Args: never
+        Returns: {
+          exercise_id: string
+          users_count: number
+        }[]
+      }
       get_or_create_conversation: {
         Args: { p_other_user_id: string }
         Returns: string
@@ -2960,6 +2967,16 @@ export type Database = {
           participants: Json
           status: string
           unread_count: number
+        }[]
+      }
+      list_exercise_users: {
+        Args: { p_exercise_id: string }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          nombre: string
+          user_id: string
+          username: string
         }[]
       }
       list_followers: {

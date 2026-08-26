@@ -3244,6 +3244,30 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-admin-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
 .exc-admin-author { font-size: 11px; color: var(--text-muted); margin-top: -4px; }
 
+.exc-admin-info { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-top: -4px; }
+.exc-admin-meta { font-size: 11px; color: var(--text-muted); }
+
+.exc-admin-usage {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--accent-2);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .exc-admin-usage:not(:disabled):hover { text-decoration: underline; }
+}
+
+.exc-admin-usage:disabled {
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: default;
+}
+
 .exc-admin-actions { display: flex; gap: 6px; }
 
 .exc-admin-actions button {
