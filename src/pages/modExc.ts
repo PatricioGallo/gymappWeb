@@ -42,7 +42,7 @@ const VIEW_MARKUP = `
   </section>
 `;
 
-function excBlockMarkup(routine: RoutineDetail, exc?: RoutineExerciseWithAuthor): string {
+function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
   const isNoWeight = exc ? !exc.es_medible : false;
   const selectedLabel = exc ? escapeHtml(exc.nombre_snapshot) : "Elegir ejercicio";
   return `
@@ -56,11 +56,6 @@ function excBlockMarkup(routine: RoutineDetail, exc?: RoutineExerciseWithAuthor)
         <input type="hidden" class="excSelectInput" value="${exc?.exercise_id ?? ""}">
         <button class="exc-remove" type="button" title="Quitar ejercicio">×</button>
       </div>
-      ${
-        exc && routine.semanas.length > 1
-          ? `<label class="exc-apply-all"><input type="checkbox" class="applyAllWeeksCheck"> Aplicar este cambio a este mismo ejercicio en todas las semanas</label>`
-          : ""
-      }
       <div class="exc-fields-row">
         <label class="exc-field exc-field-series">
           <span class="exc-field-label">Series</span>
@@ -141,7 +136,11 @@ export const modExcView: ViewModule = {
       const subtitle = container.querySelector("#routineSubtitle");
       const ownerBanner = container.querySelector("#routineOwnerBanner");
       if (title) title.textContent = routine.nombre;
-      if (subtitle) subtitle.textContent = "Elegí la semana, agregá o quitá ejercicios y editá series, repeticiones o notas de cada día.";
+      if (subtitle)
+        subtitle.textContent =
+          routine.semanas.length > 1
+            ? "Agregá o quitá ejercicios y editá series, repeticiones o notas de cada día. Por defecto el cambio se aplica a todas las semanas -- elegí una semana puntual si querés modificar solo esa."
+            : "Agregá o quitá ejercicios y editá series, repeticiones o notas de cada día.";
       if (ownerBanner) {
         const profiles = await getProfilesBasicByIds([routine.user_id, routine.assigned_by]);
         ownerBanner.innerHTML = routineOwnerLineMarkup(profiles.get(routine.user_id), routine.assigned_by ? profiles.get(routine.assigned_by) : null);
@@ -157,7 +156,7 @@ export const modExcView: ViewModule = {
             (dia) => `
           <div class="day-card reveal" data-day-id="${dia.id}">
             <h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3>
-            <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(routine!, exc)).join("")}</div>
+            <div class="exc-list">${dia.ejercicios.map((exc) => excBlockMarkup(exc)).join("")}</div>
             <button class="day-add-btn" type="button">+ Agregar ejercicio</button>
           </div>
         `
@@ -194,19 +193,10 @@ export const modExcView: ViewModule = {
           inserts: PendingRow[];
         }
         const pending: PendingDay[] = [];
+        const weekSelect = container.querySelector("#weekSelect") as HTMLSelectElement;
+        const applyToAllWeeks = weekSelect.value === "all";
 
-        // Ejercicios editados con el tilde "aplicar a todas las semanas" tildado: se buscan por
-        // exercise_id ORIGINAL (antes de esta edicion) dentro del mismo dia en las demas semanas,
-        // y se les pisa el contenido con esta misma fila -- asi tambien sirve para "reemplazar"
-        // un ejercicio por otro en todas las semanas, no solo para ajustar series/repe/nota.
-        interface ApplyAllRequest {
-          diaIndex: number;
-          originalExerciseId: string;
-          row: PendingRow;
-        }
-        const applyAllRequests: ApplyAllRequest[] = [];
-
-        dayCards.forEach((dayCard, diaIndex) => {
+        dayCards.forEach((dayCard) => {
           const dayId = dayCard.dataset.dayId!;
           const keepIds = new Set<string>();
           const updates: PendingDay["updates"] = [];
@@ -265,10 +255,6 @@ export const modExcView: ViewModule = {
             if (existingId) {
               keepIds.add(existingId);
               updates.push({ id: existingId, ...row });
-
-              const applyAll = (block.querySelector(".applyAllWeeksCheck") as HTMLInputElement | null)?.checked ?? false;
-              const originalExerciseId = semana.dias[diaIndex]?.ejercicios.find((e) => e.id === existingId)?.exercise_id;
-              if (applyAll && originalExerciseId) applyAllRequests.push({ diaIndex, originalExerciseId, row });
             } else {
               inserts.push(row);
             }
@@ -301,19 +287,33 @@ export const modExcView: ViewModule = {
             ]);
           }
 
-          // Semanas no visitadas en esta sesion (routine.semanas sigue con los datos originales):
-          // para cada pedido de "aplicar a todas las semanas" se busca, en el mismo dia de cada
-          // otra semana, la fila que tenia el exercise_id original y se le pisa el contenido. Si
-          // esa semana no tiene mas ese ejercicio en ese dia, se la deja como esta.
-          await Promise.all(
-            applyAllRequests.flatMap((req) =>
+          // "Todas las semanas" (default cuando la rutina tiene mas de una): en vez de una casilla
+          // por ejercicio, ahora es una sola decision a nivel semana -- se lleva la lista final de
+          // cada dia (ya armada arriba para la semana editada) tal cual a todas las demas semanas,
+          // borrando lo que tenian antes en ese dia e insertando de cero. Simple y predecible: lo
+          // que quedo en pantalla para ese dia es lo que va a haber en TODAS las semanas para ese
+          // dia, no solo un ajuste de numeros sobre lo que ya habia (tambien cubre agregar/sacar
+          // ejercicios, no solo tocar series/repe de uno que ya matcheaba).
+          if (applyToAllWeeks) {
+            const finalRowsByDay = pending.map(({ updates, inserts }) =>
+              [...updates.map(({ id: _id, ...row }) => row), ...inserts].sort((a, b) => a.orden - b.orden)
+            );
+
+            await Promise.all(
               routine!.semanas
                 .filter((_, wIdx) => wIdx !== weekIndex)
-                .map((otherSemana) => otherSemana.dias[req.diaIndex]?.ejercicios.find((e) => e.exercise_id === req.originalExerciseId))
-                .filter((match): match is RoutineExerciseWithAuthor => !!match)
-                .map((match) => updateRoutineExercise(match.id, { ...req.row, orden: match.orden }))
-            )
-          );
+                .flatMap((otherSemana) =>
+                  otherSemana.dias.flatMap((dia, diaIndex) => {
+                    const finalRows = finalRowsByDay[diaIndex];
+                    if (!finalRows) return [];
+                    return [
+                      ...dia.ejercicios.map((e) => deleteRoutineExercise(e.id)),
+                      ...finalRows.map((row) => addRoutineExercise(dia.id, row)),
+                    ];
+                  })
+                )
+            );
+          }
 
           loaderBody.innerHTML = `
             <div class="success-check-container">
@@ -330,8 +330,10 @@ export const modExcView: ViewModule = {
       }
 
       const weekSelect = container.querySelector("#weekSelect") as HTMLSelectElement;
-      weekSelect.innerHTML = routine.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join("");
-      weekSelect.addEventListener("change", () => renderWeek(Number(weekSelect.value)), { signal: ctx.signal });
+      weekSelect.innerHTML =
+        (routine.semanas.length > 1 ? `<option value="all" selected>Todas las semanas</option>` : "") +
+        routine.semanas.map((semana, index) => `<option value="${index}">Semana ${semana.numero}</option>`).join("");
+      weekSelect.addEventListener("change", () => renderWeek(weekSelect.value === "all" ? 0 : Number(weekSelect.value)), { signal: ctx.signal });
       renderWeek(0);
 
       container.querySelector("#weekContent")?.addEventListener(
@@ -340,7 +342,7 @@ export const modExcView: ViewModule = {
           const target = event.target as HTMLElement;
           if (target.classList.contains("day-add-btn")) {
             const list = target.previousElementSibling;
-            list?.insertAdjacentHTML("beforeend", excBlockMarkup(routine!));
+            list?.insertAdjacentHTML("beforeend", excBlockMarkup());
             if (list) updateMoveButtons(list);
           }
           if (target.classList.contains("exc-remove")) {

@@ -4513,17 +4513,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .exc-field .mini-input { width: 100%; }
 .exc-field-sep { display: none; }
 
-.exc-apply-all {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: -4px 0 10px;
-}
-
-.exc-apply-all input[type="checkbox"] { accent-color: var(--accent-2); }
-
 .exc-extra {
   display: flex;
   align-items: center;
@@ -4591,7 +4580,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
   .exc-block-create .exc-remove { order: 2; align-self: flex-end; margin-bottom: 4.5px; }
   .exc-block-create .exc-extra { order: 3; flex: 1 1 100%; }
-  .exc-block-create .exc-apply-all { order: -1; flex: 1 1 100%; margin: 0 0 8px; }
 }
 
 .help-link {
