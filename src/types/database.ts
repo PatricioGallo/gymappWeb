@@ -493,6 +493,7 @@ export type Database = {
           enrolled_at: string
           id: string
           member_id: string
+          reminder_sent_at: string | null
           session_date: string
           session_id: string
         }
@@ -501,6 +502,7 @@ export type Database = {
           enrolled_at?: string
           id?: string
           member_id: string
+          reminder_sent_at?: string | null
           session_date?: string
           session_id: string
         }
@@ -509,6 +511,7 @@ export type Database = {
           enrolled_at?: string
           id?: string
           member_id?: string
+          reminder_sent_at?: string | null
           session_date?: string
           session_id?: string
         }
@@ -1718,6 +1721,7 @@ export type Database = {
           bio: string | null
           business_hours: Json | null
           ciudad: string | null
+          class_reminder_minutes: number | null
           created_at: string
           email: string
           fecha_nacimiento: string
@@ -1748,6 +1752,7 @@ export type Database = {
           bio?: string | null
           business_hours?: Json | null
           ciudad?: string | null
+          class_reminder_minutes?: number | null
           created_at?: string
           email: string
           fecha_nacimiento: string
@@ -1778,6 +1783,7 @@ export type Database = {
           bio?: string | null
           business_hours?: Json | null
           ciudad?: string | null
+          class_reminder_minutes?: number | null
           created_at?: string
           email?: string
           fecha_nacimiento?: string

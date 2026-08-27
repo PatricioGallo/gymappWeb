@@ -705,6 +705,22 @@ export const settingsView: ViewModule = {
             .join("")}
           <div class="alert_message" id="notifAlert"></div>
         </div>
+        <div class="chart-card reveal">
+          <h3>Recordatorio de clases</h3>
+          <p class="chart-sub">Si estás inscripto en una clase de un gimnasio, te avisamos antes de que empiece.</p>
+          <div class="field">
+            <label for="classReminderSelect">Avisarme</label>
+            <select id="classReminderSelect">
+              <option value="">No avisarme</option>
+              <option value="5">5 minutos antes</option>
+              <option value="10">10 minutos antes</option>
+              <option value="15">15 minutos antes</option>
+              <option value="30">30 minutos antes</option>
+              <option value="60">1 hora antes</option>
+            </select>
+          </div>
+          <div class="alert_message" id="classReminderAlert"></div>
+        </div>
         <div class="chart-card reveal" id="pushSection">
           <h3>Push en este dispositivo</h3>
           <p class="chart-sub">Cargando...</p>
@@ -729,6 +745,25 @@ export const settingsView: ViewModule = {
           profile!.notification_prefs = newPrefs as unknown as Profile["notification_prefs"];
         });
       });
+
+      const classReminderSelect = container.querySelector("#classReminderSelect") as HTMLSelectElement | null;
+      if (classReminderSelect) {
+        classReminderSelect.value = profile!.class_reminder_minutes != null ? String(profile!.class_reminder_minutes) : "";
+        classReminderSelect.addEventListener("change", async () => {
+          const alertBox = container.querySelector("#classReminderAlert")!;
+          alertBox.innerHTML = "";
+          const minutes = classReminderSelect.value ? Number(classReminderSelect.value) : null;
+          classReminderSelect.disabled = true;
+          const { error } = await updateProfileFields(userId, { class_reminder_minutes: minutes });
+          classReminderSelect.disabled = false;
+          if (error) {
+            classReminderSelect.value = profile!.class_reminder_minutes != null ? String(profile!.class_reminder_minutes) : "";
+            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+            return;
+          }
+          profile!.class_reminder_minutes = minutes;
+        });
+      }
 
       const pushSection = container.querySelector("#pushSection")!;
       const pushMarkup = await pushSectionMarkup();

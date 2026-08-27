@@ -22,6 +22,7 @@ const TYPE_ICON: Record<string, string> = {
   repost: "🔁",
   quote: "❝",
   message_reaction: "😀",
+  class_reminder: "⏰",
 };
 
 function relativeTime(iso: string): string {
