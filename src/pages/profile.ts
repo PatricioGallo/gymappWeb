@@ -461,24 +461,33 @@ function initSubscribeButton(targetId: string, initialStatus: SubscriptionStatus
   paint();
 
   btn.addEventListener("click", async () => {
+    if (status !== "none") {
+      // "Solicitud enviada" -> cancela; "Suscripto" -> se desuscribe. Misma operación,
+      // pero pedimos confirmación porque cancelar corta el vínculo con el entrenador.
+      const isPending = status === "pending";
+      confirmProfileAction(
+        isPending ? "Cancelar solicitud" : "Cancelar suscripción",
+        isPending
+          ? "Se cancela tu solicitud de suscripción a este entrenador."
+          : "Vas a dejar de estar suscripto a este entrenador. Vas a poder volver a suscribirte cuando quieras.",
+        isPending ? "Cancelar solicitud" : "Cancelar suscripción",
+        true,
+        () => unsubscribeOrCancel(myId!, targetId),
+        () => {
+          status = "none";
+          paint();
+        }
+      );
+      return;
+    }
     btn.disabled = true;
     try {
-      if (status === "none") {
-        const { status: newStatus, error } = await subscribeToTrainer(targetId);
-        if (error) {
-          alert(error);
-          return;
-        }
-        status = newStatus ?? "pending";
-      } else {
-        // "Solicitud enviada" -> cancela; "Suscripto" -> se desuscribe. Misma operación.
-        const { error } = await unsubscribeOrCancel(myId!, targetId);
-        if (error) {
-          alert(error);
-          return;
-        }
-        status = "none";
+      const { status: newStatus, error } = await subscribeToTrainer(targetId);
+      if (error) {
+        alert(error);
+        return;
       }
+      status = newStatus ?? "pending";
       paint();
     } finally {
       btn.disabled = false;
@@ -505,24 +514,33 @@ function initSocioButton(targetId: string, initialStatus: GymMembershipStatus) {
   paint();
 
   btn.addEventListener("click", async () => {
+    if (status !== "none") {
+      // "Solicitud enviada" -> cancela; "Socio" -> deja de ser socio. Misma operación,
+      // pero pedimos confirmación porque dar de baja la sociedad corta el vínculo con el gimnasio.
+      const isPending = status === "pending";
+      confirmProfileAction(
+        isPending ? "Cancelar solicitud" : "Dejar de ser socio",
+        isPending
+          ? "Se cancela tu solicitud para ser socio de este gimnasio."
+          : "Vas a dejar de ser socio de este gimnasio. Vas a poder volver a pedirlo cuando quieras.",
+        isPending ? "Cancelar solicitud" : "Dejar de ser socio",
+        true,
+        () => leaveGym(targetId, myId!),
+        () => {
+          status = "none";
+          paint();
+        }
+      );
+      return;
+    }
     btn.disabled = true;
     try {
-      if (status === "none") {
-        const { status: newStatus, error } = await requestGymMembership(targetId);
-        if (error) {
-          alert(error);
-          return;
-        }
-        status = newStatus ?? "pending";
-      } else {
-        // "Solicitud enviada" -> cancela; "Socio" -> deja de ser socio. Misma operación.
-        const { error } = await leaveGym(targetId, myId!);
-        if (error) {
-          alert(error);
-          return;
-        }
-        status = "none";
+      const { status: newStatus, error } = await requestGymMembership(targetId);
+      if (error) {
+        alert(error);
+        return;
       }
+      status = newStatus ?? "pending";
       paint();
     } finally {
       btn.disabled = false;
@@ -605,7 +623,7 @@ const HANDLE_ICON = profileMenuIcon(`<path d="M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 
 
 // ---------- Item "Handle" del menu (solo entrenador visitando el perfil de un gimnasio) ----------
 
-function confirmHandleAction(title: string, subtitle: string, confirmLabel: string, danger: boolean, onConfirm: () => Promise<{ error?: string }>, onDone: () => void): void {
+function confirmProfileAction(title: string, subtitle: string, confirmLabel: string, danger: boolean, onConfirm: () => Promise<{ error?: string }>, onDone: () => void): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
   loaderBody.innerHTML = `
@@ -614,15 +632,15 @@ function confirmHandleAction(title: string, subtitle: string, confirmLabel: stri
         <h2>${escapeHtml(title)}</h2>
         <p class="subtitle">${escapeHtml(subtitle)}</p>
         <div class="modal-actions">
-          <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirmHandleActionBtn" type="button">${escapeHtml(confirmLabel)}</button>
-          <button class="btn btn-outline" id="cancelHandleActionBtn" type="button">Cancelar</button>
+          <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirmProfileActionBtn" type="button">${escapeHtml(confirmLabel)}</button>
+          <button class="btn btn-outline" id="cancelProfileActionBtn" type="button">Cancelar</button>
         </div>
       </div>
     </div>
   `;
-  document.getElementById("cancelHandleActionBtn")?.addEventListener("click", closeOverlay);
-  document.getElementById("confirmHandleActionBtn")?.addEventListener("click", async () => {
-    const btn = document.getElementById("confirmHandleActionBtn") as HTMLButtonElement;
+  document.getElementById("cancelProfileActionBtn")?.addEventListener("click", closeOverlay);
+  document.getElementById("confirmProfileActionBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("confirmProfileActionBtn") as HTMLButtonElement;
     btn.disabled = true;
     const { error } = await onConfirm();
     closeOverlay();
@@ -687,7 +705,7 @@ async function renderProfileMenu(targetId: string, username: string, ownerView: 
 
   document.getElementById("menuRequestHandleBtn")?.addEventListener("click", () => {
     panel.hidden = true;
-    confirmHandleAction(
+    confirmProfileAction(
       "Ser handle de este gimnasio",
       "Le vas a pedir al gimnasio que te sume como entrenador. El gimnasio tiene que aceptar y va a elegir por cuánto tiempo vas a ser handle.",
       "Pedir",
@@ -698,19 +716,19 @@ async function renderProfileMenu(targetId: string, username: string, ownerView: 
   });
   document.getElementById("menuCancelHandleBtn")?.addEventListener("click", () => {
     panel.hidden = true;
-    confirmHandleAction("Cancelar solicitud de handle", "Se cancela tu solicitud para ser handle de este gimnasio.", "Cancelar solicitud", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
+    confirmProfileAction("Cancelar solicitud de handle", "Se cancela tu solicitud para ser handle de este gimnasio.", "Cancelar solicitud", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
   });
   document.getElementById("menuAcceptHandleBtn")?.addEventListener("click", () => {
     panel.hidden = true;
-    confirmHandleAction("Aceptar invitación", "Vas a pasar a ser handle de este gimnasio, con la duración que ya definió.", "Aceptar", false, () => acceptGymTrainerInvite(targetId, myId!), refreshMenu);
+    confirmProfileAction("Aceptar invitación", "Vas a pasar a ser handle de este gimnasio, con la duración que ya definió.", "Aceptar", false, () => acceptGymTrainerInvite(targetId, myId!), refreshMenu);
   });
   document.getElementById("menuRejectHandleBtn")?.addEventListener("click", () => {
     panel.hidden = true;
-    confirmHandleAction("Rechazar invitación", "No vas a ser handle de este gimnasio.", "Rechazar", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
+    confirmProfileAction("Rechazar invitación", "No vas a ser handle de este gimnasio.", "Rechazar", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
   });
   document.getElementById("menuLeaveHandleBtn")?.addEventListener("click", () => {
     panel.hidden = true;
-    confirmHandleAction("Dejar de ser handle", "Vas a dejar de ser handle de este gimnasio. Vas a poder volver a pedirlo cuando quieras.", "Dejar de ser handle", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
+    confirmProfileAction("Dejar de ser handle", "Vas a dejar de ser handle de este gimnasio. Vas a poder volver a pedirlo cuando quieras.", "Dejar de ser handle", true, () => leaveGymAsTrainer(targetId, myId!), refreshMenu);
   });
 
   document.getElementById("menuBlockBtn")?.addEventListener("click", () => {
