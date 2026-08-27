@@ -3691,6 +3691,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .class-calendar-day-head.is-hidden-day, .class-calendar-day-col.is-hidden-day { display: none; }
 }
 
+/* Separacion propia del titulo "Sin horario asignado" respecto de lo que haya arriba (el
+   calendario, o el resumen de texto si el dueño no tiene ninguna clase con horario todavia) --
+   a proposito en el wrap y no en .gym-subsection-title, que tambien usan otros titulos
+   (Nuestras clases/Nuestros entrenadores en profile.ts) sin este espacio extra. */
+#clasesNoScheduleWrap { margin-top: 32px; }
+
 /* ---------- Modal de detalle/inscripcion de una clase (compartido slider + calendario) ---------- */
 
 .class-detail-image { width: 100%; max-height: 160px; object-fit: cover; border-radius: 14px; margin-bottom: 16px; }

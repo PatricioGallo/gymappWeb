@@ -47,7 +47,7 @@ function sessionRowHtml(c: GymClassRow, s: ClassSession, showEnrollAction: boole
   }
 
   return `
-    <li class="class-session-row">
+    <li class="class-session-row" data-session-id="${s.id}">
       <div class="class-session-row-info">
         <span class="class-session-row-time">${dayTime}</span>
         <span class="class-session-row-count">${countLine}</span>
@@ -63,15 +63,24 @@ function sessionRowHtml(c: GymClassRow, s: ClassSession, showEnrollAction: boole
 export function openClassDetailModal(
   classRow: GymClassRow,
   viewerCtx: ClassViewerCtx,
-  onChanged?: () => void,
+  onChanged?: (updatedClass: GymClassRow) => void,
   actions?: ClassDetailActions
 ): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
   let c = { ...classRow };
+  // No depende de nada que cambie durante la vida de este modal (inscribirse/cancelar no toca
+  // allowEnrollment ni isActiveSocio) -- calcularlo una sola vez ademas de mas simple es lo que
+  // permite que patchSessionRow reuse el mismo valor sin tener que re-derivarlo.
+  const showEnrollAction = !viewerCtx.isOwner && c.allowEnrollment && viewerCtx.isActiveSocio;
 
-  function render(): void {
-    const showEnrollAction = !viewerCtx.isOwner && c.allowEnrollment && viewerCtx.isActiveSocio;
+  // El shell (imagen, titulo, descripcion, wrapper con la animacion de entrada) se arma UNA sola
+  // vez al abrir el modal. Antes, inscribirse/cancelar volvia a pisar loaderBody.innerHTML
+  // entero -- eso recreaba .success-check-container de cero en cada click, y como esa clase
+  // tiene "animation: overlay-in" (ver modern.css), el modal entero replayeaba su animacion de
+  // aparicion cada vez, dando la sensacion de que la pagina "se recargaba". Ahora solo se
+  // reemplaza el <li> de la fila que cambio (patchSessionRow), el resto del modal ni se toca.
+  function renderShell(): void {
     const gatedNote =
       !viewerCtx.isOwner && c.allowEnrollment && !viewerCtx.isActiveSocio
         ? `<p class="gym-class-enroll-note">Hacete socio del gimnasio para inscribirte.</p>`
@@ -106,30 +115,43 @@ export function openClassDetailModal(
       if (e.target === e.currentTarget) closeOverlay();
     });
 
-    loaderBody!.querySelectorAll<HTMLButtonElement>(".classSessionEnrollBtn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (!viewerCtx.myId) return;
-        const sessionId = btn.dataset.sessionId!;
-        const session = c.sessions.find((s) => s.id === sessionId);
-        if (!session) return;
-        btn.disabled = true;
-        const { error } = session.isEnrolled
-          ? await unenrollFromSession(sessionId, viewerCtx.myId)
-          : await enrollInSession(sessionId, c.id, viewerCtx.myId);
-        if (error) {
-          alert(error);
-          btn.disabled = false;
-          return;
-        }
-        c = {
-          ...c,
-          sessions: c.sessions.map((s) => (s.id === sessionId ? { ...s, isEnrolled: !s.isEnrolled, enrolledCount: s.enrolledCount + (s.isEnrolled ? -1 : 1) } : s)),
-        };
-        render();
-        onChanged?.();
-      });
+    // Delegado en el <ul> (no un listener por boton): al patchear una fila puntual con
+    // outerHTML, el boton nuevo queda enganchado solo por vivir dentro de este mismo <ul>, sin
+    // tener que re-agregar el listener cada vez.
+    loaderBody!.querySelector(".class-detail-sessions-rows")?.addEventListener("click", (e) => {
+      void handleSessionButtonClick(e);
     });
   }
 
-  render();
+  async function handleSessionButtonClick(e: Event): Promise<void> {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".classSessionEnrollBtn");
+    if (!btn || !viewerCtx.myId) return;
+    const sessionId = btn.dataset.sessionId!;
+    const session = c.sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    btn.disabled = true;
+    const { error } = session.isEnrolled
+      ? await unenrollFromSession(sessionId, viewerCtx.myId)
+      : await enrollInSession(sessionId, c.id, viewerCtx.myId);
+    if (error) {
+      alert(error);
+      btn.disabled = false;
+      return;
+    }
+    c = {
+      ...c,
+      sessions: c.sessions.map((s) => (s.id === sessionId ? { ...s, isEnrolled: !s.isEnrolled, enrolledCount: s.enrolledCount + (s.isEnrolled ? -1 : 1) } : s)),
+    };
+    patchSessionRow(sessionId);
+    onChanged?.(c);
+  }
+
+  function patchSessionRow(sessionId: string): void {
+    const session = c.sessions.find((s) => s.id === sessionId);
+    const row = loaderBody!.querySelector(`.class-session-row[data-session-id="${sessionId}"]`);
+    if (!session || !row) return;
+    row.outerHTML = sessionRowHtml(c, session, showEnrollAction);
+  }
+
+  renderShell();
 }
