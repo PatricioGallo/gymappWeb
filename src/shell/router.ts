@@ -130,6 +130,28 @@ function evictOldest(view: ViewModule, max: number): void {
 // puesto. Los puntos de chequeo van justo despues de cada await, antes de tocar nada mas.
 let renderGeneration = 0;
 
+// Un import() dinamico de una ruta (match.route.load()) falla en la practica por una sola razon:
+// la pestaña/PWA quedo abierta desde antes de un deploy y esta pidiendo un chunk con un hash que
+// ya no existe -- GitHub Pages sirve el index.html nuevo, con otros nombres de archivo. El
+// contexto JS de una PWA de iOS vive dias, asi que pasa seguido. Sin esto, renderCurrentLocation
+// rechaza en silencio (nadie await-ea el renderCurrentLocation de navigate()), linkInterceptor
+// ya hizo preventDefault(), y toda navegacion interna queda muerta hasta que el usuario recargue
+// a mano. La salida es una recarga dura: trae el index.html fresco y con el los chunks nuevos.
+// Guarda contra un loop de recarga (si el chunk falta de verdad, por otra causa) con una marca
+// de tiempo en sessionStorage -- como mucho una recarga cada 60s.
+function recoverFromStaleChunk(): void {
+  const KEY = "shell:last-chunk-recovery";
+  try {
+    const last = Number(sessionStorage.getItem(KEY) ?? 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem(KEY, String(Date.now()));
+  } catch {
+    // sessionStorage no disponible -- igual intentamos la recarga (el caso comun es justamente
+    // una PWA vieja, no un modo restringido).
+  }
+  location.reload();
+}
+
 async function renderCurrentLocation(): Promise<void> {
   const myGeneration = ++renderGeneration;
   if (!viewRoot) return;
@@ -143,7 +165,13 @@ async function renderCurrentLocation(): Promise<void> {
   const key = match.route.keyFor ? match.route.keyFor(params) : "__default__";
   let view = resolvedViews.get(match.route);
   if (!view) {
-    view = await match.route.load();
+    try {
+      view = await match.route.load();
+    } catch {
+      if (myGeneration !== renderGeneration) return; // una navegacion mas nueva ya tomo el control
+      recoverFromStaleChunk(); // chunk viejo tras deploy: recarga dura y salimos
+      return;
+    }
     if (myGeneration !== renderGeneration) return; // una navegacion mas nueva ya tomo el control
     resolvedViews.set(match.route, view);
   }
@@ -234,5 +262,13 @@ export function smartNavigate(url: string): void {
 export function startRouter(root: HTMLElement): void {
   viewRoot = root;
   window.addEventListener("popstate", () => void renderCurrentLocation());
+  // Vite lo emite cuando el preload de un modulo dinamico falla -- mismo caso que el catch de
+  // renderCurrentLocation (chunk viejo tras deploy), pero atrapa tambien los preloads que Vite
+  // dispara por su cuenta (ej. modulePreload de un chunk hijo). preventDefault() evita ademas
+  // que quede logueado como error no manejado.
+  window.addEventListener("vite:preloadError", (e) => {
+    e.preventDefault();
+    recoverFromStaleChunk();
+  });
   void renderCurrentLocation();
 }
