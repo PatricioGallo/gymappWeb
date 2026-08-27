@@ -2,7 +2,7 @@ import type { ViewModule } from "../shell/router";
 import { navigate } from "../shell/router";
 import { setupAutoHideHeader } from "../lib/nav";
 import { escapeHtml } from "../lib/dom";
-import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
+import { renderPostCard, wirePostCard, patchPostCardStats, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import { openPostDetailModal } from "../lib/postDetailModal";
 import { extractFirstUrl, extractYouTubeVideoId, youtubeEmbedHtml } from "../lib/youtube";
@@ -214,6 +214,16 @@ export const feedView: ViewModule = {
     newRepFab.addEventListener("click", openComposerModal, { signal: ctx.signal });
 
     let posts: FeedPost[] = [];
+
+    // Disposers de los IntersectionObserver que crea wirePostCard (autoplay de video + registro
+    // de vistas). renderFeed() los limpia antes de pisar la lista; append/prepend acumulan el
+    // suyo. Se limpian todos al desmontar la vista (el shell mantiene el feed vivo en memoria al
+    // navegar, asi que sin esto los observers de cada tanda de scroll sobreviven para siempre).
+    const cardDisposers: Array<() => void> = [];
+    const disposeCards = () => {
+      while (cardDisposers.length) cardDisposers.pop()!();
+    };
+    ctx.addCleanup(disposeCards);
 
     type PendingMedia = {
       file: File;
@@ -478,12 +488,12 @@ export const feedView: ViewModule = {
       const wasLiked = post.likedByMe;
       post.likedByMe = !wasLiked;
       post.likes_count += wasLiked ? -1 : 1;
-      renderFeed();
+      patchPostCardStats(listEl, post); // solo esa tarjeta -- no re-renderiza el feed entero
       const { error } = await toggleLike(post.id, userId, wasLiked);
       if (error) {
         post.likedByMe = wasLiked;
         post.likes_count += wasLiked ? 1 : -1;
-        renderFeed();
+        patchPostCardStats(listEl, post);
         alert(error);
       }
     }
@@ -492,12 +502,12 @@ export const feedView: ViewModule = {
       const wasReposted = post.repostedByMe;
       post.repostedByMe = !wasReposted;
       post.reposts_count += wasReposted ? -1 : 1;
-      renderFeed();
+      patchPostCardStats(listEl, post);
       const { error } = await toggleRepost(post.id, userId, wasReposted);
       if (error) {
         post.repostedByMe = wasReposted;
         post.reposts_count += wasReposted ? 1 : -1;
-        renderFeed();
+        patchPostCardStats(listEl, post);
         alert(error);
       }
     }
@@ -540,10 +550,11 @@ export const feedView: ViewModule = {
     };
 
     function renderFeed(): void {
+      disposeCards(); // las tarjetas viejas se van con el innerHTML -- sus observers tambien
       listEl.innerHTML = posts.length
         ? posts.map((p) => renderPostCard(p, userId)).join("")
         : `<p class="exc-pick-empty">Todavía no hay Reps. ¡Publicá el primero!</p>`;
-      wirePostCard(listEl as HTMLElement, posts, postCardHandlers);
+      cardDisposers.push(wirePostCard(listEl as HTMLElement, posts, postCardHandlers));
     }
 
     // Suma posts al final sin tocar los ya renderizados (a diferencia de renderFeed,
@@ -554,7 +565,7 @@ export const feedView: ViewModule = {
     function appendFeedPosts(newPosts: FeedPost[]): void {
       const temp = document.createElement("div");
       temp.innerHTML = newPosts.map((p) => renderPostCard(p, userId)).join("");
-      wirePostCard(temp, newPosts, postCardHandlers);
+      cardDisposers.push(wirePostCard(temp, newPosts, postCardHandlers));
       while (temp.firstChild) listEl.appendChild(temp.firstChild);
     }
 
@@ -565,7 +576,7 @@ export const feedView: ViewModule = {
       listEl.querySelector(".exc-pick-empty")?.remove();
       const temp = document.createElement("div");
       temp.innerHTML = newPosts.map((p) => renderPostCard(p, userId)).join("");
-      wirePostCard(temp, newPosts, postCardHandlers);
+      cardDisposers.push(wirePostCard(temp, newPosts, postCardHandlers));
       while (temp.lastChild) listEl.insertBefore(temp.lastChild, listEl.firstChild);
     }
 

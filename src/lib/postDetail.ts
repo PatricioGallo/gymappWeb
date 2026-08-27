@@ -3,7 +3,7 @@ import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
 import { resultFullName } from "./search";
 import { supabase } from "./supabaseClient";
-import { renderPostCard, wirePostCard, type PostCardHandlers } from "./postCard";
+import { renderPostCard, wirePostCard, patchPostCardStats, type PostCardHandlers } from "./postCard";
 import { openQuoteModal, openShareToChatModal, openCommentModal, openCommentReplyModal, openPostMetricsModal, confirmDeletePost } from "./postModals";
 import { confirmDialog } from "./confirmDialog";
 import { renderCommentsHtml, wireCommentsList, collectCommentAndDescendantIds, type CommentListHandlers } from "./postComments";
@@ -132,6 +132,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
   let currentThread: FeedPost[] = [];
   let comments: FeedComment[] = [];
   let activeChannel: RealtimeChannel | null = null;
+  let disposeThreadCards: (() => void) | null = null;
   let followStatusFor: string | null = null;
   let followStatusValue: FollowStatus | null = null;
 
@@ -231,12 +232,12 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     const wasLiked = post.likedByMe;
     post.likedByMe = !wasLiked;
     post.likes_count += wasLiked ? -1 : 1;
-    renderThread();
+    patchPostCardStats(threadEl, post); // solo esa tarjeta -- no re-pinta todo el hilo
     const { error } = await toggleLike(post.id, viewerId, wasLiked);
     if (error) {
       post.likedByMe = wasLiked;
       post.likes_count += wasLiked ? 1 : -1;
-      renderThread();
+      patchPostCardStats(threadEl, post);
       alert(error);
     }
   }
@@ -245,12 +246,12 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     const wasReposted = post.repostedByMe;
     post.repostedByMe = !wasReposted;
     post.reposts_count += wasReposted ? -1 : 1;
-    renderThread();
+    patchPostCardStats(threadEl, post);
     const { error } = await toggleRepost(post.id, viewerId, wasReposted);
     if (error) {
       post.repostedByMe = wasReposted;
       post.reposts_count += wasReposted ? 1 : -1;
-      renderThread();
+      patchPostCardStats(threadEl, post);
       alert(error);
     }
   }
@@ -322,6 +323,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
   };
 
   function renderThread(): void {
+    disposeThreadCards?.(); // las tarjetas viejas se van con el innerHTML -- sus observers tambien
     threadEl.innerHTML = currentThread
       .map((post) => {
         if (post.id === currentId) {
@@ -331,7 +333,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
         return renderPostCard(post, viewerId, { compact: true });
       })
       .join("");
-    wirePostCard(threadEl, currentThread, postCardHandlers);
+    disposeThreadCards = wirePostCard(threadEl, currentThread, postCardHandlers);
     const focusedPost = currentThread.find((p) => p.id === currentId);
     if (focusedPost) wireAuthorHeader(threadEl, focusedPost.author);
   }
@@ -558,6 +560,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
     pause: pauseRealtime,
     dispose: () => {
       pauseRealtime();
+      disposeThreadCards?.();
       backBtn.removeEventListener("click", handleBack);
     },
   };

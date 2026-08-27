@@ -199,7 +199,9 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
 // Autoplay mudo de los videos nativos mientras estan a la vista (no los de YouTube,
 // esos van dentro de un iframe ajeno). Se pausan apenas salen del viewport. Se crea
 // un observer nuevo por llamada a wirePostCard, scopeado solo a esta tanda de cards.
-function observeVideoAutoplay(root: HTMLElement): void {
+function observeVideoAutoplay(root: HTMLElement): IntersectionObserver | null {
+  const videos = root.querySelectorAll<HTMLVideoElement>("video.post-card-media");
+  if (!videos.length) return null;
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -214,13 +216,16 @@ function observeVideoAutoplay(root: HTMLElement): void {
     },
     { threshold: 0.6 }
   );
-  root.querySelectorAll<HTMLVideoElement>("video.post-card-media").forEach((video) => observer.observe(video));
+  videos.forEach((video) => observer.observe(video));
+  return observer;
 }
 
 // Registra una vista (ver onView en PostCardHandlers) la primera vez que cada card
 // entra en viewport; una vez disparado se deja de observar esa card puntual.
-function observePostViews(root: HTMLElement, postsById: Map<string, FeedPost>, handlers: PostCardHandlers): void {
-  if (!handlers.onView) return;
+function observePostViews(root: HTMLElement, postsById: Map<string, FeedPost>, handlers: PostCardHandlers): IntersectionObserver | null {
+  if (!handlers.onView) return null;
+  const cards = root.querySelectorAll<HTMLElement>(".post-card[data-post-id]");
+  if (!cards.length) return null;
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -233,26 +238,42 @@ function observePostViews(root: HTMLElement, postsById: Map<string, FeedPost>, h
     },
     { threshold: 0.5 }
   );
-  root.querySelectorAll<HTMLElement>(".post-card[data-post-id]").forEach((card) => observer.observe(card));
+  cards.forEach((card) => observer.observe(card));
+  return observer;
 }
 
-/** Busca las post-card ya renderizadas adentro de `root` y les engancha los listeners de acciones. Sin delegacion: se re-llama despues de cada re-render. */
-export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: PostCardHandlers): void {
+/**
+ * Busca las post-card ya renderizadas adentro de `root` y les engancha los listeners de acciones.
+ * Sin delegacion: se re-llama despues de cada re-render.
+ *
+ * Devuelve un disposer para los IntersectionObserver que crea (autoplay de video + registro de
+ * vistas). El caller lo TIENE que registrar en el ctx de la vista (y llamarlo antes de un
+ * re-render que pise las tarjetas) -- si no, cada render deja observers vivos apuntando a
+ * tarjetas ya sacadas del DOM: fuga de nodos detached, medible tras varias vueltas por
+ * perfiles/feed en una sesion larga (mas peligroso en la WKWebView de iOS, con su limite de
+ * memoria por proceso).
+ */
+export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: PostCardHandlers): () => void {
   const postsById = new Map(posts.map((p) => [p.id, p]));
+  // Todos los listeners de esta tanda cuelgan de este signal -- el disposer lo aborta, asi
+  // Blink puede soltar las tarjetas detached en vez de retenerlas por tener listeners vivos
+  // (medido: sin esto, ~5000 nodos + ~500 listeners retenidos por cada vuelta de perfiles).
+  const ac = new AbortController();
+  const opt = { signal: ac.signal };
   root.querySelectorAll<HTMLElement>(".post-card[data-post-id]").forEach((card) => {
     const post = postsById.get(card.dataset.postId!);
     if (!post) return;
 
     card.querySelectorAll<HTMLButtonElement>('[data-action="author"]').forEach((btn) => {
-      btn.addEventListener("click", () => handlers.onAuthorClick?.(post.author));
+      btn.addEventListener("click", () => handlers.onAuthorClick?.(post.author), opt);
     });
-    card.querySelector<HTMLButtonElement>('[data-action="like"]')?.addEventListener("click", () => handlers.onLikeToggle(post));
-    card.querySelector<HTMLButtonElement>('[data-action="repost"]')?.addEventListener("click", () => handlers.onRepostToggle(post));
-    card.querySelector<HTMLButtonElement>('[data-action="comment"]')?.addEventListener("click", () => handlers.onCommentClick(post));
-    card.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", () => handlers.onQuoteClick(post));
-    card.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", () => handlers.onShareClick(post));
-    card.querySelector<HTMLButtonElement>('[data-action="metrics"]')?.addEventListener("click", () => handlers.onMetricsClick?.(post));
-    card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", () => handlers.onDeleteClick?.(post));
+    card.querySelector<HTMLButtonElement>('[data-action="like"]')?.addEventListener("click", () => handlers.onLikeToggle(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="repost"]')?.addEventListener("click", () => handlers.onRepostToggle(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="comment"]')?.addEventListener("click", () => handlers.onCommentClick(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", () => handlers.onQuoteClick(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", () => handlers.onShareClick(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="metrics"]')?.addEventListener("click", () => handlers.onMetricsClick?.(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", () => handlers.onDeleteClick?.(post), opt);
 
     // Click en la foto/video adjunto abre el visor grande (ver openMediaLightbox en
     // postModals.ts), en vez de navegar al detalle del Rep como el resto de la tarjeta.
@@ -261,24 +282,54 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
       if (!post.media_url) return;
       handlers.onMediaOpening?.();
       openMediaLightbox(post, handlers);
-    });
+    }, opt);
 
     // El Rep citado embebido es su propio Rep, no el contenedor: para el click.
     card.querySelector<HTMLButtonElement>(".post-quoted")?.addEventListener("click", (e) => {
       e.stopPropagation();
       const quotedId = post.quotedPost?.id;
       if (quotedId) handlers.onQuotedClick?.(quotedId);
-    });
+    }, opt);
 
     if (handlers.onOpenPost) {
       card.addEventListener("click", (e) => {
         const target = e.target as HTMLElement;
         if (target.closest("button, a")) return; // ya lo maneja un handler especifico (o es un link con su propio href, como la cita)
         handlers.onOpenPost?.(post);
-      });
+      }, opt);
     }
   });
 
-  observeVideoAutoplay(root);
-  observePostViews(root, postsById, handlers);
+  const videoObs = observeVideoAutoplay(root);
+  const viewObs = observePostViews(root, postsById, handlers);
+  return () => {
+    ac.abort();
+    videoObs?.disconnect();
+    viewObs?.disconnect();
+  };
+}
+
+/**
+ * Actualiza en el lugar el estado (activo + contador) de los botones de like y repost de UNA
+ * tarjeta, sin re-renderizar la lista. Para el toggle optimista de like/repost: antes cada tap
+ * llamaba a un re-render completo del innerHTML de todo el feed/perfil -- con 80 Reps scrolleados
+ * eso significaba destruir y re-parsear 80 tarjetas (imagenes re-decodificadas, <video>
+ * recreados, observers nuevos, onView re-disparado de todas) en cada like. No-op si la tarjeta
+ * no esta en el DOM.
+ */
+export function patchPostCardStats(container: ParentNode, post: FeedPost): void {
+  const card = container.querySelector<HTMLElement>(`.post-card[data-post-id="${CSS.escape(post.id)}"]`);
+  if (!card) return;
+
+  const likeBtn = card.querySelector<HTMLButtonElement>('[data-action="like"]');
+  if (likeBtn) {
+    likeBtn.classList.toggle("is-active", post.likedByMe);
+    likeBtn.innerHTML = `${post.likedByMe ? ICON_HEART_FILLED : ICON_HEART}<span>${post.likes_count}</span>`;
+  }
+
+  const repostBtn = card.querySelector<HTMLButtonElement>('[data-action="repost"]');
+  if (repostBtn) {
+    repostBtn.classList.toggle("is-active", post.repostedByMe);
+    repostBtn.innerHTML = `${ICON_REPOST}<span>${post.reposts_count}</span>`;
+  }
 }

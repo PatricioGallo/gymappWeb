@@ -553,13 +553,21 @@ export interface PostViewer extends PostAuthor {
   viewedAt: string;
 }
 
-// Silencioso a proposito: una vista es un dato secundario, no algo por lo que
-// interrumpir al usuario si falla (sin conexion, RLS, lo que sea).
+// Rep ya marcado como visto en esta carga de pagina (por viewer) -- el feed y el perfil
+// disparan onView de cada tarjeta que entra en viewport, y con el re-wire tras cada tanda de
+// scroll infinito la misma tarjeta puede volver a dispararlo. Sin esta traba eso era un POST
+// por tarjeta ya vista en cada render.
+const recordedViews = new Set<string>();
+
+// Silencioso a proposito: una vista es un dato secundario, no algo por lo que interrumpir al
+// usuario si falla. Via RPC (record_post_view: INSERT ... ON CONFLICT DO NOTHING server-side)
+// en vez de .insert() directo -- antes cada (post, viewer) ya existente devolvia 23505/409.
 export async function recordPostView(postId: string, viewerId: string): Promise<void> {
-  const { error } = await supabase.from("post_views").insert({ post_id: postId, viewer_id: viewerId });
-  if (error && error.code !== "23505") {
-    // ya lo habia visto antes (23505) o fallo silencioso -- ninguno amerita romper la UI
-  }
+  const key = `${postId}:${viewerId}`;
+  if (recordedViews.has(key)) return;
+  recordedViews.add(key);
+  const { error } = await supabase.rpc("record_post_view", { p_post_id: postId });
+  if (error) recordedViews.delete(key); // fallo de red -> reintentable en el proximo render
 }
 
 /** Quienes vieron un Rep (boton de metricas), mas recientes primero. */

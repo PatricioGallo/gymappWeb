@@ -3278,6 +3278,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_post_view: { Args: { p_post_id: string }; Returns: undefined }
       remove_group_participant: {
         Args: { p_conversation_id: string; p_user_id: string }
         Returns: undefined

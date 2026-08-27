@@ -125,15 +125,22 @@ export const notificationsView: ViewModule = {
       if (!notif) return;
       if (!notif.is_read) {
         notif.is_read = true;
-        renderList();
+        // Patch en el lugar: sacar el punto de "no leída" de esa fila y ajustar el boton de
+        // "marcar todas". Antes esto re-renderizaba las 200 filas de una, justo antes de navegar
+        // fuera de la pagina (doble desperdicio).
+        listEl.querySelector(`.notif-page-item[data-id="${id}"]`)?.classList.remove("unread");
+        if (!notifications.some((n) => !n.is_read)) {
+          listEl.querySelector<HTMLButtonElement>("#notifPageMarkAllBtn")?.setAttribute("disabled", "");
+        }
         void markNotificationRead(id);
       }
       if (notif.link) smartNavigate(notif.link);
     }
 
     async function handleMarkAllRead(): Promise<void> {
-      notifications = notifications.map((n) => ({ ...n, is_read: true }));
-      renderList();
+      notifications.forEach((n) => (n.is_read = true));
+      listEl.querySelectorAll(".notif-page-item.unread").forEach((el) => el.classList.remove("unread"));
+      listEl.querySelector<HTMLButtonElement>("#notifPageMarkAllBtn")?.setAttribute("disabled", "");
       await markAllNotificationsRead();
     }
 

@@ -65,7 +65,7 @@ import { submitUserReport, validateUserReport } from "../services/userReport.ser
 import { renderVerifiedBadge, getUserTypeLabel } from "../lib/verifiedBadge";
 import { getPlatform } from "../lib/socialLinks";
 import { DAY_LABELS as HOURS_DAY_LABELS, formatHoursTime, parseBusinessHours } from "../lib/businessHours";
-import { renderPostCard, wirePostCard, type PostCardHandlers } from "../lib/postCard";
+import { renderPostCard, wirePostCard, patchPostCardStats, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
 import { openPostDetailModal } from "../lib/postDetailModal";
 import {
@@ -1675,12 +1675,24 @@ function setupActivityTabs(
   let exhausted = false;
   let gymPosts: GymPostFull[] = [];
 
+  // Disposer de los IntersectionObserver de wirePostCard (autoplay de video + registro de
+  // vistas). renderList() lo llama antes de pisar el innerHTML; se limpia tambien al desmontar
+  // -- el shell mantiene el perfil vivo en memoria, y saltar entre perfiles evict-ea la
+  // instancia vieja pero sin esto sus observers seguian apuntando a tarjetas ya detached.
+  let disposeCards: (() => void) | null = null;
+  ctx.addCleanup(() => disposeCards?.());
+
   async function refreshGymPostGrid(): Promise<void> {
     gymPosts = await listGymPostsFull(targetUserId).catch(() => []);
     renderList();
   }
 
   function renderList(): void {
+    // Las tarjetas actuales (si las hay) se van con el innerHTML de abajo -- sus observers
+    // tambien. Va antes del early-return de "stats": pasar de Reps a Estadisticas tiene que
+    // soltarlos igual.
+    disposeCards?.();
+    disposeCards = null;
     if (activeTab === "stats") return;
     if (activeTab === "publicaciones") {
       listEl!.innerHTML = gymPosts.length
@@ -1704,7 +1716,7 @@ function setupActivityTabs(
     }
     const tab = activeTab as FeedActivityTab;
     listEl!.innerHTML = posts.length ? posts.map((p) => renderPostCard(p, myId, { compact: true })).join("") : `<p class="exc-pick-empty">${activityEmptyMessage(tab, isOwner)}</p>`;
-    wirePostCard(listEl!, posts, handlers);
+    disposeCards = wirePostCard(listEl!, posts, handlers);
   }
 
   async function handleLikeToggle(post: FeedPost): Promise<void> {
@@ -1715,12 +1727,12 @@ function setupActivityTabs(
     const wasLiked = post.likedByMe;
     post.likedByMe = !wasLiked;
     post.likes_count += wasLiked ? -1 : 1;
-    renderList();
+    patchPostCardStats(listEl!, post); // solo esa tarjeta -- no re-renderiza toda la actividad
     const { error } = await toggleLike(post.id, myId, wasLiked);
     if (error) {
       post.likedByMe = wasLiked;
       post.likes_count += wasLiked ? 1 : -1;
-      renderList();
+      patchPostCardStats(listEl!, post);
       alert(error);
     }
   }
@@ -1733,12 +1745,12 @@ function setupActivityTabs(
     const wasReposted = post.repostedByMe;
     post.repostedByMe = !wasReposted;
     post.reposts_count += wasReposted ? -1 : 1;
-    renderList();
+    patchPostCardStats(listEl!, post);
     const { error } = await toggleRepost(post.id, myId, wasReposted);
     if (error) {
       post.repostedByMe = wasReposted;
       post.reposts_count += wasReposted ? 1 : -1;
-      renderList();
+      patchPostCardStats(listEl!, post);
       alert(error);
     }
   }
