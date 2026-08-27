@@ -96,6 +96,7 @@ interface ClassBlock {
   dayOfWeek: number;
   startMin: number;
   endMin: number;
+  isEnrolled: boolean;
   lane: number;
   laneCount: number;
 }
@@ -104,7 +105,15 @@ function buildCalendarBlocks(classes: GymClassRow[]): ClassBlock[] {
   const blocks: ClassBlock[] = [];
   for (const c of classes) {
     for (const s of c.sessions) {
-      blocks.push({ classRow: c, dayOfWeek: s.dayOfWeek, startMin: timeToMinutes(s.startTime), endMin: timeToMinutes(s.endTime), lane: 0, laneCount: 1 });
+      blocks.push({
+        classRow: c,
+        dayOfWeek: s.dayOfWeek,
+        startMin: timeToMinutes(s.startTime),
+        endMin: timeToMinutes(s.endTime),
+        isEnrolled: s.isEnrolled,
+        lane: 0,
+        laneCount: 1,
+      });
     }
   }
   // Asignacion de "carriles" (lanes) lado a lado por dia, greedy por orden de inicio -- el
@@ -145,7 +154,7 @@ function calendarGridHtml(blocks: ClassBlock[]): string {
         const widthPct = 100 / b.laneCount;
         const leftPct = b.lane * widthPct;
         return `
-          <button type="button" class="class-calendar-block" data-id="${b.classRow.id}"
+          <button type="button" class="class-calendar-block${b.isEnrolled ? " is-enrolled" : ""}" data-id="${b.classRow.id}"
             style="top:${top}px; height:${height}px; left:${leftPct}%; width:calc(${widthPct}% - 4px);">
             <strong>${escapeHtml(b.classRow.name)}</strong>
             <span>${minutesToLabel(b.startMin)}-${minutesToLabel(b.endMin)}</span>

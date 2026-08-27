@@ -3661,6 +3661,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 .class-calendar-block strong { display: block; font-size: 11.5px; }
 .class-calendar-block span { display: block; opacity: 0.85; }
+/* Marca minimalista de "estoy inscripto en este horario": una franja de color a la izquierda,
+   sin texto extra -- el bloque ya es chico (11px) como para sumarle un badge/etiqueta. */
+.class-calendar-block.is-enrolled { border-left: 3px solid #6fb56f; padding-left: 4px; }
 
 /* Selector de dia: solo se ve en mobile (abajo) -- en desktop la semana entera ya entra en
    pantalla y este selector no aporta nada, asi que queda oculto. */
