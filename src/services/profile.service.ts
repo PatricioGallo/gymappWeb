@@ -74,6 +74,7 @@ export async function updateProfileFields(
       | "links"
       | "business_hours"
       | "notification_prefs"
+      | "class_reminder_minutes"
       | "zoom_enabled"
       | "show_last_seen"
       | "show_read_receipts"

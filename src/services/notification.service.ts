@@ -16,7 +16,8 @@ export type NotificationType =
   | "repost"
   | "quote"
   | "mention"
-  | "message_reaction";
+  | "message_reaction"
+  | "class_reminder";
 
 const RECENT_LIMIT = 8;
 const FULL_LIST_LIMIT = 200;

@@ -93,9 +93,11 @@ function minutesToLabel(min: number): string {
 
 interface ClassBlock {
   classRow: GymClassRow;
+  sessionId: string;
   dayOfWeek: number;
   startMin: number;
   endMin: number;
+  isEnrolled: boolean;
   lane: number;
   laneCount: number;
 }
@@ -104,7 +106,16 @@ function buildCalendarBlocks(classes: GymClassRow[]): ClassBlock[] {
   const blocks: ClassBlock[] = [];
   for (const c of classes) {
     for (const s of c.sessions) {
-      blocks.push({ classRow: c, dayOfWeek: s.dayOfWeek, startMin: timeToMinutes(s.startTime), endMin: timeToMinutes(s.endTime), lane: 0, laneCount: 1 });
+      blocks.push({
+        classRow: c,
+        sessionId: s.id,
+        dayOfWeek: s.dayOfWeek,
+        startMin: timeToMinutes(s.startTime),
+        endMin: timeToMinutes(s.endTime),
+        isEnrolled: s.isEnrolled,
+        lane: 0,
+        laneCount: 1,
+      });
     }
   }
   // Asignacion de "carriles" (lanes) lado a lado por dia, greedy por orden de inicio -- el
@@ -145,7 +156,7 @@ function calendarGridHtml(blocks: ClassBlock[]): string {
         const widthPct = 100 / b.laneCount;
         const leftPct = b.lane * widthPct;
         return `
-          <button type="button" class="class-calendar-block" data-id="${b.classRow.id}"
+          <button type="button" class="class-calendar-block${b.isEnrolled ? " is-enrolled" : ""}" data-id="${b.classRow.id}" data-session-id="${b.sessionId}"
             style="top:${top}px; height:${height}px; left:${leftPct}%; width:calc(${widthPct}% - 4px);">
             <strong>${escapeHtml(b.classRow.name)}</strong>
             <span>${minutesToLabel(b.startMin)}-${minutesToLabel(b.endMin)}</span>
@@ -215,6 +226,10 @@ async function mountClasesView(
   }
 
   let trainers: GymTrainerRow[] = [];
+  // Fuera de refresh() a proposito: openClassDetail/applyEnrollmentChange necesitan leer y
+  // parchear la misma lista que quedo pintada en pantalla, sin depender de que refresh() haya
+  // corrido de nuevo (ver applyEnrollmentChange mas abajo).
+  let classes: GymClassRow[] = [];
   // Un entrenador que es handle activo de este gimnasio tiene los mismos beneficios que un
   // socio activo para inscribirse a clases -- ver el mismo comentario en profile.ts.
   const isActiveSocio =
@@ -231,7 +246,6 @@ async function mountClasesView(
     daySelectEl.hidden = true;
     noScheduleWrap.hidden = true;
 
-    let classes: GymClassRow[];
     try {
       if (isOwner) {
         const [classRows, trainerRows] = await Promise.all([listGymClasses(gymId), listGymTrainers(gymId, { statusFilter: "all" })]);
@@ -294,11 +308,24 @@ async function mountClasesView(
     }
   }
 
+  // Inscribirse/cancelar no justifica un refresh() completo (refetch + esconder y repintar todo
+  // el calendario): eso es lo que se sentia como "recarga de pagina". El modal ya actualizo su
+  // propio estado optimista -- aca solo hace falta reflejar ese mismo cambio en el bloque del
+  // calendario (el borde verde de "inscripto", ver is-enrolled en modern.css) y dejar `classes`
+  // al dia para que reabrir el modal de esa clase muestre el estado correcto.
+  function applyEnrollmentChange(updatedClass: GymClassRow): void {
+    const idx = classes.findIndex((x) => x.id === updatedClass.id);
+    if (idx !== -1) classes[idx] = updatedClass;
+    for (const s of updatedClass.sessions) {
+      gridEl.querySelector<HTMLButtonElement>(`.class-calendar-block[data-session-id="${s.id}"]`)?.classList.toggle("is-enrolled", s.isEnrolled);
+    }
+  }
+
   function openClassDetail(c: GymClassRow): void {
     openClassDetailModal(
       c,
       { myId: authUserId, isActiveSocio, isOwner },
-      () => void refresh(),
+      applyEnrollmentChange,
       isOwner
         ? {
             onEdit: (row) => openClassManageForm({ gymId, trainers, ctx, existing: row, onSaved: () => void refresh() }),

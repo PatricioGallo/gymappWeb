@@ -3601,7 +3601,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   display: grid;
   grid-template-columns: 50px repeat(7, minmax(110px, 1fr));
   min-width: 830px;
-  border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 .class-calendar-corner { position: sticky; left: 0; z-index: 3; background: var(--bg); }
@@ -3611,7 +3610,16 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   font-weight: 700;
   color: var(--text-muted);
   padding: 8px 4px;
+  border-left: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+}
+/* El borde derecho del grid entero vivia en .class-calendar-grid (border-right), pero al ser
+   un borde del contenedor abarcaba tambien la fila del encabezado -- mas alto que el resto de
+   los separadores de dia, que solo existen en la fila de horarios (border-left de cada
+   day-head/day-col). Moverlo aca (ultimo dia = sabado) lo deja con la misma altura que los demas. */
+.class-calendar-day-head[data-day="6"],
+.class-calendar-day-col[data-day="6"] {
+  border-right: 1px solid var(--border);
 }
 .class-calendar-time-axis {
   position: sticky;
@@ -3627,7 +3635,17 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   color: var(--text-muted);
   right: 6px;
 }
-.class-calendar-day-col { position: relative; border-left: 1px solid var(--border); }
+.class-calendar-day-col {
+  position: relative;
+  border-left: 1px solid var(--border);
+  /* Lineas horizontales finas cada hora, para distinguir una franja horaria de la siguiente.
+     background-size/position tienen que coincidir exactamente con PX_PER_HOUR/AXIS_PADDING_PX
+     de clases.ts (60px por hora, offset 14px) para que caigan justo sobre cada hora del eje. */
+  background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 100% 60px;
+  background-position: 0 14px;
+  background-repeat: repeat-y;
+}
 .class-calendar-block {
   position: absolute;
   border-radius: 6px;
@@ -3643,6 +3661,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 .class-calendar-block strong { display: block; font-size: 11.5px; }
 .class-calendar-block span { display: block; opacity: 0.85; }
+/* Marca minimalista de "estoy inscripto en este horario": una franja de color a la izquierda,
+   sin texto extra -- el bloque ya es chico (11px) como para sumarle un badge/etiqueta. */
+.class-calendar-block.is-enrolled { border-left: 3px solid #6fb56f; padding-left: 4px; }
 
 /* Selector de dia: solo se ve en mobile (abajo) -- en desktop la semana entera ya entra en
    pantalla y este selector no aporta nada, asi que queda oculto. */
@@ -3669,6 +3690,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .class-calendar-grid { grid-template-columns: 50px 1fr; min-width: 0; }
   .class-calendar-day-head.is-hidden-day, .class-calendar-day-col.is-hidden-day { display: none; }
 }
+
+/* Separacion propia del titulo "Sin horario asignado" respecto de lo que haya arriba (el
+   calendario, o el resumen de texto si el dueño no tiene ninguna clase con horario todavia) --
+   a proposito en el wrap y no en .gym-subsection-title, que tambien usan otros titulos
+   (Nuestras clases/Nuestros entrenadores en profile.ts) sin este espacio extra. */
+#clasesNoScheduleWrap { margin-top: 32px; }
 
 /* ---------- Modal de detalle/inscripcion de una clase (compartido slider + calendario) ---------- */
 
