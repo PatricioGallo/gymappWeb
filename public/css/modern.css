@@ -3731,6 +3731,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
    usan .btn-primary/.btn-outline/.btn-sm tal cual estan definidos para el resto del sitio --
    nada de colores ni sombras propias aca, para no terminar con una variante que desentona. */
 .class-detail-sessions-rows { display: flex; flex-direction: column; gap: 14px; margin: 14px 0 4px; padding: 0; list-style: none; }
+
+/* Editar/Eliminar (dueño) quedaban a ~8px de la ultima tarjeta de horario -- se veian pegados. */
+.class-detail-card .modal-actions { margin-top: 20px; }
 .class-session-row {
   display: flex;
   align-items: center;
@@ -4832,6 +4835,11 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .modal-actions .btn { flex: 1; }
+
+/* En el form de gestion de clase (clases.html) los .modal-actions quedaban a 4px del ultimo
+   campo y se veian pegados. Un poco de aire arriba los separa -- y de paso despega el bloque
+   "Eliminar clase" del de Guardar/Cancelar. */
+#classForm .modal-actions { margin-top: 18px; }
 
 @media (max-width: 639px) {
   .modal-actions { flex-direction: column; }

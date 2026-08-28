@@ -92,7 +92,7 @@ export function openClassDetailModal(
 
     loaderBody!.innerHTML = `
       <div class="success-check-container">
-        <div class="modal-card">
+        <div class="modal-card class-detail-card">
           ${classImageHtml(c.imageUrl, "class-detail-image")}
           <h2>${escapeHtml(c.name)}</h2>
           ${c.description ? `<p class="subtitle">${escapeHtml(c.description)}</p>` : ""}

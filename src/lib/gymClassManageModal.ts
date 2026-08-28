@@ -244,14 +244,20 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
       }
     }
     const submitBtn = document.getElementById("submitClassBtn") as HTMLButtonElement;
+    const submitLabel = isEdit ? "Guardar cambios" : "Crear clase";
+    function restoreSubmitBtn(): void {
+      submitBtn.disabled = false;
+      submitBtn.textContent = submitLabel;
+    }
     submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="btn-spinner"></span> Guardando...`;
 
     let finalImageUrl = imageUrl;
     if (pendingFile) {
       const { url, error } = await uploadClassImage(gymId, pendingFile);
       if (error) {
         alert(error);
-        submitBtn.disabled = false;
+        restoreSubmitBtn();
         return;
       }
       finalImageUrl = url ?? null;
@@ -270,11 +276,26 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
     const { error } = isEdit ? await updateGymClass(existing!.id, input) : await createGymClass(gymId, input);
     if (error) {
       alert(error);
-      submitBtn.disabled = false;
+      restoreSubmitBtn();
       return;
     }
-    closeOverlay();
-    onSaved();
+
+    loaderBody.innerHTML = `
+      <div class="success-check-container">
+        <div class="success-icon">
+          <svg viewBox="0 0 52 52" class="success-svg">
+            <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+            <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+          </svg>
+        </div>
+        <p>${isEdit ? "¡Cambios guardados!" : "¡Clase creada!"}</p>
+      </div>
+    `;
+    const t = setTimeout(() => {
+      closeOverlay();
+      onSaved();
+    }, 1600);
+    ctx.addCleanup(() => clearTimeout(t));
   });
 
   ctx.addCleanup(() => {
