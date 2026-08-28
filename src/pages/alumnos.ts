@@ -21,6 +21,7 @@ import {
 import { listMyGymTrainerHandles, listGymStudentsForTrainer, type MyGymTrainerHandleRow, type GymStudentRow } from "../services/gymTrainer.service";
 import { listRecentComments, type RecentCommentRow } from "../services/comment.service";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
+import { initListViewToggle } from "../lib/listViewToggle";
 
 const VIEW_MARKUP = `
   <section class="page-hero">
@@ -42,7 +43,10 @@ const VIEW_MARKUP = `
         <input type="search" id="alumnosSearchInput" class="header-search-input" placeholder="Buscar por nombre o usuario...">
       </form>
       <div class="member-filter-chips" id="alumnosGymFilterChips" hidden></div>
-      <p class="chart-sub" id="alumnosSummary">Cargando...</p>
+      <div class="list-view-bar">
+        <p class="chart-sub" id="alumnosSummary">Cargando...</p>
+        <div id="alumnosViewToggle"></div>
+      </div>
       <div class="search-page-list" id="alumnosList"></div>
     </div>
   </section>
@@ -160,8 +164,8 @@ function studentCardMarkup(s: StudentRow): string {
             ? `<div><span>Progreso rutina activa</span><strong class="mini-progress-value"><span class="mini-progress-track"><span class="mini-progress-fill" style="width:${s.activeRoutinePct}%"></span></span>${s.activeRoutinePct}%</strong></div>`
             : ""
         }
-        <div><span>Último entreno</span><strong>${s.lastTrained ? escapeHtml(formatFechaCorta(s.lastTrained)) : "Nunca entrenó"}</strong></div>
-        <div><span>Rutinas asignadas</span><strong>${s.assignedRoutinesCount}</strong></div>
+        <div class="stat-portrait-hide"><span>Último entreno</span><strong>${s.lastTrained ? escapeHtml(formatFechaCorta(s.lastTrained)) : "Nunca entrenó"}</strong></div>
+        <div class="stat-portrait-hide"><span>Rutinas asignadas</span><strong>${s.assignedRoutinesCount}</strong></div>
         <div><span>Alumno desde</span><strong>${escapeHtml(formatFechaCorta(s.since))}</strong></div>
       </div>
       ${commentsMarkup}
@@ -253,6 +257,13 @@ export const alumnosView: ViewModule = {
     const searchForm = container.querySelector("#alumnosSearchForm") as HTMLFormElement;
     const searchInput = container.querySelector("#alumnosSearchInput") as HTMLInputElement;
     const gymFilterChipsWrap = container.querySelector("#alumnosGymFilterChips") as HTMLElement;
+
+    initListViewToggle({
+      storageKey: "alumnos",
+      listEl: listEl as HTMLElement,
+      mountEl: container.querySelector("#alumnosViewToggle") as HTMLElement,
+      signal: ctx.signal,
+    });
 
     let activeTab: AlumnosTab = "current";
     let gymHandles: MyGymTrainerHandleRow[] = [];

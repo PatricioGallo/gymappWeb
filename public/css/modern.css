@@ -747,6 +747,111 @@ button:focus-visible {
   gap: 10px;
 }
 
+/* ---------- Toggle Filas / Retrato de las listas (alumnos, socios, entrenadores) ---------- */
+
+.list-view-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+.list-view-bar .chart-sub { margin: 0; }
+
+.list-view-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.list-view-toggle[hidden] { display: none; }
+
+.list-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.list-view-toggle button svg { width: 15px; height: 15px; }
+
+.list-view-toggle button.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0a0c0f;
+}
+
+@media (max-width: 480px) {
+  .list-view-toggle button span { display: none; }
+  .list-view-toggle button { padding: 7px 11px; }
+}
+
+/* Modo retrato: la misma lista pintada como grilla de tarjetas verticales con los datos clave. */
+.search-page-list.is-portrait {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .search-page-list.is-portrait { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.search-page-list.is-portrait .routine-card { padding: 20px 16px; }
+.search-page-list.is-portrait .routine-card + .routine-card { margin-top: 0; }
+.search-page-list.is-portrait .routine-menu-wrap { top: 12px; right: 10px; }
+
+.search-page-list.is-portrait .student-card-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  padding-right: 0;
+  margin-bottom: 12px;
+}
+
+.search-page-list.is-portrait .student-card-head .follow-request-user {
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.search-page-list.is-portrait .student-card-head .search-result-body { align-items: center; }
+.search-page-list.is-portrait .search-result-avatar { width: 60px; height: 60px; }
+.search-page-list.is-portrait .search-result-name { white-space: normal; overflow-wrap: anywhere; }
+
+.search-page-list.is-portrait .routine-stats {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.search-page-list.is-portrait .mini-progress-value { justify-content: center; }
+
+/* En retrato el detalle largo queda para el modo Filas. */
+.search-page-list.is-portrait .student-source-tags,
+.search-page-list.is-portrait .student-comments,
+.search-page-list.is-portrait .routine-actions,
+.search-page-list.is-portrait .stat-portrait-hide { display: none; }
+
 #searchSuggestionsList:not(:empty) { margin-top: 28px; }
 
 .search-page-item {

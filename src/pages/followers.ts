@@ -136,8 +136,18 @@ export const followersView: ViewModule = {
         return isOwner ? "Todavía no tenés suscriptores." : `${nombre} todavía no tiene suscriptores.`;
       }
 
+      function countLabel(n: number): string {
+        const nouns: Record<Tab, [string, string]> = {
+          followers: ["seguidor", "seguidores"],
+          following: ["seguido", "seguidos"],
+          subscribers: ["suscriptor", "suscriptores"],
+        };
+        const [singular, plural] = nouns[activeTab];
+        return `${n} ${n === 1 ? singular : plural}.`;
+      }
+
       function renderList(rows: ListRow[], query: string): void {
-        summaryEl.textContent = rows.length === 0 ? emptyMessage(query) : `${rows.length} resultado${rows.length === 1 ? "" : "s"}.`;
+        summaryEl.textContent = rows.length === 0 ? emptyMessage(query) : countLabel(rows.length);
 
         // Se recalcula en cada render (no como const arriba): activeTab cambia al
         // clickear las pestañas, despues de que esta funcion ya fue definida.

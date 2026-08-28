@@ -15,6 +15,7 @@ import {
 import { searchProfiles } from "../services/search.service";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { wireCustomDropdown } from "../lib/customDropdown";
+import { initListViewToggle } from "../lib/listViewToggle";
 
 const VIEW_MARKUP = `
   <section class="page-hero">
@@ -51,7 +52,10 @@ const VIEW_MARKUP = `
           <div class="profile-menu-panel" id="entrenadoresSortPanel" hidden></div>
         </div>
       </div>
-      <p class="chart-sub" id="entrenadoresSummary">Cargando...</p>
+      <div class="list-view-bar">
+        <p class="chart-sub" id="entrenadoresSummary">Cargando...</p>
+        <div id="entrenadoresViewToggle"></div>
+      </div>
       <div class="search-page-list" id="entrenadoresList"></div>
     </div>
   </section>
@@ -205,6 +209,7 @@ export const entrenadoresView: ViewModule = {
     const searchForm = container.querySelector("#entrenadoresSearchForm") as HTMLFormElement;
     const searchInput = container.querySelector("#entrenadoresSearchInput") as HTMLInputElement;
     const inviteBtn = container.querySelector("#inviteTrainerBtn") as HTMLButtonElement;
+    const viewToggleWrap = container.querySelector("#entrenadoresViewToggle") as HTMLElement;
 
     const initialTab = TAB_PARAM_MAP[params.get("tab") ?? ""] ?? "active";
     let activeTab: ManageTab = initialTab;
@@ -217,6 +222,14 @@ export const entrenadoresView: ViewModule = {
     ctx.addCleanup(() => clearTimeout(debounceTimer));
     ctx.addCleanup(() => clearTimeout(inviteDebounceTimer));
 
+    const viewToggle = initListViewToggle({
+      storageKey: "entrenadores",
+      listEl: listEl as HTMLElement,
+      mountEl: viewToggleWrap,
+      signal: ctx.signal,
+      onChange: () => syncTabUi(),
+    });
+
     function syncTabUi(): void {
       tabsWrap.querySelectorAll<HTMLButtonElement>(".routine-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === activeTab));
       // Los filtros de estado (Al dia/Por vencer/Vencido) solo tienen sentido en la pestaña de
@@ -224,6 +237,11 @@ export const entrenadoresView: ViewModule = {
       chipsWrap.hidden = activeTab !== "active";
       chipsWrap.querySelectorAll<HTMLButtonElement>(".member-filter-chip").forEach((b) => b.classList.toggle("active", b.dataset.filter === activeFilter));
       searchForm.hidden = activeTab === "pending";
+      // Las solicitudes/invitaciones se muestran como filas de acción: el modo retrato no aplica
+      // ahí, así que ocultamos el toggle y forzamos filas mientras esa pestaña esté activa.
+      const showToggle = activeTab !== "pending";
+      viewToggleWrap.hidden = !showToggle;
+      listEl.classList.toggle("is-portrait", showToggle && viewToggle.get() === "portrait");
     }
     syncTabUi();
 
@@ -516,8 +534,14 @@ export const entrenadoresView: ViewModule = {
         active: { withQuery: `Sin resultados para "${query}".`, empty: "Todavía no tenés entrenadores. Aceptá una solicitud o invitá a uno." },
         ended: { withQuery: `Sin resultados para "${query}".`, empty: "Todavía no tenés handles históricos." },
       };
+      const nounByTab: Record<ManageTab, [string, string]> = {
+        pending: ["solicitud", "solicitudes"],
+        active: ["entrenador", "entrenadores"],
+        ended: ["ex entrenador", "ex entrenadores"],
+      };
+      const [singular, plural] = nounByTab[activeTab];
       const msgs = emptyMessages[activeTab];
-      summaryEl.textContent = rows.length === 0 ? (query ? msgs.withQuery : msgs.empty) : `${rows.length} resultado${rows.length === 1 ? "" : "s"}.`;
+      summaryEl.textContent = rows.length === 0 ? (query ? msgs.withQuery : msgs.empty) : `${rows.length} ${rows.length === 1 ? singular : plural}.`;
 
       const markup = activeTab === "pending" ? pendingCardMarkup : activeTab === "active" ? activeCardMarkup : endedCardMarkup;
       listEl.innerHTML = rows.map(markup).join("");
