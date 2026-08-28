@@ -3495,6 +3495,18 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .class-session-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .class-session-form .field { margin-bottom: 0; }
 
+/* En mobile (iOS sobre todo) los inputs type="time" no achican y el flex-wrap dejaba el
+   "+ Agregar" apretado contra la caja de "Hasta". En pantallas chicas pasamos a grid:
+   Día ocupa la fila entera, Desde/Hasta van a mitades y el boton queda solo abajo. */
+@media (max-width: 639px) {
+  .class-session-form { display: grid; grid-template-columns: 1fr 1fr; align-items: end; }
+  .class-session-form .field:first-child,
+  .class-session-form #addSessionBtn { grid-column: 1 / -1; }
+  .class-session-form .field select,
+  .class-session-form .field input { min-width: 0; }
+  .class-session-form #addSessionBtn { width: 100%; margin-top: 4px; }
+}
+
 .class-session-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .class-session-chip {
   display: flex;
