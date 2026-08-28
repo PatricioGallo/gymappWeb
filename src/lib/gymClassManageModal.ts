@@ -108,15 +108,22 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
           </div>
 
           <div class="field">
-            <label>Horarios</label>
-            <div class="class-session-chips" id="classSessionChips"></div>
-            <div class="class-session-form">
-              <div class="field"><label for="sessionDay">Día</label>
-                <select id="sessionDay">${CLASS_DAY_LABELS.map((d, i) => `<option value="${i}">${d}</option>`).join("")}</select>
+            <label>Horarios de la clase</label>
+            <p class="field-hint">Elegí un día y de qué hora a qué hora va, y tocá <strong>Agregar horario</strong>. Podés sumar varios (uno por día, o varios el mismo día).</p>
+            <div class="class-session-box" id="classSessionBox">
+              <div class="alert_message" id="classSessionError" hidden></div>
+              <p class="class-session-box-label">Días y horarios</p>
+              <div class="class-session-chips" id="classSessionChips"></div>
+              <div class="class-session-box-add">
+                <div class="class-session-form">
+                  <div class="field"><label for="sessionDay">Día</label>
+                    <select id="sessionDay">${CLASS_DAY_LABELS.map((d, i) => `<option value="${i}">${d}</option>`).join("")}</select>
+                  </div>
+                  <div class="field"><label for="sessionStart">Desde</label><input type="time" id="sessionStart" value="09:00"></div>
+                  <div class="field"><label for="sessionEnd">Hasta</label><input type="time" id="sessionEnd" value="10:00"></div>
+                  <button type="button" class="btn btn-outline btn-sm" id="addSessionBtn">+ Agregar horario</button>
+                </div>
               </div>
-              <div class="field"><label for="sessionStart">Desde</label><input type="time" id="sessionStart" value="09:00"></div>
-              <div class="field"><label for="sessionEnd">Hasta</label><input type="time" id="sessionEnd" value="10:00"></div>
-              <button type="button" class="btn btn-outline btn-sm" id="addSessionBtn">+ Agregar</button>
             </div>
           </div>
 
@@ -144,8 +151,29 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
     document.getElementById("deleteClassInFormBtn")?.addEventListener("click", () => confirmDeleteGymClass(existing!.id, existing!.name, onSaved));
   }
 
+  function showSessionError(msg: string): void {
+    const el = document.getElementById("classSessionError");
+    if (el) {
+      el.textContent = msg;
+      el.hidden = false;
+    }
+    document.getElementById("classSessionBox")?.classList.add("has-error");
+  }
+  function clearSessionError(): void {
+    const el = document.getElementById("classSessionError");
+    if (el) {
+      el.textContent = "";
+      el.hidden = true;
+    }
+    document.getElementById("classSessionBox")?.classList.remove("has-error");
+  }
+
   function renderSessionChips(): void {
     const chipsEl = document.getElementById("classSessionChips")!;
+    if (sessions.length === 0) {
+      chipsEl.innerHTML = `<span class="class-session-empty">Todavía no agregaste ningún horario.</span>`;
+      return;
+    }
     chipsEl.innerHTML = sessions
       .map(
         (s, i) => `
@@ -165,14 +193,44 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
   }
   renderSessionChips();
 
+  const sessionStartInput = document.getElementById("sessionStart") as HTMLInputElement;
+  const sessionEndInput = document.getElementById("sessionEnd") as HTMLInputElement;
+
+  // Una hora reloj mas tarde que `hhmm`, sin pasarse de las 23:59 (no hay clases que crucen
+  // la medianoche -- ver el eje del calendario en clases.ts).
+  function oneHourLater(hhmm: string): string {
+    const [h, m] = hhmm.split(":").map(Number);
+    const total = Math.min(h * 60 + m + 60, 23 * 60 + 59);
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }
+
+  // Al mover "Desde" a una hora igual o posterior a "Hasta", empujamos "Hasta" a +1h para que
+  // nunca quede un rango negativo por accidente. Si el usuario despues pisa "Hasta" a mano y lo
+  // deja invalido, el chequeo de "+ Agregar horario" abajo lo frena igual.
+  sessionStartInput?.addEventListener("change", () => {
+    if (sessionStartInput.value && (!sessionEndInput.value || sessionEndInput.value <= sessionStartInput.value)) {
+      sessionEndInput.value = oneHourLater(sessionStartInput.value);
+      clearSessionError();
+    }
+  });
+
   document.getElementById("addSessionBtn")?.addEventListener("click", () => {
     const day = Number((document.getElementById("sessionDay") as HTMLSelectElement).value);
-    const start = (document.getElementById("sessionStart") as HTMLInputElement).value;
-    const end = (document.getElementById("sessionEnd") as HTMLInputElement).value;
-    if (!start || !end || start >= end) {
-      alert("El horario de fin tiene que ser después del de inicio.");
+    const start = sessionStartInput.value;
+    const end = sessionEndInput.value;
+    if (!start || !end) {
+      showSessionError("Completá desde y hasta qué hora va la clase.");
       return;
     }
+    if (start >= end) {
+      showSessionError("La hora de fin tiene que ser posterior a la de inicio.");
+      return;
+    }
+    if (sessions.some((s) => s.dayOfWeek === day && s.startTime === start && s.endTime === end)) {
+      showSessionError("Ese horario ya está en la lista.");
+      return;
+    }
+    clearSessionError();
     sessions.push({ dayOfWeek: day, startTime: start, endTime: end });
     renderSessionChips();
   });
@@ -234,6 +292,11 @@ export function openClassManageForm(opts: ClassManageFormOpts): void {
     e.preventDefault();
     const name = (document.getElementById("className") as HTMLInputElement).value.trim();
     if (!name) return;
+    if (sessions.length === 0) {
+      showSessionError("Agregá al menos un horario para poder guardar la clase.");
+      document.getElementById("classSessionBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     const capacityRaw = (document.getElementById("classCapacity") as HTMLInputElement).value.trim();
     let capacity: number | null = null;
     if (capacityRaw) {

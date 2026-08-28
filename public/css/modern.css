@@ -3536,6 +3536,33 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 .class-session-chip button:hover { color: var(--accent); }
 
+/* Caja unica para armar los horarios de la clase (modal de gestion en clases.html): agrupa la
+   lista de horarios ya cargados y el mini-form para sumar uno mas, para que se lea como un
+   solo control y no como campos sueltos flotando debajo del label. */
+.class-session-box {
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  /* Sin fill propio: el modal ya es var(--surface) y los chips/inputs de adentro son
+     var(--surface-2), asi que resaltan contra la caja sin pelearse de fondos anidados. */
+  background: transparent;
+  transition: border-color 0.15s ease;
+}
+.class-session-box.has-error { border-color: #ff5a5a; }
+.class-session-box .alert_message { margin: 0 0 12px; }
+.class-session-box-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.class-session-box .class-session-chips { margin: 0 0 12px; }
+.class-session-empty { font-size: 12.5px; font-style: italic; color: var(--text-muted); }
+.class-session-box-add { padding-top: 12px; border-top: 1px dashed var(--border); }
+
 .gym-class-enroll-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
 
 /* ---------- Seccion "Nuestras clases" del perfil de gimnasio ---------- */
