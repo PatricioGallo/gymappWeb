@@ -1453,6 +1453,22 @@ button:focus-visible {
 .field input::placeholder { color: var(--text-muted); opacity: 0.7; }
 .field input:focus { outline: none; border-color: var(--accent-2); }
 
+/* iOS Safari le da a <input type="date"> un ancho intrinseco propio que ignora width:100%
+   y se desborda del contenedor en pantallas angostas (ej. el modal de agregar peso corporal
+   en iPhone). appearance:none + min-width:0 lo hacen encoger como cualquier otro input; el
+   selector de fecha nativo se sigue abriendo igual al tocarlo. */
+.field input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  /* con appearance:none iOS puede colapsar la altura del input de fecha -- la fijamos
+     para que quede igual que los demas campos (12px padding + ~21px de linea). */
+  min-height: 45px;
+  line-height: normal;
+}
+.field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+
 .password-field { position: relative; }
 .password-field input { padding-right: 44px; }
 .password-toggle {
