@@ -78,6 +78,7 @@ import {
   markContactMessageRead,
   deleteContactMessage,
   getUnreadContactMessageCount,
+  sendContactReply,
   type ContactMessageWithReader,
 } from "../services/contact.service";
 import {
@@ -114,6 +115,7 @@ const VIEW_MARKUP = `
         <button class="routine-tab" data-tab="roadmap" type="button">Roadmap</button>
         <button class="routine-tab" data-tab="issues" type="button">Issues</button>
         <button class="routine-tab" data-tab="messages" type="button">Mensajes<span class="tab-dot" id="messagesTabDot" hidden></span></button>
+        <button class="routine-tab" data-tab="mail" type="button">Mail</button>
         <button class="routine-tab" data-tab="validation" type="button">Validación<span class="tab-dot" id="validationTabDot" hidden></span></button>
         <button class="routine-tab" data-tab="notifs" type="button">Notificaciones</button>
       </div>
@@ -124,6 +126,7 @@ const VIEW_MARKUP = `
       <div id="roadmapTab" hidden></div>
       <div id="issuesTab" hidden></div>
       <div id="messagesTab" hidden></div>
+      <div id="mailTab" hidden></div>
       <div id="validationTab" hidden></div>
       <div id="notifsTab" hidden></div>
     </div>
@@ -168,6 +171,8 @@ export const adminView: ViewModule = {
     let messagesSubTab: "contact" | "errors" | "users" = "contact";
     let messagesTabInitialized = false;
     let messagesSearchTerm = "";
+    let mailTabInitialized = false;
+    let mailSearchTerm = "";
 
     let verificationRequests: Record<ApplicantType, AdminVerificationRequestRow[]> = { entrenador: [], gimnasio: [] };
     let verificationLoadedFor: Record<ApplicantType, boolean> = { entrenador: false, gimnasio: false };
@@ -194,6 +199,7 @@ export const adminView: ViewModule = {
       const roadmapTab = container.querySelector("#roadmapTab")!;
       const issuesTab = container.querySelector("#issuesTab")!;
       const messagesTab = container.querySelector("#messagesTab")!;
+      const mailTab = container.querySelector("#mailTab")!;
       const validationTab = container.querySelector("#validationTab")!;
       const notifsTab = container.querySelector("#notifsTab")!;
       if (!tabsWrap) return;
@@ -211,6 +217,7 @@ export const adminView: ViewModule = {
             (roadmapTab as HTMLElement).hidden = tab !== "roadmap";
             (issuesTab as HTMLElement).hidden = tab !== "issues";
             (messagesTab as HTMLElement).hidden = tab !== "messages";
+            (mailTab as HTMLElement).hidden = tab !== "mail";
             (validationTab as HTMLElement).hidden = tab !== "validation";
             (notifsTab as HTMLElement).hidden = tab !== "notifs";
             if (tab === "stats" && !statsLoaded) {
@@ -236,6 +243,10 @@ export const adminView: ViewModule = {
             if (tab === "messages" && !messagesTabInitialized) {
               messagesTabInitialized = true;
               await renderMessagesTab();
+            }
+            if (tab === "mail" && !mailTabInitialized) {
+              mailTabInitialized = true;
+              await renderMailTab();
             }
             if (tab === "validation" && !validationTabInitialized) {
               validationTabInitialized = true;
@@ -1396,15 +1407,18 @@ export const adminView: ViewModule = {
     }
 
     function renderContactList(resultsEl: HTMLElement): void {
-      const unreadCount = contactMessages.filter((m) => !m.is_read).length;
+      // Solo los que todavia no fueron respondidos por mail; una vez que se responde,
+      // la conversacion pasa a vivir en la pestaña "Mail".
+      const pending = contactMessages.filter((m) => m.replies.length === 0);
+      const unreadCount = pending.filter((m) => !m.is_read).length;
       const term = messagesSearchTerm.trim().toLowerCase();
-      const filtered = term ? contactMessages.filter((m) => [m.name, m.email, m.message].some((f) => f.toLowerCase().includes(term))) : contactMessages;
+      const filtered = term ? pending.filter((m) => [m.name, m.email, m.message].some((f) => f.toLowerCase().includes(term))) : pending;
 
       resultsEl.innerHTML = `
         <div class="exc-admin-toolbar">
           <div>
             <h3>Mensajes de contacto</h3>
-            <p class="chart-sub">${unreadCount} sin leer de ${contactMessages.length} en total.</p>
+            <p class="chart-sub">${pending.length} sin responder · ${unreadCount} sin leer.</p>
           </div>
         </div>
         <div class="roadmap-tasks">
@@ -1420,16 +1434,25 @@ export const adminView: ViewModule = {
                 ${m.is_read && m.readByName ? `<p class="roadmap-task-desc"><strong>Leído por:</strong> @${escapeHtml(m.readByName)}</p>` : ""}
               </div>
               <div class="roadmap-task-actions">
+                <button type="button" class="message-reply" data-id="${m.id}">✉️ Responder</button>
                 <button type="button" class="message-toggle-read" data-id="${m.id}">${m.is_read ? "Marcar no leído" : "Marcar leído"}</button>
                 <button type="button" class="message-delete" data-id="${m.id}">Eliminar</button>
               </div>
             </div>
           `
               )
-              .join("") || `<p class="exc-pick-empty">${term ? "No encontramos mensajes con ese criterio." : "Todavía no llegó ningún mensaje."}</p>`
+              .join("") ||
+            `<p class="exc-pick-empty">${term ? "No encontramos mensajes con ese criterio." : "No hay mensajes sin responder."}</p>`
           }
         </div>
       `;
+
+      resultsEl.querySelectorAll<HTMLButtonElement>(".message-reply").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const msg = contactMessages.find((m) => m.id === btn.dataset.id);
+          if (msg) openContactReplyModal(msg, () => renderContactList(resultsEl));
+        });
+      });
 
       resultsEl.querySelectorAll<HTMLButtonElement>(".message-toggle-read").forEach((btn) => {
         btn.addEventListener("click", async () => {
@@ -1486,6 +1509,193 @@ export const adminView: ViewModule = {
         contactMessages = contactMessages.filter((m) => m.id !== msg.id);
         loaderBody.innerHTML = "";
         void renderMessagesResults();
+        const mailResults = container.querySelector("#mailResults") as HTMLElement | null;
+        if (mailResults) renderMailList(mailResults);
+      });
+    }
+
+    // ---------- Mail (bandeja de contacto + responder por email) ----------
+
+    function contactReplyThreadHtml(m: ContactMessageWithReader): string {
+      if (!m.replies.length) return "";
+      return `
+        <div class="mail-thread">
+          ${m.replies
+            .map(
+              (r) => `
+            <div class="mail-thread-item">
+              <p class="mail-thread-meta">Respondido${r.sentByName ? ` por @${escapeHtml(r.sentByName)}` : ""} · ${formatDateTime(r.created_at)}</p>
+              <p class="mail-thread-subject">${escapeHtml(r.subject)}</p>
+              <p class="mail-thread-body">${escapeHtml(r.body)}</p>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `;
+    }
+
+    async function renderMailTab(): Promise<void> {
+      const mailTab = container.querySelector("#mailTab")!;
+      mailTab.innerHTML = `
+        <input type="search" id="mailSearch" class="exc-picker-search admin-search" placeholder="Buscar por nombre, mail o texto..." value="${escapeHtml(mailSearchTerm)}">
+        <div id="mailResults"></div>
+      `;
+
+      mailTab.querySelector("#mailSearch")?.addEventListener("input", (event) => {
+        mailSearchTerm = (event.target as HTMLInputElement).value;
+        const el = container.querySelector("#mailResults") as HTMLElement | null;
+        if (el) renderMailList(el);
+      });
+
+      const resultsEl = mailTab.querySelector("#mailResults") as HTMLElement;
+      if (!contactMessagesLoaded) {
+        resultsEl.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando conversaciones...</p></div>`;
+        contactMessages = await listContactMessages();
+        contactMessagesLoaded = true;
+      }
+      renderMailList(resultsEl);
+      void refreshMessagesDot();
+    }
+
+    function renderMailList(resultsEl: HTMLElement): void {
+      const term = mailSearchTerm.trim().toLowerCase();
+      // La pestaña Mail son las conversaciones ya iniciadas (mensajes con al menos una
+      // respuesta enviada). Los que todavia no respondiste viven en Mensajes → Contacto.
+      const threads = contactMessages.filter((m) => m.replies.length > 0);
+      const list = term ? threads.filter((m) => [m.name, m.email, m.message].some((f) => f.toLowerCase().includes(term))) : threads;
+
+      resultsEl.innerHTML = `
+        <div class="exc-admin-toolbar">
+          <div>
+            <h3>Conversaciones</h3>
+            <p class="chart-sub">${threads.length} ${threads.length === 1 ? "conversación respondida" : "conversaciones respondidas"}.</p>
+          </div>
+        </div>
+        <div class="roadmap-tasks">
+          ${
+            list
+              .map(
+                (m) => `
+            <div class="roadmap-task roadmap-status-done" data-id="${m.id}">
+              <div class="roadmap-task-body">
+                <span class="roadmap-task-title">${escapeHtml(m.name)} · <a href="mailto:${escapeHtml(m.email)}">${escapeHtml(m.email)}</a></span>
+                <p class="roadmap-task-desc">${escapeHtml(m.message)}</p>
+                <p class="roadmap-task-desc"><strong>Recibido:</strong> ${formatDateTime(m.created_at)}</p>
+                ${contactReplyThreadHtml(m)}
+              </div>
+              <div class="roadmap-task-actions">
+                <button type="button" class="mail-reply" data-id="${m.id}">✉️ Responder de nuevo</button>
+                <button type="button" class="mail-delete" data-id="${m.id}">Eliminar</button>
+              </div>
+            </div>
+          `
+              )
+              .join("") ||
+            `<p class="exc-pick-empty">${term ? "No encontramos conversaciones con ese criterio." : "Todavía no respondiste ningún mensaje. Respondé uno desde Mensajes → Contacto y la conversación aparece acá."}</p>`
+          }
+        </div>
+      `;
+
+      resultsEl.querySelectorAll<HTMLButtonElement>(".mail-reply").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const msg = contactMessages.find((m) => m.id === btn.dataset.id);
+          if (msg) openContactReplyModal(msg, () => renderMailList(resultsEl));
+        });
+      });
+
+      resultsEl.querySelectorAll<HTMLButtonElement>(".mail-delete").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const msg = contactMessages.find((m) => m.id === btn.dataset.id);
+          if (msg) openDeleteMessageModal(msg);
+        });
+      });
+    }
+
+    function openContactReplyModal(msg: ContactMessageWithReader, rerender: () => void): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card modal-card-lg">
+            <h2>Responder a ${escapeHtml(msg.name)}</h2>
+            <p class="subtitle">Se manda un mail a <strong>${escapeHtml(msg.email)}</strong> desde la casilla de Gym Social (la misma de los mails de registro).</p>
+
+            <div class="mail-quote">${escapeHtml(msg.message)}</div>
+            ${contactReplyThreadHtml(msg)}
+
+            <div class="field">
+              <label for="contactReplySubject">Asunto</label>
+              <input type="text" id="contactReplySubject" maxlength="150" value="Re: tu mensaje a Gym Social">
+            </div>
+            <div class="field">
+              <label for="contactReplyBody">Mensaje</label>
+              <textarea id="contactReplyBody" rows="7" maxlength="5000" placeholder="Escribí tu respuesta..."></textarea>
+            </div>
+
+            <div class="alert_message" id="contactReplyAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-outline" id="contactReplyCancel" type="button">Cancelar</button>
+              <button class="btn btn-primary" id="contactReplySend" type="button">Enviar mail</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("contactReplyCancel")?.addEventListener("click", () => {
+        loaderBody.innerHTML = "";
+      });
+      (document.getElementById("contactReplyBody") as HTMLTextAreaElement | null)?.focus();
+
+      document.getElementById("contactReplySend")?.addEventListener("click", async () => {
+        const alertBox = document.getElementById("contactReplyAlert")!;
+        alertBox.innerHTML = "";
+        const subject = (document.getElementById("contactReplySubject") as HTMLInputElement).value.trim();
+        const body = (document.getElementById("contactReplyBody") as HTMLTextAreaElement).value.trim();
+
+        if (body.length < 10) {
+          alertBox.innerHTML = `<p>Escribí una respuesta un poco más larga (mínimo 10 caracteres).</p>`;
+          return;
+        }
+
+        const sendBtn = document.getElementById("contactReplySend") as HTMLButtonElement;
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Enviando...";
+        const { error } = await sendContactReply(msg.id, body, subject);
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Enviar mail";
+
+        if (error) {
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+
+        contactMessages = await listContactMessages();
+
+        loaderBody.innerHTML = `
+          <div class="success-check-container">
+            <div class="success-icon">
+              <svg viewBox="0 0 52 52" class="success-svg">
+                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+              </svg>
+            </div>
+            <p>¡Mail enviado a ${escapeHtml(msg.email)}!</p>
+          </div>
+        `;
+        setTimeout(() => {
+          loaderBody.innerHTML = "";
+        }, 1900);
+
+        rerender();
+        // Refrescar tambien la otra vista de contacto si esta montada: el mensaje sale
+        // de "Mensajes → Contacto" y aparece como conversacion en "Mail" (o viceversa).
+        const msgResults = container.querySelector("#messagesResults") as HTMLElement | null;
+        if (msgResults && messagesSubTab === "contact") renderContactList(msgResults);
+        const mailResults = container.querySelector("#mailResults") as HTMLElement | null;
+        if (mailResults) renderMailList(mailResults);
+        void refreshMessagesDot();
       });
     }
 

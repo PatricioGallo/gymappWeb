@@ -3491,6 +3491,37 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .roadmap-task-actions { order: 4; flex: 1 0 100%; }
 }
 
+/* ---- Panel de admin: pestaña Mail (bandeja de contacto + hilo de respuestas) ---- */
+
+/* Cita del mensaje original arriba del textarea, en el modal de responder. */
+.mail-quote {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 4px 0 18px;
+  white-space: pre-wrap;
+}
+
+/* Hilo de respuestas ya enviadas (lista de la pestaña Mail + modal). */
+.mail-thread { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+.mail-thread-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--surface-2);
+}
+
+.mail-thread-meta { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--accent-2); }
+.mail-thread-subject { margin: 3px 0 0; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.mail-thread-body { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); white-space: pre-wrap; }
+
+.mail-thread + .field { margin-top: 16px; }
+
 .issue-severity-badge {
   flex-shrink: 0;
   margin-top: 2px;

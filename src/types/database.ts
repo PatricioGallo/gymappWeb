@@ -57,6 +57,58 @@ export type Database = {
           },
         ]
       }
+      contact_message_replies: {
+        Row: {
+          body: string
+          contact_message_id: string
+          created_at: string
+          id: string
+          sent_by: string | null
+          subject: string
+          to_email: string
+        }
+        Insert: {
+          body: string
+          contact_message_id: string
+          created_at?: string
+          id?: string
+          sent_by?: string | null
+          subject: string
+          to_email: string
+        }
+        Update: {
+          body?: string
+          contact_message_id?: string
+          created_at?: string
+          id?: string
+          sent_by?: string | null
+          subject?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_message_replies_contact_message_id_fkey"
+            columns: ["contact_message_id"]
+            isOneToOne: false
+            referencedRelation: "contact_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_message_replies_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_message_replies_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_messages: {
         Row: {
           created_at: string

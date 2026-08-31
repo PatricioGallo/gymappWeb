@@ -1,0 +1,11 @@
+# Config minima solo para poder deployar la Edge Function `send-contact-reply`
+# con la CLI (`npx supabase functions deploy send-contact-reply`).
+#
+# El resto del proyecto (esquema, RLS, otras funciones como send-web-push /
+# link-preview) NO se maneja desde este repo -- se aplico via el MCP de Supabase
+# / el Dashboard. Deployar UNA funcion por nombre no toca las demas.
+
+project_id = "nxyxuthkhvzticqwtaar"
+
+[functions.send-contact-reply]
+verify_jwt = true
