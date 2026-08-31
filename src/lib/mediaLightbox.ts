@@ -1,4 +1,5 @@
 import { escapeHtml } from "./dom";
+import { bindVideoResume, rememberVideoPosition } from "./videoResume";
 
 export type MediaLightboxKind = "image" | "video";
 
@@ -78,10 +79,20 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
   let index = Math.max(Math.min(options.startIndex, queue.length - 1), 0);
   let currentItem = queue[index];
 
+  // Corta el bind de "seguir donde iba" del video actual (ver renderMedia). Se
+  // reasigna en cada renderMedia y se llama al cerrar / cambiar de item.
+  let disposeVideoResume: (() => void) | null = null;
+
   let closed = false;
   function close(): void {
     if (closed) return;
     closed = true;
+    // Marca final exacta antes de soltar el video: el throttle de timeupdate pudo
+    // dejar la ultima posicion hasta ~0.25s vieja, y quien abrio el visor (la
+    // tarjeta del feed) va a leer esta marca justo despues via options.onClose.
+    const closingVideo = mediaWrap.querySelector("video");
+    if (closingVideo) rememberVideoPosition(getMedia(currentItem).url, closingVideo.currentTime);
+    disposeVideoResume?.();
     document.removeEventListener("keydown", onKeydown);
     unlockBodyScroll();
     closeOverlay();
@@ -167,6 +178,8 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
   mediaWrap.addEventListener("dblclick", (e) => toggleZoomAt(e.clientX, e.clientY));
 
   function renderMedia(): void {
+    disposeVideoResume?.();
+    disposeVideoResume = null;
     const { url, kind } = getMedia(currentItem);
     mediaWrap.innerHTML =
       kind === "video"
@@ -174,9 +187,16 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
         : `<img class="media-lightbox-media" src="${escapeHtml(url)}" alt="" draggable="false">`;
     mediaEl = mediaWrap.querySelector<HTMLElement>(".media-lightbox-media");
     resetZoom();
-    // autoplay a veces no alcanza solo con el atributo (el elemento se crea via innerHTML,
-    // no via una carga de página "de verdad"); .play() de mas no hace nada si ya arrancó.
-    mediaWrap.querySelector("video")?.play().catch(() => {});
+    const video = mediaWrap.querySelector("video");
+    if (video) {
+      // Seguir desde el segundo en que venia ese mismo media (ej. el video que ya
+      // estaba corriendo mudo en el feed cuando se toco para abrir este visor), y
+      // seguir marcando la posicion para cuando se vuelva a la tarjeta de atras.
+      disposeVideoResume = bindVideoResume(video, url);
+      // autoplay a veces no alcanza solo con el atributo (el elemento se crea via innerHTML,
+      // no via una carga de página "de verdad"); .play() de mas no hace nada si ya arrancó.
+      video.play().catch(() => {});
+    }
   }
 
   function callRenderFooter(): void {

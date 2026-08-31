@@ -4,6 +4,7 @@ import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
 import { openMediaLightbox } from "./postModals";
 import { youtubeEmbedHtml } from "./youtube";
+import { bindVideoResume, recallVideoPosition } from "./videoResume";
 import type { FeedPost, Post, PostAuthor } from "../services/post.service";
 
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
@@ -199,14 +200,29 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
 // Autoplay mudo de los videos nativos mientras estan a la vista (no los de YouTube,
 // esos van dentro de un iframe ajeno). Se pausan apenas salen del viewport. Se crea
 // un observer nuevo por llamada a wirePostCard, scopeado solo a esta tanda de cards.
-function observeVideoAutoplay(root: HTMLElement): IntersectionObserver | null {
+//
+// Ademas engancha bindVideoResume por video: un video que arranco en el feed sigue
+// desde ese segundo al abrirse el visor grande o el modal de detalle (comparten la
+// misma src), y al volver la tarjeta se pone al dia -- por eso, antes de cada play()
+// al re-entrar al viewport, salta a la marca mas fresca de ese media (ej. la que
+// dejo el visor recien cerrado).
+function observeVideoAutoplay(root: HTMLElement): (() => void) | null {
   const videos = root.querySelectorAll<HTMLVideoElement>("video.post-card-media");
   if (!videos.length) return null;
+  const unbinds = [...videos].map((video) => bindVideoResume(video, video.getAttribute("src")));
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
         const video = entry.target as HTMLVideoElement;
         if (entry.isIntersecting) {
+          const mark = recallVideoPosition(video.getAttribute("src"));
+          if (mark > 0 && mark > video.currentTime + 0.75) {
+            try {
+              video.currentTime = mark;
+            } catch {
+              // seek rechazado (rango no buscable todavia), no es un error real
+            }
+          }
           video.muted = true;
           video.play().catch(() => {}); // el navegador puede rechazar el play, no es un error real
         } else {
@@ -217,7 +233,10 @@ function observeVideoAutoplay(root: HTMLElement): IntersectionObserver | null {
     { threshold: 0.6 }
   );
   videos.forEach((video) => observer.observe(video));
-  return observer;
+  return () => {
+    observer.disconnect();
+    unbinds.forEach((fn) => fn());
+  };
 }
 
 // Registra una vista (ver onView en PostCardHandlers) la primera vez que cada card
@@ -281,7 +300,25 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
       e.stopPropagation();
       if (!post.media_url) return;
       handlers.onMediaOpening?.();
-      openMediaLightbox(post, handlers);
+      // Si es un video, lo pausamos ANTES de abrir el visor: asi la unica que sigue
+      // marcando la posicion mientras el visor esta abierto es la del visor (si no,
+      // esta tarjeta seguiria corriendo muda por detras y competiria por la marca).
+      // Al cerrar el visor, la ponemos donde quedo alla y la volvemos a arrancar.
+      const cardVideo = e.currentTarget instanceof HTMLVideoElement ? e.currentTarget : null;
+      cardVideo?.pause();
+      openMediaLightbox(post, handlers, () => {
+        if (!cardVideo || !cardVideo.isConnected) return;
+        const mark = recallVideoPosition(post.media_url);
+        if (mark > 0) {
+          try {
+            cardVideo.currentTime = mark;
+          } catch {
+            // seek rechazado (rango no buscable), no es un error real
+          }
+        }
+        cardVideo.muted = true;
+        cardVideo.play().catch(() => {}); // el observer igual lo maneja si sale/entra del viewport
+      });
     }, opt);
 
     // El Rep citado embebido es su propio Rep, no el contenedor: para el click.
@@ -300,11 +337,11 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
     }
   });
 
-  const videoObs = observeVideoAutoplay(root);
+  const disposeVideoAutoplay = observeVideoAutoplay(root);
   const viewObs = observePostViews(root, postsById, handlers);
   return () => {
     ac.abort();
-    videoObs?.disconnect();
+    disposeVideoAutoplay?.();
     viewObs?.disconnect();
   };
 }

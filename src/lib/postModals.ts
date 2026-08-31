@@ -52,7 +52,7 @@ function successCheckHtml(message: string): string {
  * antes de abrirse. Si hay más de un video en handlers.getVideoQueue(post), deslizar hacia
  * arriba pasa al siguiente sin cerrar el visor (estilo Reels/TikTok).
  */
-export function openMediaLightbox(post: FeedPost, handlers: PostCardHandlers): void {
+export function openMediaLightbox(post: FeedPost, handlers: PostCardHandlers, onClose?: () => void): void {
   if (!post.media_url) return;
 
   // El video solo entra en la cola (para el swipe-arriba): las fotos se quedan solas, un
@@ -68,6 +68,7 @@ export function openMediaLightbox(post: FeedPost, handlers: PostCardHandlers): v
   openMediaViewer({
     queue,
     startIndex,
+    onClose,
     getMedia: (p) => ({ url: p.media_url!, kind: p.media_type === "video" ? "video" : "image" }),
     // Me gusta/repostear se resuelven sin salir del visor (solo repintan la barra); el
     // resto de las acciones abre su propio modal en el mismo #loaderBody, asi que hay que
