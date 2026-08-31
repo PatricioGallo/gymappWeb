@@ -1041,6 +1041,14 @@ async function renderQuickActions(userId: string, userType: Profile["user_type"]
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
       <div><h3>Progreso completo</h3><p>Gráficos detallados por ejercicio</p></div>
     </a>
+    ${
+      userType === "admin"
+        ? `<a class="quick-card reveal" href="/pages/pesoCorporal.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13l3.5-3.5M12 5V3M4.5 6.5l1 1M19.5 6.5l-1 1"/></svg></div>
+      <div><h3>Agregar peso corporal</h3><p>Registrá tu peso y seguí su evolución</p></div>
+    </a>`
+        : ""
+    }
     <a class="quick-card reveal" href="/pages/rutinsView.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div>
       <div><h3>Nueva rutina</h3><p>Armá una rutina desde cero</p></div>

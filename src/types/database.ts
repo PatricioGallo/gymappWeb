@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      body_weight_logs: {
+        Row: {
+          created_at: string
+          fecha: string
+          id: string
+          peso: number
+          unidad: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fecha: string
+          id?: string
+          peso: number
+          unidad?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fecha?: string
+          id?: string
+          peso?: number
+          unidad?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_weight_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "body_weight_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comment_likes: {
         Row: {
           comment_id: string

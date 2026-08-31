@@ -2897,6 +2897,25 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .chart-grid { grid-template-columns: 1fr 1fr; }
 }
 
+/* ---------- Peso corporal (pesoCorporal.html) ---------- */
+
+.bw-actions { margin-bottom: 24px; }
+.bw-list { display: flex; flex-direction: column; }
+
+.bw-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.bw-row:first-child { border-top: none; padding-top: 0; }
+.bw-row-main { flex: 1; min-width: 0; }
+.bw-row-date { font-weight: 700; font-size: 14px; }
+.bw-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.bw-row-peso { font-weight: 800; font-size: 16px; white-space: nowrap; }
+
 /* ---------- Routine tabs ---------- */
 
 .routine-tabs {
