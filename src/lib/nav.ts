@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, hasPersistedSession } from "./supabaseClient";
 import { logVisitOncePerSession } from "../services/visits.service";
 import { setupNotificationBell } from "./notifications";
 import { setupChatBadge } from "./chat";
@@ -278,21 +278,121 @@ export function setupAutoHideHeader(ctx?: ViewContext): void {
   );
 }
 
+// requireAuth() deja esta marca justo antes de rebotar a login. La lee redirectIfAuthenticated()
+// para NO volver a mandar optimistamente a la app cuando la sesion guardada esta muerta (o no
+// hay red ni siquiera tras el intento de recovery) -- sin esto, login <-> profile entra en loop.
+const BOUNCED_TO_LOGIN_KEY = "auth:bounced-to-login";
+
+function recentlyBouncedToLogin(): boolean {
+  try {
+    const t = Number(sessionStorage.getItem(BOUNCED_TO_LOGIN_KEY) ?? 0);
+    return t > 0 && Date.now() - t < 15_000;
+  } catch {
+    return false;
+  }
+}
+
+function clearAuthWakeMarkers(): void {
+  try {
+    sessionStorage.removeItem("auth:wake-recovery");
+    sessionStorage.removeItem(BOUNCED_TO_LOGIN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export async function redirectIfAuthenticated(): Promise<void> {
+  const enPages = location.pathname.includes("/pages/");
+  const destino = enPages ? "profile.html" : "pages/profile.html";
+
+  // Optimista: si hay una sesion guardada en el dispositivo, ir directo a la app sin
+  // esperar la red. Al reabrir la PWA en iOS, getSession() tiene que canjear el refresh
+  // token contra el server y eso puede tardar o fallar con la red aun no lista -- antes
+  // eso dejaba al usuario tirado en la landing/login aunque siguiera logueado. Si el
+  // token estuviera muerto de verdad, profile.html -> requireAuth() rebota a login igual
+  // (y deja BOUNCED_TO_LOGIN_KEY para que no lo mandemos de vuelta en un loop).
+  if (hasPersistedSession() && !recentlyBouncedToLogin()) {
+    window.location.href = destino;
+    return;
+  }
+
   const { data } = await supabase.auth.getSession();
   if (!data.session) return;
-  const enPages = location.pathname.includes("/pages/");
-  window.location.href = enPages ? "profile.html" : "pages/profile.html";
+  clearAuthWakeMarkers();
+  window.location.href = destino;
+}
+
+/** Espera a que vuelva la conexion (evento `online`) o a que pase `timeoutMs`, lo que pase antes. */
+function waitForOnline(timeoutMs: number): Promise<void> {
+  if (navigator.onLine) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = (): void => {
+      clearTimeout(timer);
+      window.removeEventListener("online", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    window.addEventListener("online", finish, { once: true });
+  });
+}
+
+/**
+ * Al reabrir la PWA (sobre todo iOS) getSession() puede devolver null aunque el refresh
+ * token siga guardado y vivo: la red del "wake" todavia no respondio y auth-js queda ~60s
+ * sin reintentar (cooldown interno), asi que un refreshSession() en el acto no sirve. En
+ * vez de mandar a login (falso logout), recargamos la pagina cuando vuelva la conexion:
+ * cliente nuevo, sin cooldown, y el canje del refresh token se reintenta desde cero.
+ *
+ * Devuelve true si arranco una recarga (el llamador no debe seguir ni redirigir).
+ * Anti-loop: como mucho una recarga cada 90s -- si tras eso sigue sin sesion, se asume
+ * logout real y se cae a login. El timestamp vive en sessionStorage, que en una PWA se
+ * limpia al cerrarla del todo: cada arranque en frio tiene derecho a su reintento.
+ */
+function tryWakeRecovery(): boolean {
+  const KEY = "auth:wake-recovery";
+  try {
+    const last = Number(sessionStorage.getItem(KEY) ?? 0);
+    if (Date.now() - last < 90_000) return false;
+    sessionStorage.setItem(KEY, String(Date.now()));
+  } catch {
+    return false; // sin sessionStorage no hay como protegerse del loop -- no arriesgar
+  }
+  void waitForOnline(8000).then(() => {
+    // Respiro extra: en iOS navigator.onLine puede decir true antes de que la radio
+    // realmente curse requests -- 1.2s de margen sube bastante el exito de la recarga.
+    setTimeout(() => location.reload(), 1200);
+  });
+  return true;
 }
 
 /** Para paginas que requieren sesion iniciada: devuelve el user id o redirige a login.html. */
 export async function requireAuth(): Promise<string> {
   const { data } = await supabase.auth.getSession();
   const userId = data.session?.user.id;
+
   if (!userId) {
+    // Sesion guardada en disco pero getSession() no pudo revalidarla: casi siempre es
+    // la red del "wake" de la PWA, no un logout. Intentar recuperar recargando antes
+    // de rendirse (ver tryWakeRecovery).
+    if (hasPersistedSession() && tryWakeRecovery()) {
+      // La recarga ya esta agendada -- colgar aca a proposito para no seguir resolviendo
+      // ni redirigir a login mientras la pagina se recarga.
+      return new Promise<string>(() => {});
+    }
+    // Dejar la marca para que redirectIfAuthenticated() en login.html no nos rebote de
+    // vuelta a la app (loop) si el blob de sesion sigue en disco pero esta muerto.
+    try {
+      sessionStorage.setItem(BOUNCED_TO_LOGIN_KEY, String(Date.now()));
+    } catch {
+      // ignore
+    }
     window.location.href = "login.html";
     throw new Error("not authenticated");
   }
+
+  // Sesion OK: limpiar las marcas de wake/bounce para que un wake posterior tenga su reintento.
+  clearAuthWakeMarkers();
+
   // Heartbeat simple de "última conexión": una vez por carga de página autenticada.
   void touchLastSeen();
   trackPresence(userId);

@@ -2,7 +2,7 @@
   "name": "Gym Social",
   "short_name": "Gym Social",
   "description": "Gym Social: creá tus rutinas, registrá tus pesos y seguí tu progreso de entrenamiento desde el celular.",
-  "start_url": "/index.html",
+  "start_url": "/pages/profile.html?src=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
