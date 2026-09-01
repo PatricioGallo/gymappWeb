@@ -154,7 +154,7 @@ export const pesoCorporalView: ViewModule = {
             </div>
             <div class="field">
               <label for="bwPeso">Peso</label>
-              <input type="number" id="bwPeso" step="0.1" min="1" inputmode="decimal" placeholder="Ej: 78.5" value="${existing ? fmt(existing.peso) : ""}">
+              <input type="text" id="bwPeso" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" placeholder="Ej: 78.5" value="${existing ? fmt(existing.peso) : ""}">
             </div>
             <div class="field">
               <label for="bwUnidad">Unidad</label>
@@ -178,7 +178,7 @@ export const pesoCorporalView: ViewModule = {
       document.getElementById("bwSave")?.addEventListener("click", async () => {
         const alertEl = document.getElementById("bwAlert")!;
         const fechaVal = (document.getElementById("bwFecha") as HTMLInputElement).value;
-        const pesoVal = (document.getElementById("bwPeso") as HTMLInputElement).value.trim();
+        const pesoVal = (document.getElementById("bwPeso") as HTMLInputElement).value.trim().replace(",", ".");
         const unidadVal = (document.getElementById("bwUnidad") as HTMLSelectElement).value as BodyWeightUnit;
         const peso = Number(pesoVal);
 

@@ -257,7 +257,7 @@ export const pesosView: ViewModule = {
             const [routineExerciseId, serieStr] = entryKey.split(":");
             const exc = dia.ejercicios.find((e) => e.id === routineExerciseId);
             if (!exc) return;
-            const peso = val.peso !== undefined ? Number(val.peso) : NaN;
+            const peso = val.peso !== undefined ? Number(val.peso.replace(",", ".")) : NaN;
             const repe = val.repe !== undefined ? Number(val.repe) : NaN;
             if (Number.isNaN(peso) || peso < 0 || Number.isNaN(repe) || repe <= 0) return;
             newEntries.push({
@@ -799,7 +799,7 @@ export const pesosView: ViewModule = {
               <div class="weight-field-serie">
                 <div class="weight-field-sub">${subLabel}: ${previousValuesText(historyEntries)}</div>
                 <div class="weight-field-inputs">
-                  <input type="number" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${prefill ? prefill.peso : ""}">
+                  <input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${prefill ? prefill.peso : ""}">
                   <span class="weight-field-x">x</span>
                   <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
                 </div>
@@ -917,7 +917,7 @@ export const pesosView: ViewModule = {
         let error = false;
 
         inputs.forEach((input) => {
-          const value = input.value.trim();
+          const value = input.value.trim().replace(",", ".");
           if (value === "") return;
           const peso = Number(value);
           const repInput = input.closest(".weight-field-serie")?.querySelector<HTMLInputElement>(".repInput");
