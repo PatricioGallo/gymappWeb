@@ -801,7 +801,7 @@ export const pesosView: ViewModule = {
                 <div class="weight-field-inputs">
                   <input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" class="mini-input weightInput" data-id="${exc.id}" data-exc-catalog="${exc.exercise_id}" data-serie="${setIndex}" placeholder="${UNIT_PLACEHOLDERS[unit]}" value="${prefill ? prefill.peso : ""}">
                   <span class="weight-field-x">x</span>
-                  <input type="number" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="mini-input repInput" placeholder="reps" value="${repeValue ?? ""}">
                 </div>
               </div>`;
                   })

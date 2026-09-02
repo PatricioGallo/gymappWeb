@@ -59,17 +59,17 @@ function excBlockMarkup(exc?: RoutineExerciseWithAuthor): string {
       <div class="exc-fields-row">
         <label class="exc-field exc-field-series">
           <span class="exc-field-label">Series</span>
-          <input type="number" class="mini-input serieInput" value="${exc?.serie ?? ""}" placeholder="Ej: 3" min="1" max="10">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="mini-input serieInput" value="${exc?.serie ?? ""}" placeholder="Ej: 3">
         </label>
         <span class="exc-field-sep" aria-hidden="true">x</span>
         <label class="exc-field exc-field-repe">
           <span class="exc-field-label">Repeticiones</span>
-          <input type="number" class="mini-input repeInput" value="${exc?.repe ?? ""}" placeholder="Ej: 10" min="1" max="30">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="mini-input repeInput" value="${exc?.repe ?? ""}" placeholder="Ej: 10">
         </label>
         <span class="exc-field-sep" aria-hidden="true">-</span>
         <label class="exc-field exc-field-hasta">
           <span class="exc-field-label">Hasta <em>(opcional)</em></span>
-          <input type="number" class="mini-input repeMaxInput" value="${exc?.repe_max ?? ""}" placeholder="Rango" min="1" max="30" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="mini-input repeMaxInput" value="${exc?.repe_max ?? ""}" placeholder="Rango" title="Completá esto solo si querés un rango de repeticiones (ej: 5 a 7)">
         </label>
       </div>
       <div class="exc-extra">
