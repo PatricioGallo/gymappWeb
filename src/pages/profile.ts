@@ -1,6 +1,7 @@
 import { setupAutoHideHeader, settleReveal } from "../lib/nav";
-import { smartNavigate } from "../shell/router";
+import { smartNavigate, reloadActiveView } from "../shell/router";
 import type { ViewModule } from "../shell/router";
+import { setupPullToRefresh } from "../lib/pullToRefresh";
 import type { ViewContext } from "../shell/viewContext";
 import { escapeHtml } from "../lib/dom";
 import { diaLabel, formatFechaCorta } from "../lib/dias";
@@ -2787,6 +2788,8 @@ async function main(ctx: ViewContext) {
 }
 
 const VIEW_MARKUP = `
+  <div class="pull-refresh-indicator" id="profilePullRefresh" aria-hidden="true"><div class="modern-spinner"></div></div>
+
   <section class="profile-hero">
     <div class="container">
       <div class="profile-top" id="profileTop">
@@ -2918,6 +2921,14 @@ export const profileView: ViewModule = {
     setupProfileMenuToggle(ctx);
     setupRoutineMenuOutsideClick(ctx);
     setupGymClasesSlider(ctx);
+
+    // Pull-to-refresh (mobile): arrastrar hacia abajo estando arriba del todo remonta el perfil
+    // de cero (foto, bio, contadores, rutinas, actividad) -- reloadActiveView descarta esta
+    // instancia y vuelve a correr mount(), asi que no hay estado viejo que reconciliar a mano.
+    const pullIndicator = container.querySelector<HTMLElement>("#profilePullRefresh");
+    if (pullIndicator) {
+      setupPullToRefresh({ indicator: pullIndicator, container, onRefresh: reloadActiveView, ctx });
+    }
 
     // pages/profile.html (nav "Perfil") es siempre TU perfil salvo que le pasen ?u=. La ruta
     // catch-all (gymsocial.com.ar/<username>) manda el username ya extraido en pathUsername

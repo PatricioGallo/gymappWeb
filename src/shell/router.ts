@@ -237,6 +237,27 @@ async function renderCurrentLocation(): Promise<void> {
   view.onShow?.();
 }
 
+/**
+ * Descarta la instancia de la vista activa y la vuelve a montar de cero contra la URL actual.
+ * Pensado para pull-to-refresh: a diferencia de update(), no reusa nada -- dispose() del ctx baja
+ * channels/observers/listeners y el mount() nuevo re-pide todos los datos. Limpiar `active` antes
+ * de re-renderizar es lo que evita el fast-path de "misma instancia ya activa" en
+ * renderCurrentLocation (que si no, solo llamaria update()).
+ */
+export async function reloadActiveView(): Promise<void> {
+  if (!active) return;
+  const { view, key } = active;
+  const instances = instancesFor(view);
+  const inst = instances.get(key);
+  if (inst) {
+    inst.ctx.dispose();
+    inst.el.remove();
+    instances.delete(key);
+  }
+  active = null;
+  await renderCurrentLocation();
+}
+
 /** Navegacion client-side. La usa linkInterceptor y las vistas migradas (ej. abrir un chat). */
 export function navigate(url: string, opts: { replace?: boolean } = {}): void {
   if (opts.replace) history.replaceState(null, "", url);
