@@ -165,7 +165,14 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
   // Header de autor del Rep enfocado (avatar arriba, nombre en negrita, @usuario abajo, seguir)
   // -----------------------------------------------------------------------
 
-  async function handleFollowClick(btn: HTMLButtonElement, targetId: string): Promise<void> {
+  async function handleFollowClick(btn: HTMLButtonElement, targetId: string, username: string): Promise<void> {
+    if (followStatusValue === "accepted") {
+      const confirmed = await confirmDialog(`¿Estás seguro de que querés dejar de seguir a @${username}?`, {
+        confirmLabel: "Dejar de seguir",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     btn.disabled = true;
     if (followStatusValue === "none" || followStatusValue == null) {
       const { status, error } = await followUser(viewerId, targetId);
@@ -217,7 +224,7 @@ export async function mountPostDetail(container: HTMLElement, postId: string, op
       });
     }
 
-    followBtn.addEventListener("click", () => void handleFollowClick(followBtn, author.id));
+    followBtn.addEventListener("click", () => void handleFollowClick(followBtn, author.id, author.username));
   }
 
   // -----------------------------------------------------------------------

@@ -28,6 +28,7 @@ import { setRoutinePublic, deleteRoutine } from "../services/routine.service";
 import { hasMyExercises } from "../services/exercise.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
+import { confirmDialog } from "../lib/confirmDialog";
 import { getOrCreateConversation } from "../services/chat.service";
 import {
   getSubscriptionStatus,
@@ -399,7 +400,7 @@ function followButtonLabel(status: FollowStatus): string {
   return "+ Seguir";
 }
 
-function initFollowButton(targetId: string, initialStatus: FollowStatus) {
+function initFollowButton(targetId: string, initialStatus: FollowStatus, username: string) {
   const btn = document.getElementById("followBtn") as HTMLButtonElement | null;
   if (!btn || !myId) return;
   let status: FollowStatus = initialStatus;
@@ -412,6 +413,13 @@ function initFollowButton(targetId: string, initialStatus: FollowStatus) {
   paint();
 
   btn.addEventListener("click", async () => {
+    if (status === "accepted") {
+      const confirmed = await confirmDialog(`¿Estás seguro de que querés dejar de seguir a @${username}?`, {
+        confirmLabel: "Dejar de seguir",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     btn.disabled = true;
     try {
       if (status === "none") {
@@ -602,7 +610,7 @@ async function renderProfileActions(
   `;
   if (showMessageBtn) initMessageButton(targetId);
   else initShare(username, "shareBtn");
-  if (showFollowBtn) initFollowButton(targetId, followStatus);
+  if (showFollowBtn) initFollowButton(targetId, followStatus, username);
   if (showSubscribeBtn) initSubscribeButton(targetId, subscriptionStatus);
   if (showSocioBtn) initSocioButton(targetId, socioStatus);
   return followStatus;
