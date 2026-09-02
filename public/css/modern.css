@@ -7638,6 +7638,13 @@ body.feed-page .site-footer { display: none; }
   body.feed-page:not(.has-app-banner) .features { padding-top: calc(var(--header-h) + 24px); }
   body.profile-page:not(.has-app-banner) .profile-hero { padding-top: calc(var(--header-h) + 52px); }
 
+  /* El indicador de pull-to-refresh del perfil (primer hijo del container de la vista, arriba
+     de todo) queda sin la compensacion del header fijo que si tienen .profile-hero / .app-banner
+     -- sin esto el spinner nace tapado atras del header. Con app-banner el banner ya empuja el
+     container hacia abajo, asi que solo hace falta correrlo cuando NO hay banner. position/top
+     en vez de margin: la altura del indicador colapsado es 0, no debe dejar hueco permanente. */
+  body.profile-page:not(.has-app-banner) #profilePullRefresh { position: relative; top: var(--header-h); }
+
   /* En mobile no se escribe un Rep inline arriba del feed -- el boton "+" flotante abre el
      mismo composer adentro de un modal (ver openComposerModal en feed.ts). Escondido por
      ancestro (".feed-main") y no por clase propia: al tocar el boton, feed.ts reinserta este
