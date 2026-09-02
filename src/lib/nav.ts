@@ -365,6 +365,39 @@ function tryWakeRecovery(): boolean {
   return true;
 }
 
+/**
+ * Un gimnasio sin aprobar (user_type='gimnasio' + is_verified=false) solo puede estar en
+ * gym-pending.html: ahí carga su documentación y ve sus notificaciones, nada más -- ni feed, ni
+ * buscador, ni perfiles ajenos. Cualquier otra pantalla lo redirige a ese gate. Devuelve true si
+ * redirigió (el llamador tiene que colgar y no seguir resolviendo). "No es un gimnasio gateado"
+ * se cachea por sesión para no pegarle a la DB en cada carga del resto de los usuarios; un
+ * gimnasio gateado nunca llega a cachear (siempre re-consulta), así que apenas lo aprueban
+ * la primera navegación ya lo deja pasar.
+ */
+async function enforceGymApprovalGate(userId: string): Promise<boolean> {
+  if (location.pathname.endsWith("/gym-pending.html")) return false;
+  try {
+    if (sessionStorage.getItem(`gymgate:${userId}`) === "ok") return false;
+  } catch {
+    // ignore
+  }
+  const { data } = await supabase
+    .from("profiles_public")
+    .select("user_type, is_verified")
+    .eq("id", userId)
+    .maybeSingle();
+  if (data?.user_type === "gimnasio" && !data.is_verified) {
+    window.location.href = "/pages/gym-pending.html";
+    return true;
+  }
+  try {
+    sessionStorage.setItem(`gymgate:${userId}`, "ok");
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 /** Para paginas que requieren sesion iniciada: devuelve el user id o redirige a login.html. */
 export async function requireAuth(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -393,6 +426,10 @@ export async function requireAuth(): Promise<string> {
   // Sesion OK: limpiar las marcas de wake/bounce para que un wake posterior tenga su reintento.
   clearAuthWakeMarkers();
 
+  if (await enforceGymApprovalGate(userId)) {
+    return new Promise<string>(() => {}); // redirigiendo al gate de gimnasio; no seguir
+  }
+
   // Heartbeat simple de "última conexión": una vez por carga de página autenticada.
   void touchLastSeen();
   trackPresence(userId);
@@ -400,11 +437,15 @@ export async function requireAuth(): Promise<string> {
 }
 
 /** Para paginas que aceptan visitantes anonimos (ej. perfil publico): devuelve el user id si
- * hay sesion, o null si no -- a diferencia de requireAuth(), nunca redirige. */
+ * hay sesion, o null si no -- a diferencia de requireAuth(), nunca redirige (salvo el gate de
+ * un gimnasio sin aprobar, que no puede ver nada de la app). */
 export async function getOptionalAuth(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   const userId = data.session?.user.id ?? null;
   if (userId) {
+    if (await enforceGymApprovalGate(userId)) {
+      return new Promise<string | null>(() => {}); // redirigiendo al gate de gimnasio
+    }
     void touchLastSeen();
     trackPresence(userId);
   }

@@ -349,6 +349,24 @@ function renderProfileLinks(links: ProfileLink[]) {
     .join("");
 }
 
+/** Solo perfiles de gimnasio: dirección + botón "Cómo llegar" si cargó el link de Maps. */
+function renderProfileAddress(
+  address: string | null | undefined,
+  mapsUrl: string | null | undefined,
+  userType: Profile["user_type"] | null
+) {
+  const el = document.getElementById("profileAddress");
+  if (!el) return;
+  const value = userType === "gimnasio" && address ? address.trim() : "";
+  // hidden en vez de remove(): puede pintarse dos veces (cache local + dato real).
+  el.hidden = !value;
+  if (!value) return;
+  const mapsBtn = mapsUrl
+    ? ` <a class="profile-address-maps" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">Cómo llegar</a>`
+    : "";
+  el.innerHTML = `<svg class="profile-address-pin" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg><span>${escapeHtml(value)}</span>${mapsBtn}`;
+}
+
 /** Solo aplica a perfiles de gimnasio -- el resto de user_types no tiene business_hours cargado. */
 function renderProfileBusinessHours(raw: Profile["business_hours"], userType: Profile["user_type"] | null) {
   const el = document.getElementById("profileBusinessHours");
@@ -989,6 +1007,23 @@ function confirmBlockModal(targetId: string, username: string) {
 }
 
 // ---------- Perfil privado (visitante sin acceso completo) ----------
+
+function renderInactiveGymNotice(nombre: string) {
+  document.getElementById("quickActionsSection")?.remove();
+  document.getElementById("rutinas")?.remove();
+
+  const statsSection = document.getElementById("statsSection");
+  const container = statsSection?.querySelector(".container");
+  if (container) {
+    container.innerHTML = `
+      <div class="empty-state reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 21V7l6-4 6 4v14M10 9h4M10 13h4M10 17h4"/></svg></div>
+        <h3>Este gimnasio todavía no está activo</h3>
+        <p>${escapeHtml(nombre)} está pendiente de aprobación por el equipo de Gym Social.</p>
+      </div>
+    `;
+  }
+}
 
 function renderPrivateNotice(nombre: string) {
   document.getElementById("quickActionsSection")?.remove();
@@ -2570,6 +2605,7 @@ function paintCachedProfile(cached: ProfileBasic): void {
   if (avatarImg && cached.avatar_url) avatarImg.src = cached.avatar_url;
   renderProfileBio(cached.bio ?? null);
   renderProfileLinks(parseProfileLinks(cached.links ?? []));
+  renderProfileAddress(cached.address, cached.maps_url, cached.user_type ?? null);
   renderProfileBusinessHours(cached.business_hours, cached.user_type ?? null);
 }
 
@@ -2615,6 +2651,8 @@ async function main(ctx: ViewContext) {
     avatar_url: displayProfile.avatar_url,
     bio: displayProfile.bio,
     links: displayProfile.links,
+    address: displayProfile.address,
+    maps_url: displayProfile.maps_url,
     business_hours: displayProfile.business_hours,
     nacionalidad: displayProfile.nacionalidad,
     fecha_nacimiento: displayProfile.fecha_nacimiento,
@@ -2627,6 +2665,22 @@ async function main(ctx: ViewContext) {
 
   const isOwner = displayProfile.id === myId;
   const nombre = displayProfile.nombre ?? "Este usuario";
+
+  // Un gimnasio sin aprobar todavía no tiene página pública (ver gym-pending.html). Para
+  // cualquiera que no sea el dueño, avisar en vez de mostrar un perfil vacío. El dueño nunca
+  // llega acá: requireAuth/getOptionalAuth lo redirigen al gate.
+  if (displayProfile.user_type === "gimnasio" && !(displayProfile.is_verified ?? false) && !isOwner) {
+    renderProfileIdentity(displayProfile.username ?? "", nombre, "", "gimnasio", false);
+    document.getElementById("avatarEditWrap")?.remove();
+    document.getElementById("profileMenuWrap")?.remove();
+    document.getElementById("profileStats")?.remove();
+    document.getElementById("profileBio")?.remove();
+    document.getElementById("profileLinks")?.remove();
+    document.getElementById("profileBusinessHours")?.remove();
+    document.getElementById("profileTrabajaEn")?.remove();
+    renderInactiveGymNotice(nombre);
+    return;
+  }
 
   // Señal para el algoritmo del feed (get_personalized_feed): perfiles que
   // visitaste le dan un pequeño boost a ese autor. Nunca debe romper la carga
@@ -2661,6 +2715,7 @@ async function main(ctx: ViewContext) {
   if (isPrivateForViewer) {
     renderProfileBio(displayProfile.bio ?? null);
     document.getElementById("profileLinks")?.remove();
+    document.getElementById("profileAddress")?.remove();
     document.getElementById("profileBusinessHours")?.remove();
     document.getElementById("profileTrabajaEn")?.remove();
     renderPrivateNotice(nombre);
@@ -2669,6 +2724,7 @@ async function main(ctx: ViewContext) {
 
   renderProfileBio(displayProfile.bio ?? null);
   renderProfileLinks(parseProfileLinks(displayProfile.links ?? []));
+  renderProfileAddress(displayProfile.address, displayProfile.maps_url, displayProfile.user_type ?? null);
   renderProfileBusinessHours(displayProfile.business_hours, displayProfile.user_type ?? null);
   void renderProfileTrabajaEn(displayProfile.id!, displayProfile.user_type ?? null);
 
@@ -2757,6 +2813,7 @@ const VIEW_MARKUP = `
           <div class="profile-stats" id="profileStats"></div>
           <p class="profile-bio profile-bio-clamped" id="profileBio"></p>
           <div class="profile-links" id="profileLinks"></div>
+          <p class="profile-address" id="profileAddress" hidden></p>
           <div class="profile-business-hours" id="profileBusinessHours" hidden></div>
           <p class="profile-trabaja-en" id="profileTrabajaEn" hidden></p>
         </div>

@@ -69,6 +69,8 @@ export async function updateProfileFields(
       | "genero"
       | "provincia"
       | "ciudad"
+      | "address"
+      | "maps_url"
       | "is_public"
       | "bio"
       | "links"

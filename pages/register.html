@@ -46,7 +46,16 @@
         <div id="loaderBody"></div>
 
         <form id="myForm" novalidate>
-          <div class="field-row">
+          <div class="field role-select-field">
+            <label>¿Cómo te querés registrar?</label>
+            <div class="exc-pick-chips" id="roleChips">
+              <button type="button" class="exc-pick-chip active" data-role="usuario">Usuario</button>
+              <button type="button" class="exc-pick-chip" data-role="entrenador">Entrenador</button>
+              <button type="button" class="exc-pick-chip" data-role="gimnasio">Gimnasio</button>
+            </div>
+          </div>
+
+          <div class="field-row" id="nameSurnRow">
             <div class="field">
               <label for="name">Nombre</label>
               <input type="text" id="name" name="name" placeholder="Tu nombre" autocomplete="given-name">
@@ -55,6 +64,11 @@
               <label for="surn">Apellido</label>
               <input type="text" id="surn" name="surn" placeholder="Tu apellido" autocomplete="family-name">
             </div>
+          </div>
+
+          <div class="field" id="gymNameField" hidden>
+            <label for="gymName">Nombre del gimnasio</label>
+            <input type="text" id="gymName" name="gymName" placeholder="Ej: Iron House Gym" autocomplete="organization" maxlength="80">
           </div>
 
           <div class="field">
@@ -69,7 +83,7 @@
           </div>
 
           <div class="field-row">
-            <div class="field">
+            <div class="field" id="birthdateField">
               <label for="birthdateDay">Fecha de nacimiento</label>
               <div id="birthdateFieldWrap"></div>
             </div>
@@ -80,7 +94,7 @@
           </div>
 
           <div class="field-row">
-            <div class="field">
+            <div class="field" id="generoField">
               <label for="genero">Género</label>
               <select id="genero" name="genero">
                 <option value="">Elegí una opción</option>
@@ -123,16 +137,12 @@
             </div>
           </div>
 
-          <div class="field role-select-field">
-            <label>¿Cómo te querés registrar?</label>
-            <div class="exc-pick-chips" id="roleChips">
-              <button type="button" class="exc-pick-chip active" data-role="usuario">Usuario</button>
-              <button type="button" class="exc-pick-chip" data-role="entrenador">Entrenador</button>
-            </div>
-          </div>
-
           <p class="field-hint trainer-fields-hint" id="trainerFields" hidden>
             Vas a tener todos los beneficios de entrenador apenas te registres. Si querés el tick verde de "entrenador certificado", una vez que confirmes tu cuenta vas a poder subir tu documentación desde Configuración → Verificación.
+          </p>
+
+          <p class="field-hint trainer-fields-hint" id="gymFields" hidden>
+            Para dar de alta tu gimnasio, GymSocial tiene que aprobarlo. Creá la cuenta, confirmá tu mail e ingresá: ahí te vamos a pedir la documentación que certifique que sos un gimnasio registrado. Más adelante podemos solicitarte papeles adicionales. Hasta que te aprobemos, tu página de gimnasio no está activa.
           </p>
 
           <div class="field-check">

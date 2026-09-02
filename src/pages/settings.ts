@@ -139,7 +139,9 @@ export const settingsView: ViewModule = {
       const verificationTabBtn = container.querySelector("#verificationTabBtn") as HTMLButtonElement | null;
       if (!tabsWrap) return;
 
-      if (verificationTabBtn && (profile!.user_type === "entrenador" || profile!.user_type === "gimnasio")) {
+      // Gimnasio: la documentación / estado de alta se gestiona en gym-pending.html (flujo con
+      // ubicación + redes), no en esta pestaña -- acá queda solo para entrenador.
+      if (verificationTabBtn && profile!.user_type === "entrenador") {
         verificationTabBtn.hidden = false;
       }
 
@@ -184,35 +186,49 @@ export const settingsView: ViewModule = {
     function renderEditTab(): void {
       const editTab = container.querySelector("#editTab")!;
       const initialLinks = parseProfileLinks(profile!.links);
+      const isGym = profile!.user_type === "gimnasio";
 
       editTab.innerHTML = `
         <div class="chart-card reveal">
+          ${
+            isGym
+              ? `<div class="field"><label for="editNombre">Nombre del gimnasio</label><input type="text" id="editNombre" maxlength="80" value="${escapeHtml(profile!.nombre)}"></div>
+                 <input type="hidden" id="editApellido" value="${escapeHtml(profile!.apellido)}">`
+              : `<div class="field-row">
+                   <div class="field"><label for="editNombre">Nombre</label><input type="text" id="editNombre" value="${escapeHtml(profile!.nombre)}"></div>
+                   <div class="field"><label for="editApellido">Apellido</label><input type="text" id="editApellido" value="${escapeHtml(profile!.apellido)}"></div>
+                 </div>`
+          }
           <div class="field-row">
-            <div class="field"><label for="editNombre">Nombre</label><input type="text" id="editNombre" value="${escapeHtml(profile!.nombre)}"></div>
-            <div class="field"><label for="editApellido">Apellido</label><input type="text" id="editApellido" value="${escapeHtml(profile!.apellido)}"></div>
-          </div>
-          <div class="field-row">
+            ${
+              isGym
+                ? `<input type="hidden" id="editBirthdate" value="${escapeHtml(profile!.fecha_nacimiento)}">`
+                : `<div class="field">
+                     <label for="editBirthdateDay">Fecha de nacimiento</label>
+                     ${birthdateFieldHtml(EDIT_BIRTHDATE_IDS, profile!.fecha_nacimiento)}
+                   </div>`
+            }
             <div class="field">
-              <label for="editBirthdateDay">Fecha de nacimiento</label>
-              ${birthdateFieldHtml(EDIT_BIRTHDATE_IDS, profile!.fecha_nacimiento)}
-            </div>
-            <div class="field">
-              <label for="editNationality">Nacionalidad</label>
+              <label for="editNationality">${isGym ? "País" : "Nacionalidad"}</label>
               <select id="editNationality">
                 ${COUNTRIES.map((c) => `<option value="${escapeHtml(c)}" ${c === profile!.nacionalidad ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}
               </select>
             </div>
           </div>
           <div class="field-row">
-            <div class="field">
-              <label for="editGenero">Género</label>
-              <select id="editGenero">
-                <option value="" ${!profile!.genero ? "selected" : ""}>Elegí una opción</option>
-                <option value="hombre" ${profile!.genero === "hombre" ? "selected" : ""}>Hombre</option>
-                <option value="mujer" ${profile!.genero === "mujer" ? "selected" : ""}>Mujer</option>
-                <option value="otro" ${profile!.genero === "otro" ? "selected" : ""}>Otro</option>
-              </select>
-            </div>
+            ${
+              isGym
+                ? `<input type="hidden" id="editGenero" value="">`
+                : `<div class="field">
+                     <label for="editGenero">Género</label>
+                     <select id="editGenero">
+                       <option value="" ${!profile!.genero ? "selected" : ""}>Elegí una opción</option>
+                       <option value="hombre" ${profile!.genero === "hombre" ? "selected" : ""}>Hombre</option>
+                       <option value="mujer" ${profile!.genero === "mujer" ? "selected" : ""}>Mujer</option>
+                       <option value="otro" ${profile!.genero === "otro" ? "selected" : ""}>Otro</option>
+                     </select>
+                   </div>`
+            }
             <div class="field">
               <label for="editProvincia">Provincia</label>
               <input type="text" id="editProvincia" placeholder="Ej: Tucumán" value="${escapeHtml(profile!.provincia ?? "")}">
@@ -222,6 +238,18 @@ export const settingsView: ViewModule = {
             <label for="editCiudad">Ciudad (opcional)</label>
             <input type="text" id="editCiudad" placeholder="Ej: San Miguel de Tucumán" value="${escapeHtml(profile!.ciudad ?? "")}">
           </div>
+          ${
+            isGym
+              ? `<div class="field">
+                   <label for="editAddress">Ubicación</label>
+                   <input type="text" id="editAddress" maxlength="300" placeholder="Calle, número, ciudad, provincia" value="${escapeHtml(profile!.address ?? "")}">
+                 </div>
+                 <div class="field">
+                   <label for="editMapsUrl">Link de Google Maps (opcional)</label>
+                   <input type="text" id="editMapsUrl" maxlength="500" placeholder="https://maps.google.com/..." value="${escapeHtml(profile!.maps_url ?? "")}">
+                 </div>`
+              : ""
+          }
           <div class="field">
             <label for="editBio">Biografía</label>
             <textarea id="editBio" rows="3" maxlength="${MAX_BIO_LENGTH}">${escapeHtml(profile!.bio ?? "")}</textarea>
@@ -259,7 +287,7 @@ export const settingsView: ViewModule = {
         </div>
       `;
 
-      setupBirthdatePicker(EDIT_BIRTHDATE_IDS);
+      if (!isGym) setupBirthdatePicker(EDIT_BIRTHDATE_IDS);
 
       const bioField = container.querySelector("#editBio") as HTMLTextAreaElement;
       const bioCounter = container.querySelector("#bioCounter")!;
@@ -398,18 +426,31 @@ export const settingsView: ViewModule = {
         const provincia = (container.querySelector("#editProvincia") as HTMLInputElement).value.trim();
         const ciudad = (container.querySelector("#editCiudad") as HTMLInputElement).value.trim();
         const bio = bioField.value.trim();
+        const address = ((container.querySelector("#editAddress") as HTMLInputElement | null)?.value ?? "").trim();
+        let mapsUrl = ((container.querySelector("#editMapsUrl") as HTMLInputElement | null)?.value ?? "").trim();
 
         if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
-          alertBox.innerHTML = "<p>Ingresaste un nombre inválido.</p>";
+          alertBox.innerHTML = `<p>Ingresaste un ${isGym ? "nombre de gimnasio" : "nombre"} inválido.</p>`;
           return;
         }
-        if (apellido.length < 2 || !Number.isNaN(Number(apellido))) {
-          alertBox.innerHTML = "<p>Ingresaste un apellido inválido.</p>";
-          return;
+        if (!isGym) {
+          if (apellido.length < 2 || !Number.isNaN(Number(apellido))) {
+            alertBox.innerHTML = "<p>Ingresaste un apellido inválido.</p>";
+            return;
+          }
+          if (!fechaNacimiento || calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
+            alertBox.innerHTML = "<p>Ingresá una fecha de nacimiento válida.</p>";
+            return;
+          }
         }
-        if (!fechaNacimiento || calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
-          alertBox.innerHTML = "<p>Ingresá una fecha de nacimiento válida.</p>";
-          return;
+        if (mapsUrl) {
+          if (!/^https?:\/\//i.test(mapsUrl)) mapsUrl = `https://${mapsUrl}`;
+          try {
+            new URL(mapsUrl);
+          } catch {
+            alertBox.innerHTML = "<p>El link de Google Maps no es válido.</p>";
+            return;
+          }
         }
 
         const newLinks: ProfileLink[] = [];
@@ -440,6 +481,14 @@ export const settingsView: ViewModule = {
           }
         }
 
+        const gymExtra = isGym
+          ? {
+              business_hours: serializeBusinessHours(businessHours) as unknown as Profile["business_hours"],
+              address: address || null,
+              maps_url: mapsUrl || null,
+            }
+          : {};
+
         const { error } = await updateProfileFields(userId, {
           nombre,
           apellido,
@@ -450,7 +499,7 @@ export const settingsView: ViewModule = {
           ciudad: ciudad || null,
           bio: bio || null,
           links: newLinks as unknown as Profile["links"],
-          ...(profile!.user_type === "gimnasio" ? { business_hours: serializeBusinessHours(businessHours) as unknown as Profile["business_hours"] } : {}),
+          ...gymExtra,
         });
         if (error) {
           alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
@@ -467,7 +516,7 @@ export const settingsView: ViewModule = {
           ciudad: ciudad || null,
           bio: bio || null,
           links: newLinks,
-          ...(profile!.user_type === "gimnasio" ? { business_hours: serializeBusinessHours(businessHours) } : {}),
+          ...(isGym ? { business_hours: serializeBusinessHours(businessHours), address: address || null, maps_url: mapsUrl || null } : {}),
         });
         showSavedAnimation();
       });
