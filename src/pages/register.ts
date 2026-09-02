@@ -29,16 +29,34 @@ if (birthdateWrap) {
   setupBirthdatePicker(BIRTHDATE_IDS);
 }
 
-let selectedRole: "usuario" | "entrenador" = "usuario";
+type Role = "usuario" | "entrenador" | "gimnasio";
+let selectedRole: Role = "usuario";
 const roleChips = document.getElementById("roleChips");
 const trainerFields = document.getElementById("trainerFields") as HTMLElement | null;
+const gymFields = document.getElementById("gymFields") as HTMLElement | null;
+
+// Campos que un gimnasio no completa (nombre/apellido -> nombre del gym; sin fecha de nacimiento ni género).
+const nameSurnRow = document.getElementById("nameSurnRow") as HTMLElement | null;
+const gymNameField = document.getElementById("gymNameField") as HTMLElement | null;
+const birthdateField = document.getElementById("birthdateField") as HTMLElement | null;
+const generoField = document.getElementById("generoField") as HTMLElement | null;
+
+function applyRoleUI(): void {
+  const isGym = selectedRole === "gimnasio";
+  if (nameSurnRow) nameSurnRow.hidden = isGym;
+  if (gymNameField) gymNameField.hidden = !isGym;
+  if (birthdateField) birthdateField.hidden = isGym;
+  if (generoField) generoField.hidden = isGym;
+  if (trainerFields) trainerFields.hidden = selectedRole !== "entrenador";
+  if (gymFields) gymFields.hidden = !isGym;
+}
 
 roleChips?.addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
   if (!btn) return;
-  selectedRole = btn.dataset.role as "usuario" | "entrenador";
+  selectedRole = btn.dataset.role as Role;
   roleChips.querySelectorAll<HTMLButtonElement>(".exc-pick-chip").forEach((b) => b.classList.toggle("active", b === btn));
-  if (trainerFields) trainerFields.hidden = selectedRole !== "entrenador";
+  applyRoleUI();
 });
 
 function openAccountTypeHelp(): void {
@@ -59,7 +77,7 @@ function openAccountTypeHelp(): void {
           </div>
           <div class="help-item">
             <strong>Gimnasio</strong>
-            <p>Es la más completa: tiene entrenadores y miembros propios, los entrenadores hacen seguimiento de los miembros, y los miembros acceden a las rutinas del gimnasio, se anotan a clases, ven la ocupación en vivo, qué máquinas se usan más y la reputación de los entrenadores. Por ahora este rol lo asigna un admin — escribinos desde <a href="contact.html" target="_blank" rel="noopener">Contacto</a> si tenés un gimnasio.</p>
+            <p>Es la más completa: tiene entrenadores y socios propios, los entrenadores hacen seguimiento de los socios, y los socios acceden a las rutinas del gimnasio, se anotan a clases y ven la reputación de los entrenadores. El alta la aprueba el equipo de Gym Social: te vamos a pedir documentación que certifique que sos un gimnasio registrado antes de activar tu página.</p>
           </div>
         </div>
         <div class="modal-actions"><button class="btn btn-outline" id="closeAccountTypeHelp">Entendido</button></div>
@@ -93,13 +111,16 @@ usernameInput?.addEventListener("input", () => {
   if (usernameSuggestion) usernameSuggestion.hidden = true;
 });
 
+const gymNameInput = document.getElementById("gymName") as HTMLInputElement | null;
+
 function scheduleUsernameSuggestion(): void {
   if (usernameTouched || !usernameSuggestion) return;
   if (suggestionTimer) clearTimeout(suggestionTimer);
   suggestionTimer = setTimeout(async () => {
-    const nombre = nameInput?.value.trim() ?? "";
-    const apellido = surnInput?.value.trim() ?? "";
-    if (nombre.length < 2 || apellido.length < 2) {
+    const isGym = selectedRole === "gimnasio";
+    const nombre = isGym ? (gymNameInput?.value.trim() ?? "") : (nameInput?.value.trim() ?? "");
+    const apellido = isGym ? "" : (surnInput?.value.trim() ?? "");
+    if (nombre.length < 2 || (!isGym && apellido.length < 2)) {
       usernameSuggestion.hidden = true;
       return;
     }
@@ -121,25 +142,34 @@ function scheduleUsernameSuggestion(): void {
 
 nameInput?.addEventListener("input", scheduleUsernameSuggestion);
 surnInput?.addEventListener("input", scheduleUsernameSuggestion);
+gymNameInput?.addEventListener("input", scheduleUsernameSuggestion);
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (alertMessage) alertMessage.innerHTML = "";
 
-  const nombre = (document.getElementById("name") as HTMLInputElement).value.trim();
-  const apellido = (document.getElementById("surn") as HTMLInputElement).value.trim();
+  const isGym = selectedRole === "gimnasio";
+
+  const gymName = (document.getElementById("gymName") as HTMLInputElement).value.trim();
+  const nombre = isGym ? gymName : (document.getElementById("name") as HTMLInputElement).value.trim();
+  const apellido = isGym ? "" : (document.getElementById("surn") as HTMLInputElement).value.trim();
   const username = normalizeUsername((document.getElementById("username") as HTMLInputElement).value);
   const mail = (document.getElementById("mail") as HTMLInputElement).value.trim();
-  const fechaNacimiento = (document.getElementById("birthdate") as HTMLInputElement).value;
+  const fechaNacimiento = isGym ? "" : (document.getElementById("birthdate") as HTMLInputElement).value;
   const nacionalidad = (document.getElementById("nationality") as HTMLSelectElement).value;
-  const genero = (document.getElementById("genero") as HTMLSelectElement).value as "hombre" | "mujer" | "otro" | "";
+  const genero = isGym ? "" : ((document.getElementById("genero") as HTMLSelectElement).value as "hombre" | "mujer" | "otro" | "");
   const provincia = (document.getElementById("provincia") as HTMLInputElement).value.trim();
   const ciudad = (document.getElementById("ciudad") as HTMLInputElement).value.trim();
   const pass = (document.getElementById("pass") as HTMLInputElement).value;
   const pass2 = (document.getElementById("pass2") as HTMLInputElement).value;
   const terms = (document.getElementById("terms") as HTMLInputElement).checked;
 
-  if (nombre.length < 2 || !Number.isNaN(Number(nombre)) || apellido.length < 2 || !Number.isNaN(Number(apellido))) {
+  if (isGym) {
+    if (nombre.length < 2 || !Number.isNaN(Number(nombre))) {
+      showError("ERROR! Ingresá el nombre del gimnasio.");
+      return;
+    }
+  } else if (nombre.length < 2 || !Number.isNaN(Number(nombre)) || apellido.length < 2 || !Number.isNaN(Number(apellido))) {
     showError("ERROR! Nombre o apellido inválidos.");
     return;
   }
@@ -155,7 +185,7 @@ form?.addEventListener("submit", async (event) => {
     showError("ERROR! Contraseñas no coinciden o muy corta (mínimo 8 caracteres).");
     return;
   }
-  if (!fechaNacimiento || Number.isNaN(Date.parse(fechaNacimiento)) || calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100) {
+  if (!isGym && (!fechaNacimiento || Number.isNaN(Date.parse(fechaNacimiento)) || calcularEdad(fechaNacimiento) < 12 || calcularEdad(fechaNacimiento) > 100)) {
     showError("ERROR! Ingresá una fecha de nacimiento válida (entre 12 y 100 años).");
     return;
   }
@@ -163,7 +193,7 @@ form?.addEventListener("submit", async (event) => {
     showError("ERROR! Elegí tu nacionalidad.");
     return;
   }
-  if (!genero) {
+  if (!isGym && !genero) {
     showError("ERROR! Elegí tu género.");
     return;
   }
@@ -216,9 +246,11 @@ form?.addEventListener("submit", async (event) => {
 
   const successMessage = sessionData.session
     ? "¡Usuario registrado con éxito! Espera, serás redirigido."
-    : selectedRole === "entrenador"
-      ? "¡Cuenta creada! Revisá tu mail para confirmar la cuenta. Una vez que ingreses, subí tu documentación desde Configuración > Verificación para tener el tick verde."
-      : "¡Cuenta creada! Revisá tu mail para confirmar la cuenta antes de ingresar.";
+    : selectedRole === "gimnasio"
+      ? "¡Cuenta creada! Revisá tu mail para confirmar la cuenta. Cuando ingreses te vamos a pedir la documentación de tu gimnasio para que el equipo de Gym Social lo apruebe."
+      : selectedRole === "entrenador"
+        ? "¡Cuenta creada! Revisá tu mail para confirmar la cuenta. Una vez que ingreses, subí tu documentación desde Configuración > Verificación para tener el tick verde."
+        : "¡Cuenta creada! Revisá tu mail para confirmar la cuenta antes de ingresar.";
 
   if (loaderBody) {
     loaderBody.innerHTML = `

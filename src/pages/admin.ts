@@ -1976,6 +1976,12 @@ export const adminView: ViewModule = {
                     ? `<p class="roadmap-task-desc"><strong>Títulos:</strong> ${r.credentials.map((c) => escapeHtml(formatCredentialLabel(c))).join(" · ")}</p>`
                     : ""
                 }
+                ${
+                  r.gym_details
+                    ? `<p class="roadmap-task-desc"><strong>Gimnasio:</strong> ${escapeHtml(r.gym_details.gymName || r.applicantName)}</p>
+                       <p class="roadmap-task-desc"><strong>Ubicación:</strong> ${escapeHtml(r.gym_details.location || "—")}</p>`
+                    : ""
+                }
                 <p class="roadmap-task-desc"><strong>Fotos:</strong> ${(r.documents as string[]).length}</p>
                 <p class="roadmap-task-desc"><strong>Estado:</strong> ${VALIDATION_STATUS_LABELS[r.status] ?? r.status}</p>
                 <p class="roadmap-task-desc"><strong>Enviada:</strong> ${formatDateTime(r.created_at)}</p>
@@ -2011,9 +2017,20 @@ export const adminView: ViewModule = {
             <h2>${escapeHtml(row.applicantName)}</h2>
             <p class="subtitle">@${escapeHtml(row.applicantUsername)} · ${escapeHtml(row.applicantEmail)}</p>
             ${
-              row.credentials.length
-                ? `<div class="help-list">${row.credentials.map((c) => `<div class="help-item"><strong>${escapeHtml(formatCredentialLabel(c))}</strong></div>`).join("")}</div>`
-                : `<p class="chart-sub">No cargó ningún título.</p>`
+              row.gym_details
+                ? `<div class="help-list">
+                     <div class="help-item"><strong>Nombre del gimnasio</strong><p>${escapeHtml(row.gym_details.gymName || "—")}</p></div>
+                     <div class="help-item"><strong>Ubicación</strong><p>${escapeHtml(row.gym_details.location || "—")}</p></div>
+                     ${row.gym_details.mapsUrl ? `<div class="help-item"><strong>Google Maps</strong><p><a href="${escapeHtml(row.gym_details.mapsUrl)}" target="_blank" rel="noopener">${escapeHtml(row.gym_details.mapsUrl)}</a></p></div>` : ""}
+                     ${
+                       row.gym_details.socialLinks?.length
+                         ? `<div class="help-item"><strong>Redes</strong><p>${row.gym_details.socialLinks.map((l) => `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a>`).join(" · ")}</p></div>`
+                         : ""
+                     }
+                   </div>`
+                : row.credentials.length
+                  ? `<div class="help-list">${row.credentials.map((c) => `<div class="help-item"><strong>${escapeHtml(formatCredentialLabel(c))}</strong></div>`).join("")}</div>`
+                  : `<p class="chart-sub">No cargó ningún título.</p>`
             }
             <div class="verify-doc-grid" id="validationReviewDocs"><div class="inline-loader"><div class="modern-spinner"></div></div></div>
 
@@ -2061,7 +2078,13 @@ export const adminView: ViewModule = {
                 <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
               </svg>
             </div>
-            <p>${status === "approved" ? `Solicitud aprobada. @${escapeHtml(row.applicantUsername)} ya tiene el tick verde.` : `Solicitud rechazada.`}</p>
+            <p>${
+              status === "approved"
+                ? row.gym_details
+                  ? `Solicitud aprobada. El gimnasio @${escapeHtml(row.applicantUsername)} ya tiene su página activa y el tick verde.`
+                  : `Solicitud aprobada. @${escapeHtml(row.applicantUsername)} ya tiene el tick verde.`
+                : `Solicitud rechazada.`
+            }</p>
           </div>
         `;
 

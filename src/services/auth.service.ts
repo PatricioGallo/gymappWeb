@@ -4,15 +4,18 @@ import { isReservedUsername } from "../lib/reservedUsernames";
 export interface SignUpFields {
   email: string;
   password: string;
+  /** Para un gimnasio: el nombre del gimnasio (apellido va vacío). */
   nombre: string;
   apellido: string;
   username: string;
+  /** Vacío para un gimnasio: el trigger handle_new_user le pone un placeholder válido. */
   fechaNacimiento: string;
   nacionalidad: string;
-  genero: "hombre" | "mujer" | "otro";
+  /** Vacío para un gimnasio. */
+  genero: "hombre" | "mujer" | "otro" | "";
   provincia: string;
   ciudad?: string;
-  userType?: "usuario" | "entrenador";
+  userType?: "usuario" | "entrenador" | "gimnasio";
 }
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;

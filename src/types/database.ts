@@ -1810,6 +1810,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           apellido: string
           avatar_url: string | null
           bio: string | null
@@ -1825,6 +1826,7 @@ export type Database = {
           is_verified: boolean
           last_seen_at: string | null
           links: Json
+          maps_url: string | null
           nacionalidad: string | null
           nombre: string
           notification_prefs: Json
@@ -1841,6 +1843,7 @@ export type Database = {
           zoom_enabled: boolean
         }
         Insert: {
+          address?: string | null
           apellido: string
           avatar_url?: string | null
           bio?: string | null
@@ -1856,6 +1859,7 @@ export type Database = {
           is_verified?: boolean
           last_seen_at?: string | null
           links?: Json
+          maps_url?: string | null
           nacionalidad?: string | null
           nombre: string
           notification_prefs?: Json
@@ -1872,6 +1876,7 @@ export type Database = {
           zoom_enabled?: boolean
         }
         Update: {
+          address?: string | null
           apellido?: string
           avatar_url?: string | null
           bio?: string | null
@@ -1887,6 +1892,7 @@ export type Database = {
           is_verified?: boolean
           last_seen_at?: string | null
           links?: Json
+          maps_url?: string | null
           nacionalidad?: string | null
           nombre?: string
           notification_prefs?: Json
@@ -2555,6 +2561,7 @@ export type Database = {
           created_at: string
           credentials: Json
           documents: Json
+          gym_details: Json | null
           id: string
           reviewed_at: string | null
           reviewed_by: string | null
@@ -2568,6 +2575,7 @@ export type Database = {
           created_at?: string
           credentials?: Json
           documents?: Json
+          gym_details?: Json | null
           id?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -2581,6 +2589,7 @@ export type Database = {
           created_at?: string
           credentials?: Json
           documents?: Json
+          gym_details?: Json | null
           id?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -2691,6 +2700,7 @@ export type Database = {
     Views: {
       profiles_public: {
         Row: {
+          address: string | null
           apellido: string | null
           avatar_url: string | null
           bio: string | null
@@ -2700,6 +2710,7 @@ export type Database = {
           is_public: boolean | null
           is_verified: boolean | null
           links: Json | null
+          maps_url: string | null
           nacionalidad: string | null
           nombre: string | null
           show_stats: boolean | null
@@ -2708,6 +2719,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          address?: string | null
           apellido?: string | null
           avatar_url?: string | null
           bio?: string | null
@@ -2717,6 +2729,7 @@ export type Database = {
           is_public?: boolean | null
           is_verified?: boolean | null
           links?: Json | null
+          maps_url?: string | null
           nacionalidad?: string | null
           nombre?: string | null
           show_stats?: boolean | null
@@ -2725,6 +2738,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          address?: string | null
           apellido?: string | null
           avatar_url?: string | null
           bio?: string | null
@@ -2734,6 +2748,7 @@ export type Database = {
           is_public?: boolean | null
           is_verified?: boolean | null
           links?: Json | null
+          maps_url?: string | null
           nacionalidad?: string | null
           nombre?: string | null
           show_stats?: boolean | null

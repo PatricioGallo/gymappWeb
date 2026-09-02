@@ -1,8 +1,26 @@
 import { supabase } from "../lib/supabaseClient";
 import type { Tables, Json } from "../types/database";
 
-export type VerificationRequest = Omit<Tables<"verification_requests">, "credentials"> & { credentials: Credential[] };
+export type VerificationRequest = Omit<Tables<"verification_requests">, "credentials" | "gym_details"> & {
+  credentials: Credential[];
+  gym_details: GymDetails | null;
+};
 export type ApplicantType = "entrenador" | "gimnasio";
+
+/** Enlace de red social tal cual se guarda en profiles.links (ver parseProfileLinks). */
+export interface GymSocialLink {
+  platform: string;
+  label: string;
+  url: string;
+}
+
+/** Datos que un gimnasio carga en su solicitud de alta (se vuelcan al perfil al aprobar). */
+export interface GymDetails {
+  gymName: string;
+  location: string;
+  mapsUrl: string | null;
+  socialLinks: GymSocialLink[];
+}
 export type CredentialType = "terciario" | "curso" | "universitario" | "otro";
 
 export type CredentialSpecialty =
@@ -137,6 +155,39 @@ export async function resubmitVerificationRequest(id: string, credentials: Crede
     .update({ credentials: credentials as unknown as Json, documents })
     .eq("id", id);
   if (error) return { error: "No se pudo actualizar la solicitud de validación. Probá de nuevo." };
+  return {};
+}
+
+// ---------- Alta de gimnasio ----------
+
+const GYM_REQUEST_ERROR = "No se pudo enviar la solicitud. Revisá que cargaste la ubicación y al menos un documento.";
+
+export async function submitGymVerificationRequest(
+  userId: string,
+  details: GymDetails,
+  documents: string[]
+): Promise<{ error?: string }> {
+  const { error } = await supabase.from("verification_requests").insert({
+    user_id: userId,
+    applicant_type: "gimnasio", // el trigger lo sobrescribe con el user_type real de todos modos
+    credentials: [] as unknown as Json,
+    gym_details: details as unknown as Json,
+    documents,
+  });
+  if (error) return { error: GYM_REQUEST_ERROR };
+  return {};
+}
+
+export async function resubmitGymVerificationRequest(
+  id: string,
+  details: GymDetails,
+  documents: string[]
+): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from("verification_requests")
+    .update({ gym_details: details as unknown as Json, documents })
+    .eq("id", id);
+  if (error) return { error: GYM_REQUEST_ERROR };
   return {};
 }
 

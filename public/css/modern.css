@@ -1787,6 +1787,9 @@ button:focus-visible {
   margin-bottom: 16px;
 }
 
+/* [hidden] pierde contra el display:grid de arriba sin esto (mismo motivo que .alert_message[hidden]). */
+.field-row[hidden], .field[hidden] { display: none; }
+
 .field-row .field { margin-bottom: 0; }
 
 .field-check {
@@ -2778,6 +2781,23 @@ a.profile-stat:hover { color: var(--accent-2); }
 .profile-trabaja-en[hidden] { display: none; }
 .profile-trabaja-en a { color: var(--accent-2); font-weight: 600; text-decoration: none; }
 .profile-trabaja-en a:hover { text-decoration: underline; }
+
+.profile-address { margin: 10px 0 0; font-size: 13px; color: var(--text-muted); display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
+.profile-address[hidden] { display: none; }
+.profile-address-pin { width: 15px; height: 15px; stroke: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
+.profile-address-maps { color: var(--accent-2); font-weight: 600; text-decoration: none; }
+.profile-address-maps:hover { text-decoration: underline; }
+
+/* Alta de gimnasio (gym-pending.html) */
+.gym-pending-card { max-width: 560px; }
+.gym-pending-status { margin: 4px 0 14px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; border: 1px solid var(--border); }
+.gym-pending-status-pending { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4); }
+.gym-pending-status-approved { background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.4); }
+.gym-pending-status-rejected { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.4); }
+.gym-pending-status-note { margin: 6px 0 0; font-size: 13px; }
+.gym-pending-summary { margin: 12px 0; font-size: 13.5px; color: var(--text-muted); }
+.gym-pending-summary p { margin: 3px 0; }
+.gym-pending-summary a { color: var(--accent-2); text-decoration: none; }
 
 .profile-actions { display: flex; gap: 10px; }
 .profile-actions .btn { flex: 1; padding: 11px 20px; font-size: 13.5px; }

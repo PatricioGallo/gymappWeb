@@ -6,17 +6,16 @@ export type BadgeColor = "blue" | "green";
 /**
  * Reglas de la tilde de verificacion:
  * - admin/colaborador: azul, obligatoria (no configurable).
- * - gimnasio: verde, siempre. Las cuentas de gimnasio todavia las crea un admin a mano (no hay
- *   alta propia, ver [[gymappweb-trainer-verification]]), asi que ya estan vetadas por la
- *   plataforma antes de existir -- no tiene sentido pedirles ademas el mismo tramite de
- *   verification_requests que entrenador/usuario. TODO: si en algun momento se habilita el
- *   auto-registro de gimnasios, volver a gatear esto por is_verified como los demas tipos.
+ * - gimnasio: verde, solo si is_verified. Desde que existe el auto-registro de gimnasios
+ *   (ver [[gymappweb-gym-self-registration]]) el alta la aprueba un admin via
+ *   verification_requests, igual que entrenador -- hasta esa aprobacion is_verified es false
+ *   y el gimnasio ni siquiera tiene pagina publica (queda en el gate de gym-pending.html).
  * - entrenador: verde, solo si is_verified (papeleria presentada, ver verification_requests).
  * - usuario: azul, solo si is_verified (cuenta famosa/reconocida, configurable por admin).
  */
 export function getVerifiedBadgeColor(userType: UserType, isVerified: boolean): BadgeColor | null {
   if (userType === "admin" || userType === "colaborador") return "blue";
-  if (userType === "gimnasio") return "green";
+  if (userType === "gimnasio") return isVerified ? "green" : null;
   if (userType === "entrenador") return isVerified ? "green" : null;
   if (userType === "usuario") return isVerified ? "blue" : null;
   return null;
@@ -24,14 +23,14 @@ export function getVerifiedBadgeColor(userType: UserType, isVerified: boolean): 
 
 /**
  * Etiqueta minimalista de rol para debajo del nombre en el perfil.
- * admin/colaborador: rol tal cual. gimnasio: siempre "Gimnasio verificado" (ver nota arriba).
+ * admin/colaborador: rol tal cual. gimnasio: "Gimnasio verificado" con tilde verde, si no "Gimnasio".
  * entrenador: "Entrenador verificado" solo con tilde verde. usuario: nada, salvo "Cuenta oficial"
  * si tiene tilde azul.
  */
 export function getUserTypeLabel(userType: UserType, isVerified: boolean): string | null {
   if (userType === "admin") return "Administrador";
   if (userType === "colaborador") return "Colaborador";
-  if (userType === "gimnasio") return "Gimnasio verificado";
+  if (userType === "gimnasio") return isVerified ? "Gimnasio verificado" : "Gimnasio";
   if (userType === "entrenador") return isVerified ? "Entrenador verificado" : "Entrenador";
   if (userType === "usuario") return isVerified ? "Cuenta oficial" : null;
   return null;
