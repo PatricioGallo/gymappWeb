@@ -7120,6 +7120,10 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 .media-lightbox-dragging { transition: none; animation: none; }
 
+/* Efímeras (ver openViewOnceAttachment): fondo 100% opaco para que no se vea la
+   conversación por detrás mientras la foto/video está abierto. */
+.media-lightbox-opaque { background: #000; }
+
 @keyframes media-lightbox-slide-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
@@ -7148,6 +7152,16 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 
 .media-lightbox-media.is-zoomed { cursor: grab; }
+
+/* Estado de carga mientras baja una foto/video efímero (ver openViewOnceAttachment): el
+   visor ya se abrió, el media todavía no está. */
+.media-lightbox-spinner { width: 46px; height: 46px; }
+.media-lightbox-msg {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+}
 
 @media (max-width: 859px) {
   .media-lightbox-media-wrap { padding: 0; }

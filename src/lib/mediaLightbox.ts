@@ -3,6 +3,11 @@ import { bindVideoResume, rememberVideoPosition } from "./videoResume";
 
 export type MediaLightboxKind = "image" | "video";
 
+export interface MediaLightboxMedia {
+  url: string;
+  kind: MediaLightboxKind;
+}
+
 function closeOverlay(): void {
   const loaderBody = document.getElementById("loaderBody");
   if (loaderBody) loaderBody.innerHTML = "";
@@ -43,11 +48,18 @@ export interface MediaLightboxController {
 export interface OpenMediaLightboxOptions<T> {
   queue: T[];
   startIndex: number;
-  getMedia: (item: T) => { url: string; kind: MediaLightboxKind };
+  /** Devolvé el media ya resuelto, o una promesa que resuelve a él (o a null si falló) --
+   * en ese caso el visor se abre YA con un spinner y pinta el media recién cuando la promesa
+   * resuelve. Lo usa el chat para las fotos/videos efímeros: la cadena de "marcar visto +
+   * URL firmada + descarga" corre por detrás sin dejar la pantalla en blanco. */
+  getMedia: (item: T) => MediaLightboxMedia | Promise<MediaLightboxMedia | null>;
   /** Opcional: si no se pasa, el visor queda sin pie, solo el media a pantalla completa (uso del chat). */
   renderFooter?: (item: T, footerEl: HTMLElement, controller: MediaLightboxController) => void;
   /** Opcional: se llama al cerrarse el visor (cruz, Escape, fondo, o gesto de deslizar hacia abajo) -- ej. revocar un object URL creado solo para esta vista. */
   onClose?: () => void;
+  /** Opcional: fondo 100% opaco en vez del negro semitransparente por defecto -- lo usa el
+   * chat para las efímeras, así no se ve la conversación por detrás mientras está abierta. */
+  opaque?: boolean;
 }
 
 /**
@@ -57,15 +69,15 @@ export interface OpenMediaLightboxOptions<T> {
  * mas de uno -- estilo Reels/TikTok), mismo zoom (pellizco o doble tap/click). Se cierra
  * con la cruz, Escape, o clickeando el fondo.
  */
-export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void {
+export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): MediaLightboxController | undefined {
   const { queue, getMedia, renderFooter } = options;
   const loaderBody = document.getElementById("loaderBody");
-  if (!loaderBody || queue.length === 0) return;
+  if (!loaderBody || queue.length === 0) return undefined;
 
   const unlockBodyScroll = lockBodyScroll();
 
   loaderBody.innerHTML = `
-    <div class="media-lightbox" id="mediaLightboxOverlay">
+    <div class="media-lightbox${options.opaque ? " media-lightbox-opaque" : ""}" id="mediaLightboxOverlay">
       <button type="button" class="media-lightbox-close" id="mediaLightboxClose" aria-label="Cerrar">✕</button>
       <div class="media-lightbox-media-wrap" id="mediaLightboxMediaWrap"></div>
       ${renderFooter ? `<div class="media-lightbox-footer" id="mediaLightboxFooter"></div>` : ""}
@@ -83,6 +95,11 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
   // reasigna en cada renderMedia y se llama al cerrar / cambiar de item.
   let disposeVideoResume: (() => void) | null = null;
 
+  // URL del media efectivamente pintado (ver paintMedia): se guarda aparte porque getMedia
+  // puede ser async y devolver una promesa -- no se puede volver a llamar en close() para
+  // sacarle la url sin re-disparar el trabajo de atrás.
+  let currentMediaUrl: string | null = null;
+
   let closed = false;
   function close(): void {
     if (closed) return;
@@ -91,7 +108,7 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
     // dejar la ultima posicion hasta ~0.25s vieja, y quien abrio el visor (la
     // tarjeta del feed) va a leer esta marca justo despues via options.onClose.
     const closingVideo = mediaWrap.querySelector("video");
-    if (closingVideo) rememberVideoPosition(getMedia(currentItem).url, closingVideo.currentTime);
+    if (closingVideo && currentMediaUrl) rememberVideoPosition(currentMediaUrl, closingVideo.currentTime);
     disposeVideoResume?.();
     document.removeEventListener("keydown", onKeydown);
     unlockBodyScroll();
@@ -177,10 +194,10 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
 
   mediaWrap.addEventListener("dblclick", (e) => toggleZoomAt(e.clientX, e.clientY));
 
-  function renderMedia(): void {
-    disposeVideoResume?.();
-    disposeVideoResume = null;
-    const { url, kind } = getMedia(currentItem);
+  let renderSeq = 0;
+
+  function paintMedia({ url, kind }: MediaLightboxMedia): void {
+    currentMediaUrl = url;
     mediaWrap.innerHTML =
       kind === "video"
         ? `<video class="media-lightbox-media" src="${escapeHtml(url)}" controls autoplay playsinline></video>`
@@ -197,6 +214,31 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
       // no via una carga de página "de verdad"); .play() de mas no hace nada si ya arrancó.
       video.play().catch(() => {});
     }
+  }
+
+  function renderMedia(): void {
+    disposeVideoResume?.();
+    disposeVideoResume = null;
+    mediaEl = null;
+    currentMediaUrl = null;
+    const result = getMedia(currentItem);
+    if (result instanceof Promise) {
+      const seq = ++renderSeq;
+      mediaWrap.innerHTML = `<div class="modern-spinner media-lightbox-spinner" role="status" aria-label="Cargando"></div>`;
+      void result.then(
+        (media) => {
+          if (seq !== renderSeq || closed) return;
+          if (media) paintMedia(media);
+          else mediaWrap.innerHTML = `<p class="media-lightbox-msg">No se pudo cargar el contenido.</p>`;
+        },
+        () => {
+          if (seq !== renderSeq || closed) return;
+          mediaWrap.innerHTML = `<p class="media-lightbox-msg">No se pudo cargar el contenido.</p>`;
+        }
+      );
+      return;
+    }
+    paintMedia(result);
   }
 
   function callRenderFooter(): void {
@@ -388,4 +430,6 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): void
   overlay.addEventListener("pointermove", onPointerMove);
   overlay.addEventListener("pointerup", endDrag);
   overlay.addEventListener("pointercancel", endDrag);
+
+  return controller;
 }

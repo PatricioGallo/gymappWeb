@@ -1519,55 +1519,91 @@ export async function mountThread(
 
   let openingViewOnceId: string | null = null;
 
-  /** Abre una foto/video efímero: primero lo marca visto server-side (atómico, una sola vez --
-   * ver open_view_once_message), y solo si eso funcionó descarga los bytes completos (fetch a
-   * blob, no un <img src> directo) antes de mostrarlo, para poder borrar el archivo del bucket
-   * apenas termina de bajar sin arriesgarse a cortar la descarga a mitad de camino. */
+  /** Abre una foto/video efímero. El visor se abre YA (con spinner) y por detrás corre la
+   * cadena: marcar visto server-side (atómico, una sola vez -- ver open_view_once_message),
+   * pedir la URL firmada, y recién ahí descargar los bytes completos (fetch a blob, no un
+   * <img src> directo) para poder borrar el archivo del bucket apenas termina de bajar sin
+   * arriesgarse a cortar la descarga a mitad de camino. Antes se esperaba toda esa cadena
+   * -- para un video efímero, potencialmente cientos de MB -- con la nada en pantalla salvo
+   * el botón a media opacidad; se sentía trabado. */
   async function openViewOnceAttachment(message: ChatMessage): Promise<void> {
     if (openingViewOnceId) return;
     openingViewOnceId = message.id;
     const btn = messagesEl.querySelector<HTMLButtonElement>(`.chat-bubble-viewonce-unseen[data-viewonce-id="${message.id}"]`);
     btn?.classList.add("is-loading");
-    try {
+
+    let blobUrl: string | null = null;
+    let closed = false;
+    let failMsg: string | null = null;
+
+    const mediaPromise = (async (): Promise<{ url: string; kind: "image" | "video" } | null> => {
       const { message: opened, fullyViewed, error } = await openViewOnceMessage(message.id);
       if (error || !opened) {
-        alert(error || "Ya no está disponible.");
-        return;
+        failMsg = error || "Ya no está disponible.";
+        return null;
       }
       const path = opened.attachment_path!;
       const url = await resolveAttachmentUrl(path);
-      if (!url) return;
+      if (!url) {
+        failMsg = "No se pudo abrir. Probá de nuevo.";
+        return null;
+      }
       const resp = await fetch(url);
-      if (!resp.ok) return;
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      // El marcado server-side de "visto" pasa primero (arriba, atomico) para que abrir dos
-      // veces seguidas no descargue el archivo dos veces -- pero el re-render de la burbuja
-      // (el tick de "visto" que ve el otro lado) se retiene hasta que el visor termino de
-      // deslizarse a la vista. openMediaLightbox inserta el overlay ya, pero .media-lightbox
-      // anima ese overlay con una entrada de 280ms (translateY 100% -> 0, ver
-      // @keyframes media-lightbox-slide-up en modern.css); el reemplazo de HTML de la burbuja
-      // en cambio es instantaneo. Si se pintaban juntos (como quedo en el fix anterior, que
-      // solo saco la espera de red de por medio) el usuario igual veia la burbuja saltar a
-      // "visto" un instante antes de que la foto terminara de aparecer en pantalla -- por eso
-      // el re-render se demora esos mismos 280ms, sincronizado con la animacion.
-      openMediaLightbox({
-        queue: [{ url: blobUrl }],
-        startIndex: 0,
-        getMedia: (item) => ({ url: item.url, kind: opened.attachment_type === "video" ? "video" : "image" }),
-        onClose: () => URL.revokeObjectURL(blobUrl),
-      });
-      setTimeout(() => {
+      if (!resp.ok) {
+        failMsg = "No se pudo abrir. Probá de nuevo.";
+        return null;
+      }
+      blobUrl = URL.createObjectURL(await resp.blob());
+
+      // El marcado server-side de "visto" ya es irreversible acá: la burbuja pasa a "vista" y
+      // se limpia el bucket aunque el visor se haya cerrado antes de que terminara la
+      // descarga. El re-render de la burbuja (el tick de "visto" que ve el otro lado) se
+      // retiene 280ms para caer junto con la animación de entrada del visor (translateY
+      // 100% -> 0, ver @keyframes media-lightbox-slide-up en modern.css); el reemplazo de
+      // HTML de la burbuja en cambio es instantáneo, y sin ese retardo saltaría a "visto" un
+      // instante antes de que la foto termine de aparecer.
+      const markSeen = (): void => {
         // En grupo la fila del mensaje no cambia (viewed_once_at/by quedan null para
-        // siempre) -- mi propio "ya la vi" vive aca, en el Set local, y hay que sumarla ANTES
+        // siempre) -- mi propio "ya la vi" vive acá, en el Set local, y hay que sumarla ANTES
         // de re-pintar la burbuja para que el re-render la agarre (ver viewOnceMediaHtml).
         if (isGroup) myGroupViewOnceOpened.add(message.id);
         applyMessageContentUpdate(opened);
-      }, 280);
-      // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recien
+      };
+      if (closed) markSeen();
+      else setTimeout(markSeen, 280);
+      // En 1 a 1 fullyViewed siempre da true (un unico destinatario posible). En grupo recién
       // da true cuando TODOS los integrantes activos ya la abrieron cada uno la suya -- borrar
-      // antes le arruinaria la foto a quien todavia no le tocó verla.
+      // antes le arruinaría la foto a quien todavía no le tocó verla.
       if (fullyViewed) void deleteChatAttachment(path);
+
+      if (closed) {
+        URL.revokeObjectURL(blobUrl);
+        blobUrl = null;
+        return null;
+      }
+      return { url: blobUrl, kind: opened.attachment_type === "video" ? "video" : "image" };
+    })();
+
+    const lightbox = openMediaLightbox({
+      queue: [message],
+      startIndex: 0,
+      opaque: true,
+      getMedia: () => mediaPromise,
+      onClose: () => {
+        closed = true;
+        if (blobUrl) {
+          URL.revokeObjectURL(blobUrl);
+          blobUrl = null;
+        }
+      },
+    });
+
+    try {
+      const media = await mediaPromise;
+      if (!media && !closed) {
+        lightbox?.close();
+        if (failMsg) alert(failMsg);
+      }
     } finally {
       btn?.classList.remove("is-loading");
       openingViewOnceId = null;
