@@ -3382,7 +3382,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .admin-table-row:first-of-type { border-top: none; padding-top: 0; }
 
 .admin-table-row-clickable { cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s ease; }
-.admin-table-row-clickable:hover { background: var(--surface-2); }
+@media (hover: hover) {
+  .admin-table-row-clickable:hover { background: var(--surface-2); }
+}
 .admin-table-row-clickable .admin-edit-btn { cursor: pointer; }
 
 .admin-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }

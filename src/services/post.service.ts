@@ -72,6 +72,25 @@ async function tagMentionedUsers(postId: string, authorId: string, content: stri
     .insert(mentionedIds.map((mentionedUserId) => ({ post_id: postId, mentioned_user_id: mentionedUserId })));
 }
 
+/**
+ * Igual que tagMentionedUsers pero para un comentario: resuelve los @usuario del texto contra
+ * perfiles reales y crea una fila en comment_mentions por cada uno (dispara la notificacion
+ * "te etiquetaron en un comentario" via trigger SQL, ver notify_comment_mention). Se llama sin
+ * esperar el resultado desde addComment: si falla, el comentario ya se guardo igual.
+ */
+async function tagMentionedUsersInComment(commentId: string, authorId: string, content: string): Promise<void> {
+  const usernames = extractMentionedUsernames(content);
+  if (usernames.length === 0) return;
+
+  const { data: profiles } = await supabase.from("profiles_public").select("id, username").in("username", usernames);
+  const mentionedIds = (profiles ?? []).map((p) => p.id).filter((id): id is string => !!id && id !== authorId);
+  if (mentionedIds.length === 0) return;
+
+  await supabase
+    .from("comment_mentions")
+    .insert(mentionedIds.map((mentionedUserId) => ({ comment_id: commentId, mentioned_user_id: mentionedUserId })));
+}
+
 interface LinkPreviewFields {
   link_url: string;
   link_title: string | null;
@@ -603,6 +622,7 @@ export async function addComment(
     if (isPrivateInteractionError(error)) return { error: PRIVATE_INTERACTION_MESSAGE };
     return { error: friendlyError(error, "No se pudo comentar. Probá de nuevo.") };
   }
+  if (data) void tagMentionedUsersInComment(data.id, authorId, data.content);
   return { comment: data };
 }
 

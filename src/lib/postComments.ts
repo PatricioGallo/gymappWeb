@@ -1,4 +1,5 @@
 import { escapeHtml } from "./dom";
+import { linkifyHtml } from "./linkify";
 import { renderVerifiedBadge } from "./verifiedBadge";
 import { formatTiempoRelativo } from "./dias";
 import { resultFullName } from "./search";
@@ -43,7 +44,7 @@ function commentRowHtml(c: FeedComment, depth: number): string {
           <span class="post-comment-dot">·</span>
           <span class="post-comment-time">${formatTiempoRelativo(c.created_at)}</span>
         </div>
-        <p class="post-comment-text">${escapeHtml(c.content).replace(/\n/g, "<br>")}</p>
+        <p class="post-comment-text">${linkifyHtml(c.content)}</p>
         <div class="post-comment-actions">
           <button type="button" class="post-comment-reply" data-action="reply" data-id="${c.id}">Responder</button>
           <button type="button" class="post-comment-like${c.likedByMe ? " is-active" : ""}" data-action="like" data-id="${c.id}" aria-label="Me gusta">${c.likedByMe ? ICON_HEART_FILLED : ICON_HEART}<span>${c.likes_count}</span></button>

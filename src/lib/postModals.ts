@@ -460,11 +460,23 @@ function openReplyModal(
 
   overlay.querySelector("#commentModalClose")?.addEventListener("click", close);
 
+  // Tocar el fondo, fuera de la tarjeta, cierra el modal (mismo criterio que confirmDialog.ts y
+  // el modal de detalle de un Rep). e.target === overlay: un click nacido adentro de la tarjeta
+  // burbujea con target propio, asi que no dispara el cierre.
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+
   const input = overlay.querySelector("#commentModalInput") as HTMLTextAreaElement;
   const counter = overlay.querySelector("#commentModalCounter")!;
   const submitBtn = overlay.querySelector("#commentModalSubmit") as HTMLButtonElement;
 
-  input.focus();
+  // Editor con menciones: al escribir "@" sugiere perfiles y el elegido queda como chip
+  // clickeable, igual que el composer de un Rep / citar un Rep (ver mentionEditor.ts). El
+  // texto sale como "@usuario" plano -> addComment lo resuelve y etiqueta (tagMentionedUsersInComment).
+  const mention = makeMentionEditable(input);
+  attachMentionAutocomplete(mention);
+  mention.el.focus();
 
   function updateState(): void {
     const len = input.value.length;
@@ -472,11 +484,9 @@ function openReplyModal(
     counter.classList.toggle("post-composer-counter-over", len > COMMENT_MODAL_MAX);
     submitBtn.disabled = input.value.trim().length === 0 || len > COMMENT_MODAL_MAX;
   }
-  input.addEventListener("input", () => {
-    input.style.height = "auto";
-    input.style.height = `${Math.min(input.scrollHeight, 200)}px`;
-    updateState();
-  });
+  // El div del editor crece solo con su contenido (a diferencia del <textarea>), asi que ya no
+  // hace falta ajustar el alto a mano: alcanza con re-evaluar contador y boton en cada cambio.
+  input.addEventListener("input", updateState);
   updateState();
 
   submitBtn.addEventListener("click", async () => {

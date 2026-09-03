@@ -19,6 +19,7 @@ const TYPE_ICON: Record<string, string> = {
   follow_rejected: "🚫",
   like: "❤️",
   comment: "💬",
+  mention: "🏷️",
   repost: "🔁",
   quote: "❝",
   message_reaction: "😀",
