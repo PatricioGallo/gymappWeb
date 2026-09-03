@@ -151,6 +151,23 @@ export const adminView: ViewModule = {
     let statsLoaded = false;
     let usersLoaded = false;
 
+    type UsersSort = "last_seen" | "alpha" | "created";
+    const USERS_SORT_KEY = "admin_users_sort";
+    const USERS_SORT_LABELS: Record<UsersSort, string> = {
+      last_seen: "Última conexión",
+      alpha: "Orden alfabético",
+      created: "Fecha de registro",
+    };
+    let usersSort: UsersSort = ((): UsersSort => {
+      try {
+        const saved = localStorage.getItem(USERS_SORT_KEY);
+        if (saved === "last_seen" || saved === "alpha" || saved === "created") return saved;
+      } catch {
+        /* ignore */
+      }
+      return "last_seen";
+    })();
+
     let exercises: AdminExerciseRow[] = [];
     let exercisesLoaded = false;
     let excAdminSubTab: "builtin" | "custom" = "builtin";
@@ -346,7 +363,17 @@ export const adminView: ViewModule = {
       const usersTab = container.querySelector("#usersTab")!;
 
       usersTab.innerHTML = `
-        <input type="search" id="userSearch" class="exc-picker-search admin-search" placeholder="Buscar por nombre, usuario o mail..." value="${escapeHtml(filter)}">
+        <div class="admin-users-toolbar">
+          <input type="search" id="userSearch" class="exc-picker-search admin-search" placeholder="Buscar por nombre, usuario o mail..." value="${escapeHtml(filter)}">
+          <label class="admin-sort-field">
+            <span>Ordenar por</span>
+            <select id="userSort" class="admin-sort-select">
+              ${(Object.keys(USERS_SORT_LABELS) as UsersSort[])
+                .map((k) => `<option value="${k}" ${k === usersSort ? "selected" : ""}>${USERS_SORT_LABELS[k]}</option>`)
+                .join("")}
+            </select>
+          </label>
+        </div>
         <div class="exc-table-scroll" id="usersTableScroll"></div>
       `;
 
@@ -355,18 +382,50 @@ export const adminView: ViewModule = {
         renderUsersList(searchInput.value);
       });
 
+      const sortSelect = usersTab.querySelector<HTMLSelectElement>("#userSort")!;
+      sortSelect.addEventListener("change", () => {
+        usersSort = sortSelect.value as UsersSort;
+        try {
+          localStorage.setItem(USERS_SORT_KEY, usersSort);
+        } catch {
+          /* ignore */
+        }
+        renderUsersList(searchInput.value);
+      });
+
       renderUsersList(filter);
+    }
+
+    function sortUsers(list: AdminUserRow[]): AdminUserRow[] {
+      const sorted = [...list];
+      if (usersSort === "alpha") {
+        sorted.sort((a, b) =>
+          `${a.nombre} ${a.apellido}`.trim().localeCompare(`${b.nombre} ${b.apellido}`.trim(), "es", { sensitivity: "base" })
+        );
+      } else if (usersSort === "created") {
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else {
+        // last_seen: conexión más reciente primero; sin dato al final
+        const ts = (u: AdminUserRow): number => {
+          const v = u.last_seen_at ?? u.last_sign_in_at;
+          return v ? new Date(v).getTime() : -Infinity;
+        };
+        sorted.sort((a, b) => ts(b) - ts(a));
+      }
+      return sorted;
     }
 
     function renderUsersList(filter: string): void {
       const scroll = container.querySelector("#usersTableScroll");
       if (!scroll) return;
       const term = filter.trim().toLowerCase();
-      const filtered = term
-        ? users.filter((u) =>
-            [u.username, u.nombre, u.apellido, u.email].some((field) => field.toLowerCase().includes(term))
-          )
-        : users;
+      const filtered = sortUsers(
+        term
+          ? users.filter((u) =>
+              [u.username, u.nombre, u.apellido, u.email].some((field) => field.toLowerCase().includes(term))
+            )
+          : users
+      );
 
       scroll.innerHTML = `
         <div class="admin-table-head">
@@ -383,7 +442,7 @@ export const adminView: ViewModule = {
             <span class="profile-badge">${USER_TYPE_LABELS[u.user_type]}</span>
             <span>${u.routines_count}</span>
             <span>${formatDate(u.created_at)}</span>
-            <span>${formatDateTime(u.last_sign_in_at)}</span>
+            <span title="Inició sesión: ${formatDateTime(u.last_sign_in_at)}">${formatDateTime(u.last_seen_at ?? u.last_sign_in_at)}</span>
             <span class="admin-row-actions">
               ${isAdmin ? `<button class="btn btn-outline btn-sm admin-edit-btn" type="button" data-id="${u.id}">Editar</button>` : ""}
               ${isAdmin && !["admin", "colaborador"].includes(u.user_type) ? `<button class="btn btn-danger btn-sm admin-delete-btn" type="button" data-id="${u.id}">Eliminar</button>` : ""}

@@ -2787,6 +2787,7 @@ export type Database = {
           fecha_nacimiento: string
           id: string
           is_verified: boolean
+          last_seen_at: string
           last_sign_in_at: string
           nacionalidad: string
           nombre: string

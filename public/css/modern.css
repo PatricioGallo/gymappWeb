@@ -3393,6 +3393,34 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 
 .admin-search { margin-bottom: 18px; }
 
+.admin-users-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.admin-users-toolbar .admin-search { flex: 1 1 240px; min-width: 0; margin-bottom: 0; }
+.admin-sort-field { display: flex; flex-direction: column; gap: 5px; flex: 0 0 auto; }
+.admin-sort-field > span {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.admin-sort-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.admin-sort-select:focus { outline: none; border-color: var(--accent-2); }
+
 .exc-admin-toolbar {
   display: flex;
   flex-wrap: wrap;

@@ -26,6 +26,7 @@ export interface AdminUserRow {
   avatar_url: string | null;
   created_at: string;
   last_sign_in_at: string | null;
+  last_seen_at: string | null;
   email_confirmed: boolean;
   routines_count: number;
   is_verified: boolean;
