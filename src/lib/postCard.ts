@@ -5,6 +5,7 @@ import { formatTiempoRelativo } from "./dias";
 import { openMediaLightbox } from "./postModals";
 import { youtubeEmbedHtml } from "./youtube";
 import { bindVideoResume, recallVideoPosition } from "./videoResume";
+import { voteInPoll, isPollClosed } from "../services/post.service";
 import type { FeedPost, Post, PostAuthor } from "../services/post.service";
 
 const DEFAULT_AVATAR = "/images/avatars/default.svg";
@@ -71,6 +72,62 @@ function mediaHtml(mediaUrl: string | null, mediaType: string | null): string {
   if (mediaType === "video")
     return `<video class="post-card-media" src="${escapeHtml(mediaUrl)}" playsinline muted loop preload="metadata"></video>`;
   return `<img class="post-card-media" src="${escapeHtml(mediaUrl)}" alt="" draggable="false" loading="lazy" decoding="async">`;
+}
+
+// -----------------------------------------------------------------------------
+// Encuesta (Rep con poll_options): antes de votar se ven los botones de opción;
+// después de votar (o al cerrar) se ven las barras con % + total + tiempo restante.
+// El voto es único y final -- ver vote_in_poll en post.service.ts / la migración.
+// -----------------------------------------------------------------------------
+
+function formatPollTimeLeft(endsAtIso: string): string {
+  const ms = new Date(endsAtIso).getTime() - Date.now();
+  if (ms <= 0) return "Finalizada";
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `Termina en ${min} min`;
+  const hours = Math.round(min / 60);
+  if (hours < 24) return `Termina en ${hours} h`;
+  return `Termina en ${Math.round(hours / 24)} d`;
+}
+
+/** Puede votar: hay sesión, el Rep tiene encuesta, no votó todavía y sigue abierta. */
+function isPollVotable(post: FeedPost, viewerId: string | null): boolean {
+  return viewerId != null && post.poll_options != null && post.myPollVote == null && !isPollClosed(post);
+}
+
+function pollHtml(post: FeedPost, viewerId: string | null): string {
+  if (!post.poll_options || post.poll_options.length === 0) return "";
+  const options = post.poll_options;
+  const counts = post.poll_vote_counts ?? options.map(() => 0);
+  const total = counts.reduce((sum, n) => sum + n, 0);
+  const closed = isPollClosed(post);
+  const maxCount = Math.max(...counts, 0);
+
+  const body = isPollVotable(post, viewerId)
+    ? `<div class="post-poll-options">${options
+        .map(
+          (o, i) =>
+            `<button type="button" class="post-poll-option" data-action="poll-vote" data-i="${i}">${escapeHtml(o)}</button>`
+        )
+        .join("")}</div>`
+    : `<div class="post-poll-results">${options
+        .map((o, i) => {
+          const c = counts[i] ?? 0;
+          const pct = total === 0 ? 0 : Math.round((c / total) * 100);
+          const mine = post.myPollVote === i;
+          const winner = total > 0 && c === maxCount;
+          return `<div class="post-poll-result${mine ? " is-mine" : ""}${winner ? " is-winner" : ""}">
+            <div class="post-poll-result-track"><div class="post-poll-result-fill" style="width:${pct}%"></div></div>
+            <div class="post-poll-result-row">
+              <span class="post-poll-result-label">${escapeHtml(o)}${mine ? ` <span class="post-poll-check" aria-label="Tu voto">✓</span>` : ""}</span>
+              <span class="post-poll-result-pct">${pct}%</span>
+            </div>
+          </div>`;
+        })
+        .join("")}</div>`;
+
+  const meta = `${total} ${total === 1 ? "voto" : "votos"} · ${closed ? "Finalizada" : formatPollTimeLeft(post.poll_ends_at!)}`;
+  return `<div class="post-poll" data-poll-post-id="${post.id}">${body}<p class="post-poll-meta">${meta}</p></div>`;
 }
 
 function domainOf(url: string): string {
@@ -186,6 +243,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
           </div>`
           }
           ${contentHtml(post.content, "post-card-text", true)}
+          ${pollHtml(post, viewerId)}
           ${mediaHtml(post.media_url, post.media_type)}
           ${!post.media_url && post.youtube_video_id ? youtubeEmbedHtml(post.youtube_video_id) : ""}
           ${linkPreviewHtml(post)}
@@ -259,6 +317,56 @@ function observePostViews(root: HTMLElement, postsById: Map<string, FeedPost>, h
   );
   cards.forEach((card) => observer.observe(card));
   return observer;
+}
+
+// Voto optimista en una encuesta: suma 1 al contador local, marca myPollVote y repinta solo
+// el bloque .post-poll de esa tarjeta (no todo el feed). Si el RPC falla, revierte y avisa.
+// Mismo patrón que handleLikeToggle en cada página, pero autocontenido acá porque votar no
+// necesita tocar el estado de la página que montó la lista (la FeedPost es la misma referencia).
+async function handlePollVote(
+  card: HTMLElement,
+  post: FeedPost,
+  optionIndex: number,
+  viewerId: string | null,
+  opt: { signal: AbortSignal }
+): Promise<void> {
+  if (!isPollVotable(post, viewerId)) return;
+
+  const prevCounts = post.poll_vote_counts ? [...post.poll_vote_counts] : null;
+  const nextCounts = (post.poll_vote_counts ?? (post.poll_options ?? []).map(() => 0)).slice();
+  nextCounts[optionIndex] = (nextCounts[optionIndex] ?? 0) + 1;
+  post.poll_vote_counts = nextCounts;
+  post.myPollVote = optionIndex;
+  repaintPoll(card, post, viewerId, opt);
+
+  const { error } = await voteInPoll(post.id, optionIndex);
+  if (error) {
+    post.poll_vote_counts = prevCounts;
+    post.myPollVote = null;
+    repaintPoll(card, post, viewerId, opt);
+    alert(error);
+  }
+}
+
+function repaintPoll(card: HTMLElement, post: FeedPost, viewerId: string | null, opt: { signal: AbortSignal }): void {
+  const existing = card.querySelector(".post-poll");
+  if (!existing) return;
+  existing.outerHTML = pollHtml(post, viewerId);
+  wirePoll(card, post, viewerId, opt);
+}
+
+function wirePoll(card: HTMLElement, post: FeedPost, viewerId: string | null, opt: { signal: AbortSignal }): void {
+  card.querySelectorAll<HTMLButtonElement>('.post-poll [data-action="poll-vote"]').forEach((btn) => {
+    btn.addEventListener(
+      "click",
+      (e) => {
+        e.stopPropagation();
+        const i = Number(btn.dataset.i);
+        if (Number.isInteger(i)) void handlePollVote(card, post, i, viewerId, opt);
+      },
+      opt
+    );
+  });
 }
 
 /**
@@ -335,6 +443,8 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
         handlers.onOpenPost?.(post);
       }, opt);
     }
+
+    wirePoll(card, post, handlers.viewerId, opt);
   });
 
   const disposeVideoAutoplay = observeVideoAutoplay(root);

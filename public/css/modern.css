@@ -6832,12 +6832,68 @@ body.chat-embedded .chat-thread-container { max-width: none; }
 }
 .post-composer-toolbar .chat-composer-btn { color: var(--text-muted); }
 .post-composer-toolbar .btn { margin-left: auto; }
+.post-composer-toolbar .chat-composer-btn.is-active { color: var(--accent-2); background: var(--accent-soft); }
+.post-composer-toolbar .chat-composer-btn.is-disabled { opacity: 0.4; pointer-events: none; }
 
 .post-composer-counter {
   font-size: 12.5px;
   color: var(--text-muted);
 }
 .post-composer-counter-over { color: var(--accent); font-weight: 700; }
+
+/* Modo encuesta del composer (ver setPollMode en feed.ts). Sin caja propia (fondo/borde
+   anidado) -- mismo criterio que el resto del sitio (".field input"/".quote-composer-input"):
+   los campos llevan su propio fondo --surface-2 con borde, apoyados directo sobre la tarjeta
+   del composer (o del modal), sin otra tarjeta-adentro-de-tarjeta de por medio. */
+.post-composer-poll { display: flex; flex-direction: column; gap: 14px; margin: 12px 0; }
+.post-composer-poll-options { display: flex; flex-direction: column; gap: 10px; }
+.post-composer-poll-row { display: flex; align-items: center; gap: 8px; }
+.post-composer-poll-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14.5px;
+  transition: border-color 0.15s ease;
+}
+.post-composer-poll-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+.post-composer-poll-input:focus { outline: none; border-color: var(--accent-2); }
+.post-composer-poll-remove {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .post-composer-poll-remove:hover { border-color: var(--accent); color: var(--accent); }
+}
+.post-composer-poll-add { align-self: flex-start; }
+.post-composer-poll-add[hidden] { display: none; }
+.post-composer-poll-footer { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-muted); }
+.post-composer-poll-duration {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+}
+.post-composer-poll-duration:focus { outline: none; border-color: var(--accent-2); }
+
+/* En el modal mobile la pregunta no necesita las 150px reservadas para un Rep de texto largo --
+   con la encuesta abajo eso dejaba un salto vacío enorme antes de las opciones (ver is-poll-mode
+   en feed.ts). Especificidad ID+2 clases le gana a la regla de 150px de mas abajo, sin !important. */
+#composerModalSlot .is-poll-mode .post-composer-input { height: 56px; }
 
 /* Boton "+" flotante para escribir un Rep nuevo -- solo reemplaza al composer inline en
    mobile (ver ".feed-main .post-composer-wrap" mas abajo), en desktop no se usa. */
@@ -6976,6 +7032,55 @@ body.chat-embedded .chat-thread-container { max-width: none; }
   background: #000;
   cursor: pointer;
 }
+
+/* Encuesta dentro de una tarjeta del feed (ver pollHtml en postCard.ts). */
+.post-poll { margin-top: 10px; }
+.post-poll-options { display: flex; flex-direction: column; gap: 8px; }
+.post-poll-option {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--accent-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-2);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+@media (hover: hover) {
+  .post-poll-option:hover { background: var(--accent-soft); }
+}
+.post-poll-results { display: flex; flex-direction: column; gap: 8px; }
+.post-poll-result { position: relative; }
+.post-poll-result-track {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.post-poll-result-fill {
+  height: 100%;
+  background: var(--border);
+  transition: width 0.35s ease;
+}
+.post-poll-result.is-mine .post-poll-result-fill { background: var(--accent-soft); }
+.post-poll-result.is-winner .post-poll-result-fill { background: var(--live-soft); }
+.post-poll-result-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+}
+.post-poll-result-label { font-size: 13.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.post-poll-result.is-winner .post-poll-result-label { color: var(--live); }
+.post-poll-check { color: var(--live); font-weight: 700; }
+.post-poll-result-pct { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.post-poll-meta { margin: 8px 0 0; font-size: 12.5px; color: var(--text-muted); }
 
 .post-quoted {
   display: block;

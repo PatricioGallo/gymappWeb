@@ -1607,6 +1607,52 @@ export type Database = {
           },
         ]
       }
+      post_poll_votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_index: number
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_index: number
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_index?: number
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_poll_votes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_poll_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_poll_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_reposts: {
         Row: {
           created_at: string
@@ -1708,6 +1754,10 @@ export type Database = {
           link_url: string | null
           media_type: string | null
           media_url: string | null
+          poll_ends_at: string | null
+          poll_multi: boolean
+          poll_options: string[] | null
+          poll_vote_counts: number[] | null
           quoted_post_id: string | null
           quotes_count: number
           reposts_count: number
@@ -1731,6 +1781,10 @@ export type Database = {
           link_url?: string | null
           media_type?: string | null
           media_url?: string | null
+          poll_ends_at?: string | null
+          poll_multi?: boolean
+          poll_options?: string[] | null
+          poll_vote_counts?: number[] | null
           quoted_post_id?: string | null
           quotes_count?: number
           reposts_count?: number
@@ -1754,6 +1808,10 @@ export type Database = {
           link_url?: string | null
           media_type?: string | null
           media_url?: string | null
+          poll_ends_at?: string | null
+          poll_multi?: boolean
+          poll_options?: string[] | null
+          poll_vote_counts?: number[] | null
           quoted_post_id?: string | null
           quotes_count?: number
           reposts_count?: number
@@ -3044,6 +3102,10 @@ export type Database = {
           link_url: string | null
           media_type: string | null
           media_url: string | null
+          poll_ends_at: string | null
+          poll_multi: boolean
+          poll_options: string[] | null
+          poll_vote_counts: number[] | null
           quoted_post_id: string | null
           quotes_count: number
           reposts_count: number
@@ -3632,6 +3694,10 @@ export type Database = {
         Returns: undefined
       }
       unpin_message: { Args: { p_conversation_id: string }; Returns: undefined }
+      vote_in_poll: {
+        Args: { p_option_index: number; p_post_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       exercise_category:

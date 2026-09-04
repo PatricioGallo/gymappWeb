@@ -20,6 +20,9 @@ export interface FeedPost extends Post {
   quotedPost: (Post & { author: PostAuthor }) | null;
   likedByMe: boolean;
   repostedByMe: boolean;
+  /** Índice de la opción que votó el viewer en la encuesta de este Rep, o null si no votó
+   * (o si el Rep no tiene encuesta). El voto es único y final. */
+  myPollVote: number | null;
   /** Presente si esta entrada llegó al feed porque alguien reposteó el Rep (no es el autor original). */
   repostedBy?: PostAuthor;
   /** created_at del post, o del repost si repostedBy está seteado -- es la clave de orden del feed. */
@@ -34,6 +37,18 @@ export interface FeedComment extends PostComment {
 const FEED_PAGE_SIZE = 20;
 const POST_CONTENT_MAX = 240;
 const COMMENT_CONTENT_MAX = 240;
+
+export const POLL_MIN_OPTIONS = 2;
+export const POLL_MAX_OPTIONS = 4;
+export const POLL_OPTION_MAX = 40;
+/** Presets de duración de una encuesta (label -> horas), el primero es el default. */
+export const POLL_DURATIONS: ReadonlyArray<{ label: string; hours: number }> = [
+  { label: "1 día", hours: 24 },
+  { label: "6 horas", hours: 6 },
+  { label: "1 hora", hours: 1 },
+  { label: "3 días", hours: 72 },
+  { label: "7 días", hours: 168 },
+];
 const POST_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 // 2 min de video en buena calidad (incluso 4K) entra comodo en 300MB, asi el
 // peso no termina siendo la traba para un clip que ya cumple el limite de duracion.
@@ -210,14 +225,21 @@ async function hydratePosts(rows: Post[], viewerId: string | null): Promise<Map<
 
   let likedSet = new Set<string>();
   let repostedSet = new Set<string>();
+  // post_id -> índice de opción que votó el viewer (solo Reps con encuesta)
+  let pollVoteByPostId = new Map<string, number>();
   if (viewerId) {
     const postIds = rows.map((r) => r.id);
-    const [{ data: likes }, { data: reposts }] = await Promise.all([
+    const pollPostIds = rows.filter((r) => r.poll_options != null).map((r) => r.id);
+    const [{ data: likes }, { data: reposts }, pollVotesResult] = await Promise.all([
       supabase.from("post_likes").select("post_id").eq("user_id", viewerId).in("post_id", postIds),
       supabase.from("post_reposts").select("post_id").eq("user_id", viewerId).in("post_id", postIds),
+      pollPostIds.length
+        ? supabase.from("post_poll_votes").select("post_id, option_index").eq("user_id", viewerId).in("post_id", pollPostIds)
+        : Promise.resolve({ data: [] as { post_id: string; option_index: number }[] }),
     ]);
     likedSet = new Set((likes ?? []).map((l) => l.post_id));
     repostedSet = new Set((reposts ?? []).map((r) => r.post_id));
+    pollVoteByPostId = new Map((pollVotesResult.data ?? []).map((v) => [v.post_id, v.option_index]));
   }
 
   for (const r of rows) {
@@ -229,6 +251,7 @@ async function hydratePosts(rows: Post[], viewerId: string | null): Promise<Map<
       quotedPost: r.quoted_post_id ? (quotedById.get(r.quoted_post_id) ?? null) : null,
       likedByMe: likedSet.has(r.id),
       repostedByMe: repostedSet.has(r.id),
+      myPollVote: pollVoteByPostId.has(r.id) ? pollVoteByPostId.get(r.id)! : null,
       feedTimestamp: r.created_at,
     });
   }
@@ -463,6 +486,65 @@ export async function createPost(
   if (error) return { error: friendlyError(error, "No se pudo publicar el Rep. Probá de nuevo.") };
   if (trimmed) void tagMentionedUsers(data.id, authorId, trimmed);
   return { post: data };
+}
+
+/** Total de votos de la encuesta de un Rep (0 si no tiene encuesta). */
+export function pollTotalVotes(post: Pick<Post, "poll_vote_counts">): number {
+  return (post.poll_vote_counts ?? []).reduce((sum, n) => sum + n, 0);
+}
+
+/** true si el Rep tiene encuesta y ya pasó su fecha de cierre. */
+export function isPollClosed(post: Pick<Post, "poll_options" | "poll_ends_at">): boolean {
+  return post.poll_options != null && post.poll_ends_at != null && Date.now() >= new Date(post.poll_ends_at).getTime();
+}
+
+/**
+ * Valida las opciones de una encuesta antes de publicarla (mismas reglas que el trigger
+ * prepare_poll_post en la base). Devuelve null si está todo bien, o el mensaje de error.
+ */
+export function validatePollOptions(options: string[]): string | null {
+  const clean = options.map((o) => o.trim()).filter((o) => o.length > 0);
+  if (clean.length < POLL_MIN_OPTIONS) return `Una encuesta necesita al menos ${POLL_MIN_OPTIONS} opciones.`;
+  if (clean.length > POLL_MAX_OPTIONS) return `Una encuesta puede tener como máximo ${POLL_MAX_OPTIONS} opciones.`;
+  if (clean.some((o) => o.length > POLL_OPTION_MAX)) return `Cada opción puede tener hasta ${POLL_OPTION_MAX} caracteres.`;
+  return null;
+}
+
+/**
+ * Publica un Rep con encuesta: `question` es el texto del Rep (obligatorio), `options` las
+ * opciones (2-4, se recortan y se descartan las vacías), `durationHours` cuánto queda abierta.
+ * No lleva media ni link preview (la encuesta es la intención del Rep).
+ */
+export async function createPoll(
+  authorId: string,
+  question: string,
+  options: string[],
+  durationHours: number
+): Promise<{ post?: Post; error?: string }> {
+  const trimmedQuestion = question.trim();
+  if (!trimmedQuestion) return { error: "Escribí la pregunta de la encuesta." };
+  if (trimmedQuestion.length > POST_CONTENT_MAX) return { error: `Máximo ${POST_CONTENT_MAX} caracteres.` };
+
+  const cleanOptions = options.map((o) => o.trim()).filter((o) => o.length > 0);
+  const optionsError = validatePollOptions(cleanOptions);
+  if (optionsError) return { error: optionsError };
+
+  const endsAt = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("posts")
+    .insert({ author_id: authorId, content: trimmedQuestion, poll_options: cleanOptions, poll_ends_at: endsAt })
+    .select("*")
+    .single();
+  if (error) return { error: friendlyError(error, "No se pudo publicar la encuesta. Probá de nuevo.") };
+  void tagMentionedUsers(data.id, authorId, trimmedQuestion);
+  return { post: data };
+}
+
+/** Registra el voto del usuario en la encuesta de un Rep (voto único y final, ver RPC vote_in_poll). */
+export async function voteInPoll(postId: string, optionIndex: number): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("vote_in_poll", { p_post_id: postId, p_option_index: optionIndex });
+  if (error) return { error: friendlyError(error, "No se pudo registrar tu voto. Probá de nuevo.") };
+  return {};
 }
 
 export async function createQuote(authorId: string, quotedPostId: string, content: string): Promise<{ post?: Post; error?: string }> {

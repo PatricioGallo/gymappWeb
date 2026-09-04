@@ -9,14 +9,20 @@ import { extractFirstUrl, extractYouTubeVideoId, youtubeEmbedHtml } from "../lib
 import {
   getPersonalizedFeed,
   createPost,
+  createPoll,
   toggleLike,
   toggleRepost,
   validatePostContent,
+  validatePollOptions,
   validatePostVideoDuration,
   uploadPostMedia,
   deletePostMedia,
   recordPostView,
   getPost,
+  POLL_DURATIONS,
+  POLL_MIN_OPTIONS,
+  POLL_MAX_OPTIONS,
+  POLL_OPTION_MAX,
   type FeedPost,
   type Post,
   type PostAuthor,
@@ -98,11 +104,22 @@ const VIEW_MARKUP = `
             <button type="button" class="post-composer-preview-remove" id="postComposerRemoveMedia" aria-label="Quitar adjunto">✕</button>
           </div>
           <div class="post-composer-youtube-preview" id="postComposerYoutubePreview" hidden></div>
+          <div class="post-composer-poll" id="postComposerPoll" hidden>
+            <div class="post-composer-poll-options" id="postComposerPollOptions"></div>
+            <button type="button" class="btn btn-outline btn-sm post-composer-poll-add" id="postComposerPollAdd">+ Agregar opción</button>
+            <div class="post-composer-poll-footer">
+              <label for="postComposerPollDuration">Duración</label>
+              <select id="postComposerPollDuration" class="post-composer-poll-duration"></select>
+            </div>
+          </div>
           <div class="post-composer-toolbar">
-            <label class="chat-composer-btn" title="Adjuntar imagen o video">
+            <label class="chat-composer-btn" id="postComposerMediaLabel" title="Adjuntar imagen o video">
               <input type="file" id="postComposerMediaInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/3gpp,video/x-msvideo,video/x-matroska,video/mpeg,video/ogg" hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="4"/></svg>
             </label>
+            <button type="button" class="chat-composer-btn" id="postComposerPollToggle" title="Crear encuesta" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
+            </button>
             <span class="post-composer-counter" id="postComposerCounter">240</span>
             <button type="submit" class="btn btn-primary btn-sm" id="postComposerSubmit" disabled>Publicar</button>
           </div>
@@ -161,6 +178,12 @@ export const feedView: ViewModule = {
     const removeMediaBtn = container.querySelector("#postComposerRemoveMedia") as HTMLButtonElement;
     const youtubePreviewWrap = container.querySelector("#postComposerYoutubePreview") as HTMLDivElement;
     const uploadingOverlay = container.querySelector("#postComposerUploadingOverlay") as HTMLDivElement;
+    const mediaLabel = container.querySelector("#postComposerMediaLabel") as HTMLLabelElement;
+    const pollToggle = container.querySelector("#postComposerPollToggle") as HTMLButtonElement;
+    const pollWrap = container.querySelector("#postComposerPoll") as HTMLDivElement;
+    const pollOptionsWrap = container.querySelector("#postComposerPollOptions") as HTMLDivElement;
+    const pollAddBtn = container.querySelector("#postComposerPollAdd") as HTMLButtonElement;
+    const pollDurationSelect = container.querySelector("#postComposerPollDuration") as HTMLSelectElement;
 
     // ---------------------------------------------------------------------------
     // Composer en modal (mobile): en celular el composer no vive inline en el feed (se
@@ -240,6 +263,12 @@ export const feedView: ViewModule = {
     // un pendingMedia que ya no es el suyo (el usuario cambio o saco el archivo mientras subia).
     let mediaUploadToken = 0;
 
+    // Modo encuesta (botón 📊 de la toolbar): el composer publica un Rep con encuesta en vez de
+    // texto/media. pollOptionValues son las 2-4 opciones editables. Declarados acá arriba porque
+    // updateComposerState() -- definido más abajo -- los consulta ya en su primera llamada de init.
+    let pollMode = false;
+    let pollOptionValues: string[] = ["", ""];
+
     // keepBlobUrl=true cuando el blob local se reutiliza para el Rep recien publicado
     // (ver handlePublish): no lo revocamos aca, se revoca solo despues con un delay.
     // keepUploadedFile=true cuando el archivo ya subido se va a usar igual (post recien
@@ -268,7 +297,8 @@ export const feedView: ViewModule = {
     // (estilo Facebook/Twitter, pero con el video de verdad, no solo una imagen). Nunca
     // convive con un archivo adjunto: si hay media, esa es la intencion mas explicita.
     function updateYoutubePreview(): void {
-      const videoId = !pendingMedia ? extractYouTubeVideoId(extractFirstUrl(composerInput.value) ?? "") : null;
+      // En modo encuesta el texto es la pregunta -- un link de YouTube ahí no lleva embed.
+      const videoId = !pendingMedia && !pollMode ? extractYouTubeVideoId(extractFirstUrl(composerInput.value) ?? "") : null;
       if (!videoId) {
         youtubePreviewWrap.hidden = true;
         youtubePreviewWrap.innerHTML = "";
@@ -363,6 +393,12 @@ export const feedView: ViewModule = {
       const len = composerInput.value.length;
       composerCounter.textContent = String(POST_MAX - len);
       composerCounter.classList.toggle("post-composer-counter-over", len > POST_MAX);
+      if (pollMode) {
+        // Encuesta: hace falta la pregunta (el texto) + al menos 2 opciones con contenido.
+        const filled = pollOptionValues.filter((o) => o.trim().length > 0).length;
+        composerSubmit.disabled = len === 0 || len > POST_MAX || filled < POLL_MIN_OPTIONS;
+        return;
+      }
       const mediaBlocking = pendingMedia?.status === "uploading" || pendingMedia?.status === "error";
       composerSubmit.disabled = (len === 0 && !pendingMedia) || len > POST_MAX || mediaBlocking;
     }
@@ -378,7 +414,86 @@ export const feedView: ViewModule = {
     );
     updateComposerState();
     updateYoutubePreview();
-    attachMentionAutocomplete(makeMentionEditable(composerInput));
+    const mentionHandle = makeMentionEditable(composerInput);
+    attachMentionAutocomplete(mentionHandle);
+
+    // ---------------------------------------------------------------------------
+    // Modo encuesta
+    // ---------------------------------------------------------------------------
+
+    for (const { label, hours } of POLL_DURATIONS) {
+      const opt = document.createElement("option");
+      opt.value = String(hours);
+      opt.textContent = label;
+      pollDurationSelect.appendChild(opt);
+    }
+
+    function renderPollRows(): void {
+      pollOptionsWrap.innerHTML = pollOptionValues
+        .map(
+          (val, i) => `
+        <div class="post-composer-poll-row">
+          <input type="text" class="post-composer-poll-input" data-i="${i}" maxlength="${POLL_OPTION_MAX}" placeholder="Opción ${i + 1}" value="${escapeHtml(val)}">
+          ${
+            pollOptionValues.length > POLL_MIN_OPTIONS
+              ? `<button type="button" class="post-composer-poll-remove" data-i="${i}" aria-label="Quitar opción">✕</button>`
+              : ""
+          }
+        </div>`
+        )
+        .join("");
+      pollOptionsWrap.querySelectorAll<HTMLInputElement>(".post-composer-poll-input").forEach((input) => {
+        input.addEventListener("input", () => {
+          pollOptionValues[Number(input.dataset.i)] = input.value;
+          updateComposerState();
+        });
+      });
+      pollOptionsWrap.querySelectorAll<HTMLButtonElement>(".post-composer-poll-remove").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          pollOptionValues.splice(Number(btn.dataset.i), 1);
+          renderPollRows();
+          updateComposerState();
+        });
+      });
+      pollAddBtn.hidden = pollOptionValues.length >= POLL_MAX_OPTIONS;
+    }
+
+    function setPollMode(on: boolean): void {
+      pollMode = on;
+      composerForm.classList.toggle("is-poll-mode", on);
+      pollWrap.hidden = !on;
+      pollToggle.classList.toggle("is-active", on);
+      pollToggle.setAttribute("aria-pressed", String(on));
+      mediaLabel.classList.toggle("is-disabled", on);
+      mediaInput.disabled = on;
+      mentionHandle.el.dataset.placeholder = on ? "Preguntá algo..." : "¿Qué querés compartir hoy?";
+      if (on) {
+        clearPendingMedia();
+        pollOptionValues = ["", ""];
+        renderPollRows();
+      }
+      updateComposerState();
+    }
+
+    pollAddBtn.addEventListener(
+      "click",
+      () => {
+        if (pollOptionValues.length >= POLL_MAX_OPTIONS) return;
+        pollOptionValues.push("");
+        renderPollRows();
+        updateComposerState();
+      },
+      { signal: ctx.signal }
+    );
+
+    pollToggle.addEventListener(
+      "click",
+      () => {
+        if (!pollMode && pendingMedia) return; // hay foto/video adjunto: no se abre encuesta
+        setPollMode(!pollMode);
+      },
+      { signal: ctx.signal }
+    );
 
     composerForm.addEventListener(
       "submit",
@@ -393,12 +508,60 @@ export const feedView: ViewModule = {
       composerSubmit.disabled = publishing;
       composerSubmit.innerHTML = publishing ? `<span class="btn-spinner"></span> Publicando...` : "Publicar";
       removeMediaBtn.disabled = publishing;
-      mediaInput.disabled = publishing;
+      mediaInput.disabled = publishing || pollMode;
+      pollToggle.disabled = publishing;
+      pollAddBtn.disabled = publishing;
+      pollOptionsWrap.querySelectorAll("input, button").forEach((el) => ((el as HTMLInputElement).disabled = publishing));
+      pollDurationSelect.disabled = publishing;
+    }
+
+    async function handlePublishPoll(question: string): Promise<void> {
+      const options = pollOptionValues.map((o) => o.trim()).filter((o) => o.length > 0);
+      const validationError = !question.trim()
+        ? "Escribí la pregunta de la encuesta."
+        : question.length > POST_MAX
+          ? `Máximo ${POST_MAX} caracteres.`
+          : validatePollOptions(options);
+      if (validationError) {
+        composerAlert.innerHTML = `<p>${escapeHtml(validationError)}</p>`;
+        return;
+      }
+      const durationHours = Number(pollDurationSelect.value) || POLL_DURATIONS[0].hours;
+
+      setPublishing(true);
+      try {
+        const { post, error } = await createPoll(userId, question, options, durationHours);
+        if (error || !post) {
+          composerAlert.innerHTML = `<p>${escapeHtml(error || "No se pudo publicar la encuesta.")}</p>`;
+          return;
+        }
+        const hydrated = await getPost(post.id).catch(() => null);
+        if (hydrated) {
+          posts = [hydrated, ...posts];
+          renderFeed();
+        }
+        composerInput.value = "";
+        saveDraft("");
+        setPollMode(false);
+        closeComposerModal();
+      } catch (err) {
+        console.error("[feed] error publicando encuesta:", err);
+        composerAlert.innerHTML = `<p>No se pudo publicar la encuesta. Probá de nuevo.</p>`;
+      } finally {
+        setPublishing(false);
+        updateComposerState();
+      }
     }
 
     async function handlePublish(): Promise<void> {
       const content = composerInput.value;
       composerAlert.innerHTML = "";
+
+      if (pollMode) {
+        await handlePublishPoll(content);
+        return;
+      }
+
       const validationError = validatePostContent(content, !!pendingMedia);
       if (validationError) {
         composerAlert.innerHTML = `<p>${escapeHtml(validationError)}</p>`;
