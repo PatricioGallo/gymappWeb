@@ -599,14 +599,29 @@ export const pesosView: ViewModule = {
       type DayStatus = "done" | "pending" | "incomplete";
       const INCOMPLETE_AFTER_HOURS = 24;
 
+      // ¿Ya se empezó a cargar pesos en alguna semana posterior de la rutina? Si es así, las
+      // semanas anteriores quedaron atrás: sus días sin completar ya no se van a completar.
+      function laterWeekStarted(weekIndex: number): boolean {
+        for (let i = weekIndex + 1; i < routine!.semanas.length; i++) {
+          if (routine!.semanas[i].dias.some((otherDia) => dayLastActivityAt(otherDia) !== null)) return true;
+        }
+        return false;
+      }
+
       /**
        * "Pendiente": todavía no se completó y sigue siendo una sesión vigente/futura -- nunca se
        * tocó, o se tocó hace menos de 24hs y no se empezó después otro día de la misma semana.
        * "Incompleto": quedó a medias en el pasado -- pasaron más de 24hs desde el último toque,
-       * o ya se empezó (más reciente) otro día de la misma semana, así que no se va a completar.
+       * ya se empezó (más reciente) otro día de la misma semana, o ya se arrancó una semana
+       * posterior de la rutina, así que no se va a completar.
        */
-      function dayStatus(semana: RoutineDetail["semanas"][number], dia: RoutineDetail["semanas"][number]["dias"][number]): DayStatus {
+      function dayStatus(weekIndex: number, dia: RoutineDetail["semanas"][number]["dias"][number]): DayStatus {
+        const semana = routine!.semanas[weekIndex];
         if (dayProgress(dia) >= 100) return "done";
+
+        // Arrancó una semana posterior: este día de una semana anterior ya quedó incompleto,
+        // sin importar si se tocó algo o no.
+        if (laterWeekStarted(weekIndex)) return "incomplete";
 
         const lastActivity = dayLastActivityAt(dia);
         if (!lastActivity) return "pending";
@@ -676,7 +691,7 @@ export const pesosView: ViewModule = {
         weekContent.innerHTML = semana.dias
           .map((dia, diaIndex) => {
             const pct = dayProgress(dia);
-            const status = dayStatus(semana, dia);
+            const status = dayStatus(weekIndex, dia);
             const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
             const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
             const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
