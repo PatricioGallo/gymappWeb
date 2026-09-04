@@ -120,8 +120,8 @@ export function registerShellRoutes(): void {
     auth: "required",
   });
   registerRoute({
-    match: (pathname) => (pathname.endsWith("/pages/pesoCorporal.html") ? new URLSearchParams() : null),
-    load: () => import("../pages/pesoCorporal").then((m) => m.pesoCorporalView),
+    match: (pathname) => (pathname.endsWith("/pages/medidas.html") ? new URLSearchParams() : null),
+    load: () => import("../pages/medidas").then((m) => m.medidasView),
     auth: "required",
   });
   registerRoute({

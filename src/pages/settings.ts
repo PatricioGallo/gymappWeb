@@ -31,6 +31,15 @@ import {
   type StatWidgetCategory,
 } from "../lib/statsWidgets";
 import { isPushSupported, isIosNonStandalone, isPushEnabledForUser, enablePushNotifications, disablePushNotifications } from "../lib/pushNotifications";
+import {
+  MEASUREMENT_FIELDS,
+  GROUP_LABELS,
+  parseBodyMeasurementPrefs,
+  setAlturaCm,
+  type BodyMeasurementPrefs,
+  type MeasurementGroup,
+  type MeasurementKey,
+} from "../services/bodyMeasurements.service";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
 import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
 import { ALL_PLATFORMS, getPlatform, type SocialPlatform } from "../lib/socialLinks";
@@ -865,6 +874,58 @@ export const settingsView: ViewModule = {
       let showStatsDraft = savedShowStats;
       let widgetsDraft = [...savedWidgets];
 
+      // Medidas corporales: a diferencia de los widgets de arriba, cada toggle persiste al
+      // toque (mismo criterio que zoomToggle/notif-toggle) -- no hay "Guardar cambios" para esto.
+      let measurementPrefs = parseBodyMeasurementPrefs(profile!.body_measurement_prefs);
+      // Altura: NO es un toggle (ver nota en MEASUREMENT_FIELDS) -- profiles.altura_cm, se pide
+      // una sola vez acá mismo (campo de texto, no chip) porque prácticamente no cambia.
+      let alturaCm = profile!.altura_cm != null ? Number(profile!.altura_cm) : null;
+      const measurementGroups: MeasurementGroup[] = ["peso", "circunferencias", "composicion", "calculadas"];
+
+      function fmtAltura(cm: number): string {
+        return String(Math.round(cm * 100) / 100);
+      }
+
+      function alturaFieldHtml(): string {
+        return `
+          <div class="field measurement-altura-field">
+            <label for="alturaInput">Tu altura (cm)</label>
+            <input type="text" id="alturaInput" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" placeholder="Ej: 175" value="${alturaCm != null ? fmtAltura(alturaCm) : ""}">
+            <p class="chart-sub" style="margin:6px 0 0;">Se usa para tu IMC y el ratio cintura-altura. La cargás una sola vez -- no hace falta repetirla.</p>
+          </div>
+        `;
+      }
+
+      function measurementFieldsMarkup(): string {
+        return measurementGroups
+          .map(
+            (g) => `
+          <div class="settings-widget-group">
+            <h4>${GROUP_LABELS[g]}</h4>
+            ${g === "peso" ? alturaFieldHtml() : ""}
+            ${
+              // Las calculadas (IMC, ratios) no se cargan a mano -- se derivan de peso/altura/
+              // cintura/cadera cuando estén cargados, este aviso evita que activarlas sin más se
+              // sienta como que "no hacen nada".
+              g === "calculadas"
+                ? `<p class="chart-sub" style="margin:0 0 10px;">Se calculan solas a partir de las medidas de arriba -- no hace falta cargarlas a mano.</p>`
+                : ""
+            }
+            <div class="exc-pick-chips">
+              ${MEASUREMENT_FIELDS.filter((f) => f.group === g)
+                .map(
+                  (f) => `
+                <button type="button" class="exc-pick-chip measurement-field-chip${measurementPrefs[f.key] ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `
+          )
+          .join("");
+      }
+
       const trainedExercises = await getTrainedExercises();
       const exerciseNameOf = (id: string | null): string | null => (id ? (trainedExercises.find((e) => e.id === id)?.name ?? "Ejercicio") : null);
 
@@ -953,6 +1014,25 @@ export const settingsView: ViewModule = {
         </div>
 
         <div class="chart-card reveal">
+          <h3>Medidas corporales</h3>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="switch-label">Registrar medidas corporales</span>
+              <p class="chart-sub" style="margin:4px 0 0;">Por defecto está desactivado. Activalo para poder cargar tu peso y, si querés, otras medidas (cintura, bíceps, % de grasa...) desde tu perfil.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="bodyMeasurementsEnabledToggle" ${measurementPrefs.enabled ? "checked" : ""}>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div id="bodyMeasurementFieldsSection" ${measurementPrefs.enabled ? "" : "hidden"}>
+            <p class="chart-sub">Elegí qué medidas querés seguir además del peso. Podés cambiar esto cuando quieras -- lo que ya cargaste no se borra si desactivás una medida.</p>
+            <div id="bodyMeasurementFieldsList">${measurementFieldsMarkup()}</div>
+          </div>
+          <div class="alert_message" id="measurementPrefsAlert"></div>
+        </div>
+
+        <div class="chart-card reveal">
           <h3>Personalización del perfil</h3>
           <div class="settings-toggle-row">
             <div>
@@ -1003,6 +1083,109 @@ export const settingsView: ViewModule = {
         profile!.zoom_enabled = zoomEnabled;
         const viewport = document.querySelector('meta[name="viewport"]');
         if (viewport) viewport.setAttribute("content", zoomEnabled ? "width=device-width, initial-scale=1" : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
+      });
+
+      async function persistMeasurementPrefs(next: BodyMeasurementPrefs): Promise<boolean> {
+        const alertBox = container.querySelector("#measurementPrefsAlert")!;
+        alertBox.innerHTML = "";
+        const previous = measurementPrefs;
+        measurementPrefs = next;
+        const { error } = await updateProfileFields(userId, { body_measurement_prefs: next as unknown as Profile["body_measurement_prefs"] });
+        if (error) {
+          measurementPrefs = previous;
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return false;
+        }
+        profile!.body_measurement_prefs = next as unknown as Profile["body_measurement_prefs"];
+        return true;
+      }
+
+      function wireMeasurementFieldChips(): void {
+        container.querySelectorAll<HTMLButtonElement>(".measurement-field-chip").forEach((chip) => {
+          chip.addEventListener("click", async () => {
+            const key = chip.dataset.key as MeasurementKey;
+            const turningOn = !measurementPrefs[key];
+            const field = MEASUREMENT_FIELDS.find((f) => f.key === key);
+
+            // IMC / ratio cintura-altura no se pueden calcular sin altura, y la altura no es un
+            // toggle que se pueda encender solo (es profiles.altura_cm, arriba en este mismo
+            // grupo) -- si todavía no la cargó, se corta acá con un aviso en vez de dejar
+            // "activada" una medida que nunca va a mostrar nada.
+            if (turningOn && field?.requiresAltura && alturaCm == null) {
+              const alertBox = container.querySelector("#measurementPrefsAlert")!;
+              alertBox.innerHTML = `<p>Para activar "${escapeHtml(field.label)}" primero tenés que cargar tu altura, un poco más arriba.</p>`;
+              return;
+            }
+
+            const next: BodyMeasurementPrefs = { ...measurementPrefs, [key]: turningOn };
+
+            // Encender una medida CALCULADA (IMC, ratios) enciende de paso las medidas de base
+            // que necesita -- ej. IMC prende Peso, ratio cintura-cadera prende Cintura + Cadera
+            // (ver requires en MEASUREMENT_FIELDS). Solo al encender: apagar el cálculo no apaga
+            // sus medidas de base, podrían seguir queriéndose por separado.
+            const dependents = turningOn ? (field?.requires ?? []) : [];
+            dependents.forEach((depKey) => {
+              next[depKey] = true;
+            });
+
+            const affectedChips = [key, ...dependents].map((k) => container.querySelector<HTMLButtonElement>(`.measurement-field-chip[data-key="${k}"]`)).filter((c): c is HTMLButtonElement => !!c);
+            affectedChips.forEach((c) => (c.disabled = true));
+            const ok = await persistMeasurementPrefs(next);
+            affectedChips.forEach((c) => {
+              c.disabled = false;
+              if (ok) c.classList.toggle("active", measurementPrefs[c.dataset.key as MeasurementKey]);
+            });
+          });
+        });
+      }
+      wireMeasurementFieldChips();
+
+      // Guarda al perder el foco (no hace falta un botón "Guardar" aparte, mismo criterio
+      // inmediato que el resto de esta tarjeta) -- solo si el valor realmente cambió.
+      container.querySelector("#alturaInput")?.addEventListener("change", async (e) => {
+        const input = e.target as HTMLInputElement;
+        const alertBox = container.querySelector("#measurementPrefsAlert")!;
+        alertBox.innerHTML = "";
+        const raw = input.value.trim().replace(",", ".");
+
+        let value: number | null;
+        if (raw === "") {
+          value = null;
+        } else {
+          const num = Number(raw);
+          if (Number.isNaN(num) || num <= 0 || num >= 300) {
+            alertBox.innerHTML = "<p>Ingresá una altura válida en cm (entre 1 y 299).</p>";
+            input.value = alturaCm != null ? fmtAltura(alturaCm) : "";
+            return;
+          }
+          value = num;
+        }
+
+        input.disabled = true;
+        const { error } = await setAlturaCm(userId, value);
+        input.disabled = false;
+        if (error) {
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          input.value = alturaCm != null ? fmtAltura(alturaCm) : "";
+          return;
+        }
+        alturaCm = value;
+        profile!.altura_cm = value;
+        input.value = alturaCm != null ? fmtAltura(alturaCm) : "";
+      });
+
+      container.querySelector("#bodyMeasurementsEnabledToggle")?.addEventListener("change", async (e) => {
+        const toggle = e.target as HTMLInputElement;
+        const enabled = toggle.checked;
+        const fieldsSection = container.querySelector("#bodyMeasurementFieldsSection") as HTMLElement;
+        toggle.disabled = true;
+        const ok = await persistMeasurementPrefs({ ...measurementPrefs, enabled });
+        toggle.disabled = false;
+        if (!ok) {
+          toggle.checked = !enabled;
+          return;
+        }
+        fieldsSection.hidden = !enabled;
       });
 
       function syncSaveBar(): void {
