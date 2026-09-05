@@ -14,6 +14,193 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_campaigns: {
+        Row: {
+          advertiser_id: string
+          billing_notes: string | null
+          body_text: string | null
+          created_at: string
+          creative_kind: string
+          cta_label: string | null
+          cta_url: string | null
+          daily_impression_cap_per_user: number
+          ends_at: string
+          headline: string | null
+          id: string
+          media_type: string | null
+          media_url: string | null
+          post_id: string | null
+          price_total: number | null
+          starts_at: string
+          status: string
+          target_ciudad: string | null
+          target_provincia: string | null
+          target_user_types: string[]
+          updated_at: string
+        }
+        Insert: {
+          advertiser_id: string
+          billing_notes?: string | null
+          body_text?: string | null
+          created_at?: string
+          creative_kind: string
+          cta_label?: string | null
+          cta_url?: string | null
+          daily_impression_cap_per_user?: number
+          ends_at: string
+          headline?: string | null
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          post_id?: string | null
+          price_total?: number | null
+          starts_at: string
+          status?: string
+          target_ciudad?: string | null
+          target_provincia?: string | null
+          target_user_types?: string[]
+          updated_at?: string
+        }
+        Update: {
+          advertiser_id?: string
+          billing_notes?: string | null
+          body_text?: string | null
+          created_at?: string
+          creative_kind?: string
+          cta_label?: string | null
+          cta_url?: string | null
+          daily_impression_cap_per_user?: number
+          ends_at?: string
+          headline?: string | null
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          post_id?: string | null
+          price_total?: number | null
+          starts_at?: string
+          status?: string
+          target_ciudad?: string | null
+          target_provincia?: string | null
+          target_user_types?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_advertiser_id_fkey"
+            columns: ["advertiser_id"]
+            isOneToOne: false
+            referencedRelation: "advertisers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_events: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          kind: string
+          viewer_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          viewer_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_events_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_events_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advertisers: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          kind: string
+          logo_url: string | null
+          name: string
+          profile_id: string | null
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          logo_url?: string | null
+          name: string
+          profile_id?: string | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          logo_url?: string | null
+          name?: string
+          profile_id?: string | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advertisers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advertisers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       body_measurements: {
         Row: {
           agua_corporal_pct: number | null
@@ -3086,6 +3273,25 @@ export type Database = {
         }[]
       }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
+      get_feed_ads: {
+        Args: { p_limit?: number; p_seed?: string }
+        Returns: {
+          advertiser_kind: string
+          advertiser_logo_url: string
+          advertiser_name: string
+          advertiser_user_type: string
+          advertiser_username: string
+          body_text: string
+          campaign_id: string
+          creative_kind: string
+          cta_label: string
+          cta_url: string
+          headline: string
+          media_type: string
+          media_url: string
+          post_id: string
+        }[]
+      }
       get_follow_counts: {
         Args: { p_user_id: string }
         Returns: {
@@ -3549,6 +3755,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      record_ad_event: {
+        Args: { p_campaign_id: string; p_kind: string }
+        Returns: undefined
       }
       record_post_view: { Args: { p_post_id: string }; Returns: undefined }
       remove_group_participant: {
