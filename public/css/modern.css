@@ -6986,6 +6986,10 @@ body.chat-embedded .chat-thread-container { max-width: none; }
    los campos llevan su propio fondo --surface-2 con borde, apoyados directo sobre la tarjeta
    del composer (o del modal), sin otra tarjeta-adentro-de-tarjeta de por medio. */
 .post-composer-poll { display: flex; flex-direction: column; gap: 14px; margin: 12px 0; }
+/* [hidden] pierde contra el display:flex de arriba sin esto (mismo motivo que .alert_message[hidden]
+   y el resto de la hoja). Sin este override el bloque de encuesta -- "+ Agregar opción" + "Duración"
+   -- se ve apenas se abre el composer y no se va al apagar el modo encuesta (ver setPollMode en feed.ts). */
+.post-composer-poll[hidden] { display: none; }
 .post-composer-poll-options { display: flex; flex-direction: column; gap: 10px; }
 .post-composer-poll-row { display: flex; align-items: center; gap: 8px; }
 .post-composer-poll-input {
