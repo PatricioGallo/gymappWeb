@@ -138,6 +138,16 @@ function fieldValueLabel(entry: BodyMeasurementEntry, field: MeasurementFieldDef
   return `${field.label}: ${fmt(value)}${unitSuffix(unitLabelOf(field, entry.unidad))}`;
 }
 
+// Todas las medidas cargadas ese día, sean o no las que están activas hoy en Configuración --
+// desactivar una medida no borra ni esconde lo que ya se había registrado con ella. Ej. "Peso:
+// 78.5 Kg · IMC: 23.4 · Ratio cintura-altura: 0.55". La usan tanto una fila del historial como el
+// pie del visor de fotos (ver wirePhotoButtons) -- misma medida, mismo texto en los dos lugares.
+function entryMeasurementSummary(entry: BodyMeasurementEntry): string {
+  return MEASUREMENT_FIELDS.map((f) => fieldValueLabel(entry, f))
+    .filter((s): s is string => s !== null)
+    .join(" · ");
+}
+
 function emptyMarkup(): string {
   return `
     <div class="empty-state reveal">
@@ -167,11 +177,7 @@ function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, s
   const rows = [...entries]
     .reverse()
     .map((e) => {
-      // Todas las medidas cargadas ese día, sean o no las que están activas hoy en Configuración
-      // -- desactivar una medida no borra ni esconde lo que ya se había registrado con ella.
-      const summary = MEASUREMENT_FIELDS.map((f) => fieldValueLabel(e, f))
-        .filter((s): s is string => s !== null)
-        .join(" · ");
+      const summary = entryMeasurementSummary(e);
       const photoUrl = e.fotoPath ? photoUrls.get(e.fotoPath) : undefined;
       return `
     <div class="bw-row" data-id="${e.id}">
@@ -636,11 +642,15 @@ export const medidasView: ViewModule = {
     }
 
     // Abre el visor a pantalla completa (mismo componente que Reps/chat, ver mediaLightbox.ts)
-    // con la cola de TODAS las fotos de progreso en orden cronológico -- deslizar hacia arriba
-    // desde una foto va pasando a la siguiente en el tiempo. Compartido por las miniaturas del
-    // historial (.bw-row-photo-btn) y la grilla de la pestaña Progreso (.bw-gallery-item).
+    // con la cola de TODAS las fotos de progreso, de la más nueva a la más vieja -- MISMO orden
+    // en que se ven en el historial y en la grilla de Progreso (ambos muestran la más nueva
+    // primero), para que deslizar vaya siempre hacia la foto físicamente vecina en pantalla, no al
+    // revés. horizontalNav: deslizar a la izquierda avanza (más vieja), a la derecha vuelve (más
+    // nueva) -- en vez del gesto vertical de siempre, que acá no tendría "cerrar" natural (se
+    // cierra con la cruz). Compartido por las miniaturas del historial (.bw-row-photo-btn) y la
+    // grilla de la pestaña Progreso (.bw-gallery-item).
     function wirePhotoButtons(root: ParentNode, selector: string, entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): void {
-      const withPhotos = entries.filter((e) => e.fotoPath && photoUrls.has(e.fotoPath));
+      const withPhotos = [...entries].reverse().filter((e) => e.fotoPath && photoUrls.has(e.fotoPath));
       root.querySelectorAll<HTMLButtonElement>(selector).forEach((btn) => {
         btn.addEventListener("click", () => {
           const startIndex = withPhotos.findIndex((e) => e.id === btn.dataset.photoId);
@@ -648,9 +658,14 @@ export const medidasView: ViewModule = {
           openMediaLightbox<BodyMeasurementEntry>({
             queue: withPhotos,
             startIndex,
+            horizontalNav: true,
             getMedia: (e) => ({ url: photoUrls.get(e.fotoPath!)!, kind: "image" }),
             renderFooter: (e, footerEl) => {
-              footerEl.innerHTML = `<p class="bw-photo-lightbox-caption">${escapeHtml(formatFechaCorta(e.fecha))}</p>`;
+              const summary = entryMeasurementSummary(e);
+              footerEl.innerHTML = `
+                <p class="bw-photo-lightbox-caption">${escapeHtml(formatFechaCorta(e.fecha))}</p>
+                ${summary ? `<p class="bw-photo-lightbox-summary">${escapeHtml(summary)}</p>` : ""}
+              `;
             },
           });
         });

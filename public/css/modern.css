@@ -2960,6 +2960,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .bw-row-photo-btn { flex-shrink: 0; padding: 0; border: none; background: none; cursor: pointer; line-height: 0; border-radius: 8px; }
 .bw-row-photo { display: block; width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
 .bw-photo-lightbox-caption { margin: 0; font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
+.bw-photo-lightbox-summary { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); text-align: center; }
 
 /* Grilla de la pestaña "Progreso" (ver progressGalleryMarkup en medidas.ts) -- solo aparece si
    hay al menos una foto cargada. */
@@ -7402,6 +7403,45 @@ body.chat-embedded .chat-thread-container { max-width: none; }
     max-width: 100vw;
     border-radius: 0;
   }
+}
+
+/* horizontalNav (ver mediaLightbox.ts): en vez de un solo media centrado, mediaWrap se vuelve la
+   "ventana" que recorta una cinta de 3 paneles (anterior/actual/siguiente, 300% de ancho entre
+   los tres) -- arrastrar mueve la cinta entera (setTrackTransform/finishSlide), así la foto
+   vecina ya se ve entrando en vivo en vez de recién aparecer de golpe al soltar. El padding pasa
+   de mediaWrap a cada panel para que los tres lo tengan por igual. */
+.media-lightbox-carousel .media-lightbox-media-wrap {
+  padding: 0;
+  overflow: hidden;
+  /* La regla base de arriba centra su contenido (align-items/justify-content:center) -- con un
+     hijo más ancho que el contenedor (la cinta, 300%) eso centra el DESBORDE, corriendo el inicio
+     de la cinta -900px antes de aplicarle nada -- todo el cálculo de translateX de más abajo
+     asume que arranca pegada al borde izquierdo, no centrada. */
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+.media-lightbox-track {
+  display: flex;
+  width: 300%;
+  height: 100%;
+  /* Sin esto, al ser hijo flex de mediaWrap (que sigue siendo display:flex), el navegador lo
+     encoge para que entre en el contenedor -- el width:300% quedaba en los hechos ignorado y los
+     3 paneles se veían apretados en el ancho de uno solo en vez de una cinta real. */
+  flex-shrink: 0;
+}
+
+.media-lightbox-slide {
+  flex: 0 0 33.3333%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+@media (max-width: 859px) {
+  .media-lightbox-slide { padding: 0; }
 }
 
 /* Pie con el texto del Rep y la barra de acciones (me gusta, comentar, citar...), misma
