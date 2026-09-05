@@ -586,6 +586,18 @@ export async function getMeasurementPhotoUrl(path: string): Promise<string | nul
   return data.signedUrl;
 }
 
+/**
+ * Descarga la foto de una medida como Blob -- se usa para re-subirla a OTRO bucket al compartir
+ * la medida como Rep (el bucket de Reps es público, el de fotos de progreso es privado, no se
+ * puede referenciar una URL firmada con TTL desde un Rep permanente). Ver openShareMeasurementModal
+ * en medidas.ts. Devuelve null si falla -- el caller ofrece subir una foto a mano en ese caso.
+ */
+export async function downloadMeasurementPhoto(path: string): Promise<Blob | null> {
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).download(path);
+  if (error || !data) return null;
+  return data;
+}
+
 /** Batch para el historial (varias filas con foto a la vez) -- una sola llamada de red en vez de N. */
 export async function getMeasurementPhotoUrls(paths: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();

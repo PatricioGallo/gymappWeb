@@ -23,6 +23,7 @@ import {
   getGenero,
   uploadMeasurementPhoto,
   deleteMeasurementPhoto,
+  downloadMeasurementPhoto,
   getMeasurementPhotoUrl,
   getMeasurementPhotoUrls,
   type BodyMeasurementEntry,
@@ -35,9 +36,20 @@ import {
   type LoggableFieldDef,
   type RccSex,
 } from "../services/bodyMeasurements.service";
+import { createPost, uploadPostMedia, deletePostMedia, validatePostContent } from "../services/post.service";
+import { makeMentionEditable } from "../lib/mentionEditor";
+import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
 import { openMediaLightbox } from "../lib/mediaLightbox";
+
+// Límite de caracteres de un Rep (coincide con POST_MAX en feed.ts / POST_CONTENT_MAX en
+// post.service.ts, que no lo exporta). Usado por el modal "Compartir como Rep".
+const POST_MAX = 240;
+
+// Formatos que acepta el adjunto del modal "Compartir como Rep" -- solo imágenes (la foto de
+// una medida siempre es una foto; para un video está el composer normal del feed).
+const SHARE_PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
 const UNIT_LABELS: Record<BodyWeightUnit, string> = { kg: "Kg", lb: "Lb" };
 
@@ -48,6 +60,7 @@ const PROGRESO_TAB_KEY = "progreso" as const;
 const KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
 const EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+const SHARE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>`;
 
 // ---------------------------------------------------------------------------
 // Borrador de "+Agregar medidas": si el usuario cierra el modal sin guardar (Cancelar, o
@@ -148,6 +161,14 @@ function entryMeasurementSummary(entry: BodyMeasurementEntry): string {
     .join(" · ");
 }
 
+// Texto que trae precargado el modal "Compartir como Rep": encabezado con la fecha + una línea
+// por medida cargada ese día. Se recorta a POST_MAX -- para alguien que sigue las 17 medidas el
+// texto completo se pasaría de largo; el usuario lo edita igual antes de publicar.
+function buildShareText(entry: BodyMeasurementEntry): string {
+  const lines = MEASUREMENT_FIELDS.map((f) => fieldValueLabel(entry, f)).filter((s): s is string => s !== null);
+  return [`Mis medidas del ${formatFechaCorta(entry.fecha)}`, "", ...lines].join("\n").slice(0, POST_MAX);
+}
+
 function emptyMarkup(): string {
   return `
     <div class="empty-state reveal">
@@ -190,6 +211,7 @@ function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, s
       <div class="weight-menu-wrap">
         <button type="button" class="profile-menu-btn weight-menu-btn" aria-label="Más opciones" aria-expanded="false">${KEBAB_ICON}</button>
         <div class="profile-menu-panel weight-menu-panel" hidden>
+          <button type="button" class="profile-menu-item bw-share" data-id="${e.id}">${SHARE_ICON}Compartir</button>
           <button type="button" class="profile-menu-item bw-edit" data-id="${e.id}">${EDIT_ICON}Editar</button>
           <button type="button" class="profile-menu-item profile-menu-item-danger bw-delete" data-id="${e.id}">${TRASH_ICON}Borrar</button>
         </div>
@@ -608,6 +630,209 @@ export const medidasView: ViewModule = {
       });
     }
 
+    // Comparte un registro del historial como un Rep normal del feed: el texto viene precargado
+    // con las medidas de ese día (editable) y, si el registro tiene foto de progreso, viene
+    // adjunta (también editable -- se puede quitar o reemplazar por otra). Al publicar, la foto
+    // de la medida (bucket privado) se re-descarga y se sube al bucket público de Reps: un Rep
+    // es permanente y no puede depender de una URL firmada con TTL.
+    async function openShareMeasurementModal(entry: BodyMeasurementEntry): Promise<void> {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+
+      // URL firmada solo para el preview del modal (ver getMeasurementPhotoUrl) -- al publicar
+      // NO se usa esta URL, se re-descarga el archivo (downloadMeasurementPhoto).
+      const measurementPhotoUrl = entry.fotoPath ? await getMeasurementPhotoUrl(entry.fotoPath) : null;
+      const defaultText = buildShareText(entry);
+
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card modal-card-lg">
+            <h2>Compartir como Rep</h2>
+            <p class="subtitle">Se va a publicar en tu feed. Editá el texto y la foto como quieras.</p>
+            <div class="field">
+              <textarea id="bwShareText" class="quote-composer-input" rows="5" placeholder="¿Qué querés contar sobre estas medidas?">${escapeHtml(defaultText)}</textarea>
+              <span class="post-composer-counter bw-share-counter" id="bwShareCounter">${POST_MAX}</span>
+            </div>
+            <div class="field">
+              <label for="bwSharePhotoFile">Foto (opcional)</label>
+              <div class="dropzone" id="bwSharePhotoDropzone">
+                <input type="file" id="bwSharePhotoFile" accept="${SHARE_PHOTO_ACCEPT}" class="dropzone-input" aria-label="Foto del Rep">
+                <div class="dropzone-empty" id="bwSharePhotoEmpty" ${measurementPhotoUrl ? "hidden" : ""}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                  <p><strong>Hacé clic para subir</strong> o arrastrá una foto acá</p>
+                  <span class="field-hint">JPG, PNG o WEBP · hasta 20MB</span>
+                </div>
+                <div class="dropzone-preview" id="bwSharePhotoPreview" ${measurementPhotoUrl ? "" : "hidden"}>
+                  <img id="bwSharePhotoPreviewImg" class="bw-photo-preview-img" alt="" src="${measurementPhotoUrl ? escapeHtml(measurementPhotoUrl) : ""}">
+                  <span class="dropzone-filename" id="bwSharePhotoFileName">${measurementPhotoUrl ? "Foto de la medida" : ""}</span>
+                  <button type="button" class="dropzone-remove" id="bwSharePhotoRemove" title="Quitar foto">×</button>
+                </div>
+              </div>
+            </div>
+            <div class="alert_message" id="bwShareAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-primary" id="bwShareSubmit" type="button">Publicar</button>
+              <button class="btn btn-outline" id="bwShareCancel" type="button">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("bwShareCancel")?.addEventListener("click", () => {
+        loaderBody.innerHTML = "";
+      });
+
+      const textEl = document.getElementById("bwShareText") as HTMLTextAreaElement;
+      const counterEl = document.getElementById("bwShareCounter")!;
+      function updateCounter(): void {
+        const remaining = POST_MAX - textEl.value.length;
+        counterEl.textContent = String(remaining);
+        counterEl.classList.toggle("post-composer-counter-over", remaining < 0);
+      }
+      textEl.addEventListener("input", updateCounter);
+      updateCounter();
+      // Menciones @usuario igual que el composer de un Rep / citar un Rep -- el texto sale como
+      // "@usuario" plano y createPost lo resuelve y etiqueta (tagMentionedUsers).
+      attachMentionAutocomplete(makeMentionEditable(textEl));
+
+      // ---------- Dropzone de foto (mismo patrón que openMeasurementModal) ----------
+      // pendingPhotoFile: archivo nuevo elegido a mano. photoRemoved: se quitó la foto original.
+      // Media final a publicar = pendingPhotoFile ?? (foto de la medida, si no se quitó) ?? nada.
+      let pendingPhotoFile: File | null = null;
+      let photoRemoved = false;
+      let previewObjectUrl: string | null = null;
+      const dz = document.getElementById("bwSharePhotoDropzone");
+      const dzInput = document.getElementById("bwSharePhotoFile") as HTMLInputElement | null;
+      const dzEmpty = document.getElementById("bwSharePhotoEmpty");
+      const dzPreview = document.getElementById("bwSharePhotoPreview");
+      const dzPreviewImg = document.getElementById("bwSharePhotoPreviewImg") as HTMLImageElement | null;
+      const dzFileName = document.getElementById("bwSharePhotoFileName");
+
+      function showPreview(file: File): void {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = URL.createObjectURL(file);
+        if (dzPreviewImg) dzPreviewImg.src = previewObjectUrl;
+        if (dzFileName) dzFileName.textContent = file.name;
+        dz?.classList.add("has-file");
+        dzEmpty?.setAttribute("hidden", "");
+        dzPreview?.removeAttribute("hidden");
+        pendingPhotoFile = file;
+        photoRemoved = false;
+      }
+
+      function clearPreview(): void {
+        if (previewObjectUrl) {
+          URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = null;
+        }
+        if (dzInput) dzInput.value = "";
+        dz?.classList.remove("has-file");
+        dzPreview?.setAttribute("hidden", "");
+        dzEmpty?.removeAttribute("hidden");
+        pendingPhotoFile = null;
+        photoRemoved = true;
+      }
+
+      dzInput?.addEventListener("change", () => {
+        const file = dzInput.files?.[0];
+        if (file) showPreview(file);
+      });
+      document.getElementById("bwSharePhotoRemove")?.addEventListener("click", clearPreview);
+      dz?.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        dz.classList.add("dragover");
+      });
+      dz?.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+      dz?.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dz.classList.remove("dragover");
+        const file = (event as DragEvent).dataTransfer?.files?.[0];
+        if (file && dzInput) {
+          dzInput.files = (event as DragEvent).dataTransfer!.files;
+          showPreview(file);
+        }
+      });
+      ctx.addCleanup(() => {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      });
+
+      document.getElementById("bwShareSubmit")?.addEventListener("click", async () => {
+        const alertEl = document.getElementById("bwShareAlert")!;
+        alertEl.innerHTML = "";
+        const text = textEl.value;
+        const keepsMeasurementPhoto = entry.fotoPath != null && !photoRemoved && pendingPhotoFile == null;
+        const hasMedia = pendingPhotoFile != null || keepsMeasurementPhoto;
+
+        const validationError = validatePostContent(text, hasMedia);
+        if (validationError) {
+          alertEl.innerHTML = `<p>${escapeHtml(validationError)}</p>`;
+          return;
+        }
+
+        const submitBtn = document.getElementById("bwShareSubmit") as HTMLButtonElement;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span class="btn-spinner"></span> Publicando...`;
+        const resetBtn = () => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Publicar";
+        };
+
+        let uploadedPath: string | undefined;
+        try {
+          let fileToUpload: File | null = pendingPhotoFile;
+          if (!fileToUpload && keepsMeasurementPhoto) {
+            const blob = await downloadMeasurementPhoto(entry.fotoPath!);
+            if (!blob) {
+              resetBtn();
+              alertEl.innerHTML = `<p>No se pudo adjuntar la foto de la medida. Quitala y subí una a mano, o publicá sin foto.</p>`;
+              return;
+            }
+            const type = blob.type || "image/jpeg";
+            const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
+            fileToUpload = new File([blob], `medida-${entry.fecha}.${ext}`, { type });
+          }
+
+          let mediaUrl: string | undefined;
+          let mediaType: "image" | "video" | undefined;
+          if (fileToUpload) {
+            const up = await uploadPostMedia(myId, fileToUpload);
+            if (up.error || !up.url) {
+              resetBtn();
+              alertEl.innerHTML = `<p>${escapeHtml(up.error || "No se pudo subir la foto.")}</p>`;
+              return;
+            }
+            mediaUrl = up.url;
+            mediaType = up.mediaType;
+            uploadedPath = up.path;
+          }
+
+          const { post, error } = await createPost(myId, text, mediaUrl, mediaType);
+          if (error || !post) {
+            if (uploadedPath) void deletePostMedia(uploadedPath);
+            resetBtn();
+            alertEl.innerHTML = `<p>${escapeHtml(error || "No se pudo publicar el Rep.")}</p>`;
+            return;
+          }
+
+          loaderBody.innerHTML = `
+            <div class="success-check-container">
+              <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+              <p>¡Rep publicado! Lo vas a ver en tu feed.</p>
+            </div>
+          `;
+          const t = setTimeout(() => {
+            loaderBody.innerHTML = "";
+          }, 1600);
+          ctx.addCleanup(() => clearTimeout(t));
+        } catch (err) {
+          console.error("[medidas] error compartiendo medida:", err);
+          if (uploadedPath) void deletePostMedia(uploadedPath);
+          resetBtn();
+          alertEl.innerHTML = `<p>No se pudo publicar el Rep. Probá de nuevo.</p>`;
+        }
+      });
+    }
+
     function wireHistoryMenus(entries: BodyMeasurementEntry[]): void {
       const content = container.querySelector("#bwContent")!;
       content.querySelectorAll<HTMLButtonElement>(".weight-menu-btn").forEach((btn) => {
@@ -623,6 +848,13 @@ export const medidasView: ViewModule = {
           panel.hidden = !willOpen;
           btn.classList.toggle("open", willOpen);
           btn.setAttribute("aria-expanded", String(willOpen));
+        });
+      });
+      content.querySelectorAll<HTMLButtonElement>(".bw-share").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+          const entry = entries.find((e) => e.id === btn.dataset.id);
+          if (entry) void openShareMeasurementModal(entry);
         });
       });
       content.querySelectorAll<HTMLButtonElement>(".bw-edit").forEach((btn) => {
