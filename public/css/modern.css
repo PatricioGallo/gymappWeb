@@ -2938,6 +2938,13 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .bw-actions { margin-bottom: 24px; }
 .bw-list { display: flex; flex-direction: column; }
 
+@media (max-width: 639px) {
+  /* Centrado, mismo tamaño que "+ Reportar issue" (.btn-sm) y con más aire respecto de las
+     pestañas (Historial/Progreso) que quedan justo debajo en mobile. */
+  .bw-actions { text-align: center; margin-bottom: 40px; }
+  .bw-actions #addMeasurementBtn { padding: 9px 16px; font-size: 13px; }
+}
+
 .bw-row {
   display: flex;
   align-items: center;
