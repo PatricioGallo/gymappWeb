@@ -2933,7 +2933,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .chart-grid { grid-template-columns: 1fr 1fr; }
 }
 
-/* ---------- Peso corporal (pesoCorporal.html) ---------- */
+/* ---------- Medidas corporales (medidas.html) ---------- */
 
 .bw-actions { margin-bottom: 24px; }
 .bw-list { display: flex; flex-direction: column; }
@@ -2949,8 +2949,130 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .bw-row:first-child { border-top: none; padding-top: 0; }
 .bw-row-main { flex: 1; min-width: 0; }
 .bw-row-date { font-weight: 700; font-size: 14px; }
+/* Todas las medidas cargadas ese día ("Peso: 78.5 Kg · Cintura: 82 cm..."), pueden ser varias --
+   a diferencia de antes (un solo peso en negrita a la derecha), ahora va en su propia línea
+   dentro de la columna principal, envolviendo si hace falta. */
+.bw-row-summary { font-weight: 700; font-size: 14px; margin-top: 2px; color: var(--text); }
 .bw-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.bw-row-peso { font-weight: 800; font-size: 16px; white-space: nowrap; }
+
+/* Miniatura de la foto de progreso de ese registro (si tiene) -- abre el visor a pantalla
+   completa con TODAS las fotos en orden cronológico (ver wireHistoryPhotos en medidas.ts). */
+.bw-row-photo-btn { flex-shrink: 0; padding: 0; border: none; background: none; cursor: pointer; line-height: 0; border-radius: 8px; }
+.bw-row-photo { display: block; width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
+.bw-photo-lightbox-caption { margin: 0; font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
+.bw-photo-lightbox-summary { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); text-align: center; }
+
+/* Grilla de la pestaña "Progreso" (ver progressGalleryMarkup en medidas.ts) -- solo aparece si
+   hay al menos una foto cargada. */
+.bw-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.bw-gallery-item { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: none; cursor: pointer; }
+.bw-gallery-item img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.bw-gallery-date { font-size: 11px; color: var(--text-muted); text-align: center; }
+
+/* Fila "Peso [input] [Kg/Lb]" del modal de carga -- la única medida con selector de unidad. */
+.bw-field-row { display: flex; gap: 8px; }
+.bw-field-row input { flex: 1; min-width: 0; }
+.bw-field-row select { flex: 0 0 auto; width: auto; }
+
+/* Preview de la foto de progreso opcional dentro del dropzone (mismo .dropzone-preview que
+   classDropzonePreviewImg, ver gymClassManageModal.ts) -- ese no fija tamaño a su <img>, acá sí
+   para no romper el layout con una foto de cámara a resolución completa. */
+.bw-photo-preview-img { display: block; width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
+
+/* Aviso de borrador recuperado (ver loadDraft/saveDraft en medidas.ts) -- se muestra arriba del
+   todo del modal de "+Agregar medidas" cuando había algo sin guardar de la vez anterior. */
+.bw-draft-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+.bw-draft-notice button {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Guía colapsable de "cómo medirme" en el modal de "+Agregar medidas" (ver bwHelpMarkup en
+   medidas.ts) -- arranca oculta, solo lista los campos que están en ESE formulario. */
+.bw-help-toggle { display: block; margin: 2px 0 14px; }
+.bw-help-panel {
+  margin: -2px 0 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.bw-help-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+.bw-help-group { margin-top: 14px; }
+.bw-help-group:first-of-type { margin-top: 14px; }
+.bw-help-group h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.bw-help-tip { margin: 0 0 8px; font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+.bw-help-list { margin: 0; }
+.bw-help-list dt { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--text); }
+.bw-help-list dt:first-child { margin-top: 0; }
+.bw-help-list dd { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+
+/* Clasificación de IMC (pestaña IMC de medidas.ts) -- mismo look que .member-status-badge,
+   colores propios (bajoPeso/sobrepeso comparten el amarillo de "atención", obesidad usa el
+   rojo de "expired", normal el verde de "ok"). */
+.imc-badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+/* Tonos genéricos (ver badgeTone en medidas.ts) -- compartidos por IMC, ratio cintura-altura y
+   ratio cintura-cadera, que nombran sus categorías distinto pero usan la misma semántica de color. */
+.imc-badge-ok { color: #6fb56f; border-color: #6fb56f55; background: #6fb56f1a; }
+.imc-badge-warning { color: #e0a63c; border-color: #e0a63c55; background: #e0a63c1a; }
+.imc-badge-danger { color: #e05c5c; border-color: #e05c5c55; background: #e05c5c1a; }
+
+.imc-classify-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.imc-classify-value { font-size: 14px; font-weight: 700; }
+
+.imc-range-list { display: flex; flex-direction: column; }
+.imc-range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.imc-range-row:first-child { border-top: none; padding-top: 0; }
+.imc-range-row-active { color: var(--text); }
+.imc-range-imc { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-muted); }
+.imc-range-row-active .imc-range-imc { color: var(--text); font-weight: 700; }
+.imc-range-weight { font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+@media (max-width: 480px) {
+  .imc-range-row { flex-wrap: wrap; }
+  .imc-range-imc { flex: 1 1 100%; order: 3; }
+}
 
 /* ---------- Routine tabs ---------- */
 
@@ -4568,6 +4690,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .settings-widget-group h4 { display: flex; align-items: baseline; gap: 8px; font-size: 15px; margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.03em; }
 .settings-widget-group h4 .chart-sub { font-size: 12px; margin: 0; text-transform: none; letter-spacing: normal; }
 
+/* El campo de altura (grupo "Peso y altura" en Configuración) trae el margin-bottom:16px de
+   ".field" por default -- sumado a que abajo le sigue un solo chip suelto ("Peso"), ese grupo
+   terminaba leyéndose separado del de "Circunferencias" de abajo. Lo achicamos para que el chip
+   quede pegado al campo, como cualquier otro grupo de chips. */
+.measurement-altura-field { margin-bottom: 6px; }
+
 .settings-save-bar {
   display: flex;
   align-items: center;
@@ -5204,6 +5332,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .exc-pick-chip:hover { border-color: var(--accent-2); color: var(--text); }
 }
 .exc-pick-chip.active { background: var(--accent-soft); border-color: var(--accent-2); color: var(--accent-2); }
+.exc-pick-chip:disabled { opacity: 0.5; cursor: default; }
 
 .exc-pick-results { max-height: 48vh; overflow-y: auto; padding-right: 4px; }
 
@@ -7274,6 +7403,45 @@ body.chat-embedded .chat-thread-container { max-width: none; }
     max-width: 100vw;
     border-radius: 0;
   }
+}
+
+/* horizontalNav (ver mediaLightbox.ts): en vez de un solo media centrado, mediaWrap se vuelve la
+   "ventana" que recorta una cinta de 3 paneles (anterior/actual/siguiente, 300% de ancho entre
+   los tres) -- arrastrar mueve la cinta entera (setTrackTransform/finishSlide), así la foto
+   vecina ya se ve entrando en vivo en vez de recién aparecer de golpe al soltar. El padding pasa
+   de mediaWrap a cada panel para que los tres lo tengan por igual. */
+.media-lightbox-carousel .media-lightbox-media-wrap {
+  padding: 0;
+  overflow: hidden;
+  /* La regla base de arriba centra su contenido (align-items/justify-content:center) -- con un
+     hijo más ancho que el contenedor (la cinta, 300%) eso centra el DESBORDE, corriendo el inicio
+     de la cinta -900px antes de aplicarle nada -- todo el cálculo de translateX de más abajo
+     asume que arranca pegada al borde izquierdo, no centrada. */
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+.media-lightbox-track {
+  display: flex;
+  width: 300%;
+  height: 100%;
+  /* Sin esto, al ser hijo flex de mediaWrap (que sigue siendo display:flex), el navegador lo
+     encoge para que entre en el contenedor -- el width:300% quedaba en los hechos ignorado y los
+     3 paneles se veían apretados en el ancho de uno solo en vez de una cinta real. */
+  flex-shrink: 0;
+}
+
+.media-lightbox-slide {
+  flex: 0 0 33.3333%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+@media (max-width: 859px) {
+  .media-lightbox-slide { padding: 0; }
 }
 
 /* Pie con el texto del Rep y la barra de acciones (me gusta, comentar, citar...), misma

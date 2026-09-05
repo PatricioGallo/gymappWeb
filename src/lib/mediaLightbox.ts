@@ -39,6 +39,8 @@ function lockBodyScroll(): () => void {
 
 export interface MediaLightboxController {
   goToNext: () => boolean;
+  /** Igual que goToNext pero hacia atrás -- false si ya está en el primer item de la cola. */
+  goToPrev: () => boolean;
   /** Repinta solo el pie con el item actual (mismo objeto, ya mutado por el caller) sin
    * reconstruir el overlay -- para acciones como me gusta que solo cambian un contador. */
   refresh: () => void;
@@ -60,6 +62,15 @@ export interface OpenMediaLightboxOptions<T> {
   /** Opcional: fondo 100% opaco en vez del negro semitransparente por defecto -- lo usa el
    * chat para las efímeras, así no se ve la conversación por detrás mientras está abierta. */
   opaque?: boolean;
+  /**
+   * Opcional (default false): cambia el gesto de arrastre de un dedo de vertical (abajo cierra,
+   * arriba pasa al siguiente, estilo Reels -- el comportamiento de siempre) a horizontal
+   * (izquierda pasa al siguiente, derecha vuelve al anterior, estilo carrusel/stories). En este
+   * modo cerrar arrastrando queda deshabilitado -- solo cruz, Escape o click en el fondo --
+   * porque ese eje ahora lo usa la navegación. Pensado para colecciones sin orden temporal tipo
+   * Reels (ej. fotos de progreso), donde "avanzar/volver" es más natural que "siguiente/cerrar".
+   */
+  horizontalNav?: boolean;
 }
 
 /**
@@ -73,11 +84,12 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
   const { queue, getMedia, renderFooter } = options;
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody || queue.length === 0) return undefined;
+  const horizontalNav = !!options.horizontalNav;
 
   const unlockBodyScroll = lockBodyScroll();
 
   loaderBody.innerHTML = `
-    <div class="media-lightbox${options.opaque ? " media-lightbox-opaque" : ""}" id="mediaLightboxOverlay">
+    <div class="media-lightbox${options.opaque ? " media-lightbox-opaque" : ""}${horizontalNav ? " media-lightbox-carousel" : ""}" id="mediaLightboxOverlay">
       <button type="button" class="media-lightbox-close" id="mediaLightboxClose" aria-label="Cerrar">✕</button>
       <div class="media-lightbox-media-wrap" id="mediaLightboxMediaWrap"></div>
       ${renderFooter ? `<div class="media-lightbox-footer" id="mediaLightboxFooter"></div>` : ""}
@@ -107,7 +119,9 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
     // Marca final exacta antes de soltar el video: el throttle de timeupdate pudo
     // dejar la ultima posicion hasta ~0.25s vieja, y quien abrio el visor (la
     // tarjeta del feed) va a leer esta marca justo despues via options.onClose.
-    const closingVideo = mediaWrap.querySelector("video");
+    // mediaEl (no un querySelector sobre mediaWrap) es el video ACTUAL -- con horizontalNav
+    // mediaWrap puede tener hasta 3 <video> a la vez (anterior/actual/siguiente).
+    const closingVideo = mediaEl?.tagName === "VIDEO" ? (mediaEl as HTMLVideoElement) : null;
     if (closingVideo && currentMediaUrl) rememberVideoPosition(currentMediaUrl, closingVideo.currentTime);
     disposeVideoResume?.();
     document.removeEventListener("keydown", onKeydown);
@@ -132,6 +146,8 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
   const DOUBLE_TAP_MS = 300;
   const DOUBLE_TAP_DIST = 30;
   let mediaEl: HTMLElement | null = null;
+  /** Solo horizontalNav: la "cinta" de 3 paneles (anterior/actual/siguiente) -- ver renderTrack. */
+  let trackEl: HTMLElement | null = null;
   let scale = 1;
   let panX = 0;
   let panY = 0;
@@ -216,11 +232,120 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // horizontalNav: en vez de pintar UN solo media en mediaWrap, arma una "cinta" de 3 paneles
+  // (anterior/actual/siguiente, cada uno 33.33% de ancho) para que arrastrar mueva la cinta en
+  // vivo -- la foto de al lado ya está pintada y se ve entrar siguiendo el dedo, en vez de recién
+  // cambiar de golpe al soltar (ver setTrackTransform/finishSlide, usadas desde el gesto más
+  // abajo). El modo vertical (default, sin horizontalNav) no usa nada de esto.
+  // ---------------------------------------------------------------------------
+
+  function setTrackTransform(dragPx: number): void {
+    if (trackEl) trackEl.style.transform = `translateX(calc(-33.3333% + ${dragPx}px))`;
+  }
+
+  /** Pinta un media (sync o async) dentro de UN panel de la cinta. Solo el panel "actual" queda
+   * enganchado a mediaEl/zoom/video-resume -- los de al lado son una vista previa nomás. */
+  function paintSlide(el: HTMLElement, item: T, isCurrent: boolean): void {
+    const result = getMedia(item);
+    if (result instanceof Promise) {
+      el.innerHTML = `<div class="modern-spinner media-lightbox-spinner" role="status" aria-label="Cargando"></div>`;
+      void result.then(
+        (media) => {
+          // el.isConnected: si la cinta se reconstruyó (renderTrack) mientras esto bajaba, este
+          // panel ya es viejo -- pintar ahí sería invisible (y para el actual, pisaría datos
+          // de la foto nueva con la vieja).
+          if (closed || !el.isConnected) return;
+          if (media) paintSlideMedia(el, media, isCurrent);
+          else el.innerHTML = `<p class="media-lightbox-msg">No se pudo cargar el contenido.</p>`;
+        },
+        () => {
+          if (closed || !el.isConnected) return;
+          el.innerHTML = `<p class="media-lightbox-msg">No se pudo cargar el contenido.</p>`;
+        }
+      );
+      return;
+    }
+    paintSlideMedia(el, result, isCurrent);
+  }
+
+  function paintSlideMedia(el: HTMLElement, { url, kind }: MediaLightboxMedia, isCurrent: boolean): void {
+    el.innerHTML =
+      kind === "video"
+        ? `<video class="media-lightbox-media" src="${escapeHtml(url)}" ${isCurrent ? "controls autoplay" : "muted"} playsinline></video>`
+        : `<img class="media-lightbox-media" src="${escapeHtml(url)}" alt="" draggable="false">`;
+    if (!isCurrent) return; // panel vecino: solo vista previa, no toca mediaEl/zoom/video-resume
+    currentMediaUrl = url;
+    mediaEl = el.querySelector<HTMLElement>(".media-lightbox-media");
+    resetZoom();
+    const video = el.querySelector("video");
+    if (video) {
+      disposeVideoResume = bindVideoResume(video, url);
+      video.play().catch(() => {});
+    }
+  }
+
+  function renderTrack(): void {
+    mediaWrap.innerHTML = `
+      <div class="media-lightbox-track" id="mediaLightboxTrack">
+        <div class="media-lightbox-slide" id="mediaLightboxSlidePrev"></div>
+        <div class="media-lightbox-slide" id="mediaLightboxSlideCurrent"></div>
+        <div class="media-lightbox-slide" id="mediaLightboxSlideNext"></div>
+      </div>
+    `;
+    trackEl = document.getElementById("mediaLightboxTrack");
+    setTrackTransform(0);
+
+    const prevItem = index > 0 ? queue[index - 1] : null;
+    const nextItem = index < queue.length - 1 ? queue[index + 1] : null;
+    if (prevItem) paintSlide(document.getElementById("mediaLightboxSlidePrev")!, prevItem, false);
+    paintSlide(document.getElementById("mediaLightboxSlideCurrent")!, currentItem, true);
+    if (nextItem) paintSlide(document.getElementById("mediaLightboxSlideNext")!, nextItem, false);
+  }
+
+  /**
+   * Termina el gesto horizontal animando la cinta el resto del camino: a la foto siguiente
+   * (-66.6666%), a la anterior (0%), o de vuelta a la actual (-33.3333%, "cancel" -- el drag no
+   * llegó al umbral). Solo next/prev cambian de índice, y recién CUANDO TERMINA la animación
+   * (transitionend, con un timeout de respaldo por si el navegador no lo dispara) -- goToNext/
+   * goToPrev reconstruyen la cinta entera centrada de nuevo vía renderTrack.
+   */
+  function finishSlide(direction: "next" | "prev" | "cancel"): void {
+    if (!trackEl) return;
+    const track = trackEl;
+    const targetPercent = direction === "next" ? -66.6666 : direction === "prev" ? 0 : -33.3333;
+    track.style.transition = "transform 0.25s ease";
+    track.style.transform = `translateX(${targetPercent}%)`;
+    if (direction === "cancel") return;
+
+    // Mientras esto está en camino, onPointerDown bloquea un drag nuevo (ver isAdvancing) -- sin
+    // eso, un segundo swipe empezado ANTES de que este termine pisa el transform/transition de la
+    // cinta a mitad de camino con el startX/hasNext/hasPrev de un index que todavía no cambió,
+    // pudiendo dejar la cinta trabada mostrando dos fotos a la vez en vez de una sola.
+    isAdvancing = true;
+    let done = false;
+    const advance = () => {
+      if (done || closed) return;
+      done = true;
+      track.removeEventListener("transitionend", advance);
+      clearTimeout(timeoutId);
+      if (direction === "next") goToNext();
+      else goToPrev();
+      isAdvancing = false;
+    };
+    track.addEventListener("transitionend", advance, { once: true });
+    const timeoutId = setTimeout(advance, 300); // red de seguridad si transitionend no llega a disparar
+  }
+
   function renderMedia(): void {
     disposeVideoResume?.();
     disposeVideoResume = null;
     mediaEl = null;
     currentMediaUrl = null;
+    if (horizontalNav) {
+      renderTrack();
+      return;
+    }
     const result = getMedia(currentItem);
     if (result instanceof Promise) {
       const seq = ++renderSeq;
@@ -255,18 +380,39 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
     return true;
   }
 
-  const controller: MediaLightboxController = { goToNext, refresh: callRenderFooter, close };
+  function goToPrev(): boolean {
+    if (index <= 0) return false;
+    index--;
+    currentItem = queue[index];
+    renderMedia();
+    callRenderFooter();
+    return true;
+  }
+
+  const controller: MediaLightboxController = { goToNext, goToPrev, refresh: callRenderFooter, close };
 
   renderMedia();
   callRenderFooter();
 
   document.getElementById("mediaLightboxClose")?.addEventListener("click", close);
   overlay.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) close(); // solo el fondo cierra, no un click en la imagen/video/pie
+    if (suppressBackgroundClick) {
+      suppressBackgroundClick = false;
+      return;
+    }
+    // "Fondo" = cualquier click que NO caiga en el media, el pie o la cruz. Antes exigía
+    // e.target === overlay -- pero mediaWrap (y, en horizontalNav, track/slide) son wrappers de
+    // layout que cubren TODA esa zona, así que un click "al lado de la foto" nunca tenía a
+    // overlay como target real y no cerraba nada.
+    if (!(e.target as HTMLElement).closest(".media-lightbox-media, .media-lightbox-footer, .media-lightbox-close")) close();
   });
 
   // Deslizar hacia abajo cierra el visor; hacia arriba pasa al siguiente item de la cola
-  // (si hay uno -- si no, el gesto directamente no hace nada, ni se mueve la imagen). Se
+  // (si hay uno -- si no, el gesto directamente no hace nada, ni se mueve la imagen). Con
+  // options.horizontalNav este mismo mecanismo pasa a moverse en X en vez de Y (izquierda =
+  // siguiente, derecha = anterior) y pierde el cierre por arrastre (ver más abajo, ramas
+  // `if (horizontalNav)`) -- el resto del gesto (umbral de enganche, velocidad, rebote si no hay
+  // item de ese lado) es el mismo código, solo cambia el eje. Se
   // sigue el dedo en vivo y si pasa el umbral (o el gesto fue rapido) hace su acción; si
   // no, vuelve solo a su lugar. La apertura desliza desde abajo via CSS (ver .media-lightbox
   // en modern.css); esto es el gesto que la mueve despues de abierta.
@@ -281,9 +427,20 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
   let dragging = false;
   let engaged = false;
   let hasNext = false;
+  let hasPrev = false;
+  // Solo horizontalNav: true entre que un swipe cruza el umbral y termina de animar+cambiar de
+  // índice (ver finishSlide) -- bloquea un drag nuevo mientras tanto (ver onPointerDown).
+  let isAdvancing = false;
+  let startX = 0;
   let startY = 0;
   let startTime = 0;
+  let dragX = 0;
   let dragY = 0;
+  // Un drag que llegó a "engaged" a veces igual dispara, al soltar, el click de compatibilidad
+  // del navegador con target=overlay (el pointer capture lo retarget ahí) -- sin esto, ese click
+  // cae en el listener de "click en el fondo cierra" de más abajo y cierra el visor de rebote
+  // justo después de navegar. Se prende al enganchar el drag y el propio listener lo consume.
+  let suppressBackgroundClick = false;
 
   // Pointers activos por id, para distinguir un pellizco de dos dedos de un arrastre
   // de uno solo -- Pointer Events dispara un down/move/up independiente por cada dedo.
@@ -307,6 +464,17 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
   function onPointerDown(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if ((e.target as HTMLElement).closest(".media-lightbox-close, .media-lightbox-footer")) return;
+    // Un swipe anterior todavía está animando hacia la foto vecina y cambiando de índice (ver
+    // finishSlide) -- si se dejara arrancar un drag nuevo acá, pisaría la cinta a mitad de
+    // camino con datos del índice viejo y podía quedar mostrando dos fotos superpuestas.
+    if (horizontalNav && isAdvancing) {
+      // Sin este drag, el pointerup de este mismo toque sigue de largo como un click nativo sin
+      // interceptar -- si no se suprime, el listener de "click afuera cierra" de más abajo podía
+      // llegar a cerrar el visor de rebote por un swipe que arrancó una fracción de segundo antes
+      // de que el anterior terminara de asentarse.
+      suppressBackgroundClick = true;
+      return;
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.size === 2) {
@@ -325,9 +493,13 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
 
     dragging = true;
     engaged = false;
+    suppressBackgroundClick = false;
     hasNext = index < queue.length - 1;
+    hasPrev = index > 0;
+    startX = e.clientX;
     startY = e.clientY;
     startTime = Date.now();
+    dragX = 0;
     dragY = 0;
     panStartX = panX;
     panStartY = panY;
@@ -353,6 +525,7 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
         const moved = Math.hypot(e.clientX - panPointerX, e.clientY - panPointerY);
         if (moved < DRAG_ENGAGE_THRESHOLD) return; // todavia podria ser un tap (ej. doble tap)
         engaged = true;
+        suppressBackgroundClick = true;
         overlay.setPointerCapture(e.pointerId);
       }
       e.preventDefault();
@@ -363,11 +536,27 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
       return;
     }
 
+    if (horizontalNav) {
+      dragX = e.clientX - startX;
+      if ((dragX < 0 && !hasNext) || (dragX > 0 && !hasPrev)) return; // sin item de ese lado: no se mueve
+      if (!engaged) {
+        if (Math.abs(dragX) < DRAG_ENGAGE_THRESHOLD) return; // todavia podria ser un tap en los controles nativos
+        engaged = true;
+        suppressBackgroundClick = true;
+        overlay.setPointerCapture(e.pointerId);
+        if (trackEl) trackEl.style.transition = "none"; // sin esto cada frame animaria detras del dedo
+      }
+      e.preventDefault();
+      setTrackTransform(dragX); // mueve la cinta -- la foto vecina ya está pintada, se ve entrar en vivo
+      return;
+    }
+
     dragY = e.clientY - startY;
     if (dragY < 0 && !hasNext) return; // swipe hacia arriba sin siguiente: no hace nada
     if (!engaged) {
       if (Math.abs(dragY) < DRAG_ENGAGE_THRESHOLD) return; // todavia podria ser un tap en los controles nativos
       engaged = true;
+      suppressBackgroundClick = true;
       overlay.classList.add("media-lightbox-dragging");
       overlay.setPointerCapture(e.pointerId);
     }
@@ -413,7 +602,25 @@ export function openMediaLightbox<T>(options: OpenMediaLightboxOptions<T>): Medi
 
     if (scale > 1) return; // fue un pan: ya se aplico en vivo, nada mas que hacer al soltar
 
-    overlay.classList.remove("media-lightbox-dragging");
+    overlay.classList.remove("media-lightbox-dragging"); // no-op en horizontalNav (nunca se agrega, ver onPointerMove)
+    // .media-lightbox-dragging apaga "animation" mientras se arrastra (ver esa clase en
+    // modern.css); al sacarla, "animation" vuelve a valer media-lightbox-slide-up y el navegador
+    // la re-dispara desde cero (pasar de animation:none a un nombre de animación la reinicia,
+    // aunque ya se haya reproducido antes) -- se veía como que la foto siguiente "entraba desde
+    // abajo" en cada swipe vertical. Fijarla a "none" por estilo inline (gana por especificidad a
+    // la clase) apenas termina el primer drag deja esa animación de entrada como lo que es: algo
+    // de una sola vez, al abrir el visor. Inofensivo para horizontalNav (ahí quien anima es
+    // trackEl, no overlay).
+    overlay.style.animation = "none";
+
+    if (horizontalNav) {
+      const velocityX = dragX / Math.max(Date.now() - startTime, 1);
+      if (dragX < -DISMISS_DISTANCE || velocityX < -DISMISS_VELOCITY) finishSlide("next");
+      else if (dragX > DISMISS_DISTANCE || velocityX > DISMISS_VELOCITY) finishSlide("prev");
+      else finishSlide("cancel"); // no llegó al umbral: la cinta vuelve a mostrar la actual
+      return;
+    }
+
     const velocity = dragY / Math.max(Date.now() - startTime, 1);
     if (dragY > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) {
       close();

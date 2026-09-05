@@ -86,6 +86,7 @@ import {
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
 import { parseStatWidgets, type StatWidget } from "../lib/statsWidgets";
+import { getBodyMeasurementPrefs } from "../services/bodyMeasurements.service";
 import type { WeightUnit } from "../services/weightLog.service";
 
 // Estado que hoy se calculaba una sola vez a nivel de modulo (MPA: cada carga de pagina es un
@@ -1075,6 +1076,7 @@ async function renderQuickActions(userId: string, userType: Profile["user_type"]
   }
 
   const showMyExercises = await hasMyExercises(userId);
+  const measurementPrefs = await getBodyMeasurementPrefs(userId).catch(() => null);
 
   quickActions.innerHTML = `
     <a class="quick-card reveal" href="#rutinas">
@@ -1086,10 +1088,10 @@ async function renderQuickActions(userId: string, userType: Profile["user_type"]
       <div><h3>Progreso completo</h3><p>Gráficos detallados por ejercicio</p></div>
     </a>
     ${
-      userType === "admin"
-        ? `<a class="quick-card reveal" href="/pages/pesoCorporal.html">
+      measurementPrefs?.enabled
+        ? `<a class="quick-card reveal" href="/pages/medidas.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13l3.5-3.5M12 5V3M4.5 6.5l1 1M19.5 6.5l-1 1"/></svg></div>
-      <div><h3>Agregar peso corporal</h3><p>Registrá tu peso y seguí su evolución</p></div>
+      <div><h3>Agregar medidas corporales</h3><p>Registrá tu peso y otras medidas, y seguí su evolución</p></div>
     </a>`
         : ""
     }
