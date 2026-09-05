@@ -85,8 +85,15 @@ import {
 
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
-import { parseStatWidgets, type StatWidget } from "../lib/statsWidgets";
-import { getBodyMeasurementPrefs } from "../services/bodyMeasurements.service";
+import { parseStatWidgets, type StatWidget, type StatWidgetMeasurementScoped } from "../lib/statsWidgets";
+import {
+  getBodyMeasurementPrefs,
+  getProfileMeasurementSeries,
+  fieldDef,
+  type MeasurementKey,
+  type MeasurementFieldDef,
+  type ProfileMeasurementPoint,
+} from "../services/bodyMeasurements.service";
 import type { WeightUnit } from "../services/weightLog.service";
 
 // Estado que hoy se calculaba una sola vez a nivel de modulo (MPA: cada carga de pagina es un
@@ -107,6 +114,8 @@ let freqChartInstance: ChartInstance | null = null;
 // Con el picker de widgets puede haber mas de un grafico "Progreso por ejercicio" a la vez
 // (uno por ejercicio elegido) -- por eso es un array y no una sola instancia como freqChart.
 let progressChartInstances: ChartInstance[] = [];
+// Idem para los graficos "Evolución de una medida" (uno por medida corporal elegida).
+let measurementChartInstances: ChartInstance[] = [];
 
 function parseFechaISO(fecha: string): Date {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -1383,11 +1392,36 @@ function resolveMaxWeightWidget(
   return { name, auto: !widget.exerciseId, max: { peso: max, unidad: dominant } };
 }
 
-async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean, widgets: StatWidget[]) {
+// 78.5 en vez de 78.50; 78 queda 78 -- para el valor de una tarjeta de medida corporal.
+function fmtMeasure(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
+
+// Etiqueta de unidad de una medida en una tarjeta/gráfico: "Kg"/"Lb" para el peso (según sus
+// registros), la unidad fija del catálogo para el resto, "" para IMC y ratios.
+function measureUnitLabel(field: MeasurementFieldDef, pts: ProfileMeasurementPoint[]): string {
+  if (field.key !== "peso") return field.unit;
+  return pts[pts.length - 1]?.unidad === "lb" ? "Lb" : "Kg";
+}
+
+async function renderStats(profileUserId: string, logs: WeightLogEntry[], activeRoutinesCount: number, ownerView: boolean, widgets: StatWidget[]) {
   const statsContent = document.getElementById("statsContent");
   if (!statsContent) return;
 
-  if (logs.length === 0) {
+  // Los widgets de medida corporal (tarjeta = valor actual, gráfico = evolución) traen su serie
+  // por una RPC curada (ver getProfileMeasurementSeries) que respeta que estos widgets del perfil
+  // son públicos igual que el resto -- solo se pide si hay alguno.
+  const measurementWidgets = widgets.filter(
+    (w): w is StatWidgetMeasurementScoped => w.type === "measurement_card" || w.type === "measurement_chart"
+  );
+  let measurementSeries = new Map<MeasurementKey, ProfileMeasurementPoint[]>();
+  if (measurementWidgets.length > 0) {
+    measurementSeries = await getProfileMeasurementSeries(profileUserId).catch(() => new Map<MeasurementKey, ProfileMeasurementPoint[]>());
+  }
+  const hasMeasurementData = [...measurementSeries.values()].some((pts) => pts.length > 0);
+  const hasTraining = logs.length > 0;
+
+  if (!hasTraining && !hasMeasurementData) {
     statsContent.innerHTML = ownerView
       ? `
       <div class="empty-state reveal">
@@ -1407,9 +1441,14 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
     return;
   }
 
-  const top = mostFrequentExercise(logs);
+  const top = hasTraining ? mostFrequentExercise(logs) : null;
+  // Sin entrenamientos pero con medidas: se muestran SOLO los widgets de medida (los de
+  // entrenamiento no tendrían nada que mostrar todavía).
+  const renderableWidgets = hasTraining
+    ? widgets
+    : widgets.filter((w) => w.type === "measurement_card" || w.type === "measurement_chart");
 
-  const cardsMarkup = widgets
+  const cardsMarkup = renderableWidgets
     .map((w) => {
       switch (w.type) {
         case "last_trained":
@@ -1426,17 +1465,27 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
           const value = resolved.max ? `${resolved.max.peso} ${resolved.max.unidad}` : "—";
           return `<div class="stat-card reveal"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></div>`;
         }
+        case "measurement_card": {
+          const field = fieldDef(w.measurementKey);
+          const pts = measurementSeries.get(w.measurementKey) ?? [];
+          if (pts.length === 0) return "";
+          const last = pts[pts.length - 1];
+          const unit = measureUnitLabel(field, pts);
+          return `<div class="stat-card reveal"><div class="label">${escapeHtml(field.label)}</div><div class="value">${escapeHtml(`${fmtMeasure(last.value)}${unit ? ` ${unit}` : ""}`)}<small>${escapeHtml(formatFechaCorta(last.fecha))}</small></div></div>`;
+        }
         default:
           return "";
       }
     })
     .join("");
 
-  // Los widgets de grafico (frecuencia / progreso por ejercicio) se resuelven antes de armar
-  // el HTML porque un progreso sin al menos 2 dias de datos se omite del todo (mismo criterio
-  // que ya usaba el chart unico de antes), y cada uno necesita su propio <canvas id> unico ya
-  // que ahora puede haber varios "progreso por ejercicio" a la vez.
-  const chartWidgets = widgets.filter((w): w is StatWidget & { type: "frequency_chart" | "exercise_progress_chart" } => w.type === "frequency_chart" || w.type === "exercise_progress_chart");
+  // Los widgets de grafico se resuelven antes de armar el HTML porque uno sin al menos 2 dias de
+  // datos se omite del todo (mismo criterio que ya usaba el chart unico de antes), y cada uno
+  // necesita su propio <canvas id> unico ya que puede haber varios del mismo tipo a la vez.
+  const chartWidgets = renderableWidgets.filter(
+    (w): w is StatWidget & { type: "frequency_chart" | "exercise_progress_chart" | "measurement_chart" } =>
+      w.type === "frequency_chart" || w.type === "exercise_progress_chart" || w.type === "measurement_chart"
+  );
 
   const chartsMarkup = chartWidgets
     .map((w, i) => {
@@ -1445,6 +1494,17 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
       <h3>Frecuencia de entrenamiento</h3>
       <p class="chart-sub">Ejercicios distintos entrenados cada día de esta semana.</p>
       <div class="chart-wrap"><canvas id="freqChart"></canvas></div>
+    </div>`;
+      }
+      if (w.type === "measurement_chart") {
+        const field = fieldDef(w.measurementKey);
+        const pts = measurementSeries.get(w.measurementKey) ?? [];
+        if (pts.length < 2) return "";
+        const unit = measureUnitLabel(field, pts);
+        return `<div class="chart-card reveal">
+      <h3>Evolución: ${escapeHtml(field.label)}</h3>
+      <p class="chart-sub">${escapeHtml(field.label)}${unit ? ` (${escapeHtml(unit)})` : ""} a lo largo del tiempo.</p>
+      <div class="chart-wrap"><canvas id="measurementChart-${i}"></canvas></div>
     </div>`;
       }
       const resolved = resolveExerciseProgressWidget(logs, w, top);
@@ -1466,10 +1526,20 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
   freqChartInstance = null;
   progressChartInstances.forEach((c) => c.destroy());
   progressChartInstances = [];
+  measurementChartInstances.forEach((c) => c.destroy());
+  measurementChartInstances = [];
 
   for (const [i, w] of chartWidgets.entries()) {
     if (w.type === "frequency_chart") {
       await renderFreqChart(computeDailyFrequency(logs));
+      continue;
+    }
+    if (w.type === "measurement_chart") {
+      const field = fieldDef(w.measurementKey);
+      const pts = measurementSeries.get(w.measurementKey) ?? [];
+      if (pts.length < 2) continue;
+      const inst = await renderMeasurementLineChart(`measurementChart-${i}`, pts, field);
+      if (inst) measurementChartInstances.push(inst);
       continue;
     }
     const resolved = resolveExerciseProgressWidget(logs, w, top);
@@ -1477,6 +1547,40 @@ async function renderStats(logs: WeightLogEntry[], activeRoutinesCount: number, 
     const inst = await renderProgressChart(`progressChart-${i}`, resolved.points);
     if (inst) progressChartInstances.push(inst);
   }
+}
+
+async function renderMeasurementLineChart(canvasId: string, pts: ProfileMeasurementPoint[], field: MeasurementFieldDef): Promise<ChartInstance | null> {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return null;
+  const Chart = await loadChart();
+  const unit = measureUnitLabel(field, pts);
+  return new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: pts.map((p) => formatFechaCorta(p.fecha)),
+      datasets: [
+        {
+          label: unit ? `${field.label} (${unit})` : field.label,
+          data: pts.map((p) => p.value),
+          borderColor: "#ff8a3d",
+          backgroundColor: "rgba(255, 138, 61, 0.18)",
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointBackgroundColor: "#ff8a3d",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: false, ticks: { color: "#9aa1ac" }, grid: { color: "#262b33" } },
+        x: { ticks: { color: "#9aa1ac" }, grid: { display: false } },
+      },
+    },
+  });
 }
 
 async function renderFreqChart(buckets: { label: string; count: number }[]) {
@@ -1643,7 +1747,7 @@ async function refreshCurrentRoutinesTab() {
   // la pestaña de Estadisticas no esta visible ahora mismo, se difiere la reconstruccion
   // hasta que el usuario vuelva a ella (ver switchTab en setupActivityTabs).
   if (activeActivityTab === "stats") {
-    void renderStats(logs, activeCount ?? 0, routinesCtx.ownerView, routinesCtx.widgets).then(() => {
+    void renderStats(routinesCtx.userId, logs, activeCount ?? 0, routinesCtx.ownerView, routinesCtx.widgets).then(() => {
       const el = document.getElementById("statsContent");
       if (el) settleReveal(el);
     });
@@ -1922,7 +2026,7 @@ function setupActivityTabs(
       if (statsDirty && routinesCtx) {
         statsDirty = false;
         const activeCount = Number(document.getElementById("activeRoutinesStatValue")?.textContent ?? 0);
-        void renderStats(routinesCtx.logs, activeCount, routinesCtx.ownerView, routinesCtx.widgets);
+        void renderStats(routinesCtx.userId, routinesCtx.logs, activeCount, routinesCtx.ownerView, routinesCtx.widgets);
       }
       return;
     }
@@ -2784,7 +2888,7 @@ async function main(ctx: ViewContext) {
     const logs = await listWeightLogsWithContext(displayProfile.id!);
     routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
     const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
-    if (showStats) void renderStats(logs, activeCount ?? 0, isOwner, statWidgets);
+    if (showStats) void renderStats(displayProfile.id!, logs, activeCount ?? 0, isOwner, statWidgets);
   }
   setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats, isGym ? gymAuthorFromProfile(displayProfile) : null);
 }
@@ -2914,6 +3018,7 @@ export const profileView: ViewModule = {
     activityTabsController = null;
     freqChartInstance = null;
     progressChartInstances = [];
+    measurementChartInstances = [];
     gymClasesRefreshCtx = null;
     gymClasesShown = false;
 

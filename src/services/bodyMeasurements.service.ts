@@ -683,3 +683,52 @@ export function computeMeasurementStats(entries: BodyMeasurementEntry[], key: Me
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Serie de medidas para los widgets de Estadísticas del perfil (tarjeta = valor actual,
+// gráfico = evolución). A diferencia de listBodyMeasurements (owner-only, RLS directa), esto
+// va por la RPC get_profile_measurement_series (SECURITY DEFINER): los widgets del perfil son
+// públicos igual que el resto, así que un visitante también los ve -- pero la RPC devuelve
+// SOLO las medidas que ese usuario puso explícitamente como widget (curado server-side), con
+// IMC/ratios ya calculados. Ver profile.ts (renderStats).
+// ---------------------------------------------------------------------------
+
+export interface ProfileMeasurementPoint {
+  fecha: string; // "YYYY-MM-DD"
+  value: number;
+  /** Solo para "peso" (kg/lb); null en el resto. */
+  unidad: BodyWeightUnit | null;
+}
+
+export async function getProfileMeasurementSeries(userId: string): Promise<Map<MeasurementKey, ProfileMeasurementPoint[]>> {
+  const { data, error } = await supabase.rpc("get_profile_measurement_series", { p_user_id: userId });
+  if (error) throw error;
+
+  const byKey = new Map<MeasurementKey, ProfileMeasurementPoint[]>();
+  for (const row of data ?? []) {
+    const key = row.measure_key as MeasurementKey;
+    const unidad: BodyWeightUnit | null = row.unidad === "lb" ? "lb" : row.unidad === "kg" ? "kg" : null;
+    const arr = byKey.get(key) ?? [];
+    arr.push({ fecha: row.fecha, value: Number(row.value), unidad });
+    byKey.set(key, arr);
+  }
+
+  // "peso" puede tener registros en kg y en lb mezclados (no son convertibles entre sí, mismo
+  // criterio que computeMeasurementStats) -- si hay de las dos, quedarse solo con la dominante.
+  const peso = byKey.get("peso");
+  if (peso && peso.length > 0) {
+    const counts = new Map<BodyWeightUnit, number>();
+    peso.forEach((p) => p.unidad && counts.set(p.unidad, (counts.get(p.unidad) ?? 0) + 1));
+    if (counts.size > 1) {
+      const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      byKey.set(
+        "peso",
+        peso.filter((p) => p.unidad === dominant)
+      );
+    }
+  }
+
+  // La RPC ya ordena por fecha ascendente, pero no cuesta nada asegurarlo.
+  byKey.forEach((arr) => arr.sort((a, b) => a.fecha.localeCompare(b.fecha)));
+  return byKey;
+}

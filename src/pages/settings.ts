@@ -25,7 +25,9 @@ import {
   widgetLabel,
   widgetKey,
   exerciseIdOf,
+  measurementKeyOf,
   isExerciseScopedType,
+  isMeasurementScopedType,
   type StatWidget,
   type StatWidgetType,
   type StatWidgetCategory,
@@ -960,11 +962,28 @@ export const settingsView: ViewModule = {
           .join("");
       }
 
+      // Medidas corporales que este usuario tiene activadas en Configuración (measurementPrefs),
+      // que todavía no tienen un widget de ESE tipo (card o chart) -- lo que se ofrece en el
+      // selector de "Medida corporal" / "Evolución de una medida".
+      function activeMeasureFieldsFor(category: StatWidgetCategory): typeof MEASUREMENT_FIELDS {
+        const measurementType = category === "card" ? "measurement_card" : "measurement_chart";
+        const usedKeys = new Set(widgetsDraft.filter((w) => w.type === measurementType).map((w) => measurementKeyOf(w)));
+        return MEASUREMENT_FIELDS.filter((f) => measurementPrefs[f.key] && !usedKeys.has(f.key));
+      }
+
       function addRowMarkup(category: StatWidgetCategory): string {
         const items = categoryWidgets(category);
         const max = MAX_BY_CATEGORY[category];
         if (items.length >= max) return `<p class="chart-sub">Llegaste al máximo de ${max} ${CATEGORY_LABEL_PLURAL[category]}.</p>`;
-        const addableTypes = STAT_WIDGET_CATALOG.filter((c) => c.category === category && (c.allowMultiple || !widgetsDraft.some((w) => w.type === c.type)));
+
+        const activeMeasureFields = activeMeasureFieldsFor(category);
+        const addableTypes = STAT_WIDGET_CATALOG.filter((c) => {
+          if (c.category !== category) return false;
+          // Los tipos "measurement-scoped" solo se ofrecen si al usuario le queda alguna medida
+          // activada sin widget todavía (si no, el <select> saldría vacío).
+          if (isMeasurementScopedType(c.type)) return activeMeasureFields.length > 0;
+          return c.allowMultiple || !widgetsDraft.some((w) => w.type === c.type);
+        });
         if (addableTypes.length === 0) return "";
         // Cada categoria tiene a lo sumo un tipo "exercise-scoped" (progreso por ejercicio en
         // graficos, peso maximo en tarjetas) -- el set de exclusion es por ESE tipo puntual, no
@@ -972,8 +991,10 @@ export const settingsView: ViewModule = {
         // "Sentadilla" del selector de "Progreso por ejercicio" (grafico), son widgets distintos.
         const exerciseScopedType = addableTypes.find((c) => isExerciseScopedType(c.type))?.type;
         const usedExerciseIds = new Set(exerciseScopedType ? widgetsDraft.filter((w) => w.type === exerciseScopedType).map((w) => exerciseIdOf(w)) : []);
+        const hasMeasurementType = addableTypes.some((c) => isMeasurementScopedType(c.type));
         const typeSelectId = category === "card" ? "addCardType" : "addChartType";
         const excSelectId = category === "card" ? "addCardExercise" : "addChartExercise";
+        const measureSelectId = category === "card" ? "addCardMeasure" : "addChartMeasure";
         const confirmId = category === "card" ? "addCardConfirm" : "addChartConfirm";
         return `
           <div class="settings-add-widget">
@@ -989,6 +1010,13 @@ export const settingsView: ViewModule = {
                 .filter((e) => !usedExerciseIds.has(e.id))
                 .map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`)
                 .join("")}
+            </select>`
+                : ""
+            }
+            ${
+              hasMeasurementType
+                ? `<select id="${measureSelectId}" aria-label="Elegir medida" hidden>
+              ${activeMeasureFields.map((f) => `<option value="${f.key}">${escapeHtml(f.label)}</option>`).join("")}
             </select>`
                 : ""
             }
@@ -1135,6 +1163,11 @@ export const settingsView: ViewModule = {
               c.disabled = false;
               if (ok) c.classList.toggle("active", measurementPrefs[c.dataset.key as MeasurementKey]);
             });
+            // Los selectores de "+ Agregar tarjeta/gráfico" ofrecen solo medidas activas -- si se
+            // acaba de activar (o desactivar) una, hay que reconstruirlos para que la lista cambie.
+            // Los widgets ya elegidos no se tocan: desactivar una medida no borra una tarjeta que
+            // la use (sigue mostrando el historial), solo deja de ofrecerla para agregar de nuevo.
+            if (ok) refreshWidgetsDom();
           });
         });
       }
@@ -1209,6 +1242,7 @@ export const settingsView: ViewModule = {
       function wireAddRow(category: StatWidgetCategory): void {
         const typeSelect = container.querySelector(category === "card" ? "#addCardType" : "#addChartType") as HTMLSelectElement | null;
         const excSelect = container.querySelector(category === "card" ? "#addCardExercise" : "#addChartExercise") as HTMLSelectElement | null;
+        const measureSelect = container.querySelector(category === "card" ? "#addCardMeasure" : "#addChartMeasure") as HTMLSelectElement | null;
         const confirmBtn = container.querySelector(category === "card" ? "#addCardConfirm" : "#addChartConfirm") as HTMLButtonElement | null;
         if (!typeSelect || !confirmBtn) return;
 
@@ -1216,6 +1250,7 @@ export const settingsView: ViewModule = {
           const type = typeSelect!.value as StatWidgetType | "";
           confirmBtn!.disabled = !type;
           if (excSelect) excSelect.hidden = !type || !isExerciseScopedType(type);
+          if (measureSelect) measureSelect.hidden = !type || !isMeasurementScopedType(type);
         }
         sync();
         typeSelect.addEventListener("change", sync);
@@ -1223,7 +1258,16 @@ export const settingsView: ViewModule = {
         confirmBtn.addEventListener("click", () => {
           const type = typeSelect.value as StatWidgetType | "";
           if (!type) return;
-          const newWidget: StatWidget = isExerciseScopedType(type) ? { type, exerciseId: excSelect?.value || null } : { type };
+          let newWidget: StatWidget;
+          if (isExerciseScopedType(type)) {
+            newWidget = { type, exerciseId: excSelect?.value || null };
+          } else if (isMeasurementScopedType(type)) {
+            const key = (measureSelect?.value || "") as MeasurementKey;
+            if (!key) return;
+            newWidget = { type, measurementKey: key };
+          } else {
+            newWidget = { type };
+          }
           if (widgetsDraft.some((w) => widgetKey(w) === widgetKey(newWidget))) return;
           widgetsDraft.push(newWidget);
           refreshWidgetsDom();

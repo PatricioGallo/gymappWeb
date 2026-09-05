@@ -3170,6 +3170,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_profile_measurement_series: {
+        Args: { p_user_id: string }
+        Returns: {
+          fecha: string
+          measure_key: string
+          unidad: string | null
+          value: number
+        }[]
+      }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       get_socio_count: { Args: { p_gym_id: string }; Returns: number }
       get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
