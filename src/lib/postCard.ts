@@ -391,16 +391,26 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
     const post = postsById.get(card.dataset.postId!);
     if (!post) return;
 
+    // stopPropagation en cada botón de acción: si no, el click sigue burbujeando hasta el
+    // listener de la tarjeta (onOpenPost) y abre el modal de detalle. Ese listener normalmente
+    // lo frena con target.closest("button, a"), pero like/repost repintan el innerHTML de su
+    // botón de forma síncrona (patchPostCardStats) ANTES de que el evento termine de burbujear:
+    // el nodo clickeado (el <span>/<svg> de adentro) queda detached, closest() devuelve null y
+    // se abría el Rep igual. Solo "Comentar" abre el modal a propósito -- vía su propio handler.
+    const withStop = (fn: () => void) => (e: Event) => {
+      e.stopPropagation();
+      fn();
+    };
     card.querySelectorAll<HTMLButtonElement>('[data-action="author"]').forEach((btn) => {
-      btn.addEventListener("click", () => handlers.onAuthorClick?.(post.author), opt);
+      btn.addEventListener("click", withStop(() => handlers.onAuthorClick?.(post.author)), opt);
     });
-    card.querySelector<HTMLButtonElement>('[data-action="like"]')?.addEventListener("click", () => handlers.onLikeToggle(post), opt);
-    card.querySelector<HTMLButtonElement>('[data-action="repost"]')?.addEventListener("click", () => handlers.onRepostToggle(post), opt);
-    card.querySelector<HTMLButtonElement>('[data-action="comment"]')?.addEventListener("click", () => handlers.onCommentClick(post), opt);
-    card.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", () => handlers.onQuoteClick(post), opt);
-    card.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", () => handlers.onShareClick(post), opt);
-    card.querySelector<HTMLButtonElement>('[data-action="metrics"]')?.addEventListener("click", () => handlers.onMetricsClick?.(post), opt);
-    card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", () => handlers.onDeleteClick?.(post), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="like"]')?.addEventListener("click", withStop(() => handlers.onLikeToggle(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="repost"]')?.addEventListener("click", withStop(() => handlers.onRepostToggle(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="comment"]')?.addEventListener("click", withStop(() => handlers.onCommentClick(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", withStop(() => handlers.onQuoteClick(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", withStop(() => handlers.onShareClick(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="metrics"]')?.addEventListener("click", withStop(() => handlers.onMetricsClick?.(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", withStop(() => handlers.onDeleteClick?.(post)), opt);
 
     // Click en la foto/video adjunto abre el visor grande (ver openMediaLightbox en
     // postModals.ts), en vez de navegar al detalle del Rep como el resto de la tarjeta.
