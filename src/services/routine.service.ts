@@ -129,6 +129,45 @@ export async function getSharedRoutine(shareToken: string): Promise<any> {
   return data;
 }
 
+export interface SharedRoutineChatPreview {
+  id: string;
+  nombre: string;
+  shareToken: string;
+  ownerUsername: string;
+  ownerNombre: string;
+  ownerApellido: string;
+  weeksCount: number;
+  daysCount: number;
+  exercisesCount: number;
+}
+
+/**
+ * Batch de rutinas por id, con nombre / autor / conteos, para la vista previa de una rutina
+ * compartida en el chat (ver chatThread.ts). RLS-safe via SECURITY DEFINER: solo devuelve
+ * rutinas con is_shareable = true, el que mira no necesita acceso directo a la fila.
+ */
+export async function getSharedRoutinesByIds(ids: string[]): Promise<Map<string, SharedRoutineChatPreview>> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return new Map();
+  const { data, error } = await supabase.rpc("get_shared_routines_by_ids", { p_ids: uniqueIds });
+  if (error) throw error;
+  const map = new Map<string, SharedRoutineChatPreview>();
+  for (const r of data ?? []) {
+    map.set(r.id, {
+      id: r.id,
+      nombre: r.nombre,
+      shareToken: r.share_token,
+      ownerUsername: r.owner_username ?? "",
+      ownerNombre: r.owner_nombre ?? "",
+      ownerApellido: r.owner_apellido ?? "",
+      weeksCount: r.weeks_count ?? 0,
+      daysCount: r.days_count ?? 0,
+      exercisesCount: r.exercises_count ?? 0,
+    });
+  }
+  return map;
+}
+
 export async function setRoutinePublic(routineId: string, isPublic: boolean): Promise<void> {
   const { error } = await supabase.from("routines").update({ is_public: isPublic }).eq("id", routineId);
   if (error) throw error;

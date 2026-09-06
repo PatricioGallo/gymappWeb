@@ -1,11 +1,12 @@
 import type { ViewModule } from "../shell/router";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
-import { getRoutineDetail, getSharedRoutine, setRoutineShareable, type RoutineDetail } from "../services/routine.service";
+import { getRoutineDetail, getSharedRoutine, type RoutineDetail } from "../services/routine.service";
 import { getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
+import { openShareRoutineModal, type ShareableRoutine } from "../lib/routineShareModal";
 
 const VIEW_MARKUP = `
   <section class="page-hero">
@@ -94,6 +95,18 @@ export const showExcView: ViewModule = {
     // ---------- Modo autenticado (?rid=) ----------
 
     async function renderAuthenticated(id: string): Promise<void> {
+      // El listener se engancha ya (antes del await) para que un click apurado sobre
+      // "Compartir rutina" no caiga en el vacío mientras carga la rutina.
+      let shareData: ShareableRoutine | null = null;
+      const shareBtn = container.querySelector("#shareBtn") as HTMLButtonElement | null;
+      shareBtn?.addEventListener(
+        "click",
+        () => {
+          if (shareData) void openShareRoutineModal(shareData, authUserId!);
+        },
+        { signal: ctx.signal }
+      );
+
       const routine = await getRoutineDetail(id);
       if (!routine) {
         showNotFound("No se encontró esta rutina.");
@@ -113,14 +126,16 @@ export const showExcView: ViewModule = {
       const diasBase = routine.semanas[0]?.dias ?? [];
       renderWeekContent(diasBase, routine.semanas.length);
 
-      initShare(
-        async () => {
-          const token = routine.is_shareable ? routine.share_token : await setRoutineShareable(routine.id, true);
-          return `${window.location.origin}${window.location.pathname}?token=${token}`;
-        },
-        routine.nombre,
-        "vos"
-      );
+      // Dueño autenticado: el botón abre el modal completo (chat / Rep / link externo).
+      shareData = {
+        id: routine.id,
+        nombre: routine.nombre,
+        is_shareable: routine.is_shareable,
+        share_token: routine.share_token,
+        semanasCount: routine.semanas.length,
+        diasPorSemana: diasBase.length,
+        ejerciciosCount: diasBase.reduce((n, d) => n + d.ejercicios.length, 0),
+      };
     }
 
     function renderWeekContent(diasBase: RoutineDetail["semanas"][number]["dias"], weekCount: number): void {

@@ -1525,6 +1525,8 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          shared_profile_id: string | null
+          shared_routine_id: string | null
           view_once: boolean
           viewed_once_at: string | null
           viewed_once_by: string | null
@@ -1547,6 +1549,8 @@ export type Database = {
           sender_id: string
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
+          shared_profile_id?: string | null
+          shared_routine_id?: string | null
           view_once?: boolean
           viewed_once_at?: string | null
           viewed_once_by?: string | null
@@ -1569,6 +1573,8 @@ export type Database = {
           sender_id?: string
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
+          shared_profile_id?: string | null
+          shared_routine_id?: string | null
           view_once?: boolean
           viewed_once_at?: string | null
           viewed_once_by?: string | null
@@ -1614,6 +1620,27 @@ export type Database = {
             columns: ["shared_post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_shared_profile_id_fkey"
+            columns: ["shared_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_shared_profile_id_fkey"
+            columns: ["shared_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_shared_routine_id_fkey"
+            columns: ["shared_routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
             referencedColumns: ["id"]
           },
           {
@@ -3169,6 +3196,8 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          shared_profile_id: string | null
+          shared_routine_id: string | null
           view_once: boolean
           viewed_once_at: string | null
           viewed_once_by: string | null
@@ -3200,6 +3229,8 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          shared_profile_id: string | null
+          shared_routine_id: string | null
           view_once: boolean
           viewed_once_at: string | null
           viewed_once_by: string | null
@@ -3355,11 +3386,25 @@ export type Database = {
         Returns: {
           fecha: string
           measure_key: string
-          unidad: string | null
+          unidad: string
           value: number
         }[]
       }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
+      get_shared_routines_by_ids: {
+        Args: { p_ids: string[] }
+        Returns: {
+          days_count: number
+          exercises_count: number
+          id: string
+          nombre: string
+          owner_apellido: string
+          owner_nombre: string
+          owner_username: string
+          share_token: string
+          weeks_count: number
+        }[]
+      }
       get_socio_count: { Args: { p_gym_id: string }; Returns: number }
       get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
       get_subscription_status: {
@@ -3719,6 +3764,8 @@ export type Database = {
           sender_id: string
           shared_gym_post_id: string | null
           shared_post_id: string | null
+          shared_profile_id: string | null
+          shared_routine_id: string | null
           view_once: boolean
           viewed_once_at: string | null
           viewed_once_by: string | null
@@ -3860,6 +3907,8 @@ export type Database = {
               sender_id: string
               shared_gym_post_id: string | null
               shared_post_id: string | null
+              shared_profile_id: string | null
+              shared_routine_id: string | null
               view_once: boolean
               viewed_once_at: string | null
               viewed_once_by: string | null
@@ -3903,6 +3952,101 @@ export type Database = {
               sender_id: string
               shared_gym_post_id: string | null
               shared_post_id: string | null
+              shared_profile_id: string | null
+              shared_routine_id: string | null
+              view_once: boolean
+              viewed_once_at: string | null
+              viewed_once_by: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "messages"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_attachment_duration_seconds?: number
+              p_attachment_filename?: string
+              p_attachment_path?: string
+              p_attachment_type?: string
+              p_content?: string
+              p_conversation_id: string
+              p_is_forwarded?: boolean
+              p_reply_to_message_id?: string
+              p_shared_gym_post_id?: string
+              p_shared_post_id?: string
+              p_shared_routine_id?: string
+              p_view_once?: boolean
+            }
+            Returns: {
+              attachment_duration_seconds: number | null
+              attachment_filename: string | null
+              attachment_path: string | null
+              attachment_type: string | null
+              content: string | null
+              conversation_id: string
+              created_at: string
+              deleted_at: string | null
+              edited_at: string | null
+              id: string
+              is_forwarded: boolean
+              reactions: Json
+              read_at: string | null
+              reply_to_message_id: string | null
+              sender_id: string
+              shared_gym_post_id: string | null
+              shared_post_id: string | null
+              shared_profile_id: string | null
+              shared_routine_id: string | null
+              view_once: boolean
+              viewed_once_at: string | null
+              viewed_once_by: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "messages"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_attachment_duration_seconds?: number
+              p_attachment_filename?: string
+              p_attachment_path?: string
+              p_attachment_type?: string
+              p_content?: string
+              p_conversation_id: string
+              p_is_forwarded?: boolean
+              p_reply_to_message_id?: string
+              p_shared_gym_post_id?: string
+              p_shared_post_id?: string
+              p_shared_profile_id?: string
+              p_shared_routine_id?: string
+              p_view_once?: boolean
+            }
+            Returns: {
+              attachment_duration_seconds: number | null
+              attachment_filename: string | null
+              attachment_path: string | null
+              attachment_type: string | null
+              content: string | null
+              conversation_id: string
+              created_at: string
+              deleted_at: string | null
+              edited_at: string | null
+              id: string
+              is_forwarded: boolean
+              reactions: Json
+              read_at: string | null
+              reply_to_message_id: string | null
+              sender_id: string
+              shared_gym_post_id: string | null
+              shared_post_id: string | null
+              shared_profile_id: string | null
+              shared_routine_id: string | null
               view_once: boolean
               viewed_once_at: string | null
               viewed_once_by: string | null

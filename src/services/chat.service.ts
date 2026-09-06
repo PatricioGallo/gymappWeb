@@ -94,6 +94,8 @@ export interface SendMessageInput {
   attachmentDurationSeconds?: number;
   sharedPostId?: string;
   sharedGymPostId?: string;
+  sharedRoutineId?: string;
+  sharedProfileId?: string;
   replyToMessageId?: string;
   isForwarded?: boolean;
   /** Foto/video que se puede abrir una sola vez -- solo se respeta en chats 1 a 1 (ver send_message). */
@@ -111,12 +113,15 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     p_shared_gym_post_id: input.sharedGymPostId,
     p_reply_to_message_id: input.replyToMessageId,
     p_is_forwarded: input.isForwarded,
-    // Siempre boolean real, nunca undefined: la base tiene dos versiones superpuestas de
-    // send_message (una vieja sin p_view_once, ver migracion pendiente para limpiarla) y si
-    // esta clave se cae del JSON (undefined), Postgres no puede elegir entre ambas y tira
-    // "could not choose the best candidate function" -- rompe CUALQUIER mensaje de texto/emoji
-    // normal, no solo los efimeros.
+    // Siempre boolean real, nunca undefined: la base tiene tres versiones superpuestas de
+    // send_message (10/11/12 args) y si esta clave se cae del JSON (undefined), Postgres no
+    // puede elegir entre ellas y tira "could not choose the best candidate function" -- rompe
+    // CUALQUIER mensaje de texto/emoji normal, no solo los efimeros.
     p_view_once: input.viewOnce ?? false,
+    // Idem: mandamos SIEMPRE estas claves (null cuando no aplican) para forzar la resolucion al
+    // overload de 13 args -- ver migraciones share_routine_in_chat / share_profile_in_chat.
+    p_shared_routine_id: input.sharedRoutineId ?? null,
+    p_shared_profile_id: input.sharedProfileId ?? null,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };

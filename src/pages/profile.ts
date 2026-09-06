@@ -26,6 +26,8 @@ import {
 } from "../services/profile.service";
 import { getCachedProfileById, getCachedProfileByUsername, cacheProfile } from "../lib/profileDb";
 import { setRoutinePublic, deleteRoutine } from "../services/routine.service";
+import { openShareRoutineModal } from "../lib/routineShareModal";
+import { openShareProfileModal } from "../lib/profileShareModal";
 import { hasMyExercises } from "../services/exercise.service";
 import { routineOwnerLineMarkup, type BasicNamedProfile } from "../lib/routineOwner";
 import { getFollowStatus, getFollowCounts, followUser, unfollowOrCancel, type FollowStatus } from "../services/follow.service";
@@ -208,6 +210,21 @@ function initAvatar(profile: Profile) {
 }
 
 // ---------- Compartir perfil ----------
+
+/**
+ * Con sesión iniciada, "Compartir perfil" abre el modal completo (chat grupo/1a1, publicar
+ * como Rep, link externo -- mismo modal que compartir una rutina). Sin sesión no se puede
+ * listar chats/seguidores, así que ahí cae al navigator.share / copiar link de siempre.
+ */
+function initProfileShare(profileId: string, username: string, buttonId: string) {
+  const btn = document.getElementById(buttonId);
+  if (!btn) return;
+  if (!myId) {
+    initShare(username, buttonId);
+    return;
+  }
+  btn.addEventListener("click", () => void openShareProfileModal({ id: profileId, username }, myId!));
+}
 
 function initShare(username: string, buttonId = "shareBtn") {
   const shareBtn = document.getElementById(buttonId);
@@ -647,7 +664,7 @@ async function renderProfileActions(
     ${showSocioBtn ? `<button class="btn ${socioStatus === "none" ? "btn-primary" : "btn-outline"}" id="socioBtn" type="button">${socioButtonLabel(socioStatus)}</button>` : ""}
   `;
   if (showMessageBtn) initMessageButton(targetId);
-  else initShare(username, "shareBtn");
+  else initProfileShare(targetId, username, "shareBtn");
   if (showFollowBtn) initFollowButton(targetId, followStatus, username);
   if (showSubscribeBtn) initSubscribeButton(targetId, subscriptionStatus);
   if (showSocioBtn) initSocioButton(targetId, socioStatus);
@@ -743,7 +760,7 @@ async function renderProfileMenu(targetId: string, username: string, ownerView: 
   }
 
   wrap.hidden = false;
-  initShare(username, "menuShareBtn");
+  initProfileShare(targetId, username, "menuShareBtn");
 
   function refreshMenu(): void {
     void renderProfileMenu(targetId, username, ownerView, viewerLoggedIn, blockStatus, targetUserType);
@@ -2130,6 +2147,19 @@ function isFullyOwnedByViewer(r: RoutineWithCounts): boolean {
   return !r.assigned_by || r.assigned_by === myId;
 }
 
+// "Compartir" en la ruedita de una rutina propia: mismo modal para activas / históricas /
+// guardadas (ver routineShareModal.ts). RoutineWithCounts ya trae is_shareable, share_token y
+// los conteos que necesita el modal.
+function wireShareRoutineButtons(container: HTMLElement, routines: RoutineWithCounts[]): void {
+  container.querySelectorAll<HTMLButtonElement>(".shareRoutineBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.closest(".routine-menu-panel")?.setAttribute("hidden", "");
+      const routine = routines.find((r) => r.id === btn.dataset.id);
+      if (routine && myId) void openShareRoutineModal(routine, myId);
+    });
+  });
+}
+
 // Quien aparece en "Rutina de X": el que la asigno tiene prioridad (esa
 // relacion ya implica que la rutina "es de" esa persona), y si no hay
 // asignacion, quien la creo originalmente si esta rutina viene de un "Copiar
@@ -2253,6 +2283,7 @@ function renderActiveRoutines(
                ${
                  fullyOwned
                    ? `<a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+               <button type="button" class="profile-menu-item shareRoutineBtn" data-id="${r.id}">Compartir</button>
                <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
                <button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>`
                    : ""
@@ -2322,6 +2353,7 @@ function renderActiveRoutines(
       if (routine) confirmDeleteRoutineModal(routine);
     });
   });
+  wireShareRoutineButtons(container, routines);
 }
 
 function renderHistoricRoutines(
@@ -2346,7 +2378,12 @@ function renderHistoricRoutines(
              <button type="button" class="profile-menu-btn routine-menu-btn" aria-label="Más opciones" aria-expanded="false">${ROUTINE_MENU_GEAR_ICON}</button>
              <div class="profile-menu-panel routine-menu-panel" hidden>
                <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
-               ${isFullyOwnedByViewer(r) ? `<button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>` : ""}
+               ${
+                 isFullyOwnedByViewer(r)
+                   ? `<button type="button" class="profile-menu-item shareRoutineBtn" data-id="${r.id}">Compartir</button>
+               <button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>`
+                   : ""
+               }
              </div>
            </div>`
         : "";
@@ -2385,6 +2422,7 @@ function renderHistoricRoutines(
       if (routine) confirmDeleteRoutineModal(routine);
     });
   });
+  wireShareRoutineButtons(container, routines);
 }
 
 // Guardadas siempre se ve solo el dueño: no hay caso "visitante" que gatear aca.
@@ -2430,6 +2468,7 @@ function renderSavedRoutines(
           <div class="profile-menu-panel routine-menu-panel" hidden>
             <a class="profile-menu-item" href="showExc.html?rid=${r.id}">Mostrar</a>
             <a class="profile-menu-item" href="excView.html?rid=${r.id}">Modificar</a>
+            <button type="button" class="profile-menu-item shareRoutineBtn" data-id="${r.id}">Compartir</button>
             <button type="button" class="profile-menu-item togglePublicRoutine" data-id="${r.id}">${r.is_public ? "Hacer privada" : "Hacer pública"}</button>
             <button type="button" class="profile-menu-item profile-menu-item-danger deleteRoutineBtn" data-id="${r.id}">Eliminar</button>
           </div>
@@ -2457,6 +2496,7 @@ function renderSavedRoutines(
   `;
 
   wireRoutineMenus(container);
+  wireShareRoutineButtons(container, routines);
   if (isTrainer) {
     container.querySelectorAll<HTMLButtonElement>(".assignRoutine").forEach((btn) => {
       btn.addEventListener("click", () => openAssignModal(btn.dataset.id!, btn.dataset.nombre!));

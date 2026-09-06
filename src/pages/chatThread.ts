@@ -6,6 +6,8 @@ import { supabase } from "../lib/supabaseClient";
 import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
 import { getPostsByIds, type FeedPost } from "../services/post.service";
 import { getGymPostsByIds, type GymPostChatPreview } from "../services/gymPost.service";
+import { getSharedRoutinesByIds, type SharedRoutineChatPreview } from "../services/routine.service";
+import { getProfilesBasicByIds, type ProfileBasic } from "../services/profile.service";
 import {
   listConversations,
   listMessages,
@@ -301,6 +303,8 @@ export async function mountThread(
   const reactionMutationInFlight = new Set<string>();
   const sharedPostsCache = new Map<string, FeedPost>();
   const sharedGymPostsCache = new Map<string, GymPostChatPreview>();
+  const sharedRoutinesCache = new Map<string, SharedRoutineChatPreview>();
+  const sharedProfilesCache = new Map<string, ProfileBasic>();
   const audioPlayers = new Map<string, HTMLAudioElement>();
   const audioWaveLevels = new Map<string, number[]>();
   const audioOriginalDuration = new Map<string, string>();
@@ -718,13 +722,19 @@ export async function mountThread(
   async function hydrateSharedPosts(list: ChatMessage[]): Promise<void> {
     const ids = [...new Set(list.map((m) => m.shared_post_id).filter((id): id is string => !!id))].filter((id) => !sharedPostsCache.has(id));
     const gymIds = [...new Set(list.map((m) => m.shared_gym_post_id).filter((id): id is string => !!id))].filter((id) => !sharedGymPostsCache.has(id));
-    if (ids.length === 0 && gymIds.length === 0) return;
-    const [map, gymMap] = await Promise.all([
+    const routineIds = [...new Set(list.map((m) => m.shared_routine_id).filter((id): id is string => !!id))].filter((id) => !sharedRoutinesCache.has(id));
+    const profileIds = [...new Set(list.map((m) => m.shared_profile_id).filter((id): id is string => !!id))].filter((id) => !sharedProfilesCache.has(id));
+    if (ids.length === 0 && gymIds.length === 0 && routineIds.length === 0 && profileIds.length === 0) return;
+    const [map, gymMap, routineMap, profileMap] = await Promise.all([
       ids.length ? getPostsByIds(ids) : Promise.resolve(new Map<string, FeedPost>()),
       gymIds.length ? getGymPostsByIds(gymIds) : Promise.resolve(new Map<string, GymPostChatPreview>()),
+      routineIds.length ? getSharedRoutinesByIds(routineIds) : Promise.resolve(new Map<string, SharedRoutineChatPreview>()),
+      profileIds.length ? getProfilesBasicByIds(profileIds) : Promise.resolve(new Map<string, ProfileBasic>()),
     ]);
     map.forEach((post, id) => sharedPostsCache.set(id, post));
     gymMap.forEach((post, id) => sharedGymPostsCache.set(id, post));
+    routineMap.forEach((routine, id) => sharedRoutinesCache.set(id, routine));
+    profileMap.forEach((profile, id) => sharedProfilesCache.set(id, profile));
   }
 
   /** Completa myGroupViewOnceOpened para los mensajes efímeros de grupo recién cargados que
@@ -786,12 +796,50 @@ export async function mountThread(
     `;
   }
 
+  // Card de rutina compartida: link al visor público por token (mismo criterio que el Rep
+  // compartido, que linkea a post.html). Los conteos vienen del preview batch (RLS-safe).
+  function sharedRoutinePreviewHtml(routineId: string): string {
+    const routine = sharedRoutinesCache.get(routineId);
+    if (!routine) return `<div class="chat-shared-post chat-shared-post-missing">Rutina no disponible</div>`;
+    const owner = `${routine.ownerNombre} ${routine.ownerApellido}`.trim() || `@${routine.ownerUsername}`;
+    const stats = `${routine.weeksCount} sem · ${routine.daysCount} días · ${routine.exercisesCount} ejercicios`;
+    return `
+      <a class="chat-shared-post" href="showExc.html?token=${encodeURIComponent(routine.shareToken)}">
+        <div class="chat-shared-post-head">
+          <span class="chat-shared-post-name">🏋️ Rutina de ${escapeHtml(owner)}</span>
+        </div>
+        <p class="chat-shared-post-text">${escapeHtml(routine.nombre)}</p>
+        <p class="chat-shared-post-text" style="opacity:.7">${escapeHtml(stats)}</p>
+      </a>
+    `;
+  }
+
+  // Card de perfil compartido: avatar + nombre + @usuario + badge, link al perfil (mismo
+  // criterio que el Rep/rutina compartidos). Datos de profiles_public (getProfilesBasicByIds).
+  function sharedProfilePreviewHtml(profileId: string): string {
+    const p = sharedProfilesCache.get(profileId);
+    if (!p) return `<div class="chat-shared-post chat-shared-post-missing">Perfil no disponible</div>`;
+    const name = `${p.nombre ?? ""} ${p.apellido ?? ""}`.trim();
+    return `
+      <a class="chat-shared-post" href="profile.html?u=${encodeURIComponent(p.username ?? "")}">
+        <div class="chat-shared-post-head">
+          <img class="chat-shared-post-avatar" src="${escapeHtml(p.avatar_url || "/images/avatars/default.svg")}" alt="">
+          <span class="chat-shared-post-name">${escapeHtml(p.username ?? "")}${renderVerifiedBadge(p.user_type ?? "usuario", p.is_verified ?? false, 12)}</span>
+        </div>
+        ${name ? `<p class="chat-shared-post-text">${escapeHtml(name)}</p>` : ""}
+        <p class="chat-shared-post-text" style="opacity:.7">Ver perfil</p>
+      </a>
+    `;
+  }
+
   function messageSnippet(m: ChatMessage): string {
     if (m.deleted_at) return "Mensaje eliminado";
     if (m.attachment_type === "sticker") return `${m.content ?? ""} Sticker`;
     if (m.content) return m.content;
     if (m.shared_post_id) return "🔁 Rep compartido";
     if (m.shared_gym_post_id) return "📌 Publicación compartida";
+    if (m.shared_routine_id) return "🏋️ Rutina compartida";
+    if (m.shared_profile_id) return "👤 Perfil compartido";
     if (m.attachment_type === "image") return m.view_once ? "📷 Foto efímera" : "📷 Foto";
     if (m.attachment_type === "video") return m.view_once ? "🎥 Video efímero" : "🎥 Video";
     if (m.attachment_type === "audio") return "🎤 Audio";
@@ -868,6 +916,10 @@ export async function mountThread(
       mediaHtml = sharedPostPreviewHtml(m.shared_post_id);
     } else if (m.shared_gym_post_id) {
       mediaHtml = sharedGymPostPreviewHtml(m.shared_gym_post_id);
+    } else if (m.shared_routine_id) {
+      mediaHtml = sharedRoutinePreviewHtml(m.shared_routine_id);
+    } else if (m.shared_profile_id) {
+      mediaHtml = sharedProfilePreviewHtml(m.shared_profile_id);
     } else if (m.attachment_type === "image" && m.attachment_path) {
       mediaHtml = m.view_once ? viewOnceMediaHtml(m, isMe, "image") : `
         <button type="button" class="chat-bubble-image" data-path="${escapeHtml(m.attachment_path)}">
@@ -1672,7 +1724,14 @@ export async function mountThread(
     const isMe = message.sender_id === userId;
     const isPinned = pinnedMessageId === message.id;
     const myEmoji = myReaction(message);
-    const canEdit = isMe && !message.attachment_path && !message.shared_post_id && !message.shared_gym_post_id && message.attachment_type !== "sticker";
+    const canEdit =
+      isMe &&
+      !message.attachment_path &&
+      !message.shared_post_id &&
+      !message.shared_gym_post_id &&
+      !message.shared_routine_id &&
+      !message.shared_profile_id &&
+      message.attachment_type !== "sticker";
     const menu = document.createElement("div");
     menu.className = "chat-msg-menu";
     menu.innerHTML = `
@@ -1901,6 +1960,8 @@ export async function mountThread(
             attachmentDurationSeconds: message.attachment_duration_seconds ?? undefined,
             sharedPostId: message.shared_post_id ?? undefined,
             sharedGymPostId: message.shared_gym_post_id ?? undefined,
+            sharedRoutineId: message.shared_routine_id ?? undefined,
+            sharedProfileId: message.shared_profile_id ?? undefined,
             isForwarded: true,
           });
           if (error) {
