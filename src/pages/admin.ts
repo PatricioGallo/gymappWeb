@@ -79,6 +79,7 @@ import {
   AD_CAMPAIGN_STATUSES,
   AD_CAMPAIGN_STATUS_LABELS,
   extractPostId,
+  adReportUrl,
   type Advertiser,
   type AdCampaignWithMeta,
   type AdvertiserInput,
@@ -2405,6 +2406,7 @@ export const adminView: ViewModule = {
                 <p class="roadmap-task-desc">${count} campaña${count === 1 ? "" : "s"}</p>
               </div>
               <div class="roadmap-task-actions">
+                <button type="button" data-act="report" data-id="${a.id}">Link de reporte</button>
                 <button type="button" data-act="edit" data-id="${a.id}">Editar</button>
                 <button type="button" data-act="delete" data-id="${a.id}">Eliminar</button>
               </div>
@@ -2416,11 +2418,22 @@ export const adminView: ViewModule = {
       `;
       el.querySelector("#adAdvertiserNew")?.addEventListener("click", () => openAdvertiserFormModal(null));
       el.querySelectorAll<HTMLButtonElement>(".roadmap-task-actions button").forEach((btn) => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
           const a = advertisers.find((x) => x.id === btn.dataset.id);
           if (!a) return;
           if (btn.dataset.act === "edit") openAdvertiserFormModal(a);
-          else openDeleteAdvertiserModal(a);
+          else if (btn.dataset.act === "delete") openDeleteAdvertiserModal(a);
+          else if (btn.dataset.act === "report") {
+            const url = adReportUrl(a.report_token);
+            try {
+              await navigator.clipboard.writeText(url);
+              const orig = btn.textContent;
+              btn.textContent = "¡Copiado!";
+              setTimeout(() => (btn.textContent = orig), 1600);
+            } catch {
+              prompt("Link del reporte para mandarle a la marca:", url);
+            }
+          }
         });
       });
     }

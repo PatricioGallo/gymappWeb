@@ -157,6 +157,7 @@ export type Database = {
           logo_url: string | null
           name: string
           profile_id: string | null
+          report_token: string
           updated_at: string
           website_url: string | null
         }
@@ -169,6 +170,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           profile_id?: string | null
+          report_token?: string
           updated_at?: string
           website_url?: string | null
         }
@@ -181,6 +183,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           profile_id?: string | null
+          report_token?: string
           updated_at?: string
           website_url?: string | null
         }
@@ -3264,6 +3267,7 @@ export type Database = {
         Args: { p_gym_id: string; p_trainer_id: string }
         Returns: undefined
       }
+      get_ad_report: { Args: { p_token: string }; Returns: Json }
       get_ad_stats: {
         Args: never
         Returns: {

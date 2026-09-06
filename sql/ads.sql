@@ -286,6 +286,69 @@ grant execute on function public.get_ad_stats() to authenticated;
 revoke execute on function public.get_ad_stats() from public, anon;
 
 -- ---------------------------------------------------------------------------
+-- 4d. Reporte público por anunciante (link compartible, sin login)
+-- ---------------------------------------------------------------------------
+-- El admin copia el link desde el panel y se lo manda a la marca. La página
+-- pages/ad-report.html lo abre y llama get_ad_report(token). Solo agregados;
+-- nada de viewer_ids. `totals.reach` = personas distintas que vieron CUALQUIER
+-- campaña del anunciante (no la suma por campaña).
+
+alter table public.advertisers
+  add column report_token text not null default encode(gen_random_bytes(16), 'hex');
+create unique index advertisers_report_token_idx on public.advertisers(report_token);
+
+create or replace function public.get_ad_report(p_token text)
+returns jsonb
+language sql
+security definer
+set search_path to 'public'
+as $$
+  with adv as (
+    select id, name, logo_url, website_url, created_at from public.advertisers where report_token = p_token
+  ),
+  camps as (
+    select
+      c.id, c.headline, c.creative_kind, c.status, c.starts_at, c.ends_at, c.media_url, c.post_id,
+      count(e.*) filter (where e.kind = 'impression') as impressions,
+      count(e.*) filter (where e.kind = 'click') as clicks,
+      count(distinct e.viewer_id) filter (where e.kind = 'impression') as reach,
+      coalesce((select p.likes_count + p.comments_count + p.reposts_count from public.posts p where p.id = c.post_id), 0) as post_engagement
+    from public.ad_campaigns c
+    join adv on adv.id = c.advertiser_id
+    left join public.ad_events e on e.campaign_id = c.id
+    group by c.id
+  ),
+  advertiser_reach as (
+    select count(distinct e.viewer_id) as n
+    from public.ad_events e join public.ad_campaigns c on c.id = e.campaign_id join adv on adv.id = c.advertiser_id
+    where e.kind = 'impression'
+  ),
+  daily as (
+    select to_char(date_trunc('day', e.created_at), 'YYYY-MM-DD') as day,
+      count(*) filter (where e.kind = 'impression') as impressions,
+      count(*) filter (where e.kind = 'click') as clicks
+    from public.ad_events e join public.ad_campaigns c on c.id = e.campaign_id join adv on adv.id = c.advertiser_id
+    where e.created_at > now() - interval '30 days'
+    group by 1
+  )
+  select case when not exists (select 1 from adv) then null
+    else jsonb_build_object(
+      'advertiser', (select to_jsonb(adv.*) from adv),
+      'generated_at', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+      'totals', (select jsonb_build_object(
+        'impressions', coalesce(sum(impressions), 0), 'clicks', coalesce(sum(clicks), 0),
+        'reach', (select n from advertiser_reach),
+        'engagement', coalesce(sum(clicks + post_engagement), 0),
+        'campaigns', count(*), 'active_campaigns', count(*) filter (where status = 'active')
+      ) from camps),
+      'campaigns', (select coalesce(jsonb_agg(to_jsonb(camps.*) order by starts_at desc), '[]'::jsonb) from camps),
+      'daily', (select coalesce(jsonb_agg(to_jsonb(daily.*) order by day), '[]'::jsonb) from daily)
+    ) end;
+$$;
+
+grant execute on function public.get_ad_report(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 4c. Autoservicio: un gimnasio/entrenador promociona su propio Rep
 -- ---------------------------------------------------------------------------
 -- request_ad_promotion() crea una campaña 'post' en DRAFT (pago pendiente). El

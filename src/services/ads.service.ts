@@ -195,6 +195,42 @@ export function extractPostId(input: string): string | null {
   return m ? m[0] : null;
 }
 
+/** Link público del reporte de un anunciante (se lo manda el admin a la marca; no pide login). */
+export function adReportUrl(reportToken: string): string {
+  return `${window.location.origin}/pages/ad-report.html?t=${encodeURIComponent(reportToken)}`;
+}
+
+// --- Reporte público (página ad-report.html, callable por anon) ---
+
+export interface AdReportCampaign {
+  id: string;
+  headline: string | null;
+  creative_kind: "standalone" | "post";
+  status: AdCampaignStatus;
+  starts_at: string;
+  ends_at: string;
+  media_url: string | null;
+  post_id: string | null;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  post_engagement: number;
+}
+
+export interface AdReport {
+  advertiser: { id: string; name: string; logo_url: string | null; website_url: string | null; created_at: string };
+  generated_at: string;
+  totals: { impressions: number; clicks: number; reach: number; engagement: number; campaigns: number; active_campaigns: number };
+  campaigns: AdReportCampaign[];
+  daily: { day: string; impressions: number; clicks: number }[];
+}
+
+export async function getAdReport(token: string): Promise<AdReport | null> {
+  const { data, error } = await supabase.rpc("get_ad_report", { p_token: token });
+  if (error || !data) return null;
+  return data as unknown as AdReport;
+}
+
 export async function listAdvertisers(): Promise<Advertiser[]> {
   const { data, error } = await supabase.from("advertisers").select("*").order("created_at", { ascending: false });
   if (error) throw error;
