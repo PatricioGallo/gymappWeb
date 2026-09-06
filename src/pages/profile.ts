@@ -592,6 +592,7 @@ async function renderProfileActions(
   ownerView: boolean,
   viewerLoggedIn: boolean,
   blockStatus: BlockStatus,
+  followStatus: FollowStatus,
   targetUserType: Profile["user_type"]
 ): Promise<FollowStatus> {
   const actions = document.getElementById("profileActions");
@@ -604,16 +605,23 @@ async function renderProfileActions(
   // Un entrenador que ya es handle activo de este gimnasio (o sea, que trabaja ahi -- ver
   // "Trabaja en" en el perfil) no tiene sentido que ademas le aparezca "Ser socio": son dos
   // roles distintos, pero mezclarlos en la misma pantalla confunde mas de lo que suma.
-  const viewerIsActiveHandleHere = showSocioBtnBase
-    ? (await getGymTrainerHandleStatus(targetId).catch(() => ({ status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy }))).status === "active"
-    : false;
+  // followStatus llega ya resuelto (se adelanta en main()). handle / suscripcion / socio son
+  // independientes entre si y se piden juntos en vez de encadenados -- eran hasta 3 viajes de
+  // red en serie al mirar el perfil de un gimnasio. getGymMembershipStatus se gatea con
+  // showSocioBtnBase (no con el showSocioBtn ya derivado de viewerIsActiveHandleHere): a lo
+  // sumo una consulta de mas en el caso raro de un entrenador que ademas es handle activo
+  // mirando "su" propio gimnasio.
+  const NONE_HANDLE = { status: "none" as GymTrainerHandleStatus, initiatedBy: null as HandleInitiatedBy };
+  const [handleResult, rawSubscriptionStatus, rawSocioStatus] = await Promise.all([
+    showSocioBtnBase ? getGymTrainerHandleStatus(targetId).catch(() => NONE_HANDLE) : Promise.resolve(NONE_HANDLE),
+    showSubscribeBtn ? getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : Promise.resolve("none" as SubscriptionStatus),
+    showSocioBtnBase ? getGymMembershipStatus(targetId).catch(() => "none" as GymMembershipStatus) : Promise.resolve("none" as GymMembershipStatus),
+  ]);
+  const viewerIsActiveHandleHere = handleResult.status === "active";
   const showSocioBtn = showSocioBtnBase && !viewerIsActiveHandleHere;
-  const followStatus: FollowStatus = showFollowBtn ? await getFollowStatus(targetId).catch(() => "none" as FollowStatus) : "none";
   // "ended" (fue alumno/socio, ya no lo es) se trata igual que "none": el boton vuelve a ofrecer
   // suscribirse/hacerse socio, y la RPC reactiva ese mismo vinculo historico si corresponde.
-  const rawSubscriptionStatus: SubscriptionStatus = showSubscribeBtn ? await getSubscriptionStatus(targetId).catch(() => "none" as SubscriptionStatus) : "none";
   const subscriptionStatus: SubscriptionStatus = rawSubscriptionStatus === "ended" ? "none" : rawSubscriptionStatus;
-  const rawSocioStatus: GymMembershipStatus = showSocioBtn ? await getGymMembershipStatus(targetId).catch(() => "none" as GymMembershipStatus) : "none";
   const socioStatus: GymMembershipStatus = rawSocioStatus === "ended" ? "none" : rawSocioStatus;
   if (!actions) return followStatus;
 
@@ -1085,8 +1093,10 @@ async function renderQuickActions(userId: string, userType: Profile["user_type"]
     return;
   }
 
-  const showMyExercises = await hasMyExercises(userId);
-  const measurementPrefs = await getBodyMeasurementPrefs(userId).catch(() => null);
+  const [showMyExercises, measurementPrefs] = await Promise.all([
+    hasMyExercises(userId),
+    getBodyMeasurementPrefs(userId).catch(() => null),
+  ]);
 
   quickActions.innerHTML = `
     <a class="quick-card reveal" href="#rutinas">
@@ -2737,8 +2747,17 @@ async function main(ctx: ViewContext) {
   let basicProfile: ProfileBasic | null = null;
 
   if (usernameParam) {
-    profile = await getProfileByUsername(usernameParam);
-    if (!profile) basicProfile = await getProfileBasicByUsername(usernameParam);
+    // La fila completa (getProfileByUsername) solo la deja pasar RLS al dueño / admin /
+    // entrenador con acceso -- para cualquier otro visitante devuelve null y hay que caer a
+    // profiles_public. En vez de encadenar las dos (dos viajes de red en serie para el caso
+    // mas comun, que es mirar el perfil de un desconocido), se piden juntas y se usa la que
+    // corresponda: el costo es una lectura extra barata cuando SI hay acceso completo.
+    const [fullRow, publicRow] = await Promise.all([
+      getProfileByUsername(usernameParam).catch(() => null),
+      getProfileBasicByUsername(usernameParam).catch(() => null),
+    ]);
+    profile = fullRow;
+    if (!fullRow) basicProfile = publicRow;
   } else {
     profile = await getProfile(myId!);
   }
@@ -2815,8 +2834,29 @@ async function main(ctx: ViewContext) {
   if (isOwner && profile) initAvatar(profile);
 
   const targetUserType = displayProfile.user_type ?? "usuario";
-  const blockStatus: BlockStatus = !isOwner && myId ? await getBlockStatus(displayProfile.id!).catch(() => "none" as BlockStatus) : "none";
-  const followStatus = await renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, targetUserType);
+  const isGym = targetUserType === "gimnasio";
+
+  // Todo lo que no depende de otra respuesta se dispara junto y se consume mas abajo: sin esto
+  // el pintado de un perfil ajeno era getBlockStatus -> renderProfileActions -> getProfileBasicById
+  // (visitante) -> weight_logs, cuatro viajes de red en fila. Si esta instancia se descarto
+  // mientras tanto, los checkpoints de ctx.signal.aborted mas abajo cortan antes de tocar el DOM.
+  const blockStatusP: Promise<BlockStatus> =
+    !isOwner && myId ? getBlockStatus(displayProfile.id!).catch(() => "none" as BlockStatus) : Promise.resolve("none");
+  // El estado de "seguir" tambien se adelanta aca (antes lo pedia renderProfileActions recien
+  // despues de resolver blockStatus, otro viaje en serie) -- a lo sumo una consulta de mas si
+  // justo hay un bloqueo, caso muy raro. Ademas destraba isPrivateForViewer, y con el todo el
+  // pintado de bio/stats/rutinas, sin esperar a que renderProfileActions termine.
+  const followStatusP: Promise<FollowStatus> =
+    !isOwner && myId ? getFollowStatus(displayProfile.id!).catch(() => "none" as FollowStatus) : Promise.resolve("none");
+  const viewerBasicP: Promise<ProfileBasic | null> =
+    !isOwner && myId ? getProfileBasicById(myId).catch(() => null) : Promise.resolve(null);
+  const logsP: Promise<WeightLogEntry[]> = isGym
+    ? Promise.resolve([] as WeightLogEntry[])
+    : listWeightLogsWithContext(displayProfile.id!).catch(() => [] as WeightLogEntry[]);
+
+  const [blockStatus, followStatus] = await Promise.all([blockStatusP, followStatusP]);
+  if (ctx.signal.aborted) return;
+  void renderProfileActions(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, followStatus, targetUserType);
   void renderProfileMenu(displayProfile.id!, displayProfile.username ?? "", isOwner, myId !== null, blockStatus, targetUserType);
 
   // Un seguidor aceptado ve el perfil completo aunque sea privado (misma logica
@@ -2855,14 +2895,16 @@ async function main(ctx: ViewContext) {
 
   if (isOwner) {
     await renderQuickActions(displayProfile.id!, targetUserType);
+    if (ctx.signal.aborted) return;
   } else {
     document.getElementById("quickActionsSection")?.remove();
   }
 
   // "Copiar" en el menu de una rutina activa ajena solo tiene sentido si el
   // visitante tiene donde guardarla: mismo gate que canUseSaved, pero sobre el
-  // *visitante*, no sobre el dueño del perfil que se esta mirando.
-  const viewerBasic = !isOwner && myId ? await getProfileBasicById(myId).catch(() => null) : null;
+  // *visitante*, no sobre el dueño del perfil que se esta mirando. La consulta ya venia
+  // corriendo en paralelo desde arriba (viewerBasicP).
+  const viewerBasic = await viewerBasicP;
   const viewerCanCopyToSaved =
     viewerBasic?.user_type === "entrenador" || viewerBasic?.user_type === "usuario" || viewerBasic?.user_type === "admin";
 
@@ -2872,8 +2914,7 @@ async function main(ctx: ViewContext) {
   // cruda o de profiles_public segun el caso (ver arriba), asi que ambas exponen las columnas.
   // Un gimnasio no entrena, asi que no tiene rutinas ni estadisticas de entrenamiento --
   // fuerza showStats a false (pisa la preferencia guardada) y saltea toda la seccion de
-  // rutinas por completo, sin ni siquiera pedir los weight_logs.
-  const isGym = targetUserType === "gimnasio";
+  // rutinas por completo (isGym ya cortocircuito logsP a un array vacio mas arriba).
   const showStats = isGym ? false : (displayProfile.show_stats ?? true);
   const statWidgets = parseStatWidgets(displayProfile.stats_widgets);
 
@@ -2895,7 +2936,9 @@ async function main(ctx: ViewContext) {
     void renderGymClasses(gymClasesRefreshCtx.gymId, gymClasesRefreshCtx.gymUsername, gymClasesRefreshCtx.isActiveSocio, gymClasesRefreshCtx.myId, gymClasesRefreshCtx.isOwner, gymClasesRefreshCtx.ctx);
     void renderGymEntrenadores(displayProfile.id!, isActiveSocio, myId, isOwner);
   } else {
-    const logs = await listWeightLogsWithContext(displayProfile.id!);
+    // logsP ya venia corriendo en paralelo con renderProfileActions / renderQuickActions.
+    const logs = await logsP;
+    if (ctx.signal.aborted) return;
     routinesCtx = { userId: displayProfile.id!, ownerView: isOwner, logs, userType: targetUserType, ownerBasic: displayProfile, widgets: statWidgets, showStats };
     const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
     if (showStats) void renderStats(displayProfile.id!, logs, activeCount ?? 0, isOwner, statWidgets);

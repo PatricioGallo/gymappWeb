@@ -46,7 +46,10 @@ form?.addEventListener("submit", async (event) => {
       </div>
     `;
   }
+  // 900ms: lo que tarda la animacion del check + "¡Bienvenido!" en asentarse (ver
+  // .success-check / .text-rise en modern.css). Antes eran 1500ms, medio segundo de mas
+  // mirando una pantalla ya quieta antes de redirigir.
   setTimeout(() => {
     window.location.href = "profile.html";
-  }, 1500);
+  }, 900);
 });

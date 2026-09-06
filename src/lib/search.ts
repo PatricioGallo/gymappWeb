@@ -6,7 +6,7 @@ import { smartNavigate } from "../shell/router";
 
 // Mismo breakpoint que .user-menu-toggle/.notif-dropdown en modern.css (860px).
 const MOBILE_QUERY = "(max-width: 859px)";
-const DEBOUNCE_MS = 250;
+const DEBOUNCE_MS = 160;
 const INLINE_RESULTS_LIMIT = 6;
 
 export const USER_TYPE_BADGE: Record<string, string> = {

@@ -55,7 +55,7 @@ export const searchView: ViewModule = {
     const listEl = container.querySelector("#searchPageList")!;
     const suggestionsEl = container.querySelector("#searchSuggestionsList") as HTMLDivElement;
 
-    const DEBOUNCE_MS = 250;
+    const DEBOUNCE_MS = 160;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     ctx.addCleanup(() => clearTimeout(debounceTimer));
     let requestId = 0;
