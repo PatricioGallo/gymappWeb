@@ -1418,6 +1418,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          kind: string
           page: string | null
           severity: string
           status: string
@@ -1429,6 +1430,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          kind?: string
           page?: string | null
           severity?: string
           status?: string
@@ -1440,6 +1442,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          kind?: string
           page?: string | null
           severity?: string
           status?: string
@@ -2333,57 +2336,6 @@ export type Database = {
           {
             foreignKeyName: "push_tokens_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      roadmap_tasks: {
-        Row: {
-          category: string
-          created_at: string
-          created_by: string | null
-          description: string | null
-          id: string
-          position: number
-          status: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          category: string
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          id?: string
-          position?: number
-          status?: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          id?: string
-          position?: number
-          status?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "roadmap_tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "roadmap_tasks_created_by_fkey"
-            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]

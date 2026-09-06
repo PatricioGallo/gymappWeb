@@ -5,6 +5,14 @@ export type IssueReport = Tables<"issue_reports">;
 
 export type IssueSeverity = "low" | "medium" | "high";
 export type IssueStatus = "open" | "in_progress" | "blocked" | "resolved";
+export type IssueKind = "issue" | "task";
+
+export const ISSUE_KIND_OPTIONS: IssueKind[] = ["task", "issue"];
+
+export const ISSUE_KIND_LABELS: Record<IssueKind, string> = {
+  issue: "Issue",
+  task: "Task",
+};
 
 export const ISSUE_SEVERITY_OPTIONS: IssueSeverity[] = ["low", "medium", "high"];
 
@@ -47,6 +55,7 @@ export function validateIssueReport(title: string): "title_short" | "title_long"
 
 export async function addIssueReport(
   authorId: string,
+  kind: IssueKind,
   title: string,
   description: string,
   page: string,
@@ -54,12 +63,13 @@ export async function addIssueReport(
 ): Promise<{ error?: string }> {
   const { error } = await supabase
     .from("issue_reports")
-    .insert({ title: title.trim(), description: description.trim() || null, page: page.trim() || null, severity, created_by: authorId });
-  if (error) return { error: "No se pudo guardar el issue. Probá de nuevo." };
+    .insert({ kind, title: title.trim(), description: description.trim() || null, page: page.trim() || null, severity, created_by: authorId });
+  if (error) return { error: "No se pudo guardar. Probá de nuevo." };
   return {};
 }
 
 export interface EditableIssueReportFields {
+  kind?: IssueKind;
   title?: string;
   description?: string | null;
   page?: string | null;
@@ -69,12 +79,12 @@ export interface EditableIssueReportFields {
 
 export async function updateIssueReport(id: string, fields: EditableIssueReportFields): Promise<{ error?: string }> {
   const { error } = await supabase.from("issue_reports").update(fields).eq("id", id);
-  if (error) return { error: "No se pudo guardar el issue. Probá de nuevo." };
+  if (error) return { error: "No se pudo guardar. Probá de nuevo." };
   return {};
 }
 
 export async function deleteIssueReport(id: string): Promise<{ error?: string }> {
   const { error } = await supabase.from("issue_reports").delete().eq("id", id);
-  if (error) return { error: "No se pudo eliminar el issue. Probá de nuevo." };
+  if (error) return { error: "No se pudo eliminar. Probá de nuevo." };
   return {};
 }
