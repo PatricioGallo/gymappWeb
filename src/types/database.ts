@@ -3276,6 +3276,7 @@ export type Database = {
       get_feed_ads: {
         Args: { p_limit?: number; p_seed?: string }
         Returns: {
+          advertiser_id: string
           advertiser_kind: string
           advertiser_logo_url: string
           advertiser_name: string

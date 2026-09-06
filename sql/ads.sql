@@ -2,9 +2,9 @@
 -- Publicidad: sponsored posts en el feed de Reps
 -- ============================================================================
 -- Ya aplicado en producción vía mcp__supabase__apply_migration (proyecto
--- nxyxuthkhvzticqwtaar), en 3 pasos: ads_platform_tables, ads_platform_rpcs_and_bucket,
--- ads_rpcs_revoke_anon. Este archivo documenta el estado final, mismo formato que
--- sql/social_feed.sql / sql/chat.sql.
+-- nxyxuthkhvzticqwtaar): ads_platform_tables, ads_platform_rpcs_and_bucket,
+-- ads_rpcs_revoke_anon, ads_events_viewer_id_index, ads_get_feed_ads_add_advertiser_id.
+-- Este archivo documenta el estado final, mismo formato que sql/social_feed.sql / sql/chat.sql.
 --
 -- Modelo: un ANUNCIANTE (advertisers) paga una CAMPAÑA (ad_campaigns) para que un
 -- creativo aparezca en el feed de gente que matchea un targeting simple. El anunciante
@@ -147,6 +147,7 @@ create policy ad_events_staff_select on public.ad_events
 create or replace function public.get_feed_ads(p_limit integer default 3, p_seed text default null)
 returns table (
   campaign_id uuid,
+  advertiser_id uuid,
   advertiser_name text,
   advertiser_logo_url text,
   advertiser_kind text,
@@ -172,6 +173,7 @@ as $$
   eligible as (
     select
       c.id,
+      a.id    as advertiser_id,
       a.name  as advertiser_name,
       a.logo_url as advertiser_logo_url,
       a.kind  as advertiser_kind,
@@ -215,7 +217,8 @@ as $$
       ))
   )
   select
-    id, advertiser_name, advertiser_logo_url, advertiser_kind, advertiser_username, advertiser_user_type,
+    id, advertiser_id, advertiser_name, advertiser_logo_url, advertiser_kind,
+    advertiser_username, advertiser_user_type,
     creative_kind, post_id, media_url, media_type, headline, body_text, cta_label, cta_url
   from eligible
   order by last_shown asc, rand01 desc
