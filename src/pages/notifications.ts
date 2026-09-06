@@ -1,6 +1,7 @@
 import type { ViewModule } from "../shell/router";
 import { smartNavigate } from "../shell/router";
 import { escapeHtml } from "../lib/dom";
+import { settleReveal } from "../lib/nav";
 import { formatFechaCorta } from "../lib/dias";
 import {
   listAllNotifications,
@@ -8,6 +9,8 @@ import {
   markAllNotificationsRead,
   type AppNotification,
 } from "../services/notification.service";
+import { getUpcomingBirthdays, type UpcomingBirthday } from "../services/birthday.service";
+import { renderBirthdayRows, wireBirthdayRows } from "../lib/birthdayList";
 
 const TYPE_ICON: Record<string, string> = {
   routine_assigned: "🏋️",
@@ -24,6 +27,7 @@ const TYPE_ICON: Record<string, string> = {
   quote: "❝",
   message_reaction: "😀",
   class_reminder: "⏰",
+  birthday: "🎂",
 };
 
 function relativeTime(iso: string): string {
@@ -73,6 +77,7 @@ const VIEW_MARKUP = `
     <div class="container">
       <div class="pull-refresh-indicator" id="notifPullRefreshIndicator" aria-hidden="true"><div class="modern-spinner"></div></div>
       <span class="eyebrow eyebrow-standalone">Notificaciones</span>
+      <div id="birthdayCard"></div>
       <div class="notif-page-list" id="notifPageList"></div>
     </div>
   </section>
@@ -82,9 +87,28 @@ export const notificationsView: ViewModule = {
   async mount(container, _params, ctx) {
     container.innerHTML = VIEW_MARKUP;
     const listEl = container.querySelector<HTMLElement>("#notifPageList")!;
+    const birthdayCardEl = container.querySelector<HTMLElement>("#birthdayCard")!;
     const pullIndicator = container.querySelector("#notifPullRefreshIndicator") as HTMLDivElement;
 
     let notifications: AppNotification[] = [];
+
+    function renderBirthdayCard(birthdays: UpcomingBirthday[]): void {
+      if (birthdays.length === 0) {
+        birthdayCardEl.innerHTML = "";
+        return;
+      }
+      const today = birthdays.filter((b) => b.isToday);
+      const upcoming = birthdays.filter((b) => !b.isToday);
+      birthdayCardEl.innerHTML = `
+        <div class="chart-card reveal birthday-card">
+          <div class="search-recent-header"><span>🎂 Cumpleaños</span></div>
+          ${today.length ? `<p class="birthday-group-label">Hoy</p>${renderBirthdayRows(today, true)}` : ""}
+          ${upcoming.length ? `<p class="birthday-group-label">Próximos</p>${renderBirthdayRows(upcoming, true)}` : ""}
+        </div>
+      `;
+      settleReveal(birthdayCardEl);
+      wireBirthdayRows(birthdayCardEl);
+    }
 
     function renderList(): void {
       if (notifications.length === 0) {
@@ -179,8 +203,10 @@ export const notificationsView: ViewModule = {
       isRefreshingList = true;
       setPullHeight(PULL_LOADING_HEIGHT, true);
       try {
-        notifications = await listAllNotifications();
+        const [notifs, birthdays] = await Promise.all([listAllNotifications(), getUpcomingBirthdays(30).catch(() => [])]);
+        notifications = notifs;
         renderList();
+        renderBirthdayCard(birthdays);
       } catch {
         // silencioso: un pull-to-refresh fallido no tiene mucho mas que mostrar que "no paso nada"
       } finally {
@@ -233,7 +259,12 @@ export const notificationsView: ViewModule = {
     document.addEventListener("touchend", onPullEnd, { signal: ctx.signal });
     document.addEventListener("touchcancel", onPullEnd, { signal: ctx.signal });
 
-    notifications = await listAllNotifications();
+    const [initialNotifs, initialBirthdays] = await Promise.all([
+      listAllNotifications(),
+      getUpcomingBirthdays(30).catch(() => []),
+    ]);
+    notifications = initialNotifs;
     renderList();
+    renderBirthdayCard(initialBirthdays);
   },
 };

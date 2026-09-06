@@ -2198,6 +2198,7 @@ export type Database = {
           provincia: string | null
           pwa_installed: boolean
           pwa_last_seen_at: string | null
+          show_birthdate: boolean
           show_last_seen: boolean
           show_read_receipts: boolean
           show_stats: boolean
@@ -2233,6 +2234,7 @@ export type Database = {
           provincia?: string | null
           pwa_installed?: boolean
           pwa_last_seen_at?: string | null
+          show_birthdate?: boolean
           show_last_seen?: boolean
           show_read_receipts?: boolean
           show_stats?: boolean
@@ -2268,6 +2270,7 @@ export type Database = {
           provincia?: string | null
           pwa_installed?: boolean
           pwa_last_seen_at?: string | null
+          show_birthdate?: boolean
           show_last_seen?: boolean
           show_read_receipts?: boolean
           show_stats?: boolean
@@ -3412,6 +3415,22 @@ export type Database = {
         Returns: string
       }
       get_unread_conversation_count: { Args: never; Returns: number }
+      get_upcoming_birthdays: {
+        Args: { p_days?: number }
+        Returns: {
+          apellido: string
+          avatar_url: string
+          days_until: number
+          id: string
+          is_today: boolean
+          is_verified: boolean
+          next_birthday: string
+          nombre: string
+          turning_age: number
+          user_type: Database["public"]["Enums"]["user_type"]
+          username: string
+        }[]
+      }
       invite_gym_trainer: {
         Args: {
           p_duration_months?: number
@@ -3729,10 +3748,15 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      next_birthday_occurrence: {
+        Args: { p_birth: string; p_ref: string }
+        Returns: string
+      }
       next_session_occurrence: {
         Args: { p_day_of_week: number; p_end_time: string }
         Returns: string
       }
+      notify_follow_birthdays: { Args: never; Returns: undefined }
       open_view_once_message: {
         Args: { p_message_id: string }
         Returns: {

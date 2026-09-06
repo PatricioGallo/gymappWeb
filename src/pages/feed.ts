@@ -28,6 +28,8 @@ import {
   type PostAuthor,
 } from "../services/post.service";
 import { getSuggestedProfiles, type SuggestedProfile } from "../services/search.service";
+import { getUpcomingBirthdays } from "../services/birthday.service";
+import { renderBirthdayRows, wireBirthdayRows } from "../lib/birthdayList";
 import { followUser } from "../services/follow.service";
 import { resultAvatar, resultFullName } from "../lib/search";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
@@ -136,6 +138,11 @@ const VIEW_MARKUP = `
       <button type="button" class="new-rep-fab" id="newRepFab" aria-label="Nuevo Rep">${NEW_REP_FAB_ICON}</button>
 
       <aside class="feed-side feed-side-right">
+        <div class="feed-birthdays" id="feedBirthdays" hidden>
+          <div class="search-recent-header"><span>🎂 Próximos cumpleaños</span></div>
+          <div id="feedBirthdaysList"></div>
+        </div>
+
         <div class="feed-suggestions">
           <div class="search-recent-header"><span>Sugerencias para seguir</span></div>
           <div id="feedSuggestionsList"></div>
@@ -1111,6 +1118,25 @@ export const feedView: ViewModule = {
         })
         .catch(() => {
           // silencioso: si fallan las sugerencias, el feed sigue funcionando
+        });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Sidebar derecha: "próximos cumpleaños" de la gente que sigo (solo desktop).
+    // ---------------------------------------------------------------------------
+    const birthdaysWrap = container.querySelector<HTMLElement>("#feedBirthdays");
+    const birthdaysListEl = container.querySelector<HTMLElement>("#feedBirthdaysList");
+    if (birthdaysWrap && birthdaysListEl) {
+      getUpcomingBirthdays(30)
+        .then((list) => {
+          const shown = list.slice(0, 4);
+          if (shown.length === 0) return;
+          birthdaysListEl.innerHTML = renderBirthdayRows(shown, true);
+          wireBirthdayRows(birthdaysListEl);
+          birthdaysWrap.hidden = false;
+        })
+        .catch(() => {
+          // silencioso: si fallan los cumpleaños, el feed sigue funcionando
         });
     }
   },

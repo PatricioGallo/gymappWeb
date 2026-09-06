@@ -570,6 +570,16 @@ export const settingsView: ViewModule = {
               <span class="switch-track"></span>
             </label>
           </div>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="switch-label">Mostrar mi cumpleaños</span>
+              <p class="chart-sub" style="margin:4px 0 0;">Si lo desactivás, no aparecés en la lista de próximos cumpleaños de tus seguidores ni les llega un aviso el día de tu cumpleaños.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="birthdateVisibilityToggle" ${profile!.show_birthdate ? "checked" : ""}>
+              <span class="switch-track"></span>
+            </label>
+          </div>
           <div class="alert_message" id="privacyAlert"></div>
         </div>
 
@@ -631,6 +641,22 @@ export const settingsView: ViewModule = {
         profile!.show_read_receipts = showReadReceipts;
       });
 
+      container.querySelector("#birthdateVisibilityToggle")?.addEventListener("change", async (e) => {
+        const alertBox = container.querySelector("#privacyAlert")!;
+        alertBox.innerHTML = "";
+        const toggle = e.target as HTMLInputElement;
+        const showBirthdate = toggle.checked;
+        toggle.disabled = true;
+        const { error } = await updateProfileFields(userId, { show_birthdate: showBirthdate });
+        toggle.disabled = false;
+        if (error) {
+          toggle.checked = !showBirthdate;
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        profile!.show_birthdate = showBirthdate;
+      });
+
       container.querySelector("#saveAccountBtn")?.addEventListener("click", async () => {
         const alertBox = container.querySelector("#accountAlert")!;
         alertBox.innerHTML = "";
@@ -674,9 +700,10 @@ export const settingsView: ViewModule = {
       comments: boolean;
       follows: boolean;
       mentions: boolean;
+      birthdays: boolean;
     }
 
-    const NOTIFICATION_DEFAULTS: NotificationPrefs = { likes: true, comments: true, follows: true, mentions: true };
+    const NOTIFICATION_DEFAULTS: NotificationPrefs = { likes: true, comments: true, follows: true, mentions: true, birthdays: true };
 
     function parseNotificationPrefs(raw: Profile["notification_prefs"]): NotificationPrefs {
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -744,12 +771,13 @@ export const settingsView: ViewModule = {
         { key: "comments", label: "Comentarios en tus publicaciones" },
         { key: "follows", label: "Nuevos seguidores y suscripciones" },
         { key: "mentions", label: "Menciones" },
+        { key: "birthdays", label: "Cumpleaños de tus seguidos" },
       ];
 
       notificationsTab.innerHTML = `
         <div class="chart-card reveal">
           <h3>Notificaciones</h3>
-          <p class="chart-sub">"Nuevos seguidores" ya está activo. El resto (me gusta, comentarios, menciones) va a aplicarse en cuanto sumemos publicaciones a la red social.</p>
+          <p class="chart-sub">"Nuevos seguidores" y "Cumpleaños de tus seguidos" ya están activos. El resto (me gusta, comentarios, menciones) va a aplicarse en cuanto sumemos publicaciones a la red social.</p>
           ${items
             .map(
               (item) => `

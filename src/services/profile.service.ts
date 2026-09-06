@@ -82,6 +82,7 @@ export async function updateProfileFields(
       | "altura_cm"
       | "show_last_seen"
       | "show_read_receipts"
+      | "show_birthdate"
       | "show_stats"
       | "stats_widgets"
     >

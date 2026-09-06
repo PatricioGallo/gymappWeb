@@ -895,6 +895,65 @@ button:focus-visible {
   color: var(--accent-2);
 }
 
+/* ---------- Cumpleaños de seguidos (card en Notificaciones + widget en el feed) ---------- */
+.birthday-card .search-recent-header { margin-top: 0; }
+
+.birthday-group-label {
+  margin: 12px 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.birthday-group-label:first-of-type { margin-top: 4px; }
+
+.birthday-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .birthday-row:hover { background: var(--surface-2); }
+}
+
+.birthday-row-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.birthday-row-body { flex: 1; min-width: 0; }
+
+.birthday-row-name {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.birthday-row-meta {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.birthday-row-cake { flex-shrink: 0; font-size: 18px; }
+
 /* Dropdown chico anclado al toggle: usado en las paginas publicas donde el
    menu solo tiene Ingresar/Registrate. El menu de cuenta (mas items, ver
    .account-nav mas abajo) pisa estas reglas para volver a ser panel
@@ -8302,12 +8361,17 @@ body.feed-page .site-footer { display: none; }
 
   .feed-side-right { gap: 20px; width: 320px; }
 
-  .feed-suggestions {
+  .feed-suggestions,
+  .feed-birthdays {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 14px;
   }
+  .feed-birthdays .search-recent-header { margin-top: 0; }
+  .feed-birthdays .birthday-row { padding: 8px 6px; }
+  .feed-birthdays .birthday-row-avatar { width: 34px; height: 34px; }
+  #feedBirthdaysList { display: flex; flex-direction: column; gap: 4px; }
   .feed-suggestions .search-page-item { padding: 10px 12px; gap: 8px 10px; flex-wrap: wrap; }
   .feed-suggestions .search-page-avatar { width: 34px; height: 34px; }
   .feed-suggestions .search-page-name { font-size: 14px; }
