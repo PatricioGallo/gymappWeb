@@ -63,6 +63,30 @@ import {
 } from "../services/issue.service";
 import { adminSendNotification } from "../services/notification.service";
 import {
+  listAdvertisers,
+  createAdvertiser,
+  updateAdvertiser,
+  deleteAdvertiser,
+  searchAdvertiserProfiles,
+  listAdCampaigns,
+  createAdCampaign,
+  updateAdCampaign,
+  setAdCampaignStatus,
+  deleteAdCampaign,
+  uploadAdMedia,
+  AD_TARGET_USER_TYPES,
+  AD_TARGET_USER_TYPE_LABELS,
+  AD_CAMPAIGN_STATUSES,
+  AD_CAMPAIGN_STATUS_LABELS,
+  extractPostId,
+  adReportUrl,
+  type Advertiser,
+  type AdCampaignWithMeta,
+  type AdvertiserInput,
+  type AdCampaignInput,
+  type AdCampaignStatus,
+} from "../services/ads.service";
+import {
   listVerificationRequestsAdmin,
   reviewVerificationRequest,
   getVerificationDocumentUrl,
@@ -117,6 +141,7 @@ const VIEW_MARKUP = `
         <button class="routine-tab" data-tab="messages" type="button">Mensajes<span class="tab-dot" id="messagesTabDot" hidden></span></button>
         <button class="routine-tab" data-tab="mail" type="button">Mail</button>
         <button class="routine-tab" data-tab="validation" type="button">Validación<span class="tab-dot" id="validationTabDot" hidden></span></button>
+        <button class="routine-tab" data-tab="ads" type="button">Publicidad</button>
         <button class="routine-tab" data-tab="notifs" type="button">Notificaciones</button>
       </div>
 
@@ -128,6 +153,7 @@ const VIEW_MARKUP = `
       <div id="messagesTab" hidden></div>
       <div id="mailTab" hidden></div>
       <div id="validationTab" hidden></div>
+      <div id="adsTab" hidden></div>
       <div id="notifsTab" hidden></div>
     </div>
   </section>
@@ -196,6 +222,11 @@ export const adminView: ViewModule = {
     let validationSubTab: ApplicantType = "entrenador";
     let validationTabInitialized = false;
 
+    let adsLoaded = false;
+    let adsSubTab: "campaigns" | "advertisers" = "campaigns";
+    let advertisers: Advertiser[] = [];
+    let adCampaigns: AdCampaignWithMeta[] = [];
+
     function formatDateTime(iso: string | null): string {
       if (!iso) return "—";
       return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -218,6 +249,7 @@ export const adminView: ViewModule = {
       const messagesTab = container.querySelector("#messagesTab")!;
       const mailTab = container.querySelector("#mailTab")!;
       const validationTab = container.querySelector("#validationTab")!;
+      const adsTab = container.querySelector("#adsTab")!;
       const notifsTab = container.querySelector("#notifsTab")!;
       if (!tabsWrap) return;
 
@@ -236,6 +268,7 @@ export const adminView: ViewModule = {
             (messagesTab as HTMLElement).hidden = tab !== "messages";
             (mailTab as HTMLElement).hidden = tab !== "mail";
             (validationTab as HTMLElement).hidden = tab !== "validation";
+            (adsTab as HTMLElement).hidden = tab !== "ads";
             (notifsTab as HTMLElement).hidden = tab !== "notifs";
             if (tab === "stats" && !statsLoaded) {
               statsLoaded = true;
@@ -268,6 +301,10 @@ export const adminView: ViewModule = {
             if (tab === "validation" && !validationTabInitialized) {
               validationTabInitialized = true;
               await renderValidationTab();
+            }
+            if (tab === "ads" && !adsLoaded) {
+              adsLoaded = true;
+              await loadAdsTab();
             }
             if (tab === "notifs") {
               if (!usersLoaded) {
@@ -2230,6 +2267,488 @@ export const adminView: ViewModule = {
         (container.querySelector("#notifTitle") as HTMLInputElement).value = "";
         (container.querySelector("#notifBody") as HTMLTextAreaElement).value = "";
         (container.querySelector("#notifLink") as HTMLInputElement).value = "";
+      });
+    }
+
+    // ---------- Publicidad ----------
+
+    function isoToLocalInput(iso: string): string {
+      const d = new Date(iso);
+      const p = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    function localInputToIso(v: string): string {
+      return v ? new Date(v).toISOString() : "";
+    }
+
+    async function loadAdsTab(): Promise<void> {
+      const adsTab = container.querySelector("#adsTab")!;
+      adsTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando publicidad...</p></div>`;
+      try {
+        [adCampaigns, advertisers] = await Promise.all([listAdCampaigns(), listAdvertisers()]);
+      } catch {
+        adsTab.innerHTML = `<p class="chart-sub">No se pudo cargar la publicidad.</p>`;
+        return;
+      }
+      renderAdsTab();
+    }
+
+    function renderAdsTab(): void {
+      const adsTab = container.querySelector("#adsTab")!;
+      adsTab.innerHTML = `
+        <div class="ads-tab-head">
+          <div class="exc-pick-chips" id="adsSubTabs">
+            <button type="button" class="exc-pick-chip ${adsSubTab === "campaigns" ? "active" : ""}" data-sub="campaigns">Campañas (${adCampaigns.length})</button>
+            <button type="button" class="exc-pick-chip ${adsSubTab === "advertisers" ? "active" : ""}" data-sub="advertisers">Anunciantes (${advertisers.length})</button>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="adsRefresh">↻ Actualizar</button>
+        </div>
+        <div id="adsSubContent"></div>
+      `;
+      adsTab.querySelector("#adsSubTabs")?.addEventListener("click", (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
+        if (!btn) return;
+        adsSubTab = btn.dataset.sub as "campaigns" | "advertisers";
+        renderAdsTab();
+      });
+      adsTab.querySelector("#adsRefresh")?.addEventListener("click", () => void loadAdsTab());
+      if (adsSubTab === "campaigns") renderAdCampaignsList();
+      else renderAdvertisersList();
+    }
+
+    function renderAdCampaignsList(): void {
+      const el = container.querySelector("#adsSubContent")!;
+      const canCreate = advertisers.length > 0;
+      el.innerHTML = `
+        <div class="exc-admin-toolbar">
+          <div>
+            <h3>Campañas</h3>
+            <p class="chart-sub">${adCampaigns.filter((c) => c.status === "active").length} activas de ${adCampaigns.length}. El anuncio se muestra en el feed solo si la campaña está <strong>Activa</strong> y dentro de fechas.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="adCampaignNew" type="button" ${canCreate ? "" : "disabled"}>+ Nueva campaña</button>
+        </div>
+        ${canCreate ? "" : `<p class="chart-sub">Primero creá un anunciante en la pestaña "Anunciantes".</p>`}
+        <div class="roadmap-tasks">
+          ${
+            adCampaigns
+              .map((c) => {
+                const days = Math.max(1, Math.round((new Date(c.ends_at).getTime() - new Date(c.starts_at).getTime()) / 86400000));
+                const ctr = c.stats.impressions ? ((c.stats.clicks / c.stats.impressions) * 100).toFixed(1) : "0.0";
+                const target: string[] = [];
+                if (c.target_provincia) target.push(c.target_provincia);
+                if (c.target_ciudad) target.push(c.target_ciudad);
+                if (c.target_user_types.length) target.push(c.target_user_types.map((t) => AD_TARGET_USER_TYPE_LABELS[t as keyof typeof AD_TARGET_USER_TYPE_LABELS] ?? t).join("/"));
+                const title = c.creative_kind === "post" ? "Rep promocionado" : c.headline || "(sin título)";
+                return `
+            <div class="roadmap-task" data-id="${c.id}">
+              <div class="roadmap-task-body">
+                <span class="roadmap-task-title">${escapeHtml(title)} <span class="ad-status ad-status-${c.status}">${AD_CAMPAIGN_STATUS_LABELS[c.status as AdCampaignStatus]}</span></span>
+                <p class="roadmap-task-desc"><strong>${escapeHtml(c.advertiserName)}</strong>${c.advertiserKind === "external" ? " · marca externa" : " · perfil"}</p>
+                <p class="roadmap-task-desc">${formatDate(c.starts_at)} → ${formatDate(c.ends_at)} (${days} día${days === 1 ? "" : "s"})${target.length ? ` · ${escapeHtml(target.join(" · "))}` : " · sin filtro de audiencia"}</p>
+                <p class="roadmap-task-desc"><strong>${c.stats.impressions}</strong> impresiones · <strong>${c.stats.clicks}</strong> clics (CTR ${ctr}%) · <strong>${c.stats.uniqueViewers}</strong> personas${c.price_total != null ? ` · $${c.price_total}` : ""}</p>
+              </div>
+              <div class="roadmap-task-actions">
+                ${c.status !== "active" ? `<button type="button" data-act="activate" data-id="${c.id}">Activar</button>` : `<button type="button" data-act="pause" data-id="${c.id}">Pausar</button>`}
+                <button type="button" data-act="edit" data-id="${c.id}">Editar</button>
+                <button type="button" data-act="delete" data-id="${c.id}">Eliminar</button>
+              </div>
+            </div>`;
+              })
+              .join("") || `<p class="exc-pick-empty">Todavía no hay campañas.</p>`
+          }
+        </div>
+      `;
+
+      el.querySelector("#adCampaignNew")?.addEventListener("click", () => openAdCampaignFormModal(null));
+      el.querySelectorAll<HTMLButtonElement>(".roadmap-task-actions button").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const c = adCampaigns.find((x) => x.id === btn.dataset.id);
+          if (!c) return;
+          const act = btn.dataset.act;
+          if (act === "edit") return openAdCampaignFormModal(c);
+          if (act === "delete") return openDeleteAdCampaignModal(c);
+          const newStatus: AdCampaignStatus = act === "activate" ? "active" : "paused";
+          btn.disabled = true;
+          const { error } = await setAdCampaignStatus(c.id, newStatus);
+          if (error) {
+            btn.disabled = false;
+            alert(error);
+            return;
+          }
+          c.status = newStatus;
+          renderAdCampaignsList();
+        });
+      });
+    }
+
+    function renderAdvertisersList(): void {
+      const el = container.querySelector("#adsSubContent")!;
+      el.innerHTML = `
+        <div class="exc-admin-toolbar">
+          <div>
+            <h3>Anunciantes</h3>
+            <p class="chart-sub">Marcas externas (proteínas, ropa, etc.) o gimnasios/entrenadores de la app.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="adAdvertiserNew" type="button">+ Nuevo anunciante</button>
+        </div>
+        <div class="roadmap-tasks">
+          ${
+            advertisers
+              .map((a) => {
+                const count = adCampaigns.filter((c) => c.advertiser_id === a.id).length;
+                return `
+            <div class="roadmap-task" data-id="${a.id}">
+              ${a.logo_url ? `<img src="${escapeHtml(a.logo_url)}" alt="" class="ad-advertiser-logo">` : ""}
+              <div class="roadmap-task-body">
+                <span class="roadmap-task-title">${escapeHtml(a.name)} <span class="chart-sub">· ${a.kind === "external" ? "marca externa" : "perfil de la app"}</span></span>
+                ${a.website_url ? `<p class="roadmap-task-desc">${escapeHtml(a.website_url)}</p>` : ""}
+                ${a.contact_email || a.contact_phone ? `<p class="roadmap-task-desc">${escapeHtml([a.contact_email, a.contact_phone].filter(Boolean).join(" · "))}</p>` : ""}
+                <p class="roadmap-task-desc">${count} campaña${count === 1 ? "" : "s"}</p>
+              </div>
+              <div class="roadmap-task-actions">
+                <button type="button" data-act="report" data-id="${a.id}">Link de reporte</button>
+                <button type="button" data-act="edit" data-id="${a.id}">Editar</button>
+                <button type="button" data-act="delete" data-id="${a.id}">Eliminar</button>
+              </div>
+            </div>`;
+              })
+              .join("") || `<p class="exc-pick-empty">Todavía no hay anunciantes.</p>`
+          }
+        </div>
+      `;
+      el.querySelector("#adAdvertiserNew")?.addEventListener("click", () => openAdvertiserFormModal(null));
+      el.querySelectorAll<HTMLButtonElement>(".roadmap-task-actions button").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const a = advertisers.find((x) => x.id === btn.dataset.id);
+          if (!a) return;
+          if (btn.dataset.act === "edit") openAdvertiserFormModal(a);
+          else if (btn.dataset.act === "delete") openDeleteAdvertiserModal(a);
+          else if (btn.dataset.act === "report") {
+            const url = adReportUrl(a.report_token);
+            try {
+              await navigator.clipboard.writeText(url);
+              const orig = btn.textContent;
+              btn.textContent = "¡Copiado!";
+              setTimeout(() => (btn.textContent = orig), 1600);
+            } catch {
+              prompt("Link del reporte para mandarle a la marca:", url);
+            }
+          }
+        });
+      });
+    }
+
+    // --- modal: anunciante ---
+    function openAdvertiserFormModal(existing: Advertiser | null): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+      let logoUrl: string | null = existing?.logo_url ?? null;
+      let pickedProfileId: string | null = existing?.profile_id ?? null;
+
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card modal-card-lg">
+            <h2>${existing ? "Editar anunciante" : "Nuevo anunciante"}</h2>
+            <div class="field">
+              <label>Tipo</label>
+              <select id="advKind" ${existing ? "disabled" : ""}>
+                <option value="external" ${existing?.kind !== "profile" ? "selected" : ""}>Marca externa (sin perfil en la app)</option>
+                <option value="profile" ${existing?.kind === "profile" ? "selected" : ""}>Gimnasio / entrenador de la app</option>
+              </select>
+            </div>
+            <div class="field" id="advProfileField" hidden>
+              <label for="advProfileSearch">Perfil</label>
+              <input type="text" id="advProfileSearch" placeholder="Buscar por @usuario..." autocomplete="off">
+              <div id="advProfileResults" class="ad-profile-results"></div>
+              <p class="chart-sub" id="advProfilePicked">${existing?.profile_id ? "Perfil actual mantenido." : "Ninguno elegido."}</p>
+            </div>
+            <div class="field"><label for="advName">Nombre a mostrar</label><input type="text" id="advName" maxlength="120" value="${escapeHtml(existing?.name ?? "")}"></div>
+            <div class="field">
+              <label>Logo</label>
+              <input type="file" id="advLogoFile" accept="image/*">
+              <div id="advLogoPreview" class="ad-media-preview">${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="">` : ""}</div>
+            </div>
+            <div class="field"><label for="advWebsite">Sitio web (opcional)</label><input type="url" id="advWebsite" value="${escapeHtml(existing?.website_url ?? "")}"></div>
+            <div class="field"><label for="advEmail">Email de contacto (opcional)</label><input type="email" id="advEmail" value="${escapeHtml(existing?.contact_email ?? "")}"></div>
+            <div class="field"><label for="advPhone">Teléfono de contacto (opcional)</label><input type="text" id="advPhone" value="${escapeHtml(existing?.contact_phone ?? "")}"></div>
+            <div class="alert_message" id="advAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-primary" id="advSave" type="button">Guardar</button>
+              <button class="btn btn-outline" id="advClose" type="button">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const kindSel = document.getElementById("advKind") as HTMLSelectElement;
+      const profileField = document.getElementById("advProfileField") as HTMLElement;
+      const syncKind = () => (profileField.hidden = kindSel.value !== "profile");
+      syncKind();
+      kindSel.addEventListener("change", syncKind);
+
+      const searchInput = document.getElementById("advProfileSearch") as HTMLInputElement;
+      const resultsEl = document.getElementById("advProfileResults")!;
+      const pickedEl = document.getElementById("advProfilePicked")!;
+      let searchTimer: number | undefined;
+      searchInput?.addEventListener("input", () => {
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(async () => {
+          const matches = await searchAdvertiserProfiles(searchInput.value).catch(() => []);
+          resultsEl.innerHTML = matches
+            .map((m) => `<button type="button" class="ad-profile-hit" data-id="${m.id}" data-name="${escapeHtml(m.username)}">@${escapeHtml(m.username)} · ${escapeHtml(m.userType)}</button>`)
+            .join("");
+          resultsEl.querySelectorAll<HTMLButtonElement>(".ad-profile-hit").forEach((hit) => {
+            hit.addEventListener("click", () => {
+              pickedProfileId = hit.dataset.id!;
+              pickedEl.textContent = `Elegido: @${hit.dataset.name}`;
+              resultsEl.innerHTML = "";
+              searchInput.value = "";
+              if (!(document.getElementById("advName") as HTMLInputElement).value.trim())
+                (document.getElementById("advName") as HTMLInputElement).value = hit.dataset.name!;
+            });
+          });
+        }, 250);
+      });
+
+      const logoFile = document.getElementById("advLogoFile") as HTMLInputElement;
+      logoFile.addEventListener("change", async () => {
+        const f = logoFile.files?.[0];
+        if (!f) return;
+        const alertBox = document.getElementById("advAlert")!;
+        alertBox.innerHTML = `<p>Subiendo logo...</p>`;
+        const { url, error } = await uploadAdMedia(f, "logo");
+        if (error || !url) {
+          alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el logo.")}</p>`;
+          return;
+        }
+        logoUrl = url;
+        alertBox.innerHTML = "";
+        document.getElementById("advLogoPreview")!.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+      });
+
+      document.getElementById("advClose")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
+      document.getElementById("advSave")?.addEventListener("click", async () => {
+        const alertBox = document.getElementById("advAlert")!;
+        alertBox.innerHTML = "";
+        const kind = kindSel.value as "external" | "profile";
+        const input: AdvertiserInput = {
+          kind,
+          profileId: kind === "profile" ? pickedProfileId : null,
+          name: (document.getElementById("advName") as HTMLInputElement).value,
+          logoUrl,
+          websiteUrl: (document.getElementById("advWebsite") as HTMLInputElement).value.trim() || null,
+          contactEmail: (document.getElementById("advEmail") as HTMLInputElement).value.trim() || null,
+          contactPhone: (document.getElementById("advPhone") as HTMLInputElement).value.trim() || null,
+        };
+        const { error } = existing ? await updateAdvertiser(existing.id, input) : await createAdvertiser(input);
+        if (error) {
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        advertisers = await listAdvertisers();
+        loaderBody.innerHTML = "";
+        renderAdsTab();
+      });
+    }
+
+    function openDeleteAdvertiserModal(a: Advertiser): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card">
+            <h2>¿Eliminar "${escapeHtml(a.name)}"?</h2>
+            <p class="subtitle">Si tiene campañas, borralas primero.</p>
+            <div class="alert_message" id="advDelAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-outline" id="advDelCancel" type="button">Cancelar</button>
+              <button class="btn btn-danger" id="advDelConfirm" type="button">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById("advDelCancel")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
+      document.getElementById("advDelConfirm")?.addEventListener("click", async () => {
+        const { error } = await deleteAdvertiser(a.id);
+        if (error) {
+          document.getElementById("advDelAlert")!.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        advertisers = advertisers.filter((x) => x.id !== a.id);
+        loaderBody.innerHTML = "";
+        renderAdsTab();
+      });
+    }
+
+    // --- modal: campaña ---
+    function openAdCampaignFormModal(existing: AdCampaignWithMeta | null): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+      let mediaUrl: string | null = existing?.media_url ?? null;
+      let mediaType: "image" | "video" | null = (existing?.media_type as "image" | "video" | null) ?? null;
+      const now = new Date();
+      const in7 = new Date(now.getTime() + 7 * 86400000);
+
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card modal-card-lg">
+            <h2>${existing ? "Editar campaña" : "Nueva campaña"}</h2>
+            <div class="field">
+              <label for="campAdvertiser">Anunciante</label>
+              <select id="campAdvertiser">
+                ${advertisers.map((a) => `<option value="${a.id}" ${existing?.advertiser_id === a.id ? "selected" : ""}>${escapeHtml(a.name)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="campCreativeKind">Tipo de creativo</label>
+              <select id="campCreativeKind">
+                <option value="standalone" ${existing?.creative_kind !== "post" ? "selected" : ""}>Imagen o video propio</option>
+                <option value="post" ${existing?.creative_kind === "post" ? "selected" : ""}>Promocionar un Rep existente</option>
+              </select>
+            </div>
+            <div class="field" id="campPostField" hidden>
+              <label for="campPostRef">Link o ID del Rep</label>
+              <input type="text" id="campPostRef" placeholder="post.html?id=... o el UUID" value="${escapeHtml(existing?.post_id ?? "")}">
+              <p class="chart-sub">La tarjeta va a ser el Rep tal cual, con "Publicidad · &lt;anunciante&gt;" arriba.</p>
+            </div>
+            <div id="campStandaloneFields">
+              <div class="field">
+                <label>Creativo (imagen o video)</label>
+                <input type="file" id="campMediaFile" accept="image/*,video/*">
+                <div id="campMediaPreview" class="ad-media-preview">${mediaUrl ? (mediaType === "video" ? `<video src="${escapeHtml(mediaUrl)}" muted></video>` : `<img src="${escapeHtml(mediaUrl)}" alt="">`) : ""}</div>
+              </div>
+              <div class="field"><label for="campHeadline">Título</label><input type="text" id="campHeadline" maxlength="80" value="${escapeHtml(existing?.headline ?? "")}"></div>
+              <div class="field"><label for="campBody">Texto (opcional)</label><textarea id="campBody" rows="3" maxlength="200">${escapeHtml(existing?.body_text ?? "")}</textarea></div>
+              <div class="field-row">
+                <div class="field"><label for="campCtaLabel">Texto del botón</label><input type="text" id="campCtaLabel" maxlength="30" placeholder="Ver más" value="${escapeHtml(existing?.cta_label ?? "")}"></div>
+                <div class="field"><label for="campCtaUrl">Link de destino</label><input type="text" id="campCtaUrl" placeholder="https://... o profile.html?u=..." value="${escapeHtml(existing?.cta_url ?? "")}"></div>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="campStart">Inicio</label><input type="datetime-local" id="campStart" value="${isoToLocalInput(existing?.starts_at ?? now.toISOString())}"></div>
+              <div class="field"><label for="campEnd">Fin</label><input type="datetime-local" id="campEnd" value="${isoToLocalInput(existing?.ends_at ?? in7.toISOString())}"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="campProvincia">Provincia (opcional)</label><input type="text" id="campProvincia" value="${escapeHtml(existing?.target_provincia ?? "")}"></div>
+              <div class="field"><label for="campCiudad">Ciudad (opcional)</label><input type="text" id="campCiudad" value="${escapeHtml(existing?.target_ciudad ?? "")}"></div>
+            </div>
+            <div class="field">
+              <label>Mostrar a (vacío = todos)</label>
+              <div class="ad-check-row">
+                ${AD_TARGET_USER_TYPES.map((t) => `<label class="ad-check"><input type="checkbox" value="${t}" ${existing?.target_user_types.includes(t) ? "checked" : ""}> ${AD_TARGET_USER_TYPE_LABELS[t]}</label>`).join("")}
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="campCap">Máx. impresiones por persona/día</label><input type="number" id="campCap" min="1" max="20" value="${existing?.daily_impression_cap_per_user ?? 3}"></div>
+              <div class="field"><label for="campPrice">Precio cobrado (opcional)</label><input type="number" id="campPrice" min="0" step="0.01" value="${existing?.price_total ?? ""}"></div>
+            </div>
+            <div class="field">
+              <label for="campStatus">Estado</label>
+              <select id="campStatus">
+                ${AD_CAMPAIGN_STATUSES.map((s) => `<option value="${s}" ${(existing?.status ?? "draft") === s ? "selected" : ""}>${AD_CAMPAIGN_STATUS_LABELS[s]}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field"><label for="campNotes">Notas de facturación (opcional)</label><textarea id="campNotes" rows="2">${escapeHtml(existing?.billing_notes ?? "")}</textarea></div>
+            <div class="alert_message" id="campAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-primary" id="campSave" type="button">Guardar</button>
+              <button class="btn btn-outline" id="campClose" type="button">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const creativeKindSel = document.getElementById("campCreativeKind") as HTMLSelectElement;
+      const syncCreativeKind = () => {
+        const isPost = creativeKindSel.value === "post";
+        (document.getElementById("campPostField") as HTMLElement).hidden = !isPost;
+        (document.getElementById("campStandaloneFields") as HTMLElement).hidden = isPost;
+      };
+      syncCreativeKind();
+      creativeKindSel.addEventListener("change", syncCreativeKind);
+
+      const mediaFile = document.getElementById("campMediaFile") as HTMLInputElement;
+      mediaFile.addEventListener("change", async () => {
+        const f = mediaFile.files?.[0];
+        if (!f) return;
+        const alertBox = document.getElementById("campAlert")!;
+        alertBox.innerHTML = `<p>Subiendo creativo...</p>`;
+        const { url, mediaType: mt, error } = await uploadAdMedia(f, "creative");
+        if (error || !url) {
+          alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
+          return;
+        }
+        mediaUrl = url;
+        mediaType = mt ?? "image";
+        alertBox.innerHTML = "";
+        document.getElementById("campMediaPreview")!.innerHTML =
+          mediaType === "video" ? `<video src="${escapeHtml(url)}" muted controls></video>` : `<img src="${escapeHtml(url)}" alt="">`;
+      });
+
+      document.getElementById("campClose")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
+      document.getElementById("campSave")?.addEventListener("click", async () => {
+        const alertBox = document.getElementById("campAlert")!;
+        alertBox.innerHTML = "";
+        const creativeKind = (document.getElementById("campCreativeKind") as HTMLSelectElement).value as "standalone" | "post";
+        const input: AdCampaignInput = {
+          advertiserId: (document.getElementById("campAdvertiser") as HTMLSelectElement).value,
+          status: (document.getElementById("campStatus") as HTMLSelectElement).value as AdCampaignStatus,
+          startsAt: localInputToIso((document.getElementById("campStart") as HTMLInputElement).value),
+          endsAt: localInputToIso((document.getElementById("campEnd") as HTMLInputElement).value),
+          creativeKind,
+          postId: creativeKind === "post" ? extractPostId((document.getElementById("campPostRef") as HTMLInputElement).value) : null,
+          headline: (document.getElementById("campHeadline") as HTMLInputElement).value.trim() || null,
+          bodyText: (document.getElementById("campBody") as HTMLTextAreaElement).value.trim() || null,
+          mediaUrl,
+          mediaType,
+          ctaLabel: (document.getElementById("campCtaLabel") as HTMLInputElement).value.trim() || null,
+          ctaUrl: (document.getElementById("campCtaUrl") as HTMLInputElement).value.trim() || null,
+          targetProvincia: (document.getElementById("campProvincia") as HTMLInputElement).value.trim() || null,
+          targetCiudad: (document.getElementById("campCiudad") as HTMLInputElement).value.trim() || null,
+          targetUserTypes: [...document.querySelectorAll<HTMLInputElement>(".ad-check-row input:checked")].map((c) => c.value),
+          dailyImpressionCapPerUser: Number((document.getElementById("campCap") as HTMLInputElement).value) || 3,
+          priceTotal: (document.getElementById("campPrice") as HTMLInputElement).value.trim()
+            ? Number((document.getElementById("campPrice") as HTMLInputElement).value)
+            : null,
+          billingNotes: (document.getElementById("campNotes") as HTMLTextAreaElement).value.trim() || null,
+        };
+        const { error } = existing ? await updateAdCampaign(existing.id, input) : await createAdCampaign(input);
+        if (error) {
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        adCampaigns = await listAdCampaigns();
+        loaderBody.innerHTML = "";
+        renderAdsTab();
+      });
+    }
+
+    function openDeleteAdCampaignModal(c: AdCampaignWithMeta): void {
+      const loaderBody = document.getElementById("loaderBody");
+      if (!loaderBody) return;
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card">
+            <h2>¿Eliminar esta campaña?</h2>
+            <p class="subtitle">${escapeHtml(c.headline || "(sin título)")} — ${escapeHtml(c.advertiserName)}. No se puede deshacer.</p>
+            <div class="alert_message" id="campDelAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-outline" id="campDelCancel" type="button">Cancelar</button>
+              <button class="btn btn-danger" id="campDelConfirm" type="button">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById("campDelCancel")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
+      document.getElementById("campDelConfirm")?.addEventListener("click", async () => {
+        const { error } = await deleteAdCampaign(c.id);
+        if (error) {
+          document.getElementById("campDelAlert")!.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        adCampaigns = adCampaigns.filter((x) => x.id !== c.id);
+        loaderBody.innerHTML = "";
+        renderAdsTab();
       });
     }
 

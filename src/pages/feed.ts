@@ -34,6 +34,8 @@ import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
 import { getCachedFeed, cacheFeed } from "../lib/feedDb";
 import { makeMentionEditable } from "../lib/mentionEditor";
+import { renderAdCard, renderPromotedPostCard, wireAdCards, type AdCardHandlers } from "../lib/adCard";
+import { getFeedAds, recordAdEvent, hideAdCampaign, hideAdvertiser, type FeedAd } from "../services/ads.service";
 
 // Coincide con el limite por pagina que usa getPersonalizedFeed() por defecto en post.service.ts.
 const FEED_PAGE_SIZE = 20;
@@ -237,6 +239,63 @@ export const feedView: ViewModule = {
     newRepFab.addEventListener("click", openComposerModal, { signal: ctx.signal });
 
     let posts: FeedPost[] = [];
+
+    // ---------------------------------------------------------------------------
+    // Publicidad intercalada (ver src/lib/adCard.ts + get_feed_ads). El server ya
+    // decidió el targeting/frecuencia; acá solo se traen una vez por sesión de feed
+    // y se meten cada AD_EVERY Reps orgánicos, con un tope de MAX_SESSION_ADS.
+    // Nunca dos anuncios seguidos (weave() reinicia el contador tras cada uno).
+    // ---------------------------------------------------------------------------
+    // Un anuncio en el feed es un creativo standalone (marca externa) o un Rep promocionado
+    // (creativeKind='post' -> `promotedPost` trae el Rep hidratado, ver carga inicial).
+    type SessionAd = { ad: FeedAd; promotedPost: FeedPost | null };
+    type FeedItem = { kind: "post"; post: FeedPost } | { kind: "ad"; sessionAd: SessionAd };
+    const AD_EVERY = 5;
+    const MAX_SESSION_ADS = 4;
+    let feedAds: SessionAd[] = [];
+    let adsPlaced = 0; // cuántos de feedAds ya se intercalaron
+    let postsSinceLastAd = 0; // Reps orgánicos desde el último anuncio (o desde el arranque)
+    // Una impresión por campaña y por carga de página, aunque la tarjeta entre/salga del
+    // viewport o reaparezca en otra tanda de scroll. En scope de mount (no módulo) a
+    // propósito: un F5 / re-login arranca de cero.
+    const firedAdImpressions = new Set<string>();
+
+    // Intercala anuncios en una tanda de Reps. Los contadores se arrastran entre llamadas
+    // (append de scroll infinito) -- renderFeed() los resetea porque rehace todo.
+    function weaveAds(newPosts: FeedPost[]): FeedItem[] {
+      const items: FeedItem[] = [];
+      for (const post of newPosts) {
+        items.push({ kind: "post", post });
+        postsSinceLastAd++;
+        if (postsSinceLastAd >= AD_EVERY) {
+          postsSinceLastAd = 0;
+          if (adsPlaced < feedAds.length) {
+            items.push({ kind: "ad", sessionAd: feedAds[adsPlaced] });
+            adsPlaced++;
+          }
+        }
+      }
+      return items;
+    }
+
+    function feedItemHtml(item: FeedItem): string {
+      if (item.kind === "post") return renderPostCard(item.post, userId);
+      return item.sessionAd.promotedPost
+        ? renderPromotedPostCard(item.sessionAd.ad, item.sessionAd.promotedPost, userId)
+        : renderAdCard(item.sessionAd.ad);
+    }
+
+    // Engancha los listeners de una tanda ya renderizada: los Reps (orgánicos + los promocionados
+    // embebidos) por wirePostCard, la "capa anuncio" (cinta, menú ocultar, impresión, CTA) por
+    // wireAdCards. Cada uno scopea por su propio selector, no se pisan.
+    function wireFeedItems(container: HTMLElement, items: FeedItem[]): void {
+      const tandaPosts = items.flatMap((it) =>
+        it.kind === "post" ? [it.post] : it.sessionAd.promotedPost ? [it.sessionAd.promotedPost] : []
+      );
+      const tandaAds = items.flatMap((it) => (it.kind === "ad" ? [it.sessionAd.ad] : []));
+      cardDisposers.push(wirePostCard(container, tandaPosts, postCardHandlers));
+      if (tandaAds.length) cardDisposers.push(wireAdCards(container, tandaAds, adCardHandlers, firedAdImpressions));
+    }
 
     // Disposers de los IntersectionObserver que crea wirePostCard (autoplay de video + registro
     // de vistas). renderFeed() los limpia antes de pisar la lista; append/prepend acumulan el
@@ -712,34 +771,70 @@ export const feedView: ViewModule = {
       getVideoQueue: () => posts.filter((p) => p.media_type === "video" && p.media_url),
     };
 
+    const adCardHandlers: AdCardHandlers = {
+      onImpression: (ad) => void recordAdEvent(ad.campaignId, "impression"),
+      onAdClick: (ad) => {
+        void recordAdEvent(ad.campaignId, "click");
+        const url = ad.ctaUrl;
+        if (!url) return;
+        // Link externo (marca): pestaña nueva. Ruta interna (ej. profile.html?u=...): el router.
+        if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+        else navigate(url.replace(/^\//, ""));
+      },
+      onAdvertiserClick: (ad) => {
+        if (ad.advertiserUsername) navigate(`profile.html?u=${encodeURIComponent(ad.advertiserUsername)}`);
+      },
+      onHideCampaign: (ad) => {
+        hideAdCampaign(ad.campaignId);
+        feedAds = feedAds.filter((a) => a.ad.campaignId !== ad.campaignId);
+        renderFeed();
+      },
+      onHideAdvertiser: (ad) => {
+        hideAdvertiser(ad.advertiserId);
+        feedAds = feedAds.filter((a) => a.ad.advertiserId !== ad.advertiserId);
+        renderFeed();
+      },
+    };
+
     function renderFeed(): void {
       disposeCards(); // las tarjetas viejas se van con el innerHTML -- sus observers tambien
-      listEl.innerHTML = posts.length
-        ? posts.map((p) => renderPostCard(p, userId)).join("")
-        : `<p class="exc-pick-empty">Todavía no hay Reps. ¡Publicá el primero!</p>`;
-      cardDisposers.push(wirePostCard(listEl as HTMLElement, posts, postCardHandlers));
+      // Rehace todo: reseteamos el intercalado de anuncios y volvemos a tejer desde cero.
+      adsPlaced = 0;
+      postsSinceLastAd = 0;
+      if (!posts.length) {
+        listEl.innerHTML = `<p class="exc-pick-empty">Todavía no hay Reps. ¡Publicá el primero!</p>`;
+        return;
+      }
+      const items = weaveAds(posts);
+      listEl.innerHTML = items.map(feedItemHtml).join("");
+      wireFeedItems(listEl as HTMLElement, items);
     }
 
     // Suma posts al final sin tocar los ya renderizados (a diferencia de renderFeed,
     // que pisa TODO el innerHTML): reemplazar toda la lista al cargar mas Reps hacia
     // abajo le hacia perder al navegador la referencia de scroll y saltaba al principio
     // de la pagina. Wireado en un contenedor aparte para no volver a enganchar los
-    // listeners de las cards viejas (quedarian duplicados).
+    // listeners de las cards viejas (quedarian duplicados). weaveAds() arrastra sus
+    // contadores, asi que un anuncio puede caer dentro de esta tanda nueva.
     function appendFeedPosts(newPosts: FeedPost[]): void {
+      const items = weaveAds(newPosts);
       const temp = document.createElement("div");
-      temp.innerHTML = newPosts.map((p) => renderPostCard(p, userId)).join("");
-      cardDisposers.push(wirePostCard(temp, newPosts, postCardHandlers));
+      temp.innerHTML = items.map(feedItemHtml).join("");
+      wireFeedItems(temp, items);
       while (temp.firstChild) listEl.appendChild(temp.firstChild);
     }
 
     // Mismo criterio que appendFeedPosts pero al principio (pull-to-refresh, ver mas abajo):
     // no hace falta preservar scroll aca porque este gesto solo dispara estando ya arriba
     // del todo, asi que los Reps nuevos aparecen justo donde esta mirando el usuario.
+    // Sin anuncios en la tanda que se antepone (los Reps nuevos son pocos y recien salidos);
+    // el intercalado se reacomoda solo en el proximo renderFeed().
     function prependFeedPosts(newPosts: FeedPost[]): void {
       listEl.querySelector(".exc-pick-empty")?.remove();
+      const items: FeedItem[] = newPosts.map((post) => ({ kind: "post", post }));
       const temp = document.createElement("div");
-      temp.innerHTML = newPosts.map((p) => renderPostCard(p, userId)).join("");
-      cardDisposers.push(wirePostCard(temp, newPosts, postCardHandlers));
+      temp.innerHTML = items.map(feedItemHtml).join("");
+      wireFeedItems(temp, items);
       while (temp.lastChild) listEl.insertBefore(temp.lastChild, listEl.firstChild);
     }
 
@@ -922,8 +1017,31 @@ export const feedView: ViewModule = {
       renderFeed();
     }
 
-    posts = await getPersonalizedFeed(0, FEED_PAGE_SIZE, feedSeed);
+    // Los anuncios se piden en paralelo con el feed real (mismo seed para que el jitter
+    // del orden sea estable). El pintado optimista de arriba va sin anuncios; aparecen
+    // recien en este renderFeed(). Para los 'post' (Rep promocionado) hidratamos el Rep;
+    // si ese fetch falla, se descarta ese anuncio (no rompe el feed).
+    const [freshPosts, ads] = await Promise.all([
+      getPersonalizedFeed(0, FEED_PAGE_SIZE, feedSeed),
+      getFeedAds(MAX_SESSION_ADS, feedSeed),
+    ]);
+    posts = freshPosts;
     posts.forEach((p) => shownPostIds.add(p.id));
+    feedAds = (
+      await Promise.all(
+        ads.map(async (ad): Promise<SessionAd | null> => {
+          if (ad.creativeKind === "standalone") return { ad, promotedPost: null };
+          if (!ad.postId) return null;
+          // Si ese Rep ya está en el feed orgánico, no lo repetimos como anuncio.
+          if (shownPostIds.has(ad.postId)) return null;
+          const promotedPost = await getPost(ad.postId).catch(() => null);
+          return promotedPost ? { ad, promotedPost } : null;
+        })
+      )
+    ).filter((x): x is SessionAd => x !== null);
+    // Un Rep promocionado cuenta como "ya mostrado": así el scroll infinito no lo trae
+    // de nuevo como Rep orgánico y quedan dos tarjetas del mismo Rep.
+    feedAds.forEach((s) => s.promotedPost && shownPostIds.add(s.promotedPost.id));
     feedOffset = posts.length;
     renderFeed();
     initialLoadDone = true;
