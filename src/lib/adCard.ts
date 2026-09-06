@@ -1,9 +1,14 @@
 import { escapeHtml } from "./dom";
+import { renderPostCard } from "./postCard";
 import type { FeedAd } from "../services/ads.service";
+import type { FeedPost } from "../services/post.service";
 
 const DEFAULT_LOGO = "/images/avatars/default.svg";
 
 const ICON_DOTS = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
+
+// Selecciona las dos formas de anuncio en el feed: el creativo standalone y el Rep promocionado.
+const AD_CARD_SELECTOR = ".feed-ad-card[data-campaign-id], .feed-promoted[data-campaign-id]";
 
 export interface AdCardHandlers {
   /** Tocar el creativo o el botón CTA. */
@@ -74,6 +79,35 @@ export function renderAdCard(ad: FeedAd): string {
 }
 
 /**
+ * Rep promocionado (creativeKind='post'): la tarjeta ES el Rep -- se reusa renderPostCard tal
+ * cual (mantiene me gusta / comentar / repostear, es un Rep de verdad) y se lo envuelve con una
+ * cinta "Publicidad · <anunciante>" arriba y el mismo menú de ocultar. El click al Rep y sus
+ * botones los engancha el wirePostCard normal de la página; wireAdCards solo agrega la cinta.
+ */
+export function renderPromotedPostCard(ad: FeedAd, post: FeedPost, viewerId: string | null): string {
+  const name = escapeHtml(ad.advertiserName);
+  const isLinkable = ad.advertiserKind === "profile" && !!ad.advertiserUsername;
+  return `
+    <article class="feed-promoted" data-campaign-id="${escapeHtml(ad.campaignId)}">
+      <div class="feed-promoted-head">
+        <button type="button" class="feed-promoted-by" data-action="ad-advertiser"${isLinkable ? "" : " disabled"}>
+          <span class="feed-ad-label">Publicidad</span>
+          <span class="feed-promoted-name">· ${name}</span>
+        </button>
+        <div class="profile-menu-wrap">
+          <button type="button" class="profile-menu-btn" data-action="ad-menu" aria-label="Opciones del anuncio">${ICON_DOTS}</button>
+          <div class="profile-menu-panel" hidden>
+            <button type="button" class="profile-menu-item" data-action="ad-hide-campaign">Ocultar este anuncio</button>
+            <button type="button" class="profile-menu-item" data-action="ad-hide-advertiser">Ocultar anuncios de ${name}</button>
+          </div>
+        </div>
+      </div>
+      ${renderPostCard(post, viewerId)}
+    </article>
+  `;
+}
+
+/**
  * Engancha los listeners de las tarjetas de anuncio ya renderizadas dentro de `root`.
  * Devuelve un disposer (aborta listeners + corta el IntersectionObserver de impresiones).
  * El caller lo TIENE que registrar y llamarlo antes de un re-render que pise las tarjetas.
@@ -92,7 +126,7 @@ export function wireAdCards(
   const ac = new AbortController();
   const opt = { signal: ac.signal };
 
-  root.querySelectorAll<HTMLElement>(".feed-ad-card[data-campaign-id]").forEach((card) => {
+  root.querySelectorAll<HTMLElement>(AD_CARD_SELECTOR).forEach((card) => {
     const ad = adsByCampaign.get(card.dataset.campaignId!);
     if (!ad) return;
 
@@ -150,8 +184,10 @@ export function wireAdCards(
     }, opt);
   });
 
-  // Impresiones: una sola vez por campaña cuando la tarjeta se ve de verdad (>=50%).
-  const pendingCards = [...root.querySelectorAll<HTMLElement>(".feed-ad-card[data-campaign-id]")].filter(
+  // Impresiones: una sola vez por campaña cuando la tarjeta se ve de verdad. Un Rep promocionado
+  // puede ser más alto que la pantalla y nunca llegar al 50% -- por eso también cuenta si llena
+  // media pantalla.
+  const pendingCards = [...root.querySelectorAll<HTMLElement>(AD_CARD_SELECTOR)].filter(
     (card) => !firedImpressions.has(card.dataset.campaignId!)
   );
   let impressionObserver: IntersectionObserver | null = null;
@@ -159,7 +195,8 @@ export function wireAdCards(
     impressionObserver = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
+          const seen = entry.intersectionRatio >= 0.5 || entry.intersectionRect.height >= window.innerHeight * 0.5;
+          if (!seen) continue;
           const card = entry.target as HTMLElement;
           const campaignId = card.dataset.campaignId!;
           impressionObserver!.unobserve(card);
@@ -169,7 +206,7 @@ export function wireAdCards(
           if (ad) handlers.onImpression(ad);
         }
       },
-      { threshold: 0.5 }
+      { threshold: [0.25, 0.5] }
     );
     pendingCards.forEach((card) => impressionObserver!.observe(card));
   }

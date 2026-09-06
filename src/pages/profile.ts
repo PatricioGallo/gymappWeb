@@ -69,6 +69,7 @@ import { getPlatform } from "../lib/socialLinks";
 import { DAY_LABELS as HOURS_DAY_LABELS, formatHoursTime, parseBusinessHours } from "../lib/businessHours";
 import { renderPostCard, wirePostCard, patchPostCardStats, type PostCardHandlers } from "../lib/postCard";
 import { openQuoteModal, openShareToChatModal, openPostMetricsModal, confirmDeletePost } from "../lib/postModals";
+import { openPromoteRepModal } from "../lib/promoteRepModal";
 import { openPostDetailModal } from "../lib/postDetailModal";
 import {
   getUserRepsAndReposts,
@@ -1805,8 +1806,13 @@ function setupActivityTabs(
   nombre: string,
   ctx: ViewContext,
   showStats: boolean,
-  gymAuthor: PostAuthor | null
+  gymAuthor: PostAuthor | null,
+  targetUserType: Profile["user_type"],
+  ownerCiudad: string | null
 ): void {
+  // Promocionar un Rep: solo en tu propio perfil y si sos gimnasio o entrenador (los únicos
+  // que pueden ser anunciantes -- ver request_ad_promotion).
+  const canPromote = isOwner && (targetUserType === "gimnasio" || targetUserType === "entrenador");
   const tabsEl = document.getElementById("activityTabs");
   const statsContent = document.getElementById("statsContent");
   const listEl = document.getElementById("activityPostsList");
@@ -1873,7 +1879,10 @@ function setupActivityTabs(
       return;
     }
     const tab = activeTab as FeedActivityTab;
-    listEl!.innerHTML = posts.length ? posts.map((p) => renderPostCard(p, myId, { compact: true })).join("") : `<p class="exc-pick-empty">${activityEmptyMessage(tab, isOwner)}</p>`;
+    // canPromote solo para Reps propios (no en "Me gusta"/reposteados de otros).
+    listEl!.innerHTML = posts.length
+      ? posts.map((p) => renderPostCard(p, myId, { compact: true, canPromote: canPromote && p.author_id === myId })).join("")
+      : `<p class="exc-pick-empty">${activityEmptyMessage(tab, isOwner)}</p>`;
     disposeCards = wirePostCard(listEl!, posts, handlers);
   }
 
@@ -1961,6 +1970,7 @@ function setupActivityTabs(
     },
     onAuthorClick: goToAuthorProfile,
     onMetricsClick: (post) => openPostMetricsModal(post),
+    onPromoteClick: (post) => void openPromoteRepModal(post.id, ownerCiudad),
     onView: (post) => {
       if (myId && post.author_id !== myId) void recordPostView(post.id, myId);
     },
@@ -2890,7 +2900,16 @@ async function main(ctx: ViewContext) {
     const activeCount = await renderRoutines(displayProfile.id!, isOwner, logs, targetUserType, displayProfile, viewerCanCopyToSaved);
     if (showStats) void renderStats(displayProfile.id!, logs, activeCount ?? 0, isOwner, statWidgets);
   }
-  setupActivityTabs(displayProfile.id!, isOwner, nombre, ctx, showStats, isGym ? gymAuthorFromProfile(displayProfile) : null);
+  setupActivityTabs(
+    displayProfile.id!,
+    isOwner,
+    nombre,
+    ctx,
+    showStats,
+    isGym ? gymAuthorFromProfile(displayProfile) : null,
+    targetUserType,
+    (displayProfile as { ciudad?: string | null }).ciudad ?? null
+  );
 }
 
 const VIEW_MARKUP = `

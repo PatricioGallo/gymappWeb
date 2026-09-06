@@ -286,6 +286,88 @@ grant execute on function public.get_ad_stats() to authenticated;
 revoke execute on function public.get_ad_stats() from public, anon;
 
 -- ---------------------------------------------------------------------------
+-- 4c. Autoservicio: un gimnasio/entrenador promociona su propio Rep
+-- ---------------------------------------------------------------------------
+-- request_ad_promotion() crea una campaña 'post' en DRAFT (pago pendiente). El
+-- admin la activa desde el panel cuando confirma el pago.
+--
+-- Mercado Pago (pendiente, necesita la cuenta MP del proyecto): el enganche sería
+-- una Edge Function que devuelve una preference de MP al confirmar la solicitud,
+-- + un webhook que hace `update ad_campaigns set status='active' where id=...`
+-- cuando MP notifica el pago aprobado. Hoy ese salto draft->active lo hace el admin.
+create or replace function public.request_ad_promotion(
+  p_post_id uuid, p_days integer, p_target_ciudad text default null, p_target_audience text default 'todos'
+) returns uuid
+language plpgsql security definer set search_path to 'public'
+as $$
+declare
+  v_me uuid := auth.uid();
+  v_price_per_day numeric := 500;  -- ARS/día, plano. El admin puede pisar price_total por campaña.
+  v_user_type text;
+  v_post_author uuid;
+  v_advertiser_id uuid;
+  v_name text;
+  v_user_types text[];
+  v_campaign_id uuid;
+begin
+  if v_me is null then raise exception 'No autenticado'; end if;
+  if p_days not in (3, 7, 14, 30) then raise exception 'Duración inválida'; end if;
+
+  select user_type::text into v_user_type from public.profiles where id = v_me;
+  if v_user_type not in ('gimnasio', 'entrenador') then
+    raise exception 'Solo los gimnasios y entrenadores pueden promocionar Reps';
+  end if;
+
+  select author_id into v_post_author from public.posts where id = p_post_id;
+  if v_post_author is null then raise exception 'El Rep no existe'; end if;
+  if v_post_author <> v_me then raise exception 'Solo podés promocionar tus propios Reps'; end if;
+
+  if exists (select 1 from public.ad_campaigns where post_id = p_post_id and status in ('draft','active','paused')) then
+    raise exception 'Ese Rep ya tiene una promoción en curso';
+  end if;
+
+  select id into v_advertiser_id from public.advertisers where profile_id = v_me;
+  if v_advertiser_id is null then
+    select coalesce(nullif(trim(nombre || ' ' || apellido), ''), username) into v_name
+      from public.profiles where id = v_me;
+    insert into public.advertisers (kind, profile_id, name) values ('profile', v_me, coalesce(v_name, 'Anunciante'))
+    returning id into v_advertiser_id;
+  end if;
+
+  v_user_types := case p_target_audience
+    when 'usuarios' then array['usuario'] when 'entrenadores' then array['entrenador']
+    when 'gimnasios' then array['gimnasio'] else array[]::text[] end;
+
+  insert into public.ad_campaigns (
+    advertiser_id, status, starts_at, ends_at, creative_kind, post_id,
+    target_ciudad, target_user_types, daily_impression_cap_per_user, price_total, billing_notes
+  ) values (
+    v_advertiser_id, 'draft', now(), now() + (p_days || ' days')::interval, 'post', p_post_id,
+    nullif(trim(coalesce(p_target_ciudad, '')), ''), v_user_types, 3,
+    p_days * v_price_per_day, 'Autoservicio — pago pendiente'
+  ) returning id into v_campaign_id;
+
+  return v_campaign_id;
+end;
+$$;
+grant execute on function public.request_ad_promotion(uuid, integer, text, text) to authenticated;
+revoke execute on function public.request_ad_promotion(uuid, integer, text, text) from public, anon;
+
+create or replace function public.get_my_post_promotion(p_post_id uuid)
+returns table (status text, ends_at timestamptz, price_total numeric)
+language sql security definer set search_path to 'public'
+as $$
+  select c.status, c.ends_at, c.price_total
+  from public.ad_campaigns c
+  join public.posts p on p.id = c.post_id
+  where c.post_id = p_post_id and p.author_id = auth.uid()
+    and c.status in ('draft', 'active', 'paused')
+  order by c.created_at desc limit 1;
+$$;
+grant execute on function public.get_my_post_promotion(uuid) to authenticated;
+revoke execute on function public.get_my_post_promotion(uuid) from public, anon;
+
+-- ---------------------------------------------------------------------------
 -- 5. Storage: bucket público para creativos standalone (marcas externas) + logos
 -- ---------------------------------------------------------------------------
 -- Escritura solo staff (el admin sube todo desde el panel).

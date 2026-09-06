@@ -170,6 +170,9 @@ export interface AdCampaignInput {
   status: AdCampaignStatus;
   startsAt: string;
   endsAt: string;
+  /** 'standalone' = creativo propio (imagen/video + textos + CTA); 'post' = promocionar un Rep existente. */
+  creativeKind: "standalone" | "post";
+  postId: string | null;
   headline: string | null;
   bodyText: string | null;
   mediaUrl: string | null;
@@ -182,6 +185,14 @@ export interface AdCampaignInput {
   dailyImpressionCapPerUser: number;
   priceTotal: number | null;
   billingNotes: string | null;
+}
+
+/** Extrae el UUID de un Rep de una URL (post.html?id=...) o lo devuelve tal cual si ya es un UUID. */
+export function extractPostId(input: string): string | null {
+  const t = input.trim();
+  const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const m = t.match(uuidRe);
+  return m ? m[0] : null;
 }
 
 export async function listAdvertisers(): Promise<Advertiser[]> {
@@ -267,18 +278,21 @@ export async function listAdCampaigns(): Promise<AdCampaignWithMeta[]> {
 }
 
 function campaignRow(input: AdCampaignInput) {
+  const isPost = input.creativeKind === "post";
   return {
     advertiser_id: input.advertiserId,
     status: input.status,
     starts_at: input.startsAt,
     ends_at: input.endsAt,
-    creative_kind: "standalone" as const,
-    headline: input.headline,
-    body_text: input.bodyText,
-    media_url: input.mediaUrl,
-    media_type: input.mediaType,
-    cta_label: input.ctaLabel,
-    cta_url: input.ctaUrl,
+    creative_kind: input.creativeKind,
+    post_id: isPost ? input.postId : null,
+    // Un Rep promocionado no lleva creativo propio: la tarjeta ES el Rep.
+    headline: isPost ? null : input.headline,
+    body_text: isPost ? null : input.bodyText,
+    media_url: isPost ? null : input.mediaUrl,
+    media_type: isPost ? null : input.mediaType,
+    cta_label: isPost ? null : input.ctaLabel,
+    cta_url: isPost ? null : input.ctaUrl,
     target_provincia: input.targetProvincia,
     target_ciudad: input.targetCiudad,
     target_user_types: input.targetUserTypes,
@@ -290,8 +304,12 @@ function campaignRow(input: AdCampaignInput) {
 
 function validateCampaign(input: AdCampaignInput): string | null {
   if (!input.advertiserId) return "Elegí un anunciante.";
-  if (!input.mediaUrl || !input.mediaType) return "Subí la imagen o el video del anuncio.";
-  if (!input.ctaUrl?.trim()) return "Poné el link de destino (a dónde lleva el anuncio).";
+  if (input.creativeKind === "post") {
+    if (!input.postId) return "Pegá el link o el ID del Rep a promocionar.";
+  } else {
+    if (!input.mediaUrl || !input.mediaType) return "Subí la imagen o el video del anuncio.";
+    if (!input.ctaUrl?.trim()) return "Poné el link de destino (a dónde lleva el anuncio).";
+  }
   if (!input.startsAt || !input.endsAt) return "Poné las fechas de inicio y fin.";
   if (new Date(input.endsAt) <= new Date(input.startsAt)) return "La fecha de fin tiene que ser posterior a la de inicio.";
   return null;
@@ -346,4 +364,55 @@ export async function uploadAdMedia(
   if (error) return { error: `No se pudo subir el archivo: ${error.message}` };
   const { data } = supabase.storage.from("ad-media").getPublicUrl(path);
   return { url: data.publicUrl, mediaType: isVideo ? "video" : "image" };
+}
+
+// ===========================================================================
+// Autoservicio (Fase 5): un gimnasio/entrenador promociona su propio Rep desde
+// su perfil. Crea una campaña en DRAFT; el admin la activa al confirmar el pago.
+// ===========================================================================
+
+/** ARS/día, plano. Espejo del valor en request_ad_promotion (SQL) -- solo para mostrar el precio. */
+export const PROMO_PRICE_PER_DAY = 500;
+
+export const PROMO_DURATIONS: ReadonlyArray<{ days: number; label: string }> = [
+  { days: 3, label: "3 días" },
+  { days: 7, label: "1 semana" },
+  { days: 14, label: "2 semanas" },
+  { days: 30, label: "1 mes" },
+];
+
+export const PROMO_AUDIENCES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "todos", label: "Todos" },
+  { value: "usuarios", label: "Usuarios" },
+  { value: "entrenadores", label: "Entrenadores" },
+  { value: "gimnasios", label: "Gimnasios" },
+];
+
+export interface PostPromotionStatus {
+  status: "draft" | "active" | "paused";
+  endsAt: string;
+  priceTotal: number | null;
+}
+
+export async function getMyPostPromotion(postId: string): Promise<PostPromotionStatus | null> {
+  const { data, error } = await supabase.rpc("get_my_post_promotion", { p_post_id: postId });
+  if (error || !data || !data.length) return null;
+  const r = data[0];
+  return { status: r.status as PostPromotionStatus["status"], endsAt: r.ends_at, priceTotal: r.price_total };
+}
+
+export async function requestAdPromotion(
+  postId: string,
+  days: number,
+  targetCiudad: string | null,
+  targetAudience: string
+): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("request_ad_promotion", {
+    p_post_id: postId,
+    p_days: days,
+    p_target_ciudad: targetCiudad ?? undefined,
+    p_target_audience: targetAudience,
+  });
+  if (error) return { error: error.message.replace(/^.*?:\s*/, "") || "No se pudo enviar la solicitud." };
+  return {};
 }

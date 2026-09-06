@@ -22,6 +22,8 @@ export interface PostCardHandlers {
   onDeleteClick?(post: FeedPost): void;
   onAuthorClick?(author: PostAuthor): void;
   onMetricsClick?(post: FeedPost): void;
+  /** "Promocionar" -- solo en el perfil propio de un gimnasio/entrenador (ver opts.canPromote). */
+  onPromoteClick?(post: FeedPost): void;
   /** Se dispara una sola vez, cuando la tarjeta entra en viewport (ver wirePostCard). */
   onView?(post: FeedPost): void;
   /** Tocar la tarjeta (fuera de los botones/links de acción) abre el detalle del Rep, como en Twitter. */
@@ -51,6 +53,7 @@ const ICON_QUOTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="curren
 export const ICON_SHARE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>`;
 export const ICON_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
 const ICON_METRICS = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>`;
+const ICON_PROMOTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>`;
 
 export function authorLineHtml(author: PostAuthor, badgeSize = 14): string {
   return `${escapeHtml(author.username)}${renderVerifiedBadge(author.userType, author.isVerified, badgeSize)}`;
@@ -195,7 +198,7 @@ function repostedByHtml(repostedBy?: PostAuthor): string {
   `;
 }
 
-export function actionsHtml(post: FeedPost, isOwner: boolean): string {
+export function actionsHtml(post: FeedPost, isOwner: boolean, canPromote = false): string {
   return `
     <div class="post-card-actions">
       <button type="button" class="post-action" data-action="comment" aria-label="Comentar">${ICON_COMMENT}<span>${post.comments_count}</span></button>
@@ -204,6 +207,7 @@ export function actionsHtml(post: FeedPost, isOwner: boolean): string {
       <button type="button" class="post-action" data-action="quote" aria-label="Citar">${ICON_QUOTE}${post.quotes_count > 0 ? `<span>${post.quotes_count}</span>` : ""}</button>
       <button type="button" class="post-action" data-action="share" aria-label="Compartir por chat">${ICON_SHARE}</button>
       ${isOwner ? `<button type="button" class="post-action" data-action="metrics" aria-label="Ver métricas">${ICON_METRICS}</button>` : ""}
+      ${canPromote ? `<button type="button" class="post-action" data-action="promote" aria-label="Promocionar">${ICON_PROMOTE}</button>` : ""}
       ${isOwner ? `<button type="button" class="post-action post-action-delete" data-action="delete" aria-label="Eliminar Rep">${ICON_TRASH}</button>` : ""}
     </div>
   `;
@@ -215,7 +219,11 @@ export function actionsHtml(post: FeedPost, isOwner: boolean): string {
  * encabezado de autor (avatar arriba, nombre en negrita, usuario abajo, boton de seguir) en vez
  * del avatar+nombre en una sola linea que usan las tarjetas normales del feed/hilo.
  */
-export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: { compact?: boolean; hideHeader?: boolean }): string {
+export function renderPostCard(
+  post: FeedPost,
+  viewerId: string | null,
+  opts?: { compact?: boolean; hideHeader?: boolean; canPromote?: boolean }
+): string {
   const compact = opts?.compact ?? false;
   const hideHeader = opts?.hideHeader ?? false;
   const isOwner = viewerId != null && viewerId === post.author_id;
@@ -248,7 +256,7 @@ export function renderPostCard(post: FeedPost, viewerId: string | null, opts?: {
           ${!post.media_url && post.youtube_video_id ? youtubeEmbedHtml(post.youtube_video_id) : ""}
           ${linkPreviewHtml(post)}
           ${quotedPostHtml(post.quotedPost)}
-          ${actionsHtml(post, isOwner)}
+          ${actionsHtml(post, isOwner, opts?.canPromote ?? false)}
         </div>
       </div>
     </article>
@@ -410,6 +418,7 @@ export function wirePostCard(root: HTMLElement, posts: FeedPost[], handlers: Pos
     card.querySelector<HTMLButtonElement>('[data-action="quote"]')?.addEventListener("click", withStop(() => handlers.onQuoteClick(post)), opt);
     card.querySelector<HTMLButtonElement>('[data-action="share"]')?.addEventListener("click", withStop(() => handlers.onShareClick(post)), opt);
     card.querySelector<HTMLButtonElement>('[data-action="metrics"]')?.addEventListener("click", withStop(() => handlers.onMetricsClick?.(post)), opt);
+    card.querySelector<HTMLButtonElement>('[data-action="promote"]')?.addEventListener("click", withStop(() => handlers.onPromoteClick?.(post)), opt);
     card.querySelector<HTMLButtonElement>('[data-action="delete"]')?.addEventListener("click", withStop(() => handlers.onDeleteClick?.(post)), opt);
 
     // Click en la foto/video adjunto abre el visor grande (ver openMediaLightbox en

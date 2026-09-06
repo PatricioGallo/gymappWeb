@@ -34,7 +34,7 @@ import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
 import { getCachedFeed, cacheFeed } from "../lib/feedDb";
 import { makeMentionEditable } from "../lib/mentionEditor";
-import { renderAdCard, wireAdCards, type AdCardHandlers } from "../lib/adCard";
+import { renderAdCard, renderPromotedPostCard, wireAdCards, type AdCardHandlers } from "../lib/adCard";
 import { getFeedAds, recordAdEvent, hideAdCampaign, hideAdvertiser, type FeedAd } from "../services/ads.service";
 
 // Coincide con el limite por pagina que usa getPersonalizedFeed() por defecto en post.service.ts.
@@ -246,10 +246,13 @@ export const feedView: ViewModule = {
     // y se meten cada AD_EVERY Reps orgánicos, con un tope de MAX_SESSION_ADS.
     // Nunca dos anuncios seguidos (weave() reinicia el contador tras cada uno).
     // ---------------------------------------------------------------------------
-    type FeedItem = { kind: "post"; post: FeedPost } | { kind: "ad"; ad: FeedAd };
+    // Un anuncio en el feed es un creativo standalone (marca externa) o un Rep promocionado
+    // (creativeKind='post' -> `promotedPost` trae el Rep hidratado, ver carga inicial).
+    type SessionAd = { ad: FeedAd; promotedPost: FeedPost | null };
+    type FeedItem = { kind: "post"; post: FeedPost } | { kind: "ad"; sessionAd: SessionAd };
     const AD_EVERY = 5;
     const MAX_SESSION_ADS = 4;
-    let feedAds: FeedAd[] = [];
+    let feedAds: SessionAd[] = [];
     let adsPlaced = 0; // cuántos de feedAds ya se intercalaron
     let postsSinceLastAd = 0; // Reps orgánicos desde el último anuncio (o desde el arranque)
     // Una impresión por campaña y por carga de página, aunque la tarjeta entre/salga del
@@ -267,7 +270,7 @@ export const feedView: ViewModule = {
         if (postsSinceLastAd >= AD_EVERY) {
           postsSinceLastAd = 0;
           if (adsPlaced < feedAds.length) {
-            items.push({ kind: "ad", ad: feedAds[adsPlaced] });
+            items.push({ kind: "ad", sessionAd: feedAds[adsPlaced] });
             adsPlaced++;
           }
         }
@@ -276,14 +279,20 @@ export const feedView: ViewModule = {
     }
 
     function feedItemHtml(item: FeedItem): string {
-      return item.kind === "post" ? renderPostCard(item.post, userId) : renderAdCard(item.ad);
+      if (item.kind === "post") return renderPostCard(item.post, userId);
+      return item.sessionAd.promotedPost
+        ? renderPromotedPostCard(item.sessionAd.ad, item.sessionAd.promotedPost, userId)
+        : renderAdCard(item.sessionAd.ad);
     }
 
-    // Engancha los listeners de una tanda ya renderizada: los Reps por wirePostCard, los
-    // anuncios por wireAdCards. Cada uno scopea por su propio selector, no se pisan.
+    // Engancha los listeners de una tanda ya renderizada: los Reps (orgánicos + los promocionados
+    // embebidos) por wirePostCard, la "capa anuncio" (cinta, menú ocultar, impresión, CTA) por
+    // wireAdCards. Cada uno scopea por su propio selector, no se pisan.
     function wireFeedItems(container: HTMLElement, items: FeedItem[]): void {
-      const tandaPosts = items.flatMap((it) => (it.kind === "post" ? [it.post] : []));
-      const tandaAds = items.flatMap((it) => (it.kind === "ad" ? [it.ad] : []));
+      const tandaPosts = items.flatMap((it) =>
+        it.kind === "post" ? [it.post] : it.sessionAd.promotedPost ? [it.sessionAd.promotedPost] : []
+      );
+      const tandaAds = items.flatMap((it) => (it.kind === "ad" ? [it.sessionAd.ad] : []));
       cardDisposers.push(wirePostCard(container, tandaPosts, postCardHandlers));
       if (tandaAds.length) cardDisposers.push(wireAdCards(container, tandaAds, adCardHandlers, firedAdImpressions));
     }
@@ -777,12 +786,12 @@ export const feedView: ViewModule = {
       },
       onHideCampaign: (ad) => {
         hideAdCampaign(ad.campaignId);
-        feedAds = feedAds.filter((a) => a.campaignId !== ad.campaignId);
+        feedAds = feedAds.filter((a) => a.ad.campaignId !== ad.campaignId);
         renderFeed();
       },
       onHideAdvertiser: (ad) => {
         hideAdvertiser(ad.advertiserId);
-        feedAds = feedAds.filter((a) => a.advertiserId !== ad.advertiserId);
+        feedAds = feedAds.filter((a) => a.ad.advertiserId !== ad.advertiserId);
         renderFeed();
       },
     };
@@ -1010,15 +1019,29 @@ export const feedView: ViewModule = {
 
     // Los anuncios se piden en paralelo con el feed real (mismo seed para que el jitter
     // del orden sea estable). El pintado optimista de arriba va sin anuncios; aparecen
-    // recien en este renderFeed(). Fase 2 solo intercala el creativo 'standalone' (marca
-    // externa) -- el Rep promocionado llega en Fase 3.
+    // recien en este renderFeed(). Para los 'post' (Rep promocionado) hidratamos el Rep;
+    // si ese fetch falla, se descarta ese anuncio (no rompe el feed).
     const [freshPosts, ads] = await Promise.all([
       getPersonalizedFeed(0, FEED_PAGE_SIZE, feedSeed),
       getFeedAds(MAX_SESSION_ADS, feedSeed),
     ]);
     posts = freshPosts;
-    feedAds = ads.filter((a) => a.creativeKind === "standalone");
     posts.forEach((p) => shownPostIds.add(p.id));
+    feedAds = (
+      await Promise.all(
+        ads.map(async (ad): Promise<SessionAd | null> => {
+          if (ad.creativeKind === "standalone") return { ad, promotedPost: null };
+          if (!ad.postId) return null;
+          // Si ese Rep ya está en el feed orgánico, no lo repetimos como anuncio.
+          if (shownPostIds.has(ad.postId)) return null;
+          const promotedPost = await getPost(ad.postId).catch(() => null);
+          return promotedPost ? { ad, promotedPost } : null;
+        })
+      )
+    ).filter((x): x is SessionAd => x !== null);
+    // Un Rep promocionado cuenta como "ya mostrado": así el scroll infinito no lo trae
+    // de nuevo como Rep orgánico y quedan dos tarjetas del mismo Rep.
+    feedAds.forEach((s) => s.promotedPost && shownPostIds.add(s.promotedPost.id));
     feedOffset = posts.length;
     renderFeed();
     initialLoadDone = true;

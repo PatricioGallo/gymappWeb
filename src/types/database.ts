@@ -3346,6 +3346,14 @@ export type Database = {
           users_count: number
         }[]
       }
+      get_my_post_promotion: {
+        Args: { p_post_id: string }
+        Returns: {
+          ends_at: string
+          price_total: number
+          status: string
+        }[]
+      }
       get_or_create_conversation: {
         Args: { p_other_user_id: string }
         Returns: string
@@ -3778,6 +3786,15 @@ export type Database = {
       rename_group: {
         Args: { p_conversation_id: string; p_name: string }
         Returns: undefined
+      }
+      request_ad_promotion: {
+        Args: {
+          p_days: number
+          p_post_id: string
+          p_target_audience?: string
+          p_target_ciudad?: string
+        }
+        Returns: string
       }
       request_gym_membership: {
         Args: { p_gym_id: string }

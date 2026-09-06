@@ -78,6 +78,7 @@ import {
   AD_TARGET_USER_TYPE_LABELS,
   AD_CAMPAIGN_STATUSES,
   AD_CAMPAIGN_STATUS_LABELS,
+  extractPostId,
   type Advertiser,
   type AdCampaignWithMeta,
   type AdvertiserInput,
@@ -2336,10 +2337,11 @@ export const adminView: ViewModule = {
                 if (c.target_provincia) target.push(c.target_provincia);
                 if (c.target_ciudad) target.push(c.target_ciudad);
                 if (c.target_user_types.length) target.push(c.target_user_types.map((t) => AD_TARGET_USER_TYPE_LABELS[t as keyof typeof AD_TARGET_USER_TYPE_LABELS] ?? t).join("/"));
+                const title = c.creative_kind === "post" ? "Rep promocionado" : c.headline || "(sin título)";
                 return `
             <div class="roadmap-task" data-id="${c.id}">
               <div class="roadmap-task-body">
-                <span class="roadmap-task-title">${escapeHtml(c.headline || "(sin título)")} <span class="ad-status ad-status-${c.status}">${AD_CAMPAIGN_STATUS_LABELS[c.status as AdCampaignStatus]}</span></span>
+                <span class="roadmap-task-title">${escapeHtml(title)} <span class="ad-status ad-status-${c.status}">${AD_CAMPAIGN_STATUS_LABELS[c.status as AdCampaignStatus]}</span></span>
                 <p class="roadmap-task-desc"><strong>${escapeHtml(c.advertiserName)}</strong>${c.advertiserKind === "external" ? " · marca externa" : " · perfil"}</p>
                 <p class="roadmap-task-desc">${formatDate(c.starts_at)} → ${formatDate(c.ends_at)} (${days} día${days === 1 ? "" : "s"})${target.length ? ` · ${escapeHtml(target.join(" · "))}` : " · sin filtro de audiencia"}</p>
                 <p class="roadmap-task-desc"><strong>${c.stats.impressions}</strong> impresiones · <strong>${c.stats.clicks}</strong> clics (CTR ${ctr}%) · <strong>${c.stats.uniqueViewers}</strong> personas${c.price_total != null ? ` · $${c.price_total}` : ""}</p>
@@ -2585,15 +2587,29 @@ export const adminView: ViewModule = {
               </select>
             </div>
             <div class="field">
-              <label>Creativo (imagen o video)</label>
-              <input type="file" id="campMediaFile" accept="image/*,video/*">
-              <div id="campMediaPreview" class="ad-media-preview">${mediaUrl ? (mediaType === "video" ? `<video src="${escapeHtml(mediaUrl)}" muted></video>` : `<img src="${escapeHtml(mediaUrl)}" alt="">`) : ""}</div>
+              <label for="campCreativeKind">Tipo de creativo</label>
+              <select id="campCreativeKind">
+                <option value="standalone" ${existing?.creative_kind !== "post" ? "selected" : ""}>Imagen o video propio</option>
+                <option value="post" ${existing?.creative_kind === "post" ? "selected" : ""}>Promocionar un Rep existente</option>
+              </select>
             </div>
-            <div class="field"><label for="campHeadline">Título</label><input type="text" id="campHeadline" maxlength="80" value="${escapeHtml(existing?.headline ?? "")}"></div>
-            <div class="field"><label for="campBody">Texto (opcional)</label><textarea id="campBody" rows="3" maxlength="200">${escapeHtml(existing?.body_text ?? "")}</textarea></div>
-            <div class="field-row">
-              <div class="field"><label for="campCtaLabel">Texto del botón</label><input type="text" id="campCtaLabel" maxlength="30" placeholder="Ver más" value="${escapeHtml(existing?.cta_label ?? "")}"></div>
-              <div class="field"><label for="campCtaUrl">Link de destino</label><input type="text" id="campCtaUrl" placeholder="https://... o profile.html?u=..." value="${escapeHtml(existing?.cta_url ?? "")}"></div>
+            <div class="field" id="campPostField" hidden>
+              <label for="campPostRef">Link o ID del Rep</label>
+              <input type="text" id="campPostRef" placeholder="post.html?id=... o el UUID" value="${escapeHtml(existing?.post_id ?? "")}">
+              <p class="chart-sub">La tarjeta va a ser el Rep tal cual, con "Publicidad · &lt;anunciante&gt;" arriba.</p>
+            </div>
+            <div id="campStandaloneFields">
+              <div class="field">
+                <label>Creativo (imagen o video)</label>
+                <input type="file" id="campMediaFile" accept="image/*,video/*">
+                <div id="campMediaPreview" class="ad-media-preview">${mediaUrl ? (mediaType === "video" ? `<video src="${escapeHtml(mediaUrl)}" muted></video>` : `<img src="${escapeHtml(mediaUrl)}" alt="">`) : ""}</div>
+              </div>
+              <div class="field"><label for="campHeadline">Título</label><input type="text" id="campHeadline" maxlength="80" value="${escapeHtml(existing?.headline ?? "")}"></div>
+              <div class="field"><label for="campBody">Texto (opcional)</label><textarea id="campBody" rows="3" maxlength="200">${escapeHtml(existing?.body_text ?? "")}</textarea></div>
+              <div class="field-row">
+                <div class="field"><label for="campCtaLabel">Texto del botón</label><input type="text" id="campCtaLabel" maxlength="30" placeholder="Ver más" value="${escapeHtml(existing?.cta_label ?? "")}"></div>
+                <div class="field"><label for="campCtaUrl">Link de destino</label><input type="text" id="campCtaUrl" placeholder="https://... o profile.html?u=..." value="${escapeHtml(existing?.cta_url ?? "")}"></div>
+              </div>
             </div>
             <div class="field-row">
               <div class="field"><label for="campStart">Inicio</label><input type="datetime-local" id="campStart" value="${isoToLocalInput(existing?.starts_at ?? now.toISOString())}"></div>
@@ -2629,6 +2645,15 @@ export const adminView: ViewModule = {
         </div>
       `;
 
+      const creativeKindSel = document.getElementById("campCreativeKind") as HTMLSelectElement;
+      const syncCreativeKind = () => {
+        const isPost = creativeKindSel.value === "post";
+        (document.getElementById("campPostField") as HTMLElement).hidden = !isPost;
+        (document.getElementById("campStandaloneFields") as HTMLElement).hidden = isPost;
+      };
+      syncCreativeKind();
+      creativeKindSel.addEventListener("change", syncCreativeKind);
+
       const mediaFile = document.getElementById("campMediaFile") as HTMLInputElement;
       mediaFile.addEventListener("change", async () => {
         const f = mediaFile.files?.[0];
@@ -2651,11 +2676,14 @@ export const adminView: ViewModule = {
       document.getElementById("campSave")?.addEventListener("click", async () => {
         const alertBox = document.getElementById("campAlert")!;
         alertBox.innerHTML = "";
+        const creativeKind = (document.getElementById("campCreativeKind") as HTMLSelectElement).value as "standalone" | "post";
         const input: AdCampaignInput = {
           advertiserId: (document.getElementById("campAdvertiser") as HTMLSelectElement).value,
           status: (document.getElementById("campStatus") as HTMLSelectElement).value as AdCampaignStatus,
           startsAt: localInputToIso((document.getElementById("campStart") as HTMLInputElement).value),
           endsAt: localInputToIso((document.getElementById("campEnd") as HTMLInputElement).value),
+          creativeKind,
+          postId: creativeKind === "post" ? extractPostId((document.getElementById("campPostRef") as HTMLInputElement).value) : null,
           headline: (document.getElementById("campHeadline") as HTMLInputElement).value.trim() || null,
           bodyText: (document.getElementById("campBody") as HTMLTextAreaElement).value.trim() || null,
           mediaUrl,
