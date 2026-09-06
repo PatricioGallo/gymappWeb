@@ -215,7 +215,7 @@ export async function addExercise(
     is_public: isPublic,
   });
   if (error) {
-    if (error.code === "23505") return { error: "Ya existe un ejercicio con ese nombre." };
+    if (error.code === "23505") return { error: "Ya tenés un ejercicio con ese nombre." };
     return { error: "No se pudo guardar el ejercicio. Probá de nuevo." };
   }
   return {};
