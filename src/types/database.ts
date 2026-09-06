@@ -3264,6 +3264,15 @@ export type Database = {
         Args: { p_gym_id: string; p_trainer_id: string }
         Returns: undefined
       }
+      get_ad_stats: {
+        Args: never
+        Returns: {
+          campaign_id: string
+          clicks: number
+          impressions: number
+          unique_viewers: number
+        }[]
+      }
       get_block_status: { Args: { p_target_id: string }; Returns: string }
       get_conversation_peer_meta: {
         Args: { p_other_user_id: string }

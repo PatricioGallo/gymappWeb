@@ -258,6 +258,34 @@ grant execute on function public.record_ad_event(uuid, text) to authenticated;
 revoke execute on function public.record_ad_event(uuid, text) from public, anon;
 
 -- ---------------------------------------------------------------------------
+-- 4b. get_ad_stats: métricas por campaña para el panel admin (staff-only)
+-- ---------------------------------------------------------------------------
+create or replace function public.get_ad_stats()
+returns table (
+  campaign_id uuid,
+  impressions bigint,
+  clicks bigint,
+  unique_viewers bigint
+)
+language sql
+security definer
+set search_path to 'public'
+as $$
+  select
+    c.id as campaign_id,
+    count(*) filter (where e.kind = 'impression') as impressions,
+    count(*) filter (where e.kind = 'click') as clicks,
+    count(distinct e.viewer_id) filter (where e.kind = 'impression') as unique_viewers
+  from public.ad_campaigns c
+  left join public.ad_events e on e.campaign_id = c.id
+  where public.is_staff()
+  group by c.id;
+$$;
+
+grant execute on function public.get_ad_stats() to authenticated;
+revoke execute on function public.get_ad_stats() from public, anon;
+
+-- ---------------------------------------------------------------------------
 -- 5. Storage: bucket público para creativos standalone (marcas externas) + logos
 -- ---------------------------------------------------------------------------
 -- Escritura solo staff (el admin sube todo desde el panel).

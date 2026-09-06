@@ -3709,6 +3709,48 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .roadmap-task-actions { order: 4; flex: 1 0 100%; }
 }
 
+/* ---- Panel de admin: pestaña Publicidad ---- */
+.ads-tab-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ad-status {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.ad-status-active { background: var(--live-soft); color: var(--live); border-color: transparent; }
+.ad-status-paused { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.ad-status-draft { color: var(--text-muted); }
+.ad-status-ended { opacity: 0.6; }
+
+.ad-advertiser-logo { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--surface-2); flex-shrink: 0; }
+
+.ad-media-preview { margin-top: 8px; }
+.ad-media-preview img,
+.ad-media-preview video { max-width: 100%; max-height: 200px; border-radius: var(--radius-sm); border: 1px solid var(--border); display: block; }
+.ad-media-preview:empty { display: none; }
+
+.ad-profile-results { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.ad-profile-hit {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.ad-profile-hit:hover { border-color: var(--accent-2); }
+
+.ad-check-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.ad-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; }
+.ad-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
 /* ---- Panel de admin: pestaña Mail (bandeja de contacto + hilo de respuestas) ---- */
 
 /* Cita del mensaje original arriba del textarea, en el modal de responder. */
