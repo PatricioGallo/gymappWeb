@@ -34,20 +34,6 @@ import {
   type ExerciseCategory,
 } from "../services/exercise.service";
 import {
-  listRoadmapTasks,
-  addRoadmapTask,
-  updateRoadmapTask,
-  deleteRoadmapTask,
-  validateRoadmapTask,
-  ROADMAP_CATEGORIES,
-  ROADMAP_CATEGORY_LABELS,
-  ROADMAP_STATUS_OPTIONS,
-  ROADMAP_STATUS_LABELS,
-  type RoadmapTask,
-  type RoadmapCategory,
-  type RoadmapStatus,
-} from "../services/roadmap.service";
-import {
   listIssueReports,
   addIssueReport,
   updateIssueReport,
@@ -57,10 +43,13 @@ import {
   ISSUE_SEVERITY_LABELS,
   ISSUE_STATUS_OPTIONS,
   ISSUE_STATUS_LABELS,
+  ISSUE_KIND_OPTIONS,
+  ISSUE_KIND_LABELS,
   type IssueReport,
   type IssueReportWithReporter,
   type IssueSeverity,
   type IssueStatus,
+  type IssueKind,
 } from "../services/issue.service";
 import { adminSendNotification } from "../services/notification.service";
 import {
@@ -137,8 +126,7 @@ const VIEW_MARKUP = `
         <button class="routine-tab active" data-tab="stats" type="button">Estadísticas</button>
         <button class="routine-tab" data-tab="users" type="button">Usuarios</button>
         <button class="routine-tab" data-tab="exercises" type="button">Ejercicios</button>
-        <button class="routine-tab" data-tab="roadmap" type="button">Roadmap</button>
-        <button class="routine-tab" data-tab="issues" type="button">Issues</button>
+        <button class="routine-tab" data-tab="issues" type="button">Tasks</button>
         <button class="routine-tab" data-tab="messages" type="button">Mensajes<span class="tab-dot" id="messagesTabDot" hidden></span></button>
         <button class="routine-tab" data-tab="mail" type="button">Mail</button>
         <button class="routine-tab" data-tab="validation" type="button">Validación<span class="tab-dot" id="validationTabDot" hidden></span></button>
@@ -149,7 +137,6 @@ const VIEW_MARKUP = `
       <div id="statsTab"></div>
       <div id="usersTab" hidden></div>
       <div id="exercisesTab" hidden></div>
-      <div id="roadmapTab" hidden></div>
       <div id="issuesTab" hidden></div>
       <div id="messagesTab" hidden></div>
       <div id="mailTab" hidden></div>
@@ -171,7 +158,7 @@ export const adminView: ViewModule = {
 
     container.innerHTML = VIEW_MARKUP;
 
-    // Colaborador: mismo panel que admin, pero usuarios y roadmap son de solo lectura.
+    // Colaborador: mismo panel que admin, pero los usuarios son de solo lectura.
     const isAdmin = await isCurrentUserAdmin();
 
     let users: AdminUserRow[] = [];
@@ -199,12 +186,10 @@ export const adminView: ViewModule = {
     let exercisesLoaded = false;
     let excAdminSubTab: "builtin" | "custom" = "builtin";
 
-    let roadmapTasks: RoadmapTask[] = [];
-    let roadmapLoaded = false;
-
     let issueReports: IssueReportWithReporter[] = [];
     let issuesLoaded = false;
     let issuesSubTab: "open" | "in_progress" | "blocked" | "closed" = "open";
+    let issuesKindFilter: "all" | IssueKind = "all";
 
     let contactMessages: ContactMessageWithReader[] = [];
     let contactMessagesLoaded = false;
@@ -245,7 +230,6 @@ export const adminView: ViewModule = {
       const statsTab = container.querySelector("#statsTab")!;
       const usersTab = container.querySelector("#usersTab")!;
       const exercisesTab = container.querySelector("#exercisesTab")!;
-      const roadmapTab = container.querySelector("#roadmapTab")!;
       const issuesTab = container.querySelector("#issuesTab")!;
       const messagesTab = container.querySelector("#messagesTab")!;
       const mailTab = container.querySelector("#mailTab")!;
@@ -264,7 +248,6 @@ export const adminView: ViewModule = {
             (statsTab as HTMLElement).hidden = tab !== "stats";
             (usersTab as HTMLElement).hidden = tab !== "users";
             (exercisesTab as HTMLElement).hidden = tab !== "exercises";
-            (roadmapTab as HTMLElement).hidden = tab !== "roadmap";
             (issuesTab as HTMLElement).hidden = tab !== "issues";
             (messagesTab as HTMLElement).hidden = tab !== "messages";
             (mailTab as HTMLElement).hidden = tab !== "mail";
@@ -282,10 +265,6 @@ export const adminView: ViewModule = {
             if (tab === "exercises" && !exercisesLoaded) {
               exercisesLoaded = true;
               await loadExercises();
-            }
-            if (tab === "roadmap" && !roadmapLoaded) {
-              roadmapLoaded = true;
-              await loadRoadmap();
             }
             if (tab === "issues" && !issuesLoaded) {
               issuesLoaded = true;
@@ -928,233 +907,11 @@ export const adminView: ViewModule = {
       });
     }
 
-    // ---------- Roadmap ----------
-
-    async function loadRoadmap(): Promise<void> {
-      const roadmapTab = container.querySelector("#roadmapTab")!;
-      roadmapTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando roadmap...</p></div>`;
-      roadmapTasks = await listRoadmapTasks();
-      renderRoadmapTab();
-    }
-
-    function renderRoadmapTab(): void {
-      const roadmapTab = container.querySelector("#roadmapTab")!;
-
-      const sections = ROADMAP_CATEGORIES.map((cat) => {
-        const items = roadmapTasks.filter((t) => t.category === cat);
-        const doneCount = items.filter((t) => t.status === "done").length;
-        const pct = items.length ? Math.round((doneCount / items.length) * 100) : 0;
-
-        return `
-          <div class="roadmap-section reveal">
-            <div class="roadmap-section-head">
-              <div>
-                <h3>${escapeHtml(ROADMAP_CATEGORY_LABELS[cat])}</h3>
-                <p class="chart-sub">${doneCount}/${items.length} tareas hechas</p>
-              </div>
-              ${isAdmin ? `<button class="btn btn-outline btn-sm roadmap-add-btn" type="button" data-category="${cat}">+ Agregar tarea</button>` : ""}
-            </div>
-            <div class="roadmap-progress-bar"><div class="roadmap-progress-fill" style="width:${pct}%"></div></div>
-            <div class="roadmap-tasks">
-              ${
-                items
-                  .map(
-                    (t) => `
-                <div class="roadmap-task roadmap-status-${t.status}" data-id="${t.id}">
-                  <input type="checkbox" class="roadmap-task-check" data-id="${t.id}" ${t.status === "done" ? "checked" : ""} ${isAdmin ? "" : "disabled"} aria-label="Marcar como hecha">
-                  <div class="roadmap-task-body">
-                    <span class="roadmap-task-title">${escapeHtml(t.title)}</span>
-                    ${t.description ? `<p class="roadmap-task-desc">${escapeHtml(t.description)}</p>` : ""}
-                  </div>
-                  <select class="roadmap-task-status" data-id="${t.id}" aria-label="Estado de la tarea" ${isAdmin ? "" : "disabled"}>
-                    ${ROADMAP_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === t.status ? "selected" : ""}>${ROADMAP_STATUS_LABELS[s]}</option>`).join("")}
-                  </select>
-                  ${
-                    isAdmin
-                      ? `<div class="roadmap-task-actions">
-                    <button type="button" class="roadmap-task-edit" data-id="${t.id}">Editar</button>
-                    <button type="button" class="roadmap-task-delete" data-id="${t.id}">Eliminar</button>
-                  </div>`
-                      : ""
-                  }
-                </div>
-              `
-                  )
-                  .join("") || `<p class="exc-pick-empty">Todavía no hay tareas en esta categoría.</p>`
-              }
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      roadmapTab.innerHTML = sections;
-
-      roadmapTab.querySelectorAll<HTMLButtonElement>(".roadmap-add-btn").forEach((btn) => {
-        btn.addEventListener("click", () => openRoadmapFormModal(null, btn.dataset.category as RoadmapCategory));
-      });
-
-      roadmapTab.querySelectorAll<HTMLInputElement>(".roadmap-task-check").forEach((cb) => {
-        cb.addEventListener("change", async () => {
-          const task = roadmapTasks.find((t) => t.id === cb.dataset.id);
-          if (!task) return;
-          const newStatus: RoadmapStatus = cb.checked ? "done" : "pending";
-          cb.disabled = true;
-          const { error } = await updateRoadmapTask(task.id, { status: newStatus });
-          cb.disabled = false;
-          if (error) {
-            cb.checked = task.status === "done";
-            return;
-          }
-          task.status = newStatus;
-          renderRoadmapTab();
-        });
-      });
-
-      roadmapTab.querySelectorAll<HTMLSelectElement>(".roadmap-task-status").forEach((sel) => {
-        sel.addEventListener("change", async () => {
-          const task = roadmapTasks.find((t) => t.id === sel.dataset.id);
-          if (!task) return;
-          const newStatus = sel.value as RoadmapStatus;
-          sel.disabled = true;
-          const { error } = await updateRoadmapTask(task.id, { status: newStatus });
-          sel.disabled = false;
-          if (error) {
-            sel.value = task.status;
-            return;
-          }
-          task.status = newStatus;
-          renderRoadmapTab();
-        });
-      });
-
-      roadmapTab.querySelectorAll<HTMLButtonElement>(".roadmap-task-edit").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const task = roadmapTasks.find((t) => t.id === btn.dataset.id);
-          if (task) openRoadmapFormModal(task, task.category as RoadmapCategory);
-        });
-      });
-
-      roadmapTab.querySelectorAll<HTMLButtonElement>(".roadmap-task-delete").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const task = roadmapTasks.find((t) => t.id === btn.dataset.id);
-          if (task) openDeleteRoadmapModal(task);
-        });
-      });
-    }
-
-    function openRoadmapFormModal(existing: RoadmapTask | null, defaultCategory: RoadmapCategory): void {
-      const loaderBody = document.getElementById("loaderBody");
-      if (!loaderBody) return;
-
-      loaderBody.innerHTML = `
-        <div class="success-check-container">
-          <div class="modal-card modal-card-lg">
-            <h2>${existing ? "Editar tarea" : "Agregar tarea"}</h2>
-
-            <div class="field">
-              <label for="roadmapFormCategory">Categoría</label>
-              <select id="roadmapFormCategory">
-                ${ROADMAP_CATEGORIES.map((c) => `<option value="${c}" ${(existing?.category ?? defaultCategory) === c ? "selected" : ""}>${escapeHtml(ROADMAP_CATEGORY_LABELS[c])}</option>`).join("")}
-              </select>
-            </div>
-            <div class="field"><label for="roadmapFormTitle">Título</label><input type="text" id="roadmapFormTitle" value="${escapeHtml(existing?.title ?? "")}"></div>
-            <div class="field"><label for="roadmapFormDesc">Descripción (opcional)</label><textarea id="roadmapFormDesc" rows="4">${escapeHtml(existing?.description ?? "")}</textarea></div>
-            <div class="field">
-              <label for="roadmapFormStatus">Estado</label>
-              <select id="roadmapFormStatus">
-                ${ROADMAP_STATUS_OPTIONS.map((s) => `<option value="${s}" ${(existing?.status ?? "pending") === s ? "selected" : ""}>${ROADMAP_STATUS_LABELS[s]}</option>`).join("")}
-              </select>
-            </div>
-
-            <div class="alert_message" id="roadmapFormAlert"></div>
-            <div class="modal-actions">
-              <button class="btn btn-primary" id="roadmapFormSave" type="button">Guardar</button>
-              <button class="btn btn-outline" id="roadmapFormClose" type="button">Cerrar</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById("roadmapFormClose")?.addEventListener("click", () => {
-        loaderBody.innerHTML = "";
-      });
-
-      document.getElementById("roadmapFormSave")?.addEventListener("click", async () => {
-        const alertBox = document.getElementById("roadmapFormAlert")!;
-        alertBox.innerHTML = "";
-
-        const category = (document.getElementById("roadmapFormCategory") as HTMLSelectElement).value as RoadmapCategory;
-        const title = (document.getElementById("roadmapFormTitle") as HTMLInputElement).value.trim();
-        const description = (document.getElementById("roadmapFormDesc") as HTMLTextAreaElement).value.trim();
-        const status = (document.getElementById("roadmapFormStatus") as HTMLSelectElement).value as RoadmapStatus;
-
-        const validationError = validateRoadmapTask(title);
-        if (validationError) {
-          alertBox.innerHTML = `<p>${validationError === "title_short" ? "El título es muy corto." : "El título es muy largo."}</p>`;
-          return;
-        }
-
-        if (existing) {
-          const { error } = await updateRoadmapTask(existing.id, { category, title, description: description || null, status });
-          if (error) {
-            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-            return;
-          }
-          Object.assign(existing, { category, title, description: description || null, status });
-        } else {
-          const { error } = await addRoadmapTask(adminId, category, title, description, status);
-          if (error) {
-            alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-            return;
-          }
-          roadmapTasks = await listRoadmapTasks();
-        }
-
-        loaderBody.innerHTML = "";
-        renderRoadmapTab();
-      });
-    }
-
-    function openDeleteRoadmapModal(task: RoadmapTask): void {
-      const loaderBody = document.getElementById("loaderBody");
-      if (!loaderBody) return;
-
-      loaderBody.innerHTML = `
-        <div class="success-check-container">
-          <div class="modal-card">
-            <h2>¿Eliminar "${escapeHtml(task.title)}"?</h2>
-            <p class="subtitle">Esta acción no se puede deshacer.</p>
-            <div class="alert_message" id="roadmapDeleteAlert"></div>
-            <div class="modal-actions">
-              <button class="btn btn-outline" id="roadmapDeleteCancel" type="button">Cancelar</button>
-              <button class="btn btn-danger" id="roadmapDeleteConfirm" type="button">Eliminar</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById("roadmapDeleteCancel")?.addEventListener("click", () => {
-        loaderBody.innerHTML = "";
-      });
-
-      document.getElementById("roadmapDeleteConfirm")?.addEventListener("click", async () => {
-        const alertBox = document.getElementById("roadmapDeleteAlert")!;
-        const { error } = await deleteRoadmapTask(task.id);
-        if (error) {
-          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
-          return;
-        }
-        roadmapTasks = roadmapTasks.filter((t) => t.id !== task.id);
-        loaderBody.innerHTML = "";
-        renderRoadmapTab();
-      });
-    }
-
     // ---------- Issues ----------
 
     async function loadIssues(): Promise<void> {
       const issuesTab = container.querySelector("#issuesTab")!;
-      issuesTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando issues...</p></div>`;
+      issuesTab.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando...</p></div>`;
       issueReports = await listIssueReports();
       renderIssuesTab();
     }
@@ -1169,12 +926,20 @@ export const adminView: ViewModule = {
       });
     }
 
+    const ISSUE_KIND_FILTER_LABELS: Record<"all" | IssueKind, string> = {
+      all: "Tasks e issues",
+      task: "Solo tasks",
+      issue: "Solo issues",
+    };
+
     function renderIssuesTab(): void {
       const issuesTab = container.querySelector("#issuesTab")!;
-      const openIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "open"));
-      const inProgressIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "in_progress"));
-      const blockedIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "blocked"));
-      const closedIssues = sortIssuesByPriority(issueReports.filter((i) => i.status === "resolved"));
+      // El selector "Mostrar" acota la lista (y los contadores de cada sub-pestaña) a un solo tipo.
+      const scoped = issuesKindFilter === "all" ? issueReports : issueReports.filter((i) => i.kind === issuesKindFilter);
+      const openIssues = sortIssuesByPriority(scoped.filter((i) => i.status === "open"));
+      const inProgressIssues = sortIssuesByPriority(scoped.filter((i) => i.status === "in_progress"));
+      const blockedIssues = sortIssuesByPriority(scoped.filter((i) => i.status === "blocked"));
+      const closedIssues = sortIssuesByPriority(scoped.filter((i) => i.status === "resolved"));
       const activeList =
         issuesSubTab === "open"
           ? openIssues
@@ -1187,10 +952,20 @@ export const adminView: ViewModule = {
       issuesTab.innerHTML = `
         <div class="exc-admin-toolbar">
           <div>
-            <h3>Issues reportados</h3>
-            <p class="chart-sub">${openIssues.length + inProgressIssues.length + blockedIssues.length} sin resolver de ${issueReports.length} en total.</p>
+            <h3>${ISSUE_KIND_FILTER_LABELS[issuesKindFilter]}</h3>
+            <p class="chart-sub">${openIssues.length + inProgressIssues.length + blockedIssues.length} sin resolver de ${scoped.length}${issuesKindFilter === "all" ? " en total" : ` ${issuesKindFilter === "task" ? "tasks" : "issues"}`}.</p>
           </div>
-          <button class="btn btn-primary btn-sm" id="issueAddBtn" type="button">+ Reportar issue</button>
+          <button class="btn btn-primary btn-sm" id="issueAddBtn" type="button">+ Agregar task</button>
+        </div>
+        <div class="issues-filter-row">
+          <label class="admin-sort-field">
+            <span>Mostrar</span>
+            <select id="issuesKindFilter" class="admin-sort-select">
+              <option value="all" ${issuesKindFilter === "all" ? "selected" : ""}>Todos</option>
+              <option value="task" ${issuesKindFilter === "task" ? "selected" : ""}>Solo tasks</option>
+              <option value="issue" ${issuesKindFilter === "issue" ? "selected" : ""}>Solo issues</option>
+            </select>
+          </label>
         </div>
         <div class="exc-pick-chips" id="issuesSubTabs">
           <button type="button" class="exc-pick-chip ${issuesSubTab === "open" ? "active" : ""}" data-sub="open">Abiertas (${openIssues.length})</button>
@@ -1206,12 +981,12 @@ export const adminView: ViewModule = {
             <div class="roadmap-task issue-severity-${i.severity} roadmap-status-${i.status === "resolved" ? "done" : i.status}" data-id="${i.id}">
               <span class="issue-severity-badge issue-severity-badge-${i.severity}">${ISSUE_SEVERITY_LABELS[i.severity as IssueSeverity]}</span>
               <div class="roadmap-task-body">
-                <span class="roadmap-task-title">${escapeHtml(i.title)}</span>
-                ${i.reporterName ? `<p class="roadmap-task-desc"><strong>Reportado por:</strong> ${escapeHtml(i.reporterName)}</p>` : ""}
+                <span class="roadmap-task-title">${escapeHtml(i.title)}<span class="issue-kind-badge issue-kind-badge-${i.kind}">${ISSUE_KIND_LABELS[i.kind as IssueKind] ?? i.kind}</span></span>
+                ${i.reporterName ? `<p class="roadmap-task-desc"><strong>Cargado por:</strong> ${escapeHtml(i.reporterName)}</p>` : ""}
                 ${i.page ? `<p class="roadmap-task-desc"><strong>Pantalla:</strong> ${escapeHtml(i.page)}</p>` : ""}
                 ${i.description ? `<p class="roadmap-task-desc">${escapeHtml(i.description)}</p>` : ""}
               </div>
-              <select class="roadmap-task-status issue-status-select" data-id="${i.id}" aria-label="Estado del issue">
+              <select class="roadmap-task-status issue-status-select" data-id="${i.id}" aria-label="Estado">
                 ${ISSUE_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === i.status ? "selected" : ""}>${ISSUE_STATUS_LABELS[s]}</option>`).join("")}
               </select>
               <div class="roadmap-task-actions">
@@ -1223,19 +998,26 @@ export const adminView: ViewModule = {
               )
               .join("") ||
             `<p class="exc-pick-empty">${
-              issuesSubTab === "open"
-                ? "No hay issues abiertos. ¡Buena señal!"
-                : issuesSubTab === "in_progress"
-                  ? "No hay issues en progreso."
-                  : issuesSubTab === "blocked"
-                    ? "No hay issues bloqueados."
-                    : "Todavía no hay issues cerrados."
+              `No hay ${issuesKindFilter === "task" ? "tasks" : issuesKindFilter === "issue" ? "issues" : "elementos"} ${
+                issuesSubTab === "open"
+                  ? "abiertos"
+                  : issuesSubTab === "in_progress"
+                    ? "en progreso"
+                    : issuesSubTab === "blocked"
+                      ? "bloqueados"
+                      : "cerrados"
+              }.${issuesSubTab === "open" ? " ¡Buena señal!" : ""}`
             }</p>`
           }
         </div>
       `;
 
       container.querySelector("#issueAddBtn")?.addEventListener("click", () => openIssueFormModal(null));
+
+      container.querySelector("#issuesKindFilter")?.addEventListener("change", (event) => {
+        issuesKindFilter = (event.target as HTMLSelectElement).value as "all" | IssueKind;
+        renderIssuesTab();
+      });
 
       container.querySelector("#issuesSubTabs")?.addEventListener("click", (event) => {
         const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-chip");
@@ -1283,8 +1065,14 @@ export const adminView: ViewModule = {
       loaderBody.innerHTML = `
         <div class="success-check-container">
           <div class="modal-card modal-card-lg">
-            <h2>${existing ? "Editar issue" : "Reportar issue"}</h2>
+            <h2>${existing ? "Editar" : "Agregar task"}</h2>
 
+            <div class="field">
+              <label for="issueFormKind">Tipo</label>
+              <select id="issueFormKind">
+                ${ISSUE_KIND_OPTIONS.map((k) => `<option value="${k}" ${(existing?.kind ?? "task") === k ? "selected" : ""}>${ISSUE_KIND_LABELS[k]}</option>`).join("")}
+              </select>
+            </div>
             <div class="field"><label for="issueFormTitle">Título</label><input type="text" id="issueFormTitle" value="${escapeHtml(existing?.title ?? "")}" placeholder="Ej: El botón de guardar no responde"></div>
             <div class="field"><label for="issueFormPage">Pantalla / sección (opcional)</label><input type="text" id="issueFormPage" value="${escapeHtml(existing?.page ?? "")}" placeholder="Ej: Pantalla de rutinas"></div>
             <div class="field"><label for="issueFormDesc">Descripción (opcional)</label><textarea id="issueFormDesc" rows="4">${escapeHtml(existing?.description ?? "")}</textarea></div>
@@ -1312,6 +1100,7 @@ export const adminView: ViewModule = {
         const alertBox = document.getElementById("issueFormAlert")!;
         alertBox.innerHTML = "";
 
+        const kind = (document.getElementById("issueFormKind") as HTMLSelectElement).value as IssueKind;
         const title = (document.getElementById("issueFormTitle") as HTMLInputElement).value.trim();
         const page = (document.getElementById("issueFormPage") as HTMLInputElement).value.trim();
         const description = (document.getElementById("issueFormDesc") as HTMLTextAreaElement).value.trim();
@@ -1331,7 +1120,7 @@ export const adminView: ViewModule = {
         saveBtn.innerHTML = `<span class="btn-spinner"></span> Guardando...`;
 
         if (existing) {
-          const { error } = await updateIssueReport(existing.id, { title, page: page || null, description: description || null, severity });
+          const { error } = await updateIssueReport(existing.id, { kind, title, page: page || null, description: description || null, severity });
           if (error) {
             saveBtn.disabled = false;
             closeBtn.disabled = false;
@@ -1339,9 +1128,9 @@ export const adminView: ViewModule = {
             alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
             return;
           }
-          Object.assign(existing, { title, page: page || null, description: description || null, severity });
+          Object.assign(existing, { kind, title, page: page || null, description: description || null, severity });
         } else {
-          const { error } = await addIssueReport(adminId, title, description, page, severity);
+          const { error } = await addIssueReport(adminId, kind, title, description, page, severity);
           if (error) {
             saveBtn.disabled = false;
             closeBtn.disabled = false;

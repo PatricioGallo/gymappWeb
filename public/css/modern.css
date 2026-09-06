@@ -3625,29 +3625,8 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   .exc-admin-actions button:hover { border-color: var(--accent-2); color: var(--text); }
 }
 
-.roadmap-section { margin-bottom: 30px; }
-
-.roadmap-section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.roadmap-section-head h3 { margin: 0; }
-
-.roadmap-progress-bar {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  overflow: hidden;
-  margin-bottom: 14px;
-}
-
-.roadmap-progress-fill { height: 100%; background: var(--accent-2); border-radius: 999px; }
-
+/* .roadmap-task* : nombre heredado del viejo roadmap de admin (ya eliminado). Estas clases las
+   siguen usando las listas del panel de admin (issues/tasks, mensajes, validación, publicidad). */
 .roadmap-task {
   display: flex;
   align-items: flex-start;
@@ -3657,15 +3636,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 .roadmap-task:first-of-type { border-top: none; padding-top: 0; }
-
-.roadmap-task-check {
-  margin-top: 3px;
-  width: 17px;
-  height: 17px;
-  accent-color: var(--accent-2);
-  flex-shrink: 0;
-  cursor: pointer;
-}
 
 .roadmap-task-body { flex: 1; min-width: 0; }
 
@@ -3864,6 +3834,30 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .issue-severity-badge-low { color: #6fb56f; border-color: #6fb56f55; background: #6fb56f1a; }
 .issue-severity-badge-medium { color: #e0a63c; border-color: #e0a63c55; background: #e0a63c1a; }
 .issue-severity-badge-high { color: #e05c5c; border-color: #e05c5c55; background: #e05c5c1a; }
+
+/* Task vs Issue: dos colores bien distintos en la lista de "Abiertas" del panel de admin. */
+.issues-filter-row { margin: 0 0 14px; }
+.issues-filter-row .admin-sort-field { display: inline-flex; }
+.issues-filter-row .admin-sort-select { min-width: 190px; }
+
+/* Etiqueta chica al lado del título (mismo renglón), conservando el color por tipo. */
+.issue-kind-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.issue-kind-badge-task { color: #5b9be0; border-color: #5b9be055; background: #5b9be01a; }
+.issue-kind-badge-issue { color: #c678dd; border-color: #c678dd55; background: #c678dd1a; }
 
 /* ---------- Socios (estado de membresia de gimnasio) ---------- */
 
