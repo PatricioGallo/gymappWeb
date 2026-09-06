@@ -20,6 +20,7 @@ import {
 } from "../services/admin.service";
 import { renderVerifiedBadge, getVerifiedBadgeColor } from "../lib/verifiedBadge";
 import { exerciseMediaPickerMarkup, wireExerciseMediaPicker, resolveExerciseMediaUrls, exerciseThumbMediaHtml } from "../lib/imageDropzone";
+import { mediaDropzoneMarkup, wireMediaDropzone } from "../lib/mediaDropzone";
 import {
   listExercisesAdmin,
   addExercise,
@@ -2442,7 +2443,7 @@ export const adminView: ViewModule = {
     function openAdvertiserFormModal(existing: Advertiser | null): void {
       const loaderBody = document.getElementById("loaderBody");
       if (!loaderBody) return;
-      let logoUrl: string | null = existing?.logo_url ?? null;
+      const existingLogoUrl = existing?.logo_url ?? null;
       let pickedProfileId: string | null = existing?.profile_id ?? null;
 
       loaderBody.innerHTML = `
@@ -2463,11 +2464,14 @@ export const adminView: ViewModule = {
               <p class="chart-sub" id="advProfilePicked">${existing?.profile_id ? "Perfil actual mantenido." : "Ninguno elegido."}</p>
             </div>
             <div class="field"><label for="advName">Nombre a mostrar</label><input type="text" id="advName" maxlength="120" value="${escapeHtml(existing?.name ?? "")}"></div>
-            <div class="field">
-              <label>Logo</label>
-              <input type="file" id="advLogoFile" accept="image/*">
-              <div id="advLogoPreview" class="ad-media-preview">${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="">` : ""}</div>
-            </div>
+            ${mediaDropzoneMarkup({
+              idPrefix: "advLogo",
+              label: "Logo",
+              hint: "JPG, PNG o WEBP · hasta 20MB",
+              accept: "image/*",
+              currentUrl: existingLogoUrl,
+              currentType: "image",
+            })}
             <div class="field"><label for="advWebsite">Sitio web (opcional)</label><input type="url" id="advWebsite" value="${escapeHtml(existing?.website_url ?? "")}"></div>
             <div class="field"><label for="advEmail">Email de contacto (opcional)</label><input type="email" id="advEmail" value="${escapeHtml(existing?.contact_email ?? "")}"></div>
             <div class="field"><label for="advPhone">Teléfono de contacto (opcional)</label><input type="text" id="advPhone" value="${escapeHtml(existing?.contact_phone ?? "")}"></div>
@@ -2510,20 +2514,14 @@ export const adminView: ViewModule = {
         }, 250);
       });
 
-      const logoFile = document.getElementById("advLogoFile") as HTMLInputElement;
-      logoFile.addEventListener("change", async () => {
-        const f = logoFile.files?.[0];
-        if (!f) return;
-        const alertBox = document.getElementById("advAlert")!;
-        alertBox.innerHTML = `<p>Subiendo logo...</p>`;
-        const { url, error } = await uploadAdMedia(f, "logo");
-        if (error || !url) {
-          alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el logo.")}</p>`;
-          return;
-        }
-        logoUrl = url;
-        alertBox.innerHTML = "";
-        document.getElementById("advLogoPreview")!.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+      const logoDz = wireMediaDropzone(loaderBody, {
+        idPrefix: "advLogo",
+        currentUrl: existingLogoUrl,
+        currentType: "image",
+        upload: (f) => uploadAdMedia(f, "logo"),
+        onUploading: () => (document.getElementById("advAlert")!.innerHTML = `<p>Subiendo logo...</p>`),
+        onError: (msg) => (document.getElementById("advAlert")!.innerHTML = `<p>${escapeHtml(msg)}</p>`),
+        onDone: () => (document.getElementById("advAlert")!.innerHTML = ""),
       });
 
       document.getElementById("advClose")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
@@ -2535,7 +2533,7 @@ export const adminView: ViewModule = {
           kind,
           profileId: kind === "profile" ? pickedProfileId : null,
           name: (document.getElementById("advName") as HTMLInputElement).value,
-          logoUrl,
+          logoUrl: logoDz.getValue().url,
           websiteUrl: (document.getElementById("advWebsite") as HTMLInputElement).value.trim() || null,
           contactEmail: (document.getElementById("advEmail") as HTMLInputElement).value.trim() || null,
           contactPhone: (document.getElementById("advPhone") as HTMLInputElement).value.trim() || null,
@@ -2584,8 +2582,8 @@ export const adminView: ViewModule = {
     function openAdCampaignFormModal(existing: AdCampaignWithMeta | null): void {
       const loaderBody = document.getElementById("loaderBody");
       if (!loaderBody) return;
-      let mediaUrl: string | null = existing?.media_url ?? null;
-      let mediaType: "image" | "video" | null = (existing?.media_type as "image" | "video" | null) ?? null;
+      const existingMediaUrl = existing?.media_url ?? null;
+      const existingMediaType = (existing?.media_type as "image" | "video" | null) ?? null;
       const now = new Date();
       const in7 = new Date(now.getTime() + 7 * 86400000);
 
@@ -2612,11 +2610,13 @@ export const adminView: ViewModule = {
               <p class="chart-sub">La tarjeta va a ser el Rep tal cual, con "Publicidad · &lt;anunciante&gt;" arriba.</p>
             </div>
             <div id="campStandaloneFields">
-              <div class="field">
-                <label>Creativo (imagen o video)</label>
-                <input type="file" id="campMediaFile" accept="image/*,video/*">
-                <div id="campMediaPreview" class="ad-media-preview">${mediaUrl ? (mediaType === "video" ? `<video src="${escapeHtml(mediaUrl)}" muted></video>` : `<img src="${escapeHtml(mediaUrl)}" alt="">`) : ""}</div>
-              </div>
+              ${mediaDropzoneMarkup({
+                idPrefix: "campMedia",
+                label: "Creativo (imagen o video)",
+                hint: "Imagen hasta 20MB · video hasta 300MB",
+                currentUrl: existingMediaUrl,
+                currentType: existingMediaType,
+              })}
               <div class="field"><label for="campHeadline">Título</label><input type="text" id="campHeadline" maxlength="80" value="${escapeHtml(existing?.headline ?? "")}"></div>
               <div class="field"><label for="campBody">Texto (opcional)</label><textarea id="campBody" rows="3" maxlength="200">${escapeHtml(existing?.body_text ?? "")}</textarea></div>
               <div class="field-row">
@@ -2667,22 +2667,14 @@ export const adminView: ViewModule = {
       syncCreativeKind();
       creativeKindSel.addEventListener("change", syncCreativeKind);
 
-      const mediaFile = document.getElementById("campMediaFile") as HTMLInputElement;
-      mediaFile.addEventListener("change", async () => {
-        const f = mediaFile.files?.[0];
-        if (!f) return;
-        const alertBox = document.getElementById("campAlert")!;
-        alertBox.innerHTML = `<p>Subiendo creativo...</p>`;
-        const { url, mediaType: mt, error } = await uploadAdMedia(f, "creative");
-        if (error || !url) {
-          alertBox.innerHTML = `<p>${escapeHtml(error || "No se pudo subir el archivo.")}</p>`;
-          return;
-        }
-        mediaUrl = url;
-        mediaType = mt ?? "image";
-        alertBox.innerHTML = "";
-        document.getElementById("campMediaPreview")!.innerHTML =
-          mediaType === "video" ? `<video src="${escapeHtml(url)}" muted controls></video>` : `<img src="${escapeHtml(url)}" alt="">`;
+      const mediaDz = wireMediaDropzone(loaderBody, {
+        idPrefix: "campMedia",
+        currentUrl: existingMediaUrl,
+        currentType: existingMediaType,
+        upload: (f) => uploadAdMedia(f, "creative"),
+        onUploading: () => (document.getElementById("campAlert")!.innerHTML = `<p>Subiendo creativo...</p>`),
+        onError: (msg) => (document.getElementById("campAlert")!.innerHTML = `<p>${escapeHtml(msg)}</p>`),
+        onDone: () => (document.getElementById("campAlert")!.innerHTML = ""),
       });
 
       document.getElementById("campClose")?.addEventListener("click", () => (loaderBody.innerHTML = ""));
@@ -2699,8 +2691,8 @@ export const adminView: ViewModule = {
           postId: creativeKind === "post" ? extractPostId((document.getElementById("campPostRef") as HTMLInputElement).value) : null,
           headline: (document.getElementById("campHeadline") as HTMLInputElement).value.trim() || null,
           bodyText: (document.getElementById("campBody") as HTMLTextAreaElement).value.trim() || null,
-          mediaUrl,
-          mediaType,
+          mediaUrl: mediaDz.getValue().url,
+          mediaType: mediaDz.getValue().mediaType,
           ctaLabel: (document.getElementById("campCtaLabel") as HTMLInputElement).value.trim() || null,
           ctaUrl: (document.getElementById("campCtaUrl") as HTMLInputElement).value.trim() || null,
           targetProvincia: (document.getElementById("campProvincia") as HTMLInputElement).value.trim() || null,

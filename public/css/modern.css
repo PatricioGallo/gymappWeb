@@ -1453,21 +1453,24 @@ button:focus-visible {
 .field input::placeholder { color: var(--text-muted); opacity: 0.7; }
 .field input:focus { outline: none; border-color: var(--accent-2); }
 
-/* iOS Safari le da a <input type="date"> un ancho intrinseco propio que ignora width:100%
-   y se desborda del contenedor en pantallas angostas (ej. el modal de agregar peso corporal
-   en iPhone). appearance:none + min-width:0 lo hacen encoger como cualquier otro input; el
-   selector de fecha nativo se sigue abriendo igual al tocarlo. */
-.field input[type="date"] {
+/* iOS Safari le da a <input type="date"> y <input type="datetime-local"> un ancho intrinseco
+   propio que ignora width:100% y se desborda del contenedor en pantallas angostas (ej. el modal
+   de agregar peso corporal, o el de "Nueva campaña" con Inicio/Fin en un .field-row, en iPhone).
+   appearance:none + min-width:0 lo hacen encoger como cualquier otro input; el selector nativo
+   se sigue abriendo igual al tocarlo. */
+.field input[type="date"],
+.field input[type="datetime-local"] {
   -webkit-appearance: none;
   appearance: none;
   min-width: 0;
   max-width: 100%;
-  /* con appearance:none iOS puede colapsar la altura del input de fecha -- la fijamos
-     para que quede igual que los demas campos (12px padding + ~21px de linea). */
+  /* con appearance:none iOS puede colapsar la altura del input -- la fijamos para que quede
+     igual que los demas campos (12px padding + ~21px de linea). */
   min-height: 45px;
   line-height: normal;
 }
-.field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+.field input[type="date"]::-webkit-date-and-time-value,
+.field input[type="datetime-local"]::-webkit-date-and-time-value { text-align: left; }
 
 .password-field { position: relative; }
 .password-field input { padding-right: 44px; }
@@ -3727,11 +3730,6 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .ad-status-ended { opacity: 0.6; }
 
 .ad-advertiser-logo { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--surface-2); flex-shrink: 0; }
-
-.ad-media-preview { margin-top: 8px; }
-.ad-media-preview img,
-.ad-media-preview video { max-width: 100%; max-height: 200px; border-radius: var(--radius-sm); border: 1px solid var(--border); display: block; }
-.ad-media-preview:empty { display: none; }
 
 .ad-profile-results { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .ad-profile-hit {
