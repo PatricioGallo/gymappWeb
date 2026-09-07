@@ -8,6 +8,7 @@ import {
   getNutritionCalcInputs,
   listNutritionLogs,
   addNutritionLog,
+  addNutritionLogs,
   updateNutritionLogQuantity,
   deleteNutritionLog,
   type NutritionTarget,
@@ -560,21 +561,24 @@ export const nutricionView: ViewModule = {
           const mc = mealCtx(mi);
           if (!mc) return;
           openMealSuggestions(
-            async (s) => {
-              await addNutritionLog(myId, {
-                logDate: viewDate,
-                mealIndex: mi,
-                mealName: mc.meal.name,
-                foodId: s.food.id,
-                foodName: s.food.name,
-                brand: s.food.brand,
-                grams: s.grams,
-                displayQty: s.grams,
-                displayUnit: "g",
-                macros: s.macros,
-              });
+            async (combo) => {
+              await addNutritionLogs(
+                myId,
+                combo.items.map((it) => ({
+                  logDate: viewDate,
+                  mealIndex: mi,
+                  mealName: mc.meal.name,
+                  foodId: it.food.id,
+                  foodName: it.food.name,
+                  brand: it.food.brand,
+                  grams: it.grams,
+                  displayQty: it.displayQty,
+                  displayUnit: it.displayUnit,
+                  macros: it.macros,
+                }))
+              );
             },
-            { mealName: mc.meal.name, remaining: mc.remaining, mealTargetKcal: mc.mealTarget.kcal },
+            { mealName: mc.meal.name, remaining: mc.remaining, mealTarget: mc.mealTarget },
             ctx,
             () => void render()
           );

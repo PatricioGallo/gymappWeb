@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../types/database";
 import { calcularEdad } from "../lib/age";
 import { parseMeals, type Goal, type MacroSet, type Meal, type Sex } from "../lib/macroCalculator";
+import { MEAL_TEMPLATES } from "../lib/mealTemplates";
 
 // ---------------------------------------------------------------------------
 // Alimentación / Macros. Feature opt-in (profiles.nutrition_prefs.enabled), mismo
@@ -470,6 +471,32 @@ export async function addNutritionLog(userId: string, log: NewNutritionLog): Pro
   return {};
 }
 
+/** Inserta varios logs de una (usado por las sugerencias de comida completa). */
+export async function addNutritionLogs(userId: string, logs: NewNutritionLog[]): Promise<{ error?: string }> {
+  if (logs.length === 0) return {};
+  const { error } = await supabase.from("nutrition_logs").insert(
+    logs.map((log) => ({
+      user_id: userId,
+      log_date: log.logDate,
+      meal_index: log.mealIndex,
+      meal_name: log.mealName,
+      food_id: log.foodId,
+      food_name: log.foodName,
+      brand: log.brand,
+      grams: log.grams,
+      display_qty: log.displayQty,
+      display_unit: log.displayUnit,
+      kcal: log.macros.kcal,
+      protein_g: log.macros.protein_g,
+      carbs_g: log.macros.carbs_g,
+      fat_g: log.macros.fat_g,
+      fiber_g: log.macros.fiber_g,
+    }))
+  );
+  if (error) return { error: "No se pudieron agregar los alimentos. Probá de nuevo." };
+  return {};
+}
+
 export async function updateNutritionLogQuantity(
   logId: string,
   patch: { grams: number; displayQty: number; displayUnit: DisplayUnit; macros: FoodMacros }
@@ -535,20 +562,20 @@ export function macroFitScore(food: Pick<FoodItem, "protein100" | "carbs100" | "
   return (rp * fp + rc * fc + rf * ff) / (rMag * fMag);
 }
 
-/** Fracción de kcal que viene de un solo macro (1 = alimento "puro": aceite, azúcar). */
-function singleMacroShare(food: Pick<FoodItem, "protein100" | "carbs100" | "fat100">): number {
-  const p = food.protein100 * 4;
-  const c = food.carbs100 * 4;
-  const f = food.fat100 * 9;
-  const total = p + c + f;
-  if (total <= 0) return 0;
-  return Math.max(p, c, f) / total;
-}
-
-export interface FoodSuggestion {
+/** Un alimento del combo con su cantidad y macros ya calculados. */
+export interface MealComboItem {
   food: FoodItem;
   grams: number;
+  displayQty: number;
+  displayUnit: DisplayUnit;
   macros: FoodMacros;
+}
+
+/** Una sugerencia de comida completa: varios alimentos que juntos apuntan al objetivo. */
+export interface MealCombo {
+  title: string;
+  items: MealComboItem[];
+  totals: FoodMacros;
 }
 
 /** Popularidad global por alimento (para ordenar el buscador). */
@@ -562,43 +589,96 @@ export async function getFoodPopularity(): Promise<Map<string, number>> {
   return map;
 }
 
-/**
- * Alimentos sugeridos para una comida, con una cantidad escalada para acercarse a lo que le
- * falta (o a ~1/3 del objetivo si ya está cubierta). Ordenados por: encaje de macros +
- * popularidad. Los curados que matchean el tipo de comida entran aunque nadie los haya cargado.
- */
-export async function getMealSuggestions(mealName: string, remaining: MacroSet, mealTargetKcal: number): Promise<FoodSuggestion[]> {
-  const tags = mealTagsForName(mealName);
-  const { data, error } = await supabase.rpc("get_meal_suggestion_foods", { p_meal_tags: tags, p_limit: 16 });
-  if (error) throw error;
-  // La RPC ya viene ordenada por match de tipo de comida y después uso. El encaje de macros
-  // re-acomoda un poco (un alimento que le cae justo a lo que falta salta ~3 puestos), y se
-  // penalizan los "puros" (aceite, azúcar) salvo que lo que falte sea justo ese macro.
-  const foods = ((data ?? []) as FoodItemRow[]).map(mapFood);
-  const ranked = foods
-    .map((food, i) => {
-      const purePenalty = singleMacroShare(food) > 0.85 && macroFitScore(food, remaining) < 0.9 ? 6 : 0;
-      return { food, rank: i - macroFitScore(food, remaining) * 4 + purePenalty };
-    })
-    .sort((a, b) => a.rank - b.rank)
-    .slice(0, 8);
+const EMPTY_FOOD_MACROS: FoodMacros = { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 };
 
-  // Una sugerencia = ~la mitad de lo que falta (una comida real son 2-3 alimentos, no uno solo
-  // gigante). Se acota a una porción sensata: si el alimento trae serving_grams, se redondea a
-  // porciones; si no, tope de 300 g.
-  const targetKcal = Math.min(
-    remaining.kcal > 60 ? remaining.kcal * 0.55 : mealTargetKcal * 0.25,
-    mealTargetKcal * 0.5
+function sumFoodMacros(list: FoodMacros[]): FoodMacros {
+  return list.reduce<FoodMacros>(
+    (a, m) => ({
+      kcal: a.kcal + m.kcal,
+      protein_g: a.protein_g + m.protein_g,
+      carbs_g: a.carbs_g + m.carbs_g,
+      fat_g: a.fat_g + m.fat_g,
+      fiber_g: (a.fiber_g ?? 0) + (m.fiber_g ?? 0),
+    }),
+    { ...EMPTY_FOOD_MACROS }
   );
-  return ranked.map(({ food }) => {
-    const rawGrams = food.kcal100 > 0 ? (targetKcal / food.kcal100) * 100 : 100;
-    let grams: number;
-    if (food.servingGrams && food.servingGrams > 0) {
-      const servings = Math.max(1, Math.min(4, Math.round(rawGrams / food.servingGrams)));
-      grams = servings * food.servingGrams;
-    } else {
-      grams = Math.round(Math.min(300, Math.max(15, rawGrams)) / 5) * 5;
-    }
-    return { food, grams, macros: foodMacrosForGrams(food, grams) };
-  });
+}
+
+/** Reparte `kcal` con las proporciones de macro de `ref` (kcal de P·4 / C·4 / G·9). */
+function macrosAtKcal(ref: MacroSet, kcal: number): MacroSet {
+  const pk = ref.protein_g * 4;
+  const ck = ref.carbs_g * 4;
+  const fk = ref.fat_g * 9;
+  const tot = pk + ck + fk || 1;
+  return {
+    kcal,
+    protein_g: (kcal * (pk / tot)) / 4,
+    carbs_g: (kcal * (ck / tot)) / 4,
+    fat_g: (kcal * (fk / tot)) / 9,
+  };
+}
+
+/**
+ * Sugerencias de COMIDAS COMPLETAS para una comida: cada una es un combo de 2-6 alimentos del
+ * catálogo (plantillas en `mealTemplates.ts`) escalado como bloque para acercarse a las kcal y
+ * al reparto de macros que le faltan a la comida (o, si ya está cubierta, a ~una versión chica
+ * con el reparto seteado). Ordenadas por encaje de macros + cercanía de kcal. Devuelve hasta 5,
+ * con como mucho 2 que arranquen con el mismo alimento principal.
+ */
+export async function getMealSuggestions(
+  mealName: string,
+  remaining: MacroSet,
+  mealTarget: MacroSet
+): Promise<MealCombo[]> {
+  const tags = mealTagsForName(mealName) as string[];
+  const foods = await listBuiltinFoods();
+  const byName = new Map(foods.map((f) => [f.name, f]));
+
+  const goalKcal = Math.min(mealTarget.kcal * 1.15, Math.max(mealTarget.kcal * 0.35, remaining.kcal));
+  const goal: MacroSet =
+    remaining.kcal < mealTarget.kcal * 0.35
+      ? macrosAtKcal(mealTarget, goalKcal)
+      : {
+          kcal: goalKcal,
+          protein_g: Math.max(0, remaining.protein_g),
+          carbs_g: Math.max(0, remaining.carbs_g),
+          fat_g: Math.max(0, remaining.fat_g),
+        };
+
+  const scored: Array<{ combo: MealCombo; score: number; primary: string }> = [];
+
+  for (const tpl of MEAL_TEMPLATES) {
+    if (!tpl.tags.some((t) => tags.includes(t))) continue;
+    const parts = tpl.items.map((it) => ({ food: byName.get(it.food), base: it.grams }));
+    if (parts.some((p) => !p.food)) continue; // falta un alimento del catálogo -> descartar
+
+    const baseKcal = parts.reduce((s, p) => s + foodMacrosForGrams(p.food!, p.base).kcal, 0);
+    if (baseKcal <= 0) continue;
+    const f = Math.min(2, Math.max(0.5, goalKcal / baseKcal));
+
+    const items: MealComboItem[] = parts.map((p) => {
+      // Los ítems "de relleno" (café con leche, mate, ensalada, agua...) no se escalan tanto
+      // como el resto -- si no, un combo grande te deja tomando 400 ml de café.
+      const itemF = p.food!.kcal100 < 45 ? Math.min(f, 1.3) : f;
+      const grams = Math.max(5, Math.round((p.base * itemF) / 5) * 5);
+      return { food: p.food!, grams, displayQty: grams, displayUnit: "g", macros: foodMacrosForGrams(p.food!, grams) };
+    });
+    const totals = sumFoodMacros(items.map((i) => i.macros));
+
+    const fit = macroFitScore({ protein100: totals.protein_g, carbs100: totals.carbs_g, fat100: totals.fat_g }, goal);
+    const kcalScore = 1 - Math.min(1, Math.abs(totals.kcal - goalKcal) / goalKcal);
+    scored.push({ combo: { title: tpl.title, items, totals }, score: fit * 0.62 + kcalScore * 0.38, primary: tpl.items[0].food });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  const out: MealCombo[] = [];
+  const primaryCount = new Map<string, number>();
+  for (const s of scored) {
+    if ((primaryCount.get(s.primary) ?? 0) >= 2) continue;
+    primaryCount.set(s.primary, (primaryCount.get(s.primary) ?? 0) + 1);
+    out.push(s.combo);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
