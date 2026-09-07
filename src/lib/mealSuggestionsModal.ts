@@ -79,7 +79,7 @@ export function openMealSuggestions(
           <span class="ms-row-name">${escapeHtml(s.food.name)}${s.food.brand ? ` <span class="ms-row-brand">${escapeHtml(s.food.brand)}</span>` : ""}</span>
           <span class="ms-row-sub">${Math.round(s.grams)} g · ${s.macros.kcal} kcal · ${s.macros.protein_g}P ${s.macros.carbs_g}C ${s.macros.fat_g}G</span>
         </div>
-        <button type="button" class="btn btn-primary btn-sm ms-add" data-i="${i}">Agregar</button>
+        <button type="button" class="btn btn-outline btn-sm ms-add" data-i="${i}">Agregar</button>
       </div>`
       )
       .join("");

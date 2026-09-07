@@ -3330,7 +3330,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .dp-actions { margin-top: 14px; justify-content: flex-end; }
 
 /* Lista de comidas (resumen del objetivo y vista del día). */
-.nutri-meal-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.nutri-meal-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 .nutri-meal-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -3567,13 +3567,19 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
    "Sugerencias" y "Repetir" quedan como acciones secundarias chicas, alineadas a la izquierda. */
 .nutri-meal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .nutri-add-food { width: 100%; }
-.nutri-meal-actions-sub { display: flex; gap: 16px; }
+.nutri-meal-actions-sub { display: flex; align-items: center; gap: 16px; }
+/* inline-flex + align-items:center + line-height:1: el emoji 💡 y el símbolo ⟳ tienen alturas
+   de glifo distintas -> sin esto "⟳ Repetir" quedaba más arriba que "💡 Sugerencias". */
 .nutri-meal-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: none;
   border: none;
   padding: 2px 0;
   color: var(--text-muted);
   font-size: 12.5px;
+  line-height: 1;
   font-weight: 600;
   cursor: pointer;
 }
