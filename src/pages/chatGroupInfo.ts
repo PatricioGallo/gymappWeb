@@ -352,7 +352,7 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
           <div class="alert_message" id="chatGroupAddAlert"></div>
           <div class="modal-actions">
             <button class="btn btn-outline" id="chatGroupAddBack" type="button">Atrás</button>
-            <button class="btn btn-primary" id="chatGroupAddConfirm" type="button" disabled>Agregar (<span id="chatGroupAddCount">0</span>)</button>
+            <button class="btn btn-primary" id="chatGroupAddConfirm" type="button" disabled>Agregar (0)</button>
           </div>
         </div>
       </div>
@@ -366,11 +366,10 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
     const listEl = document.getElementById("chatGroupAddList")!;
     const searchInput = document.getElementById("chatGroupAddSearch") as HTMLInputElement;
     const confirmBtn = document.getElementById("chatGroupAddConfirm") as HTMLButtonElement;
-    const countEl = document.getElementById("chatGroupAddCount")!;
     const alertBox = document.getElementById("chatGroupAddAlert")!;
 
     function updateCount(): void {
-      countEl.textContent = String(selected.size);
+      confirmBtn.innerHTML = `Agregar (${selected.size})`;
       confirmBtn.disabled = selected.size === 0;
     }
 
@@ -429,18 +428,33 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
     });
 
     confirmBtn.addEventListener("click", async () => {
+      const count = selected.size;
       confirmBtn.disabled = true;
+      confirmBtn.innerHTML = `<span class="btn-spinner"></span> Agregando...`;
       try {
         const { error } = await addGroupParticipants(current.conversation_id, [...selected.keys()]);
         if (error) {
           alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          updateCount();
           return;
         }
-        await refresh();
+        // Mismo check animado que "Saliste del grupo" -- reemplaza todo el overlay, deja ver el
+        // resultado un segundo y recién ahí vuelve al panel de integrantes ya actualizado.
+        loaderBody!.innerHTML = `
+          <div class="success-check-container">
+            <div class="success-icon">
+              <svg viewBox="0 0 52 52" class="success-svg">
+                <circle cx="26" cy="26" r="25" fill="none" class="success-circle" />
+                <path fill="none" d="M14 27l7 7 16-16" class="success-check" />
+              </svg>
+            </div>
+            <p>${count === 1 ? "Agregaste a 1 integrante" : `Agregaste a ${count} integrantes`}</p>
+          </div>
+        `;
+        setTimeout(() => void refresh(), 1400);
       } catch {
         alertBox.innerHTML = `<p>No se pudieron agregar los integrantes. Probá de nuevo.</p>`;
-      } finally {
-        confirmBtn.disabled = false;
+        updateCount();
       }
     });
 

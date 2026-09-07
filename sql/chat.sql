@@ -1279,6 +1279,11 @@ begin
 end;
 $$;
 
+-- Los cambios de integrantes (agregar / eliminar / salir) dejan un aviso de
+-- sistema en el hilo (messages.attachment_type='system'), igual que
+-- rename_group / set_group_avatar -- llega por historial/realtime/push sin
+-- lógica aparte en el cliente (ver bubbleHtml en chatThread.ts). Migración
+-- group_membership_system_messages.
 create or replace function public.add_group_participants(p_conversation_id uuid, p_user_ids uuid[])
 returns void
 language plpgsql
@@ -1288,6 +1293,11 @@ as $$
 declare
   v_me uuid := auth.uid();
   v_kind text;
+  v_already uuid[];
+  v_actor_name text;
+  v_names text[];
+  v_list text;
+  v_msg public.messages;
 begin
   if v_me is null then
     raise exception 'No autenticado';
@@ -1308,11 +1318,50 @@ begin
     raise exception 'Solo un admin puede agregar integrantes';
   end if;
 
+  -- Quiénes de los pedidos YA estaban activos (para no anunciarlos de nuevo).
+  select coalesce(array_agg(user_id), '{}') into v_already
+  from public.conversation_participants
+  where conversation_id = p_conversation_id and left_at is null and user_id = any(p_user_ids);
+
   insert into public.conversation_participants (conversation_id, user_id, role, joined_at, left_at, last_read_at)
   select p_conversation_id, m, 'member', now(), null, now()
   from unnest(p_user_ids) as m
   where m <> v_me and exists (select 1 from public.profiles where id = m)
   on conflict (conversation_id, user_id) do update set left_at = null;
+
+  -- Nombres de los realmente agregados (perfil válido, no yo, no ya activos).
+  select array_agg(nm order by nm) into v_names
+  from (
+    select coalesce(nullif(trim(coalesce(p.nombre, '') || ' ' || coalesce(p.apellido, '')), ''), p.username) as nm
+    from unnest(p_user_ids) as u
+    join public.profiles p on p.id = u
+    where u <> v_me and not (u = any(v_already))
+  ) s;
+
+  if v_names is null or array_length(v_names, 1) = 0 then
+    return;
+  end if;
+
+  select coalesce(nullif(trim(coalesce(nombre, '') || ' ' || coalesce(apellido, '')), ''), username, 'Alguien')
+    into v_actor_name
+  from public.profiles where id = v_me;
+
+  if array_length(v_names, 1) = 1 then
+    v_list := v_names[1];
+  else
+    v_list := array_to_string(v_names[1:array_length(v_names, 1) - 1], ', ') || ' y ' || v_names[array_length(v_names, 1)];
+  end if;
+
+  insert into public.messages (conversation_id, sender_id, content, attachment_type)
+  values (p_conversation_id, v_me, v_actor_name || ' añadió a ' || v_list, 'system')
+  returning * into v_msg;
+
+  update public.conversations
+  set last_message_at = v_msg.created_at,
+      last_message_preview = v_msg.content,
+      last_message_type = 'system',
+      last_message_sender_id = v_me
+  where id = p_conversation_id;
 end;
 $$;
 
@@ -1327,6 +1376,9 @@ as $$
 declare
   v_me uuid := auth.uid();
   v_creator uuid;
+  v_actor_name text;
+  v_target_name text;
+  v_msg public.messages;
 begin
   if v_me is null then
     raise exception 'No autenticado';
@@ -1355,6 +1407,22 @@ begin
   if not found then
     raise exception 'Esa persona no está en el grupo';
   end if;
+
+  select coalesce(nullif(trim(coalesce(nombre, '') || ' ' || coalesce(apellido, '')), ''), username, 'Alguien')
+    into v_actor_name from public.profiles where id = v_me;
+  select coalesce(nullif(trim(coalesce(nombre, '') || ' ' || coalesce(apellido, '')), ''), username, 'Alguien')
+    into v_target_name from public.profiles where id = p_user_id;
+
+  insert into public.messages (conversation_id, sender_id, content, attachment_type)
+  values (p_conversation_id, v_me, v_actor_name || ' eliminó a ' || v_target_name || ' del grupo', 'system')
+  returning * into v_msg;
+
+  update public.conversations
+  set last_message_at = v_msg.created_at,
+      last_message_preview = v_msg.content,
+      last_message_type = 'system',
+      last_message_sender_id = v_me
+  where id = p_conversation_id;
 end;
 $$;
 
@@ -1370,6 +1438,8 @@ declare
   v_me uuid := auth.uid();
   v_was_admin boolean;
   v_next_admin uuid;
+  v_actor_name text;
+  v_msg public.messages;
 begin
   if v_me is null then
     raise exception 'No autenticado';
@@ -1406,6 +1476,20 @@ begin
       where conversation_id = p_conversation_id and user_id = v_next_admin;
     end if;
   end if;
+
+  select coalesce(nullif(trim(coalesce(nombre, '') || ' ' || coalesce(apellido, '')), ''), username, 'Alguien')
+    into v_actor_name from public.profiles where id = v_me;
+
+  insert into public.messages (conversation_id, sender_id, content, attachment_type)
+  values (p_conversation_id, v_me, v_actor_name || ' salió del grupo', 'system')
+  returning * into v_msg;
+
+  update public.conversations
+  set last_message_at = v_msg.created_at,
+      last_message_preview = v_msg.content,
+      last_message_type = 'system',
+      last_message_sender_id = v_me
+  where id = p_conversation_id;
 end;
 $$;
 
