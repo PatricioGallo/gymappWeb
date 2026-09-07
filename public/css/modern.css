@@ -3521,11 +3521,17 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 /* Buscador de alimentos ------------------------------------------------------- */
-.nutri-fp-barcode-row { display: flex; gap: 8px; margin-bottom: 10px; }
-.nutri-fp-barcode-row[hidden] { display: none; }
-.nutri-fp-barcode-row input { flex: 1; min-width: 0; }
-.nutri-fp-barcode-row button { flex-shrink: 0; }
 .nutri-fp-attribution { margin: 8px 0 0; font-size: 11px; color: var(--text-muted); text-align: right; }
+
+/* En celular el modal va a pantalla completa (.exc-pick-modal-card, ver mas abajo), pero
+   .exc-pick-results se cortaba a 48vh y dejaba un hueco muerto entre la lista y los botones
+   del fondo. Con el modal como columna flex la lista se estira a todo el alto disponible y
+   "+ Crear alimento" / "Cerrar" quedan fijos abajo. */
+@media (max-width: 639px) {
+  .nutri-fp-modal-card { display: flex; flex-direction: column; }
+  .nutri-fp-modal-card .exc-pick-results { flex: 1; min-height: 0; max-height: none; }
+  .nutri-fp-modal-card .modal-actions { margin-top: auto; padding-top: 14px; }
+}
 .nutri-food-grid { grid-template-columns: 1fr; gap: 6px; }
 .nutri-food-card {
   display: flex;

@@ -253,6 +253,16 @@ export async function searchFoods(term: string, limit = 30): Promise<FoodItem[]>
   return (data ?? []).map(mapFood);
 }
 
+/** Alimento ya cacheado (de OFF) por código de barras exacto -- evita pegarle a Open Food
+ * Facts si alguien ya lo escaneó antes. Devuelve null si no está o el código es muy corto. */
+export async function findFoodByBarcode(barcode: string): Promise<FoodItem | null> {
+  const code = barcode.replace(/\D/g, "");
+  if (code.length < 6) return null;
+  const { data, error } = await supabase.from("food_items").select("*").eq("off_barcode", code).limit(1).maybeSingle();
+  if (error || !data) return null;
+  return mapFood(data);
+}
+
 export interface NewUserFood {
   name: string;
   brand?: string | null;

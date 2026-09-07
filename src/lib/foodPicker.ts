@@ -3,6 +3,7 @@ import {
   listBuiltinFoods,
   listMyFoods,
   searchFoods,
+  findFoodByBarcode,
   cacheOffFood,
   foodMacrosForGrams,
   suggestedGrams,
@@ -81,18 +82,14 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     const overlay = document.getElementById("fpOverlay");
     if (!overlay) return;
     overlay.innerHTML = `
-        <div class="modal-card modal-card-lg exc-pick-modal-card">
+        <div class="modal-card modal-card-lg exc-pick-modal-card nutri-fp-modal-card">
           <h2>Agregar a ${escapeHtml(opts.mealName)}</h2>
           <p class="subtitle">Buscá un alimento del catálogo, de los tuyos, o en Open Food Facts.</p>
           <div class="exc-pick-tabs" id="fpTabs">
             ${TAB_ORDER.map((t) => `<button type="button" class="exc-pick-tab${t === activeTab ? " active" : ""}" data-tab="${t}">${escapeHtml(TAB_LABELS[t])}</button>`).join("")}
           </div>
           <div class="exc-pick-search-row">
-            <input type="search" id="fpSearch" class="exc-picker-search" placeholder="Buscar alimento..." value="${escapeHtml(search)}">
-          </div>
-          <div id="fpBarcodeRow" class="nutri-fp-barcode-row" ${activeTab === "buscar" ? "" : "hidden"}>
-            <input type="text" id="fpBarcode" inputmode="numeric" pattern="[0-9]*" placeholder="… o pegá un código de barras">
-            <button type="button" class="btn btn-outline btn-sm" id="fpBarcodeBtn">Buscar</button>
+            <input type="search" id="fpSearch" class="exc-picker-search" placeholder="${activeTab === "buscar" ? "Buscar por nombre o código de barras" : "Buscar alimento..."}" value="${escapeHtml(search)}">
           </div>
           <div class="exc-pick-results" id="fpResults"></div>
           <p class="nutri-fp-attribution" id="fpAttribution" ${activeTab === "buscar" ? "" : "hidden"}>Datos de Open Food Facts · ODbL</p>
@@ -140,11 +137,6 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
         }
       }
       renderResults();
-    });
-
-    document.getElementById("fpBarcodeBtn")?.addEventListener("click", () => void runBarcode());
-    document.getElementById("fpBarcode")?.addEventListener("keydown", (e) => {
-      if ((e as KeyboardEvent).key === "Enter") void runBarcode();
     });
 
     document.getElementById("fpResults")?.addEventListener("click", (e) => {
@@ -202,16 +194,49 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     });
   }
 
+  // El mismo campo acepta nombre o código de barras: si son sólo dígitos (8-14, con o sin
+  // espacios/guiones) lo tratamos como barcode y vamos directo al producto en Open Food Facts.
+  function barcodeDigits(term: string): string | null {
+    const digits = term.replace(/[\s-]/g, "");
+    return /^\d{8,14}$/.test(digits) ? digits : null;
+  }
+
   async function runSearch(): Promise<void> {
     const term = search.trim();
-    if (term.length < 2) {
+    offAbort?.abort();
+    offAbort = new AbortController();
+
+    const code = barcodeDigits(term);
+    if (code) {
+      offLoading = true;
       cachedHits = [];
       offHits = [];
       renderResults();
+      // Primero la caché local (ya lo escaneó alguien antes), después Open Food Facts.
+      const local = await findFoodByBarcode(code).catch(() => null);
+      if (search.trim() !== term) return;
+      if (local) {
+        cachedHits = [local];
+        offHits = [];
+        offLoading = false;
+        renderResults();
+        return;
+      }
+      const off = await getOpenFoodFactsByBarcode(code);
+      if (search.trim() !== term) return;
+      offHits = off ? [off] : [];
+      offLoading = false;
+      renderResults();
       return;
     }
-    offAbort?.abort();
-    offAbort = new AbortController();
+
+    if (term.length < 2) {
+      cachedHits = [];
+      offHits = [];
+      offLoading = false;
+      renderResults();
+      return;
+    }
     offLoading = true;
     const localHits = await searchFoods(term).catch(() => []);
     if (search.trim() !== term) return; // se tipeó otra cosa mientras tanto
@@ -224,20 +249,6 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     offHits = results.filter((o) => !cachedBarcodes.has(o.barcode));
     offLoading = false;
     renderResults();
-  }
-
-  async function runBarcode(): Promise<void> {
-    const input = document.getElementById("fpBarcode") as HTMLInputElement | null;
-    const code = input?.value.replace(/\D/g, "") ?? "";
-    if (code.length < 6) return;
-    const results = document.getElementById("fpResults");
-    if (results) results.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Buscando el código...</p></div>`;
-    const off = await getOpenFoodFactsByBarcode(code);
-    if (!off) {
-      if (results) results.innerHTML = `<p class="exc-pick-empty">No encontramos ese código en Open Food Facts. Podés crear el alimento a mano.</p>`;
-      return;
-    }
-    void selectOff(off);
   }
 
   function foodCardMarkup(f: FoodItem, recommended = false): string {
@@ -285,15 +296,19 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
       return;
     }
 
+    const isBarcode = barcodeDigits(search.trim()) != null;
     if (term.length < 2) {
-      results.innerHTML = `<p class="exc-pick-empty">Escribí al menos 2 letras para buscar.</p>`;
+      results.innerHTML = `<p class="exc-pick-empty">Escribí al menos 2 letras, o pegá un código de barras.</p>`;
       return;
     }
     const parts: string[] = [];
     if (cachedHits.length) parts.push(`<div class="exc-pick-grid nutri-food-grid">${cachedHits.map((f) => foodCardMarkup(f, isRecommended(f))).join("")}</div>`);
     if (offHits.length) parts.push(`<div class="exc-pick-grid nutri-food-grid">${offHits.map(offCardMarkup).join("")}</div>`);
     if (offLoading) parts.push(`<div class="inline-loader"><div class="modern-spinner"></div><p>Buscando en Open Food Facts...</p></div>`);
-    if (!parts.length) parts.push(`<p class="exc-pick-empty">Sin resultados${offLoading ? "" : " -- probá otro nombre o creá el alimento"}.</p>`);
+    if (!parts.length) {
+      const hint = isBarcode ? "No encontramos ese código de barras -- creá el alimento a mano" : "probá otro nombre o creá el alimento";
+      parts.push(`<p class="exc-pick-empty">Sin resultados${offLoading ? "" : ` -- ${hint}`}.</p>`);
+    }
     results.innerHTML = parts.join("");
   }
 
