@@ -42,6 +42,7 @@ import {
   type MeasurementGroup,
   type MeasurementKey,
 } from "../services/bodyMeasurements.service";
+import { parseNutritionPrefs } from "../services/nutrition.service";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
 import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
 import { ALL_PLATFORMS, getPlatform, type SocialPlatform } from "../lib/socialLinks";
@@ -924,6 +925,8 @@ export const settingsView: ViewModule = {
       // Medidas corporales: a diferencia de los widgets de arriba, cada toggle persiste al
       // toque (mismo criterio que zoomToggle/notif-toggle) -- no hay "Guardar cambios" para esto.
       let measurementPrefs = parseBodyMeasurementPrefs(profile!.body_measurement_prefs);
+      // Alimentación / Macros: igual que el toggle de medidas, persiste al toque.
+      let nutritionPrefs = parseNutritionPrefs(profile!.nutrition_prefs);
       // Altura: NO es un toggle (ver nota en MEASUREMENT_FIELDS) -- profiles.altura_cm, se pide
       // una sola vez acá mismo (campo de texto, no chip) porque prácticamente no cambia.
       let alturaCm = profile!.altura_cm != null ? Number(profile!.altura_cm) : null;
@@ -1105,6 +1108,21 @@ export const settingsView: ViewModule = {
           <div class="alert_message" id="measurementPrefsAlert"></div>
         </div>
 
+        <div class="chart-card reveal" id="nutritionPrefsCard">
+          <h3>Alimentación / Macros</h3>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="switch-label">Registrar alimentación y macros</span>
+              <p class="chart-sub" style="margin:4px 0 0;">Por defecto está desactivado. Activalo para fijar un objetivo de calorías y macros, repartirlo en comidas y cargar lo que comés desde tu perfil.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="nutritionEnabledToggle" ${nutritionPrefs.enabled ? "checked" : ""}>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div class="alert_message" id="nutritionPrefsAlert"></div>
+        </div>
+
         <div class="chart-card reveal">
           <h3>Personalización del perfil</h3>
           <div class="settings-toggle-row">
@@ -1264,6 +1282,24 @@ export const settingsView: ViewModule = {
           return;
         }
         fieldsSection.hidden = !enabled;
+      });
+
+      container.querySelector("#nutritionEnabledToggle")?.addEventListener("change", async (e) => {
+        const alertBox = container.querySelector("#nutritionPrefsAlert")!;
+        alertBox.innerHTML = "";
+        const toggle = e.target as HTMLInputElement;
+        const enabled = toggle.checked;
+        toggle.disabled = true;
+        const next = { ...nutritionPrefs, enabled };
+        const { error } = await updateProfileFields(userId, { nutrition_prefs: next as unknown as Profile["nutrition_prefs"] });
+        toggle.disabled = false;
+        if (error) {
+          toggle.checked = !enabled;
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        nutritionPrefs = next;
+        profile!.nutrition_prefs = next as unknown as Profile["nutrition_prefs"];
       });
 
       function syncSaveBar(): void {

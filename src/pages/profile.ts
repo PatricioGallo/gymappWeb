@@ -97,6 +97,7 @@ import {
   type MeasurementFieldDef,
   type ProfileMeasurementPoint,
 } from "../services/bodyMeasurements.service";
+import { getNutritionPrefs } from "../services/nutrition.service";
 import type { WeightUnit } from "../services/weightLog.service";
 
 // Estado que hoy se calculaba una sola vez a nivel de modulo (MPA: cada carga de pagina es un
@@ -1110,9 +1111,10 @@ async function renderQuickActions(userId: string, userType: Profile["user_type"]
     return;
   }
 
-  const [showMyExercises, measurementPrefs] = await Promise.all([
+  const [showMyExercises, measurementPrefs, nutritionPrefs] = await Promise.all([
     hasMyExercises(userId),
     getBodyMeasurementPrefs(userId).catch(() => null),
+    getNutritionPrefs(userId).catch(() => null),
   ]);
 
   quickActions.innerHTML = `
@@ -1129,6 +1131,14 @@ async function renderQuickActions(userId: string, userType: Profile["user_type"]
         ? `<a class="quick-card reveal" href="/pages/medidas.html">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13l3.5-3.5M12 5V3M4.5 6.5l1 1M19.5 6.5l-1 1"/></svg></div>
       <div><h3>Agregar medidas corporales</h3><p>Registrá tu peso y otras medidas, y seguí su evolución</p></div>
+    </a>`
+        : ""
+    }
+    ${
+      nutritionPrefs?.enabled
+        ? `<a class="quick-card reveal" href="/pages/nutricion.html">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3h16M6 3v6a6 6 0 0 0 12 0V3M12 15v6M8 21h8"/></svg></div>
+      <div><h3>Mis macros</h3><p>Tu objetivo de calorías y macros, y lo que comés cada día</p></div>
     </a>`
         : ""
     }

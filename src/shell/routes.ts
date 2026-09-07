@@ -125,6 +125,11 @@ export function registerShellRoutes(): void {
     auth: "required",
   });
   registerRoute({
+    match: (pathname) => (pathname.endsWith("/pages/nutricion.html") ? new URLSearchParams() : null),
+    load: () => import("../pages/nutricion").then((m) => m.nutricionView),
+    auth: "required",
+  });
+  registerRoute({
     match: (pathname) => (pathname.endsWith("/pages/settings.html") ? new URLSearchParams() : null),
     load: () => import("../pages/settings").then((m) => m.settingsView),
     auth: "required",
