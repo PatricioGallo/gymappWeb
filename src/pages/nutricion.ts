@@ -17,7 +17,10 @@ import {
 } from "../services/nutrition.service";
 import { openFoodPicker, type PickedFood } from "../lib/foodPicker";
 import { openMealSuggestions } from "../lib/mealSuggestionsModal";
-import { todayLocalISO, formatFechaCorta } from "../lib/dias";
+import { openNutritionIntroModal } from "../lib/nutritionIntroModal";
+import { openDatePickerModal } from "../lib/datePickerModal";
+import { todayLocalISO, dateToLocalISO } from "../lib/dias";
+import { settleReveal } from "../lib/nav";
 import { loadChart } from "../lib/chartLoader";
 import type { Chart as ChartInstance } from "chart.js";
 import {
@@ -29,6 +32,7 @@ import {
   defaultMeals,
   mealMacros,
   mealsPctTotal,
+  rescaleMealsTo100,
   ACTIVITY_FACTORS,
   ACTIVITY_LABELS,
   GOAL_LABELS,
@@ -46,15 +50,13 @@ const BACK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-
 
 // El shell mantiene la instancia de la vista viva al navegar afuera y llama update() (no
 // mount()) al volver -- este handler, seteado en mount(), reevalúa prefs/objetivo. Ver medidas.ts.
-let updateHandler: (() => void) | null = null;
+let updateHandler: ((params?: URLSearchParams) => void) | null = null;
 
 const VIEW_MARKUP = `
-  <section class="page-hero">
+  <section class="page-hero-slim">
     <div class="container">
       <a href="profile.html" class="back-link" id="backToProfile">${BACK_ICON}Volver al perfil</a>
       <span class="eyebrow">Alimentación</span>
-      <h1>Tus macros del día</h1>
-      <p>Definí un objetivo de calorías y macros, repartilo en comidas y cargá lo que comés.</p>
     </div>
   </section>
 
@@ -71,6 +73,30 @@ const VIEW_MARKUP = `
 
 function fmt(n: number): string {
   return String(Math.round(n));
+}
+
+const WEEKDAY_SHORT = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
+/** Suma (o resta) días a una fecha "YYYY-MM-DD" respetando el calendario local. */
+function shiftISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return dateToLocalISO(dt);
+}
+
+/** "7/9" -- día y mes sin año, para la tira de fechas. */
+function dayMonth(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d}/${m}`;
+}
+
+/** Encabezado del día visto: "Hoy · 7/9" / "Ayer · 6/9" / "sáb 30/8". */
+function dateHeading(viewDate: string, today: string): string {
+  if (viewDate === today) return `Hoy · ${dayMonth(viewDate)}`;
+  if (viewDate === shiftISO(today, -1)) return `Ayer · ${dayMonth(viewDate)}`;
+  const [y, m, d] = viewDate.split("-").map(Number);
+  return `${WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()]} ${d}/${m}`;
 }
 
 const MACRO_META: Array<{ key: keyof MacroSet; label: string; unit: string }> = [
@@ -135,6 +161,17 @@ function sumMacros(logs: NutritionLog[]): FoodMacros {
 
 const UNIT_SHORT: Record<NutritionLog["displayUnit"], string> = { g: "g", lb: "lb", porcion: "porción" };
 
+/** Reescala los macros de un log por un factor (cambio de cantidad, o al repetir una comida). */
+function scaleLogMacros(log: NutritionLog, f: number): FoodMacros {
+  return {
+    kcal: Math.round(log.kcal * f),
+    protein_g: Math.round(log.protein_g * f),
+    carbs_g: Math.round(log.carbs_g * f),
+    fat_g: Math.round(log.fat_g * f),
+    fiber_g: log.fiber_g != null ? Math.round(log.fiber_g * f * 10) / 10 : null,
+  };
+}
+
 function qtyLabel(log: NutritionLog): string {
   const n = Math.round(log.displayQty * 100) / 100;
   const unit = log.displayUnit === "porcion" && n !== 1 ? "porciones" : UNIT_SHORT[log.displayUnit];
@@ -181,13 +218,15 @@ function macroStatusLine(label: string, consumed: number, target: number, unit: 
   return `<li class="nutri-mstat nutri-mstat-${cls}"><span>${label}</span><span>${text}</span></li>`;
 }
 
-function daySummaryMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
+function daySummaryMarkup(target: NutritionTarget, logs: NutritionLog[], isToday: boolean): string {
   const daily = targetMacros(target);
   const consumed = sumMacros(logs);
   const overallDiff = Math.round(consumed.kcal - daily.kcal);
   const headline =
     logs.length === 0
-      ? "Todavía no cargaste nada hoy."
+      ? isToday
+        ? "Todavía no cargaste nada hoy."
+        : "No cargaste nada ese día."
       : overallDiff > 60
         ? `Te pasaste ${overallDiff} kcal. Cuidá las porciones el resto del día.`
         : overallDiff >= -120
@@ -223,10 +262,11 @@ function daySummaryMarkup(target: NutritionTarget, logs: NutritionLog[]): string
   `;
 }
 
-function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
+function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[], viewDate: string, today: string): string {
   const daily = targetMacros(target);
   const consumed = sumMacros(logs);
   const status = dayStatus(consumed, daily);
+  const isToday = viewDate === today;
 
   const meals = target.meals
     .map((meal, i) => {
@@ -255,14 +295,17 @@ function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
         </div>
         <div class="nutri-meal-targets">
           <span>Objetivo</span>
-          <span><strong>${fmt(mealTarget.protein_g)}</strong> P</span>
-          <span><strong>${fmt(mealTarget.carbs_g)}</strong> C</span>
-          <span><strong>${fmt(mealTarget.fat_g)}</strong> G</span>
+          <span class="nutri-mt nutri-mt-p"><strong>${fmt(mealTarget.protein_g)}</strong> P</span>
+          <span class="nutri-mt nutri-mt-c"><strong>${fmt(mealTarget.carbs_g)}</strong> C</span>
+          <span class="nutri-mt nutri-mt-f"><strong>${fmt(mealTarget.fat_g)}</strong> G</span>
         </div>
         ${foodRows ? `<div class="nutri-log-list">${foodRows}</div>` : ""}
         <div class="nutri-meal-actions">
           <button type="button" class="btn btn-outline btn-sm nutri-add-food" data-meal="${i}">+ Agregar alimento</button>
-          <button type="button" class="btn btn-outline btn-sm nutri-meal-suggest" data-meal="${i}">💡 Sugerencias</button>
+          <div class="nutri-meal-actions-sub">
+            <button type="button" class="nutri-meal-mini nutri-meal-suggest" data-meal="${i}">💡 Sugerencias</button>
+            <button type="button" class="nutri-meal-mini nutri-meal-repeat" data-meal="${i}">⟳ Repetir</button>
+          </div>
         </div>
       </div>`;
     })
@@ -271,15 +314,26 @@ function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
   return `
     <div class="chart-card reveal nutri-target-card">
       <div class="nutri-target-head">
-        <div>
-          <h3>Hoy · ${escapeHtml(formatFechaCorta(todayLocalISO()))}</h3>
+        <div class="nutri-target-head-main">
+          <div class="nutri-date-nav">
+            <button type="button" class="nutri-date-arrow" id="nutriPrevDay" aria-label="Día anterior">‹</button>
+            <button type="button" class="nutri-date-current" id="nutriDateBtn" aria-label="Elegir fecha">
+              <strong>${escapeHtml(dateHeading(viewDate, today))}</strong>
+              <svg class="nutri-date-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <button type="button" class="nutri-date-arrow" id="nutriNextDay" aria-label="Día siguiente"${isToday ? " disabled" : ""}>›</button>
+            ${isToday ? "" : `<button type="button" class="btn btn-outline btn-sm" id="nutriToday">Hoy</button>`}
+          </div>
           <p class="chart-sub nutri-status nutri-status-${status.tone}">${escapeHtml(status.text)}</p>
         </div>
-        <button class="btn btn-outline btn-sm" id="editTargetBtn" type="button">Editar objetivo</button>
+        <div class="nutri-target-head-actions">
+          <button class="btn btn-outline btn-sm" id="repeatDayBtn" type="button">⟳ Repetir día</button>
+          <button class="btn btn-outline btn-sm" id="editTargetBtn" type="button">Editar objetivo</button>
+        </div>
       </div>
     </div>
     <div class="nutri-meal-list">${meals}</div>
-    ${daySummaryMarkup(target, logs)}
+    ${daySummaryMarkup(target, logs, isToday)}
   `;
 }
 
@@ -296,7 +350,6 @@ interface WizardState {
   activity: ActivityLevel;
   goal: Goal;
   sexOverride: Sex | "";
-  mealCount: number;
   meals: Meal[];
 }
 
@@ -325,7 +378,6 @@ function initialWizardState(existing: NutritionTarget | null): WizardState {
       activity: activityFromFactor(existing.activityFactor),
       goal: existing.goal ?? "mantenimiento",
       sexOverride: "",
-      mealCount: existing.meals.length,
       meals: existing.meals.map((m) => ({ ...m })),
     };
   }
@@ -336,34 +388,43 @@ function initialWizardState(existing: NutritionTarget | null): WizardState {
     activity: "moderado",
     goal: "mantenimiento",
     sexOverride: "",
-    mealCount: 4,
     meals: defaultMeals(4),
   };
 }
 
 export const nutricionView: ViewModule = {
-  async mount(container, _params, ctx, authUserId) {
+  async mount(container, params, ctx, authUserId) {
     const myId = authUserId!; // ruta registrada con auth "required"
+
+    // ?intro=1 = llegó tocando la notificación mensual "Seguí tu alimentación"
+    // (ver notify_nutrition_reminder). Si todavía no activó la feature, en vez de rebotar seco
+    // le abrimos el mini tutorial arriba de su propio perfil (mismo patrón que medidas.ts).
+    const bounce = (p?: URLSearchParams) => {
+      if (p?.get("intro") === "1") {
+        openNutritionIntroModal();
+        navigate("profile.html", { replace: true });
+      } else {
+        navigate("profile.html");
+      }
+    };
 
     let prefs = await getNutritionPrefs(myId);
     if (!prefs.enabled) {
-      // Fase 7 sumará el mini tutorial de descubrimiento para ?intro=1. Por ahora,
-      // si no está activada, se vuelve al perfil.
-      const bounce = () => navigate("profile.html");
-      updateHandler = () => {
+      updateHandler = (p?: URLSearchParams) => {
         void (async () => {
           if ((await getNutritionPrefs(myId)).enabled) void reloadActiveView();
-          else bounce();
+          else bounce(p);
         })();
       };
       ctx.addCleanup(() => {
         updateHandler = null;
       });
-      bounce();
+      bounce(params);
       return;
     }
 
     const today = todayLocalISO();
+    let viewDate = today;
     let target = await getActiveNutritionTarget(myId);
     let logs: NutritionLog[] = [];
     let dayChart: ChartInstance | null = null;
@@ -380,12 +441,16 @@ export const nutricionView: ViewModule = {
         return;
       }
       try {
-        logs = await listNutritionLogs(myId, today);
+        logs = await listNutritionLogs(myId, viewDate);
       } catch {
-        content.innerHTML = `<p class="chart-sub">No se pudo cargar lo que registraste hoy. Probá recargar la página.</p>`;
+        content.innerHTML = `<p class="chart-sub">No se pudo cargar lo que registraste ese día. Probá recargar la página.</p>`;
         return;
       }
-      content.innerHTML = dayViewMarkup(target, logs);
+      content.innerHTML = dayViewMarkup(target, logs, viewDate, today);
+      // La vista se re-renderiza entera en cada mutación / cambio de día -- sin esto la
+      // "Resumen del día" (.chart-card.reveal) queda en opacity:0 si está bajo el fold, y
+      // navegar días replica el fade-in cada vez. Ver settleReveal / gotcha en la memoria.
+      settleReveal(content);
       wireDayView(content);
       void drawDayChart();
     }
@@ -430,6 +495,32 @@ export const nutricionView: ViewModule = {
 
     function wireDayView(content: Element): void {
       content.querySelector("#editTargetBtn")?.addEventListener("click", () => void openTargetWizard(target));
+      content.querySelector("#repeatDayBtn")?.addEventListener("click", () => openRepeatModal({ kind: "day" }));
+
+      // Navegación de días (cualquier día es editable; no se puede ir al futuro).
+      content.querySelector("#nutriPrevDay")?.addEventListener("click", () => {
+        viewDate = shiftISO(viewDate, -1);
+        void render();
+      });
+      content.querySelector("#nutriNextDay")?.addEventListener("click", () => {
+        if (viewDate >= today) return;
+        viewDate = shiftISO(viewDate, 1);
+        void render();
+      });
+      content.querySelector("#nutriToday")?.addEventListener("click", () => {
+        viewDate = today;
+        void render();
+      });
+      content.querySelector("#nutriDateBtn")?.addEventListener("click", () => {
+        openDatePickerModal({
+          value: viewDate,
+          max: today,
+          onPick: (v) => {
+            viewDate = v > today ? today : v;
+            void render();
+          },
+        });
+      });
 
       function mealCtx(mealIndex: number): { meal: Meal; mealTarget: MacroSet; remaining: FoodMacros } | null {
         const meal = target?.meals[mealIndex];
@@ -471,7 +562,7 @@ export const nutricionView: ViewModule = {
           openMealSuggestions(
             async (s) => {
               await addNutritionLog(myId, {
-                logDate: today,
+                logDate: viewDate,
                 mealIndex: mi,
                 mealName: mc.meal.name,
                 foodId: s.food.id,
@@ -487,6 +578,15 @@ export const nutricionView: ViewModule = {
             ctx,
             () => void render()
           );
+        });
+      });
+
+      content.querySelectorAll<HTMLButtonElement>(".nutri-meal-repeat").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const mi = Number(btn.dataset.meal);
+          const meal = target?.meals[mi];
+          if (!meal) return;
+          openRepeatModal({ kind: "meal", mealIndex: mi, mealName: meal.name });
         });
       });
 
@@ -506,7 +606,7 @@ export const nutricionView: ViewModule = {
 
     async function addPicked(mealIndex: number, mealName: string, picked: PickedFood): Promise<void> {
       const { error } = await addNutritionLog(myId, {
-        logDate: today,
+        logDate: viewDate,
         mealIndex,
         mealName,
         foodId: picked.foodId,
@@ -522,6 +622,174 @@ export const nutricionView: ViewModule = {
         return;
       }
       await render();
+    }
+
+    // -------------------------------------------------------------------------
+    // Repetir una comida (o un día entero): se copian filas de un día origen a un
+    // día destino (el que estás viendo, o -- si estás parado en un día pasado --
+    // también podés mandarlas a hoy). Cantidades precargadas y editables. Ver Fase 6.
+    // -------------------------------------------------------------------------
+
+    type RepeatScope = { kind: "meal"; mealIndex: number; mealName: string } | { kind: "day" };
+
+    function openRepeatModal(scope: RepeatScope): void {
+      const host = document.getElementById("loaderBody");
+      if (!host || !target) return;
+      const loaderBody: HTMLElement = host;
+      const activeTarget = target;
+
+      let sourceDate = shiftISO(viewDate, -1);
+      let destDate = viewDate;
+      let sourceLogs: NutritionLog[] = [];
+
+      const canPickDest = viewDate !== today; // en un día pasado se puede mandar a hoy
+      const titleWord = scope.kind === "meal" ? scope.mealName : "el día";
+
+      function repeatRow(l: NutritionLog): string {
+        const n = Math.round(l.displayQty * 100) / 100;
+        return `
+          <div class="nutri-repeat-row" data-log="${l.id}">
+            <input type="checkbox" class="nutri-repeat-check" checked aria-label="Incluir ${escapeHtml(l.foodName)}">
+            <span class="nutri-repeat-name">${escapeHtml(l.foodName)}${l.brand ? ` <span class="nutri-log-brand">${escapeHtml(l.brand)}</span>` : ""}</span>
+            <span class="nutri-repeat-qty">
+              <input type="text" class="nutri-repeat-input" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" value="${n}">
+              <small>${escapeHtml(UNIT_SHORT[l.displayUnit])}</small>
+            </span>
+          </div>`;
+      }
+
+      async function loadPreview(): Promise<void> {
+        const box = loaderBody.querySelector("#repeatPreview");
+        if (!box) return;
+        box.innerHTML = `<p class="chart-sub">Cargando…</p>`;
+        let all: NutritionLog[];
+        try {
+          all = await listNutritionLogs(myId, sourceDate);
+        } catch {
+          box.innerHTML = `<p class="chart-sub">No se pudo cargar ese día.</p>`;
+          return;
+        }
+        sourceLogs = scope.kind === "meal" ? all.filter((l) => l.mealIndex === scope.mealIndex) : all;
+        if (sourceDate === destDate) {
+          box.innerHTML = `<p class="chart-sub">Elegí un día de origen distinto al de destino.</p>`;
+          return;
+        }
+        if (sourceLogs.length === 0) {
+          box.innerHTML = `<p class="chart-sub">No registraste ${scope.kind === "meal" ? "esa comida" : "nada"} ese día.</p>`;
+          return;
+        }
+        if (scope.kind === "meal") {
+          box.innerHTML = sourceLogs.map(repeatRow).join("");
+          return;
+        }
+        const groups = new Map<number, NutritionLog[]>();
+        for (const l of sourceLogs) {
+          const arr = groups.get(l.mealIndex);
+          if (arr) arr.push(l);
+          else groups.set(l.mealIndex, [l]);
+        }
+        box.innerHTML = [...groups.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([mi, ls]) => {
+            const name = activeTarget.meals[mi]?.name ?? ls[0].mealName;
+            return `<div class="nutri-repeat-group"><h4>${escapeHtml(name)}</h4>${ls.map(repeatRow).join("")}</div>`;
+          })
+          .join("");
+      }
+
+      async function doCopy(): Promise<void> {
+        const alertEl = loaderBody.querySelector("#repeatAlert")!;
+        alertEl.innerHTML = "";
+        const picked = [...loaderBody.querySelectorAll<HTMLElement>(".nutri-repeat-row")]
+          .map((row) => {
+            const log = sourceLogs.find((l) => l.id === row.dataset.log);
+            const checked = (row.querySelector(".nutri-repeat-check") as HTMLInputElement).checked;
+            const qty = Number((row.querySelector(".nutri-repeat-input") as HTMLInputElement).value.replace(",", "."));
+            return { log, checked, qty };
+          })
+          .filter((r): r is { log: NutritionLog; checked: boolean; qty: number } => !!r.log && r.checked && Number.isFinite(r.qty) && r.qty > 0);
+        if (picked.length === 0) {
+          alertEl.innerHTML = "<p>Elegí al menos un alimento con una cantidad válida.</p>";
+          return;
+        }
+        const btn = loaderBody.querySelector("#repeatConfirm") as HTMLButtonElement;
+        btn.disabled = true;
+        for (const { log, qty } of picked) {
+          const f = log.displayQty > 0 ? qty / log.displayQty : 1;
+          const gramsPerUnit = log.displayQty > 0 ? log.grams / log.displayQty : log.grams;
+          const destMeal = scope.kind === "meal" ? scope.mealIndex : Math.min(log.mealIndex, activeTarget.meals.length - 1);
+          const { error } = await addNutritionLog(myId, {
+            logDate: destDate,
+            mealIndex: destMeal,
+            mealName: activeTarget.meals[destMeal]?.name ?? log.mealName,
+            foodId: log.foodId,
+            foodName: log.foodName,
+            brand: log.brand,
+            grams: Math.round(qty * gramsPerUnit * 10) / 10,
+            displayQty: Math.round(qty * 100) / 100,
+            displayUnit: log.displayUnit,
+            macros: scaleLogMacros(log, f),
+          });
+          if (error) {
+            btn.disabled = false;
+            alertEl.innerHTML = `<p>${escapeHtml(error)}</p>`;
+            return;
+          }
+        }
+        const whereLabel = destDate === viewDate ? "" : destDate === today ? " a hoy" : ` al ${dayMonth(destDate)}`;
+        loaderBody.innerHTML = `
+          <div class="success-check-container">
+            <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+            <p>Copiamos ${picked.length} ${picked.length === 1 ? "alimento" : "alimentos"}${whereLabel}.</p>
+          </div>`;
+        await render();
+        const t = setTimeout(() => {
+          loaderBody.innerHTML = "";
+        }, 1300);
+        ctx.addCleanup(() => clearTimeout(t));
+      }
+
+      const destFieldMarkup = canPickDest
+        ? `<div class="field">
+              <label for="repeatDestDate">Copiar a</label>
+              <select id="repeatDestDate">
+                <option value="${viewDate}">Este día (${dayMonth(viewDate)})</option>
+                <option value="${today}">Hoy (${dayMonth(today)})</option>
+              </select>
+            </div>`
+        : "";
+
+      loaderBody.innerHTML = `
+        <div class="success-check-container">
+          <div class="modal-card modal-card-lg">
+            <h2>Repetir ${escapeHtml(titleWord)}</h2>
+            <p class="subtitle">Copiá lo que comiste otro día. Ajustá las cantidades y confirmá.</p>
+            <div class="field">
+              <label for="repeatSourceDate">Copiar del día</label>
+              <input type="date" id="repeatSourceDate" value="${sourceDate}" max="${today}">
+            </div>
+            ${destFieldMarkup}
+            <div id="repeatPreview" class="nutri-repeat-preview"></div>
+            <div class="alert_message" id="repeatAlert"></div>
+            <div class="modal-actions">
+              <button class="btn btn-primary" id="repeatConfirm" type="button">Confirmar</button>
+              <button class="btn btn-outline" id="repeatCancel" type="button">Cancelar</button>
+            </div>
+          </div>
+        </div>`;
+      loaderBody.querySelector("#repeatCancel")?.addEventListener("click", () => {
+        loaderBody.innerHTML = "";
+      });
+      loaderBody.querySelector("#repeatSourceDate")?.addEventListener("change", (e) => {
+        sourceDate = (e.target as HTMLInputElement).value || sourceDate;
+        void loadPreview();
+      });
+      loaderBody.querySelector("#repeatDestDate")?.addEventListener("change", (e) => {
+        destDate = (e.target as HTMLSelectElement).value;
+        void loadPreview();
+      });
+      loaderBody.querySelector("#repeatConfirm")?.addEventListener("click", () => void doCopy());
+      void loadPreview();
     }
 
     function confirmDeleteLog(log: NutritionLog): void {
@@ -599,18 +867,11 @@ export const nutricionView: ViewModule = {
           return;
         }
         const f = qty / log.displayQty;
-        const macros: FoodMacros = {
-          kcal: Math.round(log.kcal * f),
-          protein_g: Math.round(log.protein_g * f),
-          carbs_g: Math.round(log.carbs_g * f),
-          fat_g: Math.round(log.fat_g * f),
-          fiber_g: log.fiber_g != null ? Math.round(log.fiber_g * f * 10) / 10 : null,
-        };
         const { error } = await updateNutritionLogQuantity(log.id, {
           grams: Math.round(qty * gramsPerUnit * 10) / 10,
           displayQty: Math.round(qty * 100) / 100,
           displayUnit: log.displayUnit,
-          macros,
+          macros: scaleLogMacros(log, f),
         });
         host.innerHTML = "";
         if (error) {
@@ -638,8 +899,15 @@ export const nutricionView: ViewModule = {
         calcInputs = null;
       }
 
-      // Sexo efectivo para el cálculo: el del perfil, o el elegido a mano en el asistente.
-      const effectiveSex = (): Sex | null => (calcInputs?.sex ?? (state.sexOverride || null)) as Sex | null;
+      // El selector de sexo arranca en el género del perfil (hombre/mujer). Si es "otro" o no
+      // está cargado, queda en "Elegí una opción" y el usuario lo elige a mano.
+      const profileSex = calcInputs?.sex;
+      if (!state.sexOverride && (profileSex === "hombre" || profileSex === "mujer")) {
+        state.sexOverride = profileSex;
+      }
+
+      // Sexo efectivo para el cálculo: lo que muestra el selector del asistente.
+      const effectiveSex = (): Sex | null => (state.sexOverride || null) as Sex | null;
 
       // Qué falta para poder calcular (peso, altura, edad). El sexo se resuelve con
       // el selector del asistente, así que no cuenta como "faltante" acá.
@@ -710,20 +978,15 @@ export const nutricionView: ViewModule = {
             </div>
           `;
         }
-        const sexKnown = calcInputs?.sex != null;
         return `
-          ${
-            sexKnown
-              ? ""
-              : `<div class="field">
-                  <label for="wizSex">Sexo (para el cálculo)</label>
-                  <select id="wizSex">
-                    <option value="" ${state.sexOverride === "" ? "selected" : ""}>Elegí una opción</option>
-                    <option value="hombre" ${state.sexOverride === "hombre" ? "selected" : ""}>Hombre</option>
-                    <option value="mujer" ${state.sexOverride === "mujer" ? "selected" : ""}>Mujer</option>
-                  </select>
-                </div>`
-          }
+          <div class="field">
+            <label for="wizSex">Sexo (para el cálculo)</label>
+            <select id="wizSex">
+              <option value="" ${state.sexOverride === "" ? "selected" : ""}>Elegí una opción</option>
+              <option value="hombre" ${state.sexOverride === "hombre" ? "selected" : ""}>Hombre</option>
+              <option value="mujer" ${state.sexOverride === "mujer" ? "selected" : ""}>Mujer</option>
+            </select>
+          </div>
           <div class="field">
             <label for="wizActivity">Nivel de actividad</label>
             <select id="wizActivity">
@@ -749,33 +1012,19 @@ export const nutricionView: ViewModule = {
         `;
       }
 
-      function mealsSectionMarkup(): string {
+      function mealRowMarkup(meal: Meal, i: number): string {
         return `
-          <div class="field">
-            <label for="wizMealCount">Cantidad de comidas</label>
-            <select id="wizMealCount">
-              ${Array.from({ length: MAX_MEALS - MIN_MEALS + 1 }, (_, i) => i + MIN_MEALS)
-                .map((n) => `<option value="${n}" ${state.mealCount === n ? "selected" : ""}>${n} comidas</option>`)
-                .join("")}
-            </select>
-          </div>
-          <div class="nutri-meal-editor" id="wizMealEditor">
-            ${state.meals
-              .map(
-                (meal, i) => `
-              <div class="nutri-meal-edit-row">
-                <input type="text" class="nutri-meal-name" data-i="${i}" maxlength="40" value="${escapeHtml(meal.name)}" placeholder="Nombre">
-                <label class="nutri-meal-pct-field"><input type="text" class="nutri-meal-pct" data-i="${i}" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(String(meal.pct))}"><span>%</span></label>
-                <span class="nutri-meal-kcal" data-i="${i}"></span>
-              </div>`
-              )
-              .join("")}
-            <p class="nutri-pct-sum" id="wizMealSum"></p>
-          </div>
-        `;
+          <div class="nutri-meal-edit-row">
+            <input type="text" class="nutri-meal-name" data-i="${i}" maxlength="40" value="${escapeHtml(meal.name)}" placeholder="Nombre">
+            <label class="nutri-meal-pct-field"><input type="text" class="nutri-meal-pct" data-i="${i}" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(String(meal.pct))}"><span>%</span></label>
+            <span class="nutri-meal-kcal" data-i="${i}"></span>
+            <button type="button" class="nutri-meal-del" data-i="${i}" aria-label="Quitar comida"${state.meals.length <= MIN_MEALS ? " disabled" : ""}>×</button>
+          </div>`;
       }
 
-      function renderWizard(): void {
+      // El shell del modal se monta UNA vez; después sólo se repintan #wizModeSection y
+      // #wizMealEditor (cambiar de pestaña o de comidas no re-dispara la animación del overlay).
+      function buildShell(): void {
         loaderBody.innerHTML = `
           <div class="success-check-container">
             <div class="modal-card modal-card-lg">
@@ -783,16 +1032,22 @@ export const nutricionView: ViewModule = {
               <p class="subtitle">Elegí cómo querés fijar tus calorías y macros, y repartilos en comidas.</p>
 
               <div class="nutri-mode-toggle" id="wizModeToggle">
-                <button type="button" class="exc-pick-tab${state.mode === "manual" ? " active" : ""}" data-mode="manual">A mano</button>
-                <button type="button" class="exc-pick-tab${state.mode === "calculated" ? " active" : ""}" data-mode="calculated">Calculado</button>
+                <button type="button" class="exc-pick-tab" data-mode="manual">A mano</button>
+                <button type="button" class="exc-pick-tab" data-mode="calculated">Calculado</button>
               </div>
 
-              <div class="nutri-wiz-section">${modeSectionMarkup()}</div>
+              <div class="nutri-wiz-section" id="wizModeSection"></div>
 
               <div class="nutri-wiz-preview" id="wizPreview"></div>
 
               <h3 class="nutri-wiz-subhead">Reparto en comidas</h3>
-              <div class="nutri-wiz-section">${mealsSectionMarkup()}</div>
+              <div class="nutri-wiz-section">
+                <div class="nutri-meal-editor" id="wizMealEditor"></div>
+                <div class="nutri-meal-editor-foot">
+                  <button type="button" class="btn btn-outline btn-sm" id="wizAddMeal">+ Agregar comida</button>
+                  <p class="nutri-pct-sum" id="wizMealSum"></p>
+                </div>
+              </div>
 
               <div class="alert_message" id="wizAlert"></div>
               <div class="modal-actions">
@@ -802,7 +1057,99 @@ export const nutricionView: ViewModule = {
             </div>
           </div>
         `;
-        wireWizard();
+
+        loaderBody.querySelector("#wizCancel")?.addEventListener("click", () => {
+          loaderBody.innerHTML = "";
+        });
+        loaderBody.querySelector("#wizSave")?.addEventListener("click", () => void saveWizard());
+        loaderBody.querySelector("#wizModeToggle")?.addEventListener("click", (e) => {
+          const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-mode]");
+          if (!btn) return;
+          state.mode = btn.dataset.mode as WizardMode;
+          paintModeSection();
+        });
+        loaderBody.querySelector("#wizAddMeal")?.addEventListener("click", () => {
+          if (state.meals.length >= MAX_MEALS) return;
+          const share = Math.round(100 / (state.meals.length + 1));
+          state.meals.push({ name: `Comida ${state.meals.length + 1}`, pct: share });
+          state.meals = rescaleMealsTo100(state.meals);
+          paintMeals();
+        });
+      }
+
+      function paintModeSection(): void {
+        const section = loaderBody.querySelector("#wizModeSection");
+        if (!section) return;
+        loaderBody.querySelectorAll<HTMLButtonElement>("#wizModeToggle [data-mode]").forEach((b) => {
+          b.classList.toggle("active", b.dataset.mode === state.mode);
+        });
+        section.innerHTML = modeSectionMarkup();
+
+        // Manual
+        section.querySelector("#wizKcal")?.addEventListener("input", (e) => {
+          state.manualKcal = (e.target as HTMLInputElement).value;
+          updatePreview();
+        });
+        const bindPct = (id: string, key: keyof WizardState["manualPct"]) => {
+          section.querySelector(`#${id}`)?.addEventListener("input", (e) => {
+            state.manualPct[key] = (e.target as HTMLInputElement).value;
+            updatePreview();
+          });
+        };
+        bindPct("wizPctP", "protein");
+        bindPct("wizPctC", "carbs");
+        bindPct("wizPctF", "fat");
+
+        // Calculado
+        section.querySelector("#wizSex")?.addEventListener("change", (e) => {
+          state.sexOverride = (e.target as HTMLSelectElement).value as Sex | "";
+          updatePreview();
+        });
+        section.querySelector("#wizActivity")?.addEventListener("change", (e) => {
+          state.activity = (e.target as HTMLSelectElement).value as ActivityLevel;
+          updatePreview();
+        });
+        section.querySelector("#wizGoalGrid")?.addEventListener("click", (e) => {
+          const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-goal]");
+          if (!btn) return;
+          state.goal = btn.dataset.goal as Goal;
+          section.querySelectorAll("#wizGoalGrid .nutri-goal-card").forEach((c) => c.classList.toggle("active", (c as HTMLElement).dataset.goal === state.goal));
+          updatePreview();
+        });
+
+        updatePreview();
+      }
+
+      function paintMeals(): void {
+        const editor = loaderBody.querySelector("#wizMealEditor");
+        if (!editor) return;
+        editor.innerHTML = state.meals.map((m, i) => mealRowMarkup(m, i)).join("");
+
+        editor.querySelectorAll<HTMLInputElement>(".nutri-meal-name").forEach((input) => {
+          input.addEventListener("input", () => {
+            const i = Number(input.dataset.i);
+            if (state.meals[i]) state.meals[i].name = input.value;
+          });
+        });
+        editor.querySelectorAll<HTMLInputElement>(".nutri-meal-pct").forEach((input) => {
+          input.addEventListener("input", () => {
+            const i = Number(input.dataset.i);
+            if (state.meals[i]) state.meals[i].pct = Number(input.value.replace(",", ".")) || 0;
+            updatePreview();
+          });
+        });
+        editor.querySelectorAll<HTMLButtonElement>(".nutri-meal-del").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            if (state.meals.length <= MIN_MEALS) return;
+            state.meals.splice(Number(btn.dataset.i), 1);
+            state.meals = rescaleMealsTo100(state.meals);
+            paintMeals();
+          });
+        });
+
+        const addBtn = loaderBody.querySelector("#wizAddMeal") as HTMLButtonElement | null;
+        if (addBtn) addBtn.disabled = state.meals.length >= MAX_MEALS;
+
         updatePreview();
       }
 
@@ -833,7 +1180,7 @@ export const nutricionView: ViewModule = {
           const i = Number(el.dataset.i);
           const meal = state.meals[i];
           if (!meal) return;
-          el.textContent = daily ? `≈ ${fmt(mealMacros(daily, meal.pct).kcal)} kcal` : "";
+          el.textContent = daily ? `${fmt(mealMacros(daily, meal.pct).kcal)} kcal` : "";
         });
         const mealSum = document.getElementById("wizMealSum");
         if (mealSum) {
@@ -841,73 +1188,6 @@ export const nutricionView: ViewModule = {
           mealSum.textContent = `Las comidas suman ${total}% (tiene que ser 100%).`;
           mealSum.classList.toggle("nutri-pct-sum-bad", total !== 100);
         }
-      }
-
-      function wireWizard(): void {
-        document.getElementById("wizCancel")?.addEventListener("click", () => {
-          loaderBody.innerHTML = "";
-        });
-
-        document.getElementById("wizModeToggle")?.addEventListener("click", (e) => {
-          const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-mode]");
-          if (!btn) return;
-          state.mode = btn.dataset.mode as WizardMode;
-          renderWizard();
-        });
-
-        // Manual
-        document.getElementById("wizKcal")?.addEventListener("input", (e) => {
-          state.manualKcal = (e.target as HTMLInputElement).value;
-          updatePreview();
-        });
-        const bindPct = (id: string, key: keyof WizardState["manualPct"]) => {
-          document.getElementById(id)?.addEventListener("input", (e) => {
-            state.manualPct[key] = (e.target as HTMLInputElement).value;
-            updatePreview();
-          });
-        };
-        bindPct("wizPctP", "protein");
-        bindPct("wizPctC", "carbs");
-        bindPct("wizPctF", "fat");
-
-        // Calculado
-        document.getElementById("wizSex")?.addEventListener("change", (e) => {
-          state.sexOverride = (e.target as HTMLSelectElement).value as Sex | "";
-          updatePreview();
-        });
-        document.getElementById("wizActivity")?.addEventListener("change", (e) => {
-          state.activity = (e.target as HTMLSelectElement).value as ActivityLevel;
-          updatePreview();
-        });
-        document.getElementById("wizGoalGrid")?.addEventListener("click", (e) => {
-          const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-goal]");
-          if (!btn) return;
-          state.goal = btn.dataset.goal as Goal;
-          document.querySelectorAll("#wizGoalGrid .nutri-goal-card").forEach((c) => c.classList.toggle("active", (c as HTMLElement).dataset.goal === state.goal));
-          updatePreview();
-        });
-
-        // Comidas
-        document.getElementById("wizMealCount")?.addEventListener("change", (e) => {
-          state.mealCount = Number((e.target as HTMLSelectElement).value);
-          state.meals = defaultMeals(state.mealCount);
-          renderWizard();
-        });
-        document.querySelectorAll<HTMLInputElement>(".nutri-meal-name").forEach((input) => {
-          input.addEventListener("input", () => {
-            const i = Number(input.dataset.i);
-            if (state.meals[i]) state.meals[i].name = input.value;
-          });
-        });
-        document.querySelectorAll<HTMLInputElement>(".nutri-meal-pct").forEach((input) => {
-          input.addEventListener("input", () => {
-            const i = Number(input.dataset.i);
-            if (state.meals[i]) state.meals[i].pct = Number(input.value.replace(",", ".")) || 0;
-            updatePreview();
-          });
-        });
-
-        document.getElementById("wizSave")?.addEventListener("click", () => void saveWizard());
       }
 
       async function saveWizard(): Promise<void> {
@@ -965,17 +1245,19 @@ export const nutricionView: ViewModule = {
         ctx.addCleanup(() => clearTimeout(t));
       }
 
-      renderWizard();
+      buildShell();
+      paintModeSection();
+      paintMeals();
     }
 
     container.innerHTML = VIEW_MARKUP;
     void render();
 
-    updateHandler = () => {
+    updateHandler = (p?: URLSearchParams) => {
       void (async () => {
         prefs = await getNutritionPrefs(myId);
         if (!prefs.enabled) {
-          navigate("profile.html");
+          bounce(p);
           return;
         }
         target = await getActiveNutritionTarget(myId);
@@ -986,7 +1268,7 @@ export const nutricionView: ViewModule = {
       updateHandler = null;
     });
   },
-  update() {
-    updateHandler?.();
+  update(params) {
+    updateHandler?.(params);
   },
 };

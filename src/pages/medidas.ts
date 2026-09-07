@@ -107,12 +107,10 @@ function clearDraft(userId: string): void {
 }
 
 const VIEW_MARKUP = `
-  <section class="page-hero">
+  <section class="page-hero-slim">
     <div class="container">
       <a href="profile.html" class="back-link" id="backToProfile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
       <span class="eyebrow">Medidas corporales</span>
-      <h1>Tus medidas corporales</h1>
-      <p>Registrá tus medidas cada tanto y mirá cómo evolucionan con el tiempo.</p>
     </div>
   </section>
 

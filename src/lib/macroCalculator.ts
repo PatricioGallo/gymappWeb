@@ -138,8 +138,8 @@ export interface Meal {
   pct: number;
 }
 
-export const MIN_MEALS = 3;
-export const MAX_MEALS = 6;
+export const MIN_MEALS = 2;
+export const MAX_MEALS = 12;
 
 // Nombres por defecto según la cantidad de comidas (editables por el usuario).
 const DEFAULT_MEALS_BY_COUNT: Record<number, Meal[]> = {
@@ -173,7 +173,32 @@ const DEFAULT_MEALS_BY_COUNT: Record<number, Meal[]> = {
 
 export function defaultMeals(count: number): Meal[] {
   const clamped = Math.min(MAX_MEALS, Math.max(MIN_MEALS, Math.round(count)));
-  return DEFAULT_MEALS_BY_COUNT[clamped].map((m) => ({ ...m }));
+  const template = DEFAULT_MEALS_BY_COUNT[clamped];
+  if (template) return template.map((m) => ({ ...m }));
+  // Para cantidades fuera de la plantilla (2, o 7+): reparto parejo con nombres genéricos.
+  const pct = Math.round(100 / clamped);
+  return Array.from({ length: clamped }, (_, i) => ({
+    name: `Comida ${i + 1}`,
+    pct: i === clamped - 1 ? 100 - pct * (clamped - 1) : pct,
+  }));
+}
+
+/**
+ * Reescala los `pct` de las comidas para que sumen 100 conservando las proporciones
+ * (la última comida absorbe el redondeo). Si venían todos en 0, hace un reparto parejo.
+ * Se usa al agregar/quitar una comida en el asistente.
+ */
+export function rescaleMealsTo100(meals: Meal[]): Meal[] {
+  if (meals.length === 0) return [];
+  const total = meals.reduce((s, m) => s + (Number(m.pct) || 0), 0);
+  const even = Math.floor(100 / meals.length);
+  let acc = 0;
+  return meals.map((m, i) => {
+    const raw = total > 0 ? ((Number(m.pct) || 0) / total) * 100 : even;
+    const pct = i === meals.length - 1 ? 100 - acc : Math.round(raw);
+    acc += pct;
+    return { name: m.name, pct };
+  });
 }
 
 /** Macros recomendados para una comida = fracción del objetivo diario según su pct. */

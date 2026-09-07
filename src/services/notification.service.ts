@@ -19,7 +19,8 @@ export type NotificationType =
   | "message_reaction"
   | "class_reminder"
   | "birthday"
-  | "measurements_reminder";
+  | "measurements_reminder"
+  | "nutrition_reminder";
 
 const RECENT_LIMIT = 8;
 const FULL_LIST_LIMIT = 200;

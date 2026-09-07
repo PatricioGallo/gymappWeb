@@ -23,13 +23,13 @@ interface ExerciseGroup {
 }
 
 const VIEW_MARKUP = `
-  <section class="page-hero">
+  <section class="page-hero-slim">
     <div class="container">
       <a href="profile.html" class="back-link" id="backToProfile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver al perfil</a>
       <a href="alumnos.html" class="back-link" id="backToAlumnos" hidden><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Volver a tus alumnos</a>
       <span class="eyebrow">Progreso</span>
-      <h1 id="pageTitle">Tu progreso</h1>
-      <p id="pageSubtitle">Un resumen de tus mejores marcas y el detalle de cómo evolucionó cada ejercicio.</p>
+      <!-- Sólo se muestra (vía JS) cuando un entrenador mira el progreso de un alumno (?uid=). -->
+      <h1 id="pageTitle" class="page-hero-alt-title" hidden></h1>
     </div>
   </section>
 
@@ -663,8 +663,13 @@ export const progressView: ViewModule = {
         return;
       }
 
-      const title = container.querySelector("#pageTitle");
-      if (title) title.textContent = `Progreso de ${escapeHtml(profile.nombre)}`;
+      // El título de la página se muestra sólo cuando un entrenador está mirando el progreso de
+      // un alumno (?uid=), para no perder de vista de quién es. En el progreso propio no va nada.
+      const title = container.querySelector<HTMLElement>("#pageTitle");
+      if (title && targetUserId !== myId) {
+        title.textContent = `Progreso de ${profile.nombre}`;
+        title.hidden = false;
+      }
 
       wireTabs();
       void loadTab(currentTab);

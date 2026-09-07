@@ -74,9 +74,13 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
   ctx?.addCleanup(close);
 
   // ---------------------------------------------------------------- paso lista
-  function listShell(): void {
-    host.innerHTML = `
-      <div class="success-check-container exc-pick-overlay">
+  // El overlay (.success-check-container) se monta UNA vez en openFoodPicker; acá sólo se
+  // repinta la .modal-card de adentro -- cambiar de pestaña no re-dispara la animación de
+  // entrada del overlay ni parpadea (mismo criterio que el asistente de objetivo / el calendario).
+  function paintList(): void {
+    const overlay = document.getElementById("fpOverlay");
+    if (!overlay) return;
+    overlay.innerHTML = `
         <div class="modal-card modal-card-lg exc-pick-modal-card">
           <h2>Agregar a ${escapeHtml(opts.mealName)}</h2>
           <p class="subtitle">Buscá un alimento del catálogo, de los tuyos, o en Open Food Facts.</p>
@@ -97,7 +101,6 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
             <button type="button" class="btn btn-outline" id="fpClose">Cerrar</button>
           </div>
         </div>
-      </div>
     `;
 
     document.getElementById("fpClose")?.addEventListener("click", close);
@@ -105,7 +108,7 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
       openCreateFoodModal(userId, search.trim(), ctx, (food) => {
         delete cache.mios;
         activeTab = "mios";
-        listShell();
+        paintList();
         void loadTab();
         // El alimento recién creado -> directo al paso de cantidad.
         selectFood(food);
@@ -116,7 +119,7 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".exc-pick-tab");
       if (!btn) return;
       activeTab = btn.dataset.tab as Tab;
-      listShell();
+      paintList();
       void loadTab();
     });
 
@@ -324,8 +327,9 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     const suggestedG = suggestedGrams(food.kcal100, opts.remainingKcal);
     const initialQty = initialUnit === "porcion" ? Math.max(1, Math.round((suggestedG / food.servingGrams!) * 2) / 2) : suggestedG;
 
-    host.innerHTML = `
-      <div class="success-check-container exc-pick-overlay">
+    const overlay = document.getElementById("fpOverlay");
+    if (!overlay) return;
+    overlay.innerHTML = `
         <div class="modal-card exc-pick-modal-card nutri-qty-card">
           <button type="button" class="nutri-qty-back" id="fpQtyBack">${BACK_ICON} Volver</button>
           <h2>${escapeHtml(food.name)}</h2>
@@ -356,7 +360,6 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
             <button class="btn btn-outline" id="fpQtyCancel" type="button">Cancelar</button>
           </div>
         </div>
-      </div>
     `;
 
     const qtyInput = document.getElementById("fpQty") as HTMLInputElement;
@@ -401,7 +404,7 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     });
 
     document.getElementById("fpQtyBack")?.addEventListener("click", () => {
-      listShell();
+      paintList();
       void loadTab();
     });
     document.getElementById("fpQtyCancel")?.addEventListener("click", close);
@@ -427,6 +430,7 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     });
   }
 
-  listShell();
+  host.innerHTML = `<div class="success-check-container exc-pick-overlay" id="fpOverlay"></div>`;
+  paintList();
   void loadTab();
 }

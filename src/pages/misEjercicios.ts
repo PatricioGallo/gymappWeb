@@ -18,14 +18,15 @@ const DUMBBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" str
 const BACK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`;
 
 const VIEW_MARKUP = `
-  <section class="auth-section">
+  <section class="page-hero-slim">
     <div class="container">
       <a href="profile.html" class="back-link">${BACK_ICON}Volver</a>
-      <div class="section-head reveal">
-        <span class="eyebrow">Catálogo de ejercicios</span>
-        <h1>Mis ejercicios</h1>
-        <p>Los ejercicios que vos creaste. Podés editarlos, eliminarlos o agregar uno nuevo.</p>
-      </div>
+      <span class="eyebrow">Catálogo de ejercicios</span>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
       <button class="btn btn-primary btn-sm" id="myExcAddBtn" type="button">+ Agregar ejercicio</button>
       <div id="myExcResults"></div>
     </div>
