@@ -105,6 +105,11 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
       openCreateFoodModal(userId, search.trim(), ctx, (food) => {
         delete cache.mios;
         activeTab = "mios";
+        // openCreateFoodModal comparte #loaderBody con el picker y lo pisó al abrirse
+        // -> hay que remontar el overlay antes de repintar, si no #fpOverlay ya no existe
+        // y tanto paintList() como selectFood() cortan al principio (quedaría el modal de
+        // crear alimento colgado en pantalla con el alimento ya guardado).
+        mountOverlay();
         paintList();
         void loadTab();
         // El alimento recién creado -> directo al paso de cantidad.
@@ -445,7 +450,11 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     });
   }
 
-  host.innerHTML = `<div class="success-check-container exc-pick-overlay" id="fpOverlay"></div>`;
+  function mountOverlay(): void {
+    host.innerHTML = `<div class="success-check-container exc-pick-overlay" id="fpOverlay"></div>`;
+  }
+
+  mountOverlay();
   paintList();
   void loadTab();
 }
