@@ -79,6 +79,7 @@ export async function updateProfileFields(
       | "class_reminder_minutes"
       | "zoom_enabled"
       | "body_measurement_prefs"
+      | "nutrition_prefs"
       | "altura_cm"
       | "show_last_seen"
       | "show_read_receipts"

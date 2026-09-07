@@ -800,6 +800,84 @@ export type Database = {
           },
         ]
       }
+      food_items: {
+        Row: {
+          author_id: string | null
+          brand: string | null
+          carbs_100g: number
+          created_at: string
+          fat_100g: number
+          fiber_100g: number | null
+          id: string
+          image_url: string | null
+          is_public: boolean
+          kcal_100g: number
+          meal_tags: string[]
+          name: string
+          off_barcode: string | null
+          off_data: Json | null
+          protein_100g: number
+          serving_grams: number | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          brand?: string | null
+          carbs_100g?: number
+          created_at?: string
+          fat_100g?: number
+          fiber_100g?: number | null
+          id?: string
+          image_url?: string | null
+          is_public?: boolean
+          kcal_100g: number
+          meal_tags?: string[]
+          name: string
+          off_barcode?: string | null
+          off_data?: Json | null
+          protein_100g?: number
+          serving_grams?: number | null
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          brand?: string | null
+          carbs_100g?: number
+          created_at?: string
+          fat_100g?: number
+          fiber_100g?: number | null
+          id?: string
+          image_url?: string | null
+          is_public?: boolean
+          kcal_100g?: number
+          meal_tags?: string[]
+          name?: string
+          off_barcode?: string | null
+          off_data?: Json | null
+          protein_100g?: number
+          serving_grams?: number | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_items_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_items_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       follows: {
         Row: {
           created_at: string
@@ -1724,6 +1802,151 @@ export type Database = {
           },
         ]
       }
+      nutrition_logs: {
+        Row: {
+          brand: string | null
+          carbs_g: number
+          created_at: string
+          display_qty: number
+          display_unit: string
+          fat_g: number
+          fiber_g: number | null
+          food_id: string | null
+          food_name: string
+          grams: number
+          id: string
+          kcal: number
+          log_date: string
+          meal_index: number
+          meal_name: string
+          protein_g: number
+          user_id: string
+        }
+        Insert: {
+          brand?: string | null
+          carbs_g: number
+          created_at?: string
+          display_qty: number
+          display_unit: string
+          fat_g: number
+          fiber_g?: number | null
+          food_id?: string | null
+          food_name: string
+          grams: number
+          id?: string
+          kcal: number
+          log_date: string
+          meal_index: number
+          meal_name: string
+          protein_g: number
+          user_id: string
+        }
+        Update: {
+          brand?: string | null
+          carbs_g?: number
+          created_at?: string
+          display_qty?: number
+          display_unit?: string
+          fat_g?: number
+          fiber_g?: number | null
+          food_id?: string | null
+          food_name?: string
+          grams?: number
+          id?: string
+          kcal?: number
+          log_date?: string
+          meal_index?: number
+          meal_name?: string
+          protein_g?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_logs_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_targets: {
+        Row: {
+          activity_factor: number | null
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          goal: string | null
+          id: string
+          is_active: boolean
+          kcal: number
+          meals: Json
+          mode: string
+          protein_g: number
+          snapshot: Json | null
+          user_id: string
+        }
+        Insert: {
+          activity_factor?: number | null
+          carbs_g: number
+          created_at?: string
+          fat_g: number
+          goal?: string | null
+          id?: string
+          is_active?: boolean
+          kcal: number
+          meals: Json
+          mode: string
+          protein_g: number
+          snapshot?: Json | null
+          user_id: string
+        }
+        Update: {
+          activity_factor?: number | null
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          goal?: string | null
+          id?: string
+          is_active?: boolean
+          kcal?: number
+          meals?: Json
+          mode?: string
+          protein_g?: number
+          snapshot?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_targets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_targets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_comments: {
         Row: {
           author_id: string
@@ -2195,6 +2418,7 @@ export type Database = {
           nacionalidad: string | null
           nombre: string
           notification_prefs: Json
+          nutrition_prefs: Json
           provincia: string | null
           pwa_installed: boolean
           pwa_last_seen_at: string | null
@@ -2231,6 +2455,7 @@ export type Database = {
           nacionalidad?: string | null
           nombre: string
           notification_prefs?: Json
+          nutrition_prefs?: Json
           provincia?: string | null
           pwa_installed?: boolean
           pwa_last_seen_at?: string | null
@@ -2267,6 +2492,7 @@ export type Database = {
           nacionalidad?: string | null
           nombre?: string
           notification_prefs?: Json
+          nutrition_prefs?: Json
           provincia?: string | null
           pwa_installed?: boolean
           pwa_last_seen_at?: string | null
@@ -3328,6 +3554,17 @@ export type Database = {
           initiated_by: string
           status: string
         }[]
+      }
+      get_food_popularity: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          food_id: string
+          uses: number
+        }[]
+      }
+      get_meal_suggestion_foods: {
+        Args: { p_meal_tags: string[]; p_limit?: number }
+        Returns: Database["public"]["Tables"]["food_items"]["Row"][]
       }
       get_my_exercises_usage_counts: {
         Args: never

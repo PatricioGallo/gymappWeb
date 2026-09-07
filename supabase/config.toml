@@ -9,3 +9,6 @@ project_id = "nxyxuthkhvzticqwtaar"
 
 [functions.send-contact-reply]
 verify_jwt = true
+
+[functions.off-search]
+verify_jwt = true

@@ -42,6 +42,7 @@ import {
   type MeasurementGroup,
   type MeasurementKey,
 } from "../services/bodyMeasurements.service";
+import { parseNutritionPrefs } from "../services/nutrition.service";
 import { renderMultiImageUploader, MultiImageUploader } from "../lib/multiImageUploader";
 import { ARGENTINE_UNIVERSITIES } from "../lib/universities";
 import { ALL_PLATFORMS, getPlatform, type SocialPlatform } from "../lib/socialLinks";
@@ -100,9 +101,9 @@ const VIEW_MARKUP = `
 // sin desmontar la vista) pueda cambiar de pestaña sin re-pedir el perfil ni recargar las
 // pestañas ya cargadas (blocked/verification quedan con su propio flag de "ya cargada").
 let selectTabHandler: ((tab: string) => void) | null = null;
-// Idem para el resalte de la tarjeta "Medidas corporales" cuando se llega desde el mini
-// tutorial de la notificación mensual (settings.html?tab=personalization&highlight=measurements).
-let highlightMeasurementHandler: (() => void) | null = null;
+// Idem para el resalte de una tarjeta de Personalización cuando se llega desde el mini tutorial
+// de una notificación mensual (settings.html?tab=personalization&highlight=measurements|nutrition).
+let highlightCardHandler: ((feature: string) => void) | null = null;
 
 export const settingsView: ViewModule = {
   async mount(container, params, ctx, authUserId) {
@@ -193,17 +194,23 @@ export const settingsView: ViewModule = {
       if (requestedTab) void activateTab(requestedTab);
     }
 
-    // Resalta y scrollea a la vista la tarjeta "Medidas corporales" (tab Personalización) --
-    // se llama al llegar desde el mini tutorial de la notificación mensual. La clase se saca
-    // sola a los ~2.4s (ver .settings-card-highlight en modern.css).
-    function highlightMeasurementCard(): void {
-      const card = container.querySelector<HTMLElement>("#measurementPrefsCard");
+    // Resalta y scrollea a la vista una tarjeta de la pestaña Personalización -- se llama al
+    // llegar desde el mini tutorial de una notificación mensual. La clase se saca sola a los
+    // ~2.4s (ver .settings-card-highlight en modern.css).
+    const HIGHLIGHT_CARD_IDS: Record<string, string> = {
+      measurements: "measurementPrefsCard",
+      nutrition: "nutritionPrefsCard",
+    };
+    function highlightSettingsCard(feature: string): void {
+      const cardId = HIGHLIGHT_CARD_IDS[feature];
+      if (!cardId) return;
+      const card = container.querySelector<HTMLElement>(`#${cardId}`);
       if (!card || (card.closest("#personalizationTab") as HTMLElement | null)?.hidden) return;
       card.scrollIntoView({ behavior: "smooth", block: "center" });
       card.classList.add("settings-card-highlight");
       window.setTimeout(() => card.classList.remove("settings-card-highlight"), 2400);
     }
-    highlightMeasurementHandler = highlightMeasurementCard;
+    highlightCardHandler = highlightSettingsCard;
 
     // ---------- Editar perfil ----------
 
@@ -717,9 +724,10 @@ export const settingsView: ViewModule = {
       mentions: boolean;
       birthdays: boolean;
       measurements: boolean;
+      nutrition: boolean;
     }
 
-    const NOTIFICATION_DEFAULTS: NotificationPrefs = { likes: true, comments: true, follows: true, mentions: true, birthdays: true, measurements: true };
+    const NOTIFICATION_DEFAULTS: NotificationPrefs = { likes: true, comments: true, follows: true, mentions: true, birthdays: true, measurements: true, nutrition: true };
 
     function parseNotificationPrefs(raw: Profile["notification_prefs"]): NotificationPrefs {
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -789,12 +797,13 @@ export const settingsView: ViewModule = {
         { key: "mentions", label: "Menciones" },
         { key: "birthdays", label: "Cumpleaños de tus seguidos" },
         { key: "measurements", label: "Recordatorio de medidas corporales" },
+        { key: "nutrition", label: "Recordatorio de alimentación" },
       ];
 
       notificationsTab.innerHTML = `
         <div class="chart-card reveal">
           <h3>Notificaciones</h3>
-          <p class="chart-sub">"Nuevos seguidores", "Cumpleaños de tus seguidos" y el "Recordatorio de medidas corporales" ya están activos. El resto (me gusta, comentarios, menciones) va a aplicarse en cuanto sumemos publicaciones a la red social.</p>
+          <p class="chart-sub">"Nuevos seguidores", "Cumpleaños de tus seguidos" y los recordatorios de medidas corporales y de alimentación ya están activos. El resto (me gusta, comentarios, menciones) va a aplicarse en cuanto sumemos publicaciones a la red social.</p>
           ${items
             .map(
               (item) => `
@@ -924,6 +933,8 @@ export const settingsView: ViewModule = {
       // Medidas corporales: a diferencia de los widgets de arriba, cada toggle persiste al
       // toque (mismo criterio que zoomToggle/notif-toggle) -- no hay "Guardar cambios" para esto.
       let measurementPrefs = parseBodyMeasurementPrefs(profile!.body_measurement_prefs);
+      // Alimentación / Macros: igual que el toggle de medidas, persiste al toque.
+      let nutritionPrefs = parseNutritionPrefs(profile!.nutrition_prefs);
       // Altura: NO es un toggle (ver nota en MEASUREMENT_FIELDS) -- profiles.altura_cm, se pide
       // una sola vez acá mismo (campo de texto, no chip) porque prácticamente no cambia.
       let alturaCm = profile!.altura_cm != null ? Number(profile!.altura_cm) : null;
@@ -1105,6 +1116,21 @@ export const settingsView: ViewModule = {
           <div class="alert_message" id="measurementPrefsAlert"></div>
         </div>
 
+        <div class="chart-card reveal" id="nutritionPrefsCard">
+          <h3>Alimentación / Macros</h3>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="switch-label">Registrar alimentación y macros</span>
+              <p class="chart-sub" style="margin:4px 0 0;">Por defecto está desactivado. Activalo para fijar un objetivo de calorías y macros, repartirlo en comidas y cargar lo que comés desde tu perfil.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="nutritionEnabledToggle" ${nutritionPrefs.enabled ? "checked" : ""}>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div class="alert_message" id="nutritionPrefsAlert"></div>
+        </div>
+
         <div class="chart-card reveal">
           <h3>Personalización del perfil</h3>
           <div class="settings-toggle-row">
@@ -1264,6 +1290,24 @@ export const settingsView: ViewModule = {
           return;
         }
         fieldsSection.hidden = !enabled;
+      });
+
+      container.querySelector("#nutritionEnabledToggle")?.addEventListener("change", async (e) => {
+        const alertBox = container.querySelector("#nutritionPrefsAlert")!;
+        alertBox.innerHTML = "";
+        const toggle = e.target as HTMLInputElement;
+        const enabled = toggle.checked;
+        toggle.disabled = true;
+        const next = { ...nutritionPrefs, enabled };
+        const { error } = await updateProfileFields(userId, { nutrition_prefs: next as unknown as Profile["nutrition_prefs"] });
+        toggle.disabled = false;
+        if (error) {
+          toggle.checked = !enabled;
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        nutritionPrefs = next;
+        profile!.nutrition_prefs = next as unknown as Profile["nutrition_prefs"];
       });
 
       function syncSaveBar(): void {
@@ -1757,17 +1801,19 @@ export const settingsView: ViewModule = {
     void renderPersonalizationTab().then(() => {
       // La tarjeta recién existe cuando esta pestaña terminó de renderizar (async) -- por eso el
       // resalte del deep-link del tutorial se dispara acá y no en setupTabs().
-      if (params.get("highlight") === "measurements") highlightMeasurementHandler?.();
+      const highlight = params.get("highlight");
+      if (highlight) highlightCardHandler?.(highlight);
     });
 
     ctx.addCleanup(() => {
       selectTabHandler = null;
-      highlightMeasurementHandler = null;
+      highlightCardHandler = null;
     });
   },
   update(params) {
     const tab = params.get("tab");
     if (tab) selectTabHandler?.(tab);
-    if (params.get("highlight") === "measurements") highlightMeasurementHandler?.();
+    const highlight = params.get("highlight");
+    if (highlight) highlightCardHandler?.(highlight);
   },
 };

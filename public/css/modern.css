@@ -1255,6 +1255,18 @@ button:focus-visible {
   margin: 0 auto;
 }
 
+/* Cabecera reducida: el link "Volver" + el eyebrow naranja, sin título grande ni descripción
+   (progreso, medidas corporales, mis macros, mis ejercicios). */
+.page-hero-slim {
+  padding: 22px 0 6px;
+  text-align: center;
+}
+.page-hero-slim .back-link { margin-bottom: 14px; } /* .back-link es flex -> queda a la izquierda */
+.page-hero-slim .eyebrow { margin-bottom: 2px; }
+.page-hero-slim + .features { padding-top: 22px; }
+/* Título alternativo del progreso: "Progreso de <alumno>" cuando un entrenador lo mira. */
+.page-hero-alt-title { font-size: clamp(20px, 4vw, 26px); margin: 6px 0 0; letter-spacing: -0.01em; }
+
 /* ---------- Story (texto + timeline) ---------- */
 
 .story { padding: 48px 0; }
@@ -3174,6 +3186,424 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 @media (max-width: 480px) {
   .imc-range-row { flex-wrap: wrap; }
   .imc-range-imc { flex: 1 1 100%; order: 3; }
+}
+
+/* ---------- Alimentación / Macros (nutricion.html) ---------- */
+
+/* Chips de macros: calorías + P/C/F. Se usan en el resumen del objetivo, el preview del
+   asistente y (más adelante) la vista del día. */
+.nutri-macro-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.nutri-macro-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  text-align: center;
+}
+.nutri-macro-value { font-size: 17px; font-weight: 800; }
+.nutri-macro-value small { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-left: 2px; }
+.nutri-macro-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.nutri-macro-kcal { border-color: var(--accent-2); }
+.nutri-macro-protein_g .nutri-macro-value { color: #6fb0e0; }
+.nutri-macro-carbs_g .nutri-macro-value { color: #e0a63c; }
+.nutri-macro-fat_g .nutri-macro-value { color: #c58fe0; }
+
+@media (max-width: 480px) {
+  .nutri-macro-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.nutri-target-card .nutri-target-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nutri-target-head-main { min-width: 0; }
+.nutri-target-head-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
+/* Tira de fechas / navegación de días (Fase 6). Cualquier día es editable; no se va al futuro. */
+.nutri-date-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.nutri-date-arrow {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nutri-date-arrow:disabled { opacity: 0.4; cursor: default; }
+/* Botón central: abre el calendario propio (openDatePickerModal). */
+.nutri-date-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.nutri-date-current:hover { border-color: var(--text-muted); }
+.nutri-date-current strong { font-size: 15px; white-space: nowrap; }
+.nutri-date-caret { width: 15px; height: 15px; color: var(--text-muted); flex-shrink: 0; }
+
+/* Modal "Repetir comida / día" (Fase 6) */
+.nutri-repeat-preview { margin: 10px 0 4px; display: flex; flex-direction: column; }
+.nutri-repeat-group { margin-bottom: 10px; }
+.nutri-repeat-group h4 { margin: 0 0 4px; font-size: 13px; color: var(--text-muted); }
+.nutri-repeat-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.nutri-repeat-row:first-child { border-top: none; }
+.nutri-repeat-check { width: auto; flex-shrink: 0; }
+.nutri-repeat-name { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; }
+.nutri-repeat-qty { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.nutri-repeat-input { width: 64px; text-align: right; }
+.nutri-repeat-qty small { font-size: 12px; color: var(--text-muted); }
+
+@media (max-width: 480px) {
+  .nutri-target-card .nutri-target-head { flex-direction: column; }
+  .nutri-target-head-actions { flex-direction: row; }
+}
+
+/* Calendario propio (src/lib/datePickerModal.ts) -- días / meses / años. */
+.dp-card { max-width: 340px; }
+.dp-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.dp-nav {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dp-nav:disabled { opacity: 0.35; cursor: default; }
+.dp-title {
+  flex: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.dp-title:hover { background: var(--surface-2); }
+.dp-weekdays, .dp-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+.dp-weekdays { margin-bottom: 6px; }
+.dp-weekdays span { text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.dp-days { gap: 2px; }
+.dp-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.dp-cell {
+  border: none;
+  background: none;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dp-day { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; }
+.dp-month, .dp-year { padding: 12px 0; text-align: center; }
+.dp-cell:hover:not(:disabled) { background: var(--surface-2); }
+.dp-cell:disabled { opacity: 0.28; cursor: default; }
+.dp-empty { pointer-events: none; }
+.dp-today { box-shadow: inset 0 0 0 1px var(--accent-2); }
+.dp-selected, .dp-selected:hover { background: var(--accent-2); color: #14171c; }
+.dp-actions { margin-top: 14px; justify-content: flex-end; }
+
+/* Lista de comidas (resumen del objetivo y vista del día). */
+.nutri-meal-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.nutri-meal-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--surface-2);
+}
+.nutri-meal-head { display: flex; align-items: center; justify-content: space-between; }
+.nutri-meal-head h4 { margin: 0; font-size: 14px; }
+.nutri-meal-pct { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.nutri-meal-targets { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font-size: 12.5px; color: var(--text-muted); }
+.nutri-meal-targets strong { color: var(--text); }
+/* Color por macro (mismo criterio que las barras / el doughnut del resumen). */
+.nutri-meal-targets .nutri-mt-p,
+.nutri-meal-targets .nutri-mt-p strong { color: #6fb0e0; }
+.nutri-meal-targets .nutri-mt-c,
+.nutri-meal-targets .nutri-mt-c strong { color: #e0a63c; }
+.nutri-meal-targets .nutri-mt-f,
+.nutri-meal-targets .nutri-mt-f strong { color: #c58fe0; }
+
+/* Asistente ---------------------------------------------------------------- */
+.nutri-mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+.nutri-mode-toggle .exc-pick-tab { flex: 1; text-align: center; }
+
+.nutri-wiz-section { margin-bottom: 4px; }
+.nutri-wiz-subhead { margin: 18px 0 10px; font-size: 15px; }
+.nutri-wiz-preview { margin: 10px 0 4px; }
+.nutri-calc-note { margin: 6px 0 0; font-size: 12.5px; color: var(--text-muted); }
+.nutri-calc-missing {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--surface-2);
+}
+.nutri-calc-missing p { margin: 0 0 4px; font-size: 13px; }
+.nutri-calc-missing p:last-child { margin-bottom: 0; }
+
+.nutri-pct-row { display: flex; gap: 8px; }
+.nutri-pct-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.nutri-pct-field span { font-size: 12px; color: var(--text-muted); }
+.nutri-pct-sum { margin: 8px 0 0; font-size: 12.5px; color: var(--text-muted); }
+.nutri-pct-sum-bad { color: var(--accent); font-weight: 700; }
+
+.nutri-goal-grid { display: flex; flex-direction: column; gap: 8px; }
+.nutri-goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.nutri-goal-card strong { font-size: 13.5px; }
+.nutri-goal-card span { font-size: 12px; color: var(--text-muted); }
+.nutri-goal-card.active { border-color: var(--accent-2); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* Editor de comidas del asistente. Los inputs no viven dentro de un `.field`, así que hay que
+   darles a mano el mismo look que `.field input` del resto del sitio (si no, quedan con el
+   estilo default del navegador -- blancos, desalineados). */
+.nutri-meal-name,
+.nutri-meal-pct-field input,
+.nutri-repeat-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.nutri-meal-name:focus,
+.nutri-meal-pct-field input:focus,
+.nutri-repeat-input:focus { outline: none; border-color: var(--accent-2); }
+
+.nutri-meal-editor { display: flex; flex-direction: column; gap: 8px; }
+/* nombre + % + kcal + × SIEMPRE en una línea (también en mobile) -- cada pieza se achica pero
+   no se envuelve. El nombre tiene un piso; la kcal (sólo una pista) es lo que se recorta. */
+.nutri-meal-edit-row { display: flex; align-items: center; gap: 8px; }
+.nutri-meal-edit-row .nutri-meal-name { flex: 1 1 auto; min-width: 64px; }
+.nutri-meal-pct-field { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.nutri-meal-pct-field input { width: 56px; text-align: right; padding-left: 6px; padding-right: 6px; }
+.nutri-meal-pct-field span { font-size: 13px; color: var(--text-muted); }
+/* ancho FIJO -- si no, "1200 kcal" y "900 kcal" tienen ancho distinto y descuadran la columna
+   del % y la × entre filas. */
+.nutri-meal-kcal { font-size: 12px; color: var(--text-muted); white-space: nowrap; width: 66px; flex: 0 0 66px; text-align: right; }
+.nutri-meal-del {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nutri-meal-del:hover:not(:disabled) { color: var(--text); }
+.nutri-meal-del:disabled { opacity: 0.3; cursor: default; }
+/* margin-bottom: despega el "+ Agregar comida" de los botones Guardar/Cancelar del modal
+   (los .modal-actions traen sólo 4px de margin-top). */
+.nutri-meal-editor-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 20px; }
+.nutri-meal-editor-foot .nutri-pct-sum { margin: 0; }
+
+@media (max-width: 480px) {
+  .nutri-meal-edit-row { gap: 6px; }
+  .nutri-meal-edit-row .nutri-meal-name { flex: 1 1 0; min-width: 52px; }
+  .nutri-meal-name, .nutri-meal-pct-field input { padding-left: 8px; padding-right: 8px; }
+  .nutri-meal-pct-field { gap: 3px; }
+  .nutri-meal-pct-field input { width: 46px; }
+  .nutri-meal-pct-field span { font-size: 12px; }
+  /* kcal: ancho fijo chico (columna pareja entre filas), el nombre cede el espacio. */
+  .nutri-meal-kcal { width: 56px; flex: 0 0 56px; font-size: 10.5px; }
+  .nutri-meal-del { width: 28px; height: 28px; font-size: 15px; }
+}
+
+/* Vista del día ---------------------------------------------------------------- */
+.nutri-status { font-weight: 700; }
+.nutri-status-ok { color: var(--live); }
+.nutri-status-under { color: var(--text-muted); }
+.nutri-status-over { color: var(--accent); }
+
+.nutri-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.nutri-bar-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+.nutri-bar-track { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.nutri-bar-fill { height: 100%; border-radius: 999px; transition: width 0.35s ease; }
+.nutri-bar-kcal { background: var(--accent-2); }
+.nutri-bar-p { background: #6fb0e0; }
+.nutri-bar-c { background: #e0a63c; }
+.nutri-bar-f { background: #c58fe0; }
+.nutri-bar-over { background: var(--accent); }
+
+.nutri-log-list { display: flex; flex-direction: column; margin: 10px 0 4px; }
+.nutri-log-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.nutri-log-row:first-child { border-top: none; }
+.nutri-log-main { flex: 1; min-width: 0; }
+.nutri-log-name { display: block; font-size: 13.5px; font-weight: 600; }
+.nutri-log-brand { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+.nutri-log-sub { display: block; font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.nutri-log-edit, .nutri-log-del {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.nutri-log-del { font-size: 16px; }
+.nutri-log-edit:hover, .nutri-log-del:hover { color: var(--text); }
+
+/* Resumen del día (gráfico + barras + estado por macro) ----------------------- */
+.nutri-summary-headline { margin-bottom: 12px; }
+.nutri-summary-grid { display: flex; gap: 20px; align-items: center; }
+.nutri-donut-wrap { position: relative; flex-shrink: 0; width: 200px; }
+.nutri-donut { height: 200px; }
+.nutri-donut-center {
+  position: absolute;
+  top: calc(50% - 14px);   /* la leyenda de abajo desplaza el centro visual del anillo */
+  left: 0; right: 0;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+}
+.nutri-donut-center strong { font-size: 22px; font-weight: 800; line-height: 1; }
+.nutri-donut-center span { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.nutri-summary-bars { flex: 1; min-width: 0; margin-top: 0; }
+
+.nutri-macro-status { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+.nutri-mstat { display: flex; justify-content: space-between; font-size: 13px; }
+.nutri-mstat span:first-child { color: var(--text-muted); }
+.nutri-mstat span:last-child { font-weight: 700; }
+.nutri-mstat-ok span:last-child { color: var(--live); }
+.nutri-mstat-under span:last-child { color: var(--text-muted); }
+.nutri-mstat-over span:last-child { color: var(--accent); }
+
+@media (max-width: 560px) {
+  .nutri-summary-grid { flex-direction: column; gap: 12px; }
+  .nutri-donut-wrap { width: 100%; max-width: 240px; }
+  .nutri-summary-bars { width: 100%; }
+  .nutri-macro-status { grid-template-columns: 1fr; }
+}
+
+/* Buscador de alimentos ------------------------------------------------------- */
+.nutri-fp-attribution { margin: 8px 0 0; font-size: 11px; color: var(--text-muted); text-align: right; }
+
+/* En celular el modal va a pantalla completa (.exc-pick-modal-card, ver mas abajo), pero
+   .exc-pick-results se cortaba a 48vh y dejaba un hueco muerto entre la lista y los botones
+   del fondo. Con el modal como columna flex la lista se estira a todo el alto disponible y
+   "+ Crear alimento" / "Cerrar" quedan fijos abajo. */
+@media (max-width: 639px) {
+  .nutri-fp-modal-card { display: flex; flex-direction: column; }
+  .nutri-fp-modal-card .exc-pick-results { flex: 1; min-height: 0; max-height: none; }
+  .nutri-fp-modal-card .modal-actions { margin-top: auto; padding-top: 14px; }
+}
+.nutri-food-grid { grid-template-columns: 1fr; gap: 6px; }
+.nutri-food-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+}
+.nutri-food-name { font-size: 13.5px; font-weight: 600; }
+.nutri-food-meta { font-size: 12px; color: var(--text-muted); }
+.nutri-off-tag { color: var(--accent-2); }
+
+.nutri-qty-card { max-width: 460px; }
+.nutri-qty-back {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; padding: 0; margin-bottom: 6px;
+}
+.nutri-qty-back svg { width: 16px; height: 16px; }
+.nutri-qty-row { display: flex; gap: 10px; }
+.nutri-qty-row .field { flex: 1; }
+.nutri-qty-suggest { margin: 4px 0 10px; }
+.nutri-qty-preview { margin: 6px 0; }
+.nutri-qty-grams { font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+
+/* Crear alimento ------------------------------------------------------------- */
+.nutri-cf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.nutri-cf-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0 4px; cursor: pointer; }
+.nutri-cf-check input { width: auto; }
+
+/* Acciones por comida: "+ Agregar alimento" es la principal (botón lleno, ancho completo);
+   "Sugerencias" y "Repetir" quedan como acciones secundarias chicas, alineadas a la izquierda. */
+.nutri-meal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.nutri-add-food { width: 100%; }
+.nutri-meal-actions-sub { display: flex; align-items: center; gap: 16px; }
+/* inline-flex + align-items:center + line-height:1: el emoji 💡 y el símbolo ⟳ tienen alturas
+   de glifo distintas -> sin esto "⟳ Repetir" quedaba más arriba que "💡 Sugerencias". */
+.nutri-meal-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1;
+  font-weight: 600;
+  cursor: pointer;
+}
+.nutri-meal-mini:hover { color: var(--text); }
+
+/* Sugerencias por comida + "recomendados primero" en el buscador --------------- */
+
+.nutri-fp-section { margin: 12px 0 6px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.nutri-fp-section:first-child { margin-top: 0; }
+.nutri-food-reco { border-color: var(--accent-2); }
+
+.ms-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+.ms-row:first-child { border-top: none; }
+.ms-row-main { flex: 1; min-width: 0; }
+.ms-row-name { display: block; font-size: 13.5px; font-weight: 600; }
+.ms-row-brand { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+.ms-row-sub { display: block; font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.ms-add { flex-shrink: 0; }
+.ms-row-done { opacity: 0.55; }
+.ms-row-done .ms-add { color: var(--live); }
+
+@media (max-width: 480px) {
+  .nutri-cf-grid { grid-template-columns: 1fr; }
+  .nutri-qty-row { flex-direction: column; gap: 0; }
 }
 
 /* ---------- Routine tabs ---------- */
