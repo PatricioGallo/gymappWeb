@@ -3555,6 +3555,17 @@ export type Database = {
           status: string
         }[]
       }
+      get_food_popularity: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          food_id: string
+          uses: number
+        }[]
+      }
+      get_meal_suggestion_foods: {
+        Args: { p_meal_tags: string[]; p_limit?: number }
+        Returns: Database["public"]["Tables"]["food_items"]["Row"][]
+      }
       get_my_exercises_usage_counts: {
         Args: never
         Returns: {

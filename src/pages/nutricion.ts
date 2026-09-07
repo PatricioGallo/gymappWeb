@@ -16,6 +16,7 @@ import {
   type FoodMacros,
 } from "../services/nutrition.service";
 import { openFoodPicker, type PickedFood } from "../lib/foodPicker";
+import { openMealSuggestions } from "../lib/mealSuggestionsModal";
 import { todayLocalISO, formatFechaCorta } from "../lib/dias";
 import {
   calcMacros,
@@ -195,7 +196,10 @@ function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
           <span><strong>${fmt(mealTarget.fat_g)}</strong> G</span>
         </div>
         ${foodRows ? `<div class="nutri-log-list">${foodRows}</div>` : ""}
-        <button type="button" class="btn btn-outline btn-sm nutri-add-food" data-meal="${i}">+ Agregar alimento</button>
+        <div class="nutri-meal-actions">
+          <button type="button" class="btn btn-outline btn-sm nutri-add-food" data-meal="${i}">+ Agregar alimento</button>
+          <button type="button" class="btn btn-outline btn-sm nutri-meal-suggest" data-meal="${i}">💡 Sugerencias</button>
+        </div>
       </div>`;
     })
     .join("");
@@ -325,15 +329,62 @@ export const nutricionView: ViewModule = {
     function wireDayView(content: Element): void {
       content.querySelector("#editTargetBtn")?.addEventListener("click", () => void openTargetWizard(target));
 
+      function mealCtx(mealIndex: number): { meal: Meal; mealTarget: MacroSet; remaining: FoodMacros } | null {
+        const meal = target?.meals[mealIndex];
+        if (!meal || !target) return null;
+        const mealTarget = mealMacros(targetMacros(target), meal.pct);
+        const c = sumMacros(logs.filter((l) => l.mealIndex === mealIndex));
+        return {
+          meal,
+          mealTarget,
+          remaining: {
+            kcal: mealTarget.kcal - c.kcal,
+            protein_g: mealTarget.protein_g - c.protein_g,
+            carbs_g: mealTarget.carbs_g - c.carbs_g,
+            fat_g: mealTarget.fat_g - c.fat_g,
+            fiber_g: null,
+          },
+        };
+      }
+
       content.querySelectorAll<HTMLButtonElement>(".nutri-add-food").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const mealIndex = Number(btn.dataset.meal);
-          const meal = target?.meals[mealIndex];
-          if (!meal || !target) return;
-          const mealTarget = mealMacros(targetMacros(target), meal.pct);
-          const mealConsumed = sumMacros(logs.filter((l) => l.mealIndex === mealIndex));
-          const remainingKcal = Math.max(0, mealTarget.kcal - mealConsumed.kcal);
-          openFoodPicker((picked) => void addPicked(mealIndex, meal.name, picked), myId, { mealName: meal.name, remainingKcal }, ctx);
+          const mi = Number(btn.dataset.meal);
+          const mc = mealCtx(mi);
+          if (!mc) return;
+          openFoodPicker(
+            (picked) => void addPicked(mi, mc.meal.name, picked),
+            myId,
+            { mealName: mc.meal.name, remainingKcal: Math.max(0, mc.remaining.kcal), remaining: mc.remaining },
+            ctx
+          );
+        });
+      });
+
+      content.querySelectorAll<HTMLButtonElement>(".nutri-meal-suggest").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const mi = Number(btn.dataset.meal);
+          const mc = mealCtx(mi);
+          if (!mc) return;
+          openMealSuggestions(
+            async (s) => {
+              await addNutritionLog(myId, {
+                logDate: today,
+                mealIndex: mi,
+                mealName: mc.meal.name,
+                foodId: s.food.id,
+                foodName: s.food.name,
+                brand: s.food.brand,
+                grams: s.grams,
+                displayQty: s.grams,
+                displayUnit: "g",
+                macros: s.macros,
+              });
+            },
+            { mealName: mc.meal.name, remaining: mc.remaining, mealTargetKcal: mc.mealTarget.kcal },
+            ctx,
+            () => void render()
+          );
         });
       });
 

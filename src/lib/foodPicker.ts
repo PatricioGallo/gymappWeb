@@ -7,10 +7,14 @@ import {
   foodMacrosForGrams,
   suggestedGrams,
   toGrams,
+  macroFitScore,
+  mealTagsForName,
+  getFoodPopularity,
   type FoodItem,
   type FoodMacros,
   type DisplayUnit,
 } from "../services/nutrition.service";
+import type { MacroSet } from "./macroCalculator";
 import { searchOpenFoodFacts, getOpenFoodFactsByBarcode, type OffCandidate } from "./openFoodFacts";
 import { openCreateFoodModal } from "./createFoodModal";
 import type { ViewContext } from "../shell/viewContext";
@@ -40,12 +44,17 @@ interface PickerOpts {
   mealName: string;
   /** kcal que le faltan a la comida para llegar a su objetivo (para la cantidad sugerida). */
   remainingKcal: number;
+  /** Lo que le falta a la comida por macro -- si viene, el Catálogo ordena "recomendados primero". */
+  remaining?: MacroSet;
 }
 
 export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: string, opts: PickerOpts, ctx?: ViewContext): void {
   const loaderBody = document.getElementById("loaderBody");
   if (!loaderBody) return;
   const host: HTMLElement = loaderBody;
+
+  const mealTags = mealTagsForName(opts.mealName);
+  let popularity: Map<string, number> | null = null;
 
   const cache: Partial<Record<"catalogo" | "mios", FoodItem[]>> = {};
   let activeTab: Tab = "catalogo";
@@ -159,9 +168,35 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     }
     if (!cache[activeTab]) {
       if (results) results.innerHTML = `<div class="inline-loader"><div class="modern-spinner"></div><p>Cargando...</p></div>`;
-      cache[activeTab] = activeTab === "catalogo" ? await listBuiltinFoods() : await listMyFoods(userId);
+      const [items] = await Promise.all([
+        activeTab === "catalogo" ? listBuiltinFoods() : listMyFoods(userId),
+        // Popularidad global -- solo hace falta si vamos a ordenar "recomendados primero".
+        opts.remaining && !popularity ? getFoodPopularity().then((p) => (popularity = p)) : Promise.resolve(),
+      ]);
+      cache[activeTab] = items;
     }
     renderResults();
+  }
+
+  /** true si el alimento es del tipo de esta comida (curados con meal_tag que matchea). */
+  function isRecommended(f: FoodItem): boolean {
+    if (!opts.remaining) return false;
+    return f.mealTags.some((t) => (mealTags as string[]).includes(t));
+  }
+
+  /** Orden "recomendados primero": tipo de comida / encaje de macros / popularidad / nombre. */
+  function sortForMeal(items: FoodItem[]): FoodItem[] {
+    if (!opts.remaining) return items;
+    const rem = opts.remaining;
+    return [...items].sort((a, b) => {
+      const ra = isRecommended(a) ? 0 : 1;
+      const rb = isRecommended(b) ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      const fa = macroFitScore(a, rem) + Math.log1p(popularity?.get(a.id) ?? 0) * 0.1;
+      const fb = macroFitScore(b, rem) + Math.log1p(popularity?.get(b.id) ?? 0) * 0.1;
+      if (Math.abs(fa - fb) > 0.001) return fb - fa;
+      return a.name.localeCompare(b.name);
+    });
   }
 
   async function runSearch(): Promise<void> {
@@ -202,10 +237,10 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     void selectOff(off);
   }
 
-  function foodCardMarkup(f: FoodItem): string {
+  function foodCardMarkup(f: FoodItem, recommended = false): string {
     const meta = [f.brand, `${Math.round(f.kcal100)} kcal/100 g`].filter(Boolean).join(" · ");
     return `
-      <button type="button" class="exc-pick-card nutri-food-card" data-kind="food" data-id="${f.id}">
+      <button type="button" class="exc-pick-card nutri-food-card${recommended ? " nutri-food-reco" : ""}" data-kind="food" data-id="${f.id}">
         <span class="nutri-food-name">${escapeHtml(f.name)}</span>
         <span class="nutri-food-meta">${escapeHtml(meta)}</span>
       </button>`;
@@ -226,10 +261,24 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     const term = search.trim().toLowerCase();
 
     if (activeTab !== "buscar") {
-      const items = (cache[activeTab] ?? []).filter((f) => f.name.toLowerCase().includes(term) || (f.brand ?? "").toLowerCase().includes(term));
-      results.innerHTML = items.length
-        ? `<div class="exc-pick-grid nutri-food-grid">${items.map(foodCardMarkup).join("")}</div>`
-        : `<p class="exc-pick-empty">${activeTab === "mios" ? "Todavía no creaste alimentos propios." : "No hay alimentos del catálogo con ese criterio."}</p>`;
+      const filtered = (cache[activeTab] ?? []).filter(
+        (f) => f.name.toLowerCase().includes(term) || (f.brand ?? "").toLowerCase().includes(term)
+      );
+      if (!filtered.length) {
+        results.innerHTML = `<p class="exc-pick-empty">${activeTab === "mios" ? "Todavía no creaste alimentos propios." : "No hay alimentos del catálogo con ese criterio."}</p>`;
+        return;
+      }
+      const items = sortForMeal(filtered);
+      // Sin filtro de texto y con contexto de comida: separar "Recomendados" arriba.
+      if (opts.remaining && term === "") {
+        const reco = items.filter(isRecommended);
+        const rest = items.filter((f) => !isRecommended(f));
+        results.innerHTML =
+          (reco.length ? `<h4 class="nutri-fp-section">Recomendados para ${escapeHtml(opts.mealName)}</h4><div class="exc-pick-grid nutri-food-grid">${reco.map((f) => foodCardMarkup(f, true)).join("")}</div>` : "") +
+          (rest.length ? `<h4 class="nutri-fp-section">Todos</h4><div class="exc-pick-grid nutri-food-grid">${rest.map((f) => foodCardMarkup(f)).join("")}</div>` : "");
+        return;
+      }
+      results.innerHTML = `<div class="exc-pick-grid nutri-food-grid">${items.map((f) => foodCardMarkup(f, isRecommended(f))).join("")}</div>`;
       return;
     }
 
@@ -238,7 +287,7 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
       return;
     }
     const parts: string[] = [];
-    if (cachedHits.length) parts.push(`<div class="exc-pick-grid nutri-food-grid">${cachedHits.map(foodCardMarkup).join("")}</div>`);
+    if (cachedHits.length) parts.push(`<div class="exc-pick-grid nutri-food-grid">${cachedHits.map((f) => foodCardMarkup(f, isRecommended(f))).join("")}</div>`);
     if (offHits.length) parts.push(`<div class="exc-pick-grid nutri-food-grid">${offHits.map(offCardMarkup).join("")}</div>`);
     if (offLoading) parts.push(`<div class="inline-loader"><div class="modern-spinner"></div><p>Buscando en Open Food Facts...</p></div>`);
     if (!parts.length) parts.push(`<p class="exc-pick-empty">Sin resultados${offLoading ? "" : " -- probá otro nombre o creá el alimento"}.</p>`);

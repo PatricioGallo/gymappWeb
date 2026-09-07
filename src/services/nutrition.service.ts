@@ -486,3 +486,109 @@ export async function deleteNutritionLog(logId: string): Promise<{ error?: strin
   if (error) return { error: "No se pudo borrar el alimento." };
   return {};
 }
+
+// ---------------------------------------------------------------------------
+// Sugerencias por comida + orden "recomendados primero" en el buscador
+// ---------------------------------------------------------------------------
+
+export const MEAL_TAGS = ["desayuno", "almuerzo", "merienda", "cena", "snack"] as const;
+export type MealTag = (typeof MEAL_TAGS)[number];
+
+/** Infiere el/los tipo(s) de comida a partir del nombre (los nombres los edita el usuario). */
+export function mealTagsForName(name: string): MealTag[] {
+  const n = name.toLowerCase();
+  if (n.includes("desayuno")) return ["desayuno"];
+  if (n.includes("merienda")) return ["merienda"];
+  if (n.includes("almuerzo")) return ["almuerzo"];
+  if (n.includes("cena")) return ["cena"];
+  if (/media\s*ma|media\s*tar|brunch/.test(n)) return ["merienda", "snack"];
+  if (/tentemp|tentenp|colaci|snack|pre[\s-]?entren|post[\s-]?entren/.test(n)) return ["snack"];
+  return ["snack", "merienda"];
+}
+
+/**
+ * Qué tan bien "encaja" el perfil de macros de un alimento con lo que le falta a la comida
+ * -- similitud coseno entre los vectores de kcal por macro (P·4, C·4, G·9). 0..1.
+ * Si a la comida ya no le falta nada, devuelve 0.5 (neutro).
+ */
+export function macroFitScore(food: Pick<FoodItem, "protein100" | "carbs100" | "fat100">, remaining: MacroSet): number {
+  const rp = Math.max(0, remaining.protein_g) * 4;
+  const rc = Math.max(0, remaining.carbs_g) * 4;
+  const rf = Math.max(0, remaining.fat_g) * 9;
+  const rMag = Math.hypot(rp, rc, rf);
+  if (rMag === 0) return 0.5;
+  const fp = food.protein100 * 4;
+  const fc = food.carbs100 * 4;
+  const ff = food.fat100 * 9;
+  const fMag = Math.hypot(fp, fc, ff);
+  if (fMag === 0) return 0;
+  return (rp * fp + rc * fc + rf * ff) / (rMag * fMag);
+}
+
+/** Fracción de kcal que viene de un solo macro (1 = alimento "puro": aceite, azúcar). */
+function singleMacroShare(food: Pick<FoodItem, "protein100" | "carbs100" | "fat100">): number {
+  const p = food.protein100 * 4;
+  const c = food.carbs100 * 4;
+  const f = food.fat100 * 9;
+  const total = p + c + f;
+  if (total <= 0) return 0;
+  return Math.max(p, c, f) / total;
+}
+
+export interface FoodSuggestion {
+  food: FoodItem;
+  grams: number;
+  macros: FoodMacros;
+}
+
+/** Popularidad global por alimento (para ordenar el buscador). */
+export async function getFoodPopularity(): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc("get_food_popularity");
+  if (error) return new Map();
+  const map = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ food_id: string; uses: number }>) {
+    if (row.food_id) map.set(row.food_id, Number(row.uses));
+  }
+  return map;
+}
+
+/**
+ * Alimentos sugeridos para una comida, con una cantidad escalada para acercarse a lo que le
+ * falta (o a ~1/3 del objetivo si ya está cubierta). Ordenados por: encaje de macros +
+ * popularidad. Los curados que matchean el tipo de comida entran aunque nadie los haya cargado.
+ */
+export async function getMealSuggestions(mealName: string, remaining: MacroSet, mealTargetKcal: number): Promise<FoodSuggestion[]> {
+  const tags = mealTagsForName(mealName);
+  const { data, error } = await supabase.rpc("get_meal_suggestion_foods", { p_meal_tags: tags, p_limit: 16 });
+  if (error) throw error;
+  // La RPC ya viene ordenada por match de tipo de comida y después uso. El encaje de macros
+  // re-acomoda un poco (un alimento que le cae justo a lo que falta salta ~3 puestos), y se
+  // penalizan los "puros" (aceite, azúcar) salvo que lo que falte sea justo ese macro.
+  const foods = ((data ?? []) as FoodItemRow[]).map(mapFood);
+  const ranked = foods
+    .map((food, i) => {
+      const purePenalty = singleMacroShare(food) > 0.85 && macroFitScore(food, remaining) < 0.9 ? 6 : 0;
+      return { food, rank: i - macroFitScore(food, remaining) * 4 + purePenalty };
+    })
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 8);
+
+  // Una sugerencia = ~la mitad de lo que falta (una comida real son 2-3 alimentos, no uno solo
+  // gigante). Se acota a una porción sensata: si el alimento trae serving_grams, se redondea a
+  // porciones; si no, tope de 300 g.
+  const targetKcal = Math.min(
+    remaining.kcal > 60 ? remaining.kcal * 0.55 : mealTargetKcal * 0.25,
+    mealTargetKcal * 0.5
+  );
+  return ranked.map(({ food }) => {
+    const rawGrams = food.kcal100 > 0 ? (targetKcal / food.kcal100) * 100 : 100;
+    let grams: number;
+    if (food.servingGrams && food.servingGrams > 0) {
+      const servings = Math.max(1, Math.min(4, Math.round(rawGrams / food.servingGrams)));
+      grams = servings * food.servingGrams;
+    } else {
+      grams = Math.round(Math.min(300, Math.max(15, rawGrams)) / 5) * 5;
+    }
+    return { food, grams, macros: foodMacrosForGrams(food, grams) };
+  });
+}
