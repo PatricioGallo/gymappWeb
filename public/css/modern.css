@@ -3105,6 +3105,35 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
    medidas.ts) -- alineado a la derecha debajo del textarea. */
 .bw-share-counter { display: block; margin: 6px 0 0; text-align: right; }
 
+/* Mini tutorial de "Medidas corporales" (ver src/lib/measurementsIntroModal.ts) -- lo abre el
+   tap de la notificación mensual measurements_reminder. Usa .modal-card / .subtitle / .modal-actions
+   como el resto de los modales; esto solo agrega la lista de pasos y el pie. */
+.measurements-intro-steps {
+  margin: 4px 0 12px;
+  padding-left: 22px;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.measurements-intro-steps li { margin: 6px 0; }
+.measurements-intro-hint {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* Resalte temporal de una tarjeta de Configuración cuando se llega a ella desde un deep-link
+   (ej. tutorial de medidas -> settings.html?tab=personalization&highlight=measurements). La clase
+   se saca sola a los ~2.4s desde el JS (ver highlightMeasurementCard en settings.ts). */
+.settings-card-highlight {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--accent-soft);
+  transition: outline-color 0.3s ease, box-shadow 0.3s ease;
+}
+
 /* Clasificación de IMC (pestaña IMC de medidas.ts) -- mismo look que .member-status-badge,
    colores propios (bajoPeso/sobrepeso comparten el amarillo de "atención", obesidad usa el
    rojo de "expired", normal el verde de "ok"). */

@@ -31,6 +31,7 @@ const TYPE_ICON: Record<string, string> = {
   message_reaction: "😀",
   class_reminder: "⏰",
   birthday: "🎂",
+  measurements_reminder: "📏",
 };
 
 function relativeTime(iso: string): string {

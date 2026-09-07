@@ -1,5 +1,5 @@
 import type { ViewModule } from "../shell/router";
-import { navigate } from "../shell/router";
+import { navigate, reloadActiveView } from "../shell/router";
 import { escapeHtml } from "../lib/dom";
 import { formatFechaCorta, todayLocalISO } from "../lib/dias";
 import {
@@ -42,6 +42,7 @@ import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
 import { openMediaLightbox } from "../lib/mediaLightbox";
+import { openMeasurementsIntroModal } from "../lib/measurementsIntroModal";
 
 // Límite de caracteres de un Rep (coincide con POST_MAX en feed.ts / POST_CONTENT_MAX en
 // post.service.ts, que no lo exporta). Usado por el modal "Compartir como Rep".
@@ -229,10 +230,10 @@ function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, s
   `;
 }
 
-let updateHandler: (() => void) | null = null;
+let updateHandler: ((params?: URLSearchParams) => void) | null = null;
 
 export const medidasView: ViewModule = {
-  async mount(container, _params, ctx, authUserId) {
+  async mount(container, params, ctx, authUserId) {
     const myId = authUserId!; // la ruta se registra con auth "required"
 
     // Feature opt-in (ver profiles.body_measurement_prefs / Configuración > Personalización):
@@ -241,7 +242,30 @@ export const medidasView: ViewModule = {
     // solo evita mostrar la pantalla a quien todavía no la activó.
     let prefs = await getBodyMeasurementPrefs(myId);
     if (!prefs.enabled) {
-      navigate("profile.html");
+      // ?intro=1 = llegó tocando la notificación mensual "Seguí tus medidas corporales"
+      // (ver notify_measurements_reminder). Como todavía no la activó, en vez de rebotar seco
+      // le abrimos el mini tutorial arriba de su propio perfil.
+      const bounce = (p?: URLSearchParams) => {
+        if (p?.get("intro") === "1") {
+          openMeasurementsIntroModal();
+          navigate("profile.html", { replace: true });
+        } else {
+          navigate("profile.html");
+        }
+      };
+      // El shell deja esta instancia (vacía) cacheada aunque mount() corte acá -- si el usuario
+      // activa las medidas en Configuración y vuelve, el shell llama update() (no mount()), así
+      // que dejamos un updateHandler que la re-evalúa: si ya está activada, remonta de cero.
+      updateHandler = (p?: URLSearchParams) => {
+        void (async () => {
+          if ((await getBodyMeasurementPrefs(myId)).enabled) void reloadActiveView();
+          else bounce(p);
+        })();
+      };
+      ctx.addCleanup(() => {
+        updateHandler = null;
+      });
+      bounce(params);
       return;
     }
     // Altura: no es una medida por fecha, es profiles.altura_cm (se pide una sola vez en
@@ -1224,13 +1248,21 @@ function noDataMarkup(field: MeasurementFieldDef): string {
 
     await render();
 
-    updateHandler = () => {
+    updateHandler = (params?: URLSearchParams) => {
       void (async () => {
         // Las preferencias (y la altura) pueden haber cambiado en Configuración desde la última
         // vez que se montó esta vista (el shell mantiene las vistas vivas, ver update() en otras páginas).
         prefs = await getBodyMeasurementPrefs(myId);
         if (!prefs.enabled) {
-          navigate("profile.html");
+          // Mismo caso que en mount(): si vino tocando la notificación mensual y sigue sin
+          // activarla, mostramos el tutorial en vez de rebotar seco (cubre la instancia de esta
+          // vista ya cacheada por el shell).
+          if (params?.get("intro") === "1") {
+            openMeasurementsIntroModal();
+            navigate("profile.html", { replace: true });
+          } else {
+            navigate("profile.html");
+          }
           return;
         }
         alturaCm = await getAlturaCm(myId);
@@ -1242,7 +1274,7 @@ function noDataMarkup(field: MeasurementFieldDef): string {
       updateHandler = null;
     });
   },
-  update() {
-    updateHandler?.();
+  update(params) {
+    updateHandler?.(params);
   },
 };

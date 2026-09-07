@@ -18,7 +18,8 @@ export type NotificationType =
   | "mention"
   | "message_reaction"
   | "class_reminder"
-  | "birthday";
+  | "birthday"
+  | "measurements_reminder";
 
 const RECENT_LIMIT = 8;
 const FULL_LIST_LIMIT = 200;
