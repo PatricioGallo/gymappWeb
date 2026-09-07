@@ -18,6 +18,8 @@ import {
 import { openFoodPicker, type PickedFood } from "../lib/foodPicker";
 import { openMealSuggestions } from "../lib/mealSuggestionsModal";
 import { todayLocalISO, formatFechaCorta } from "../lib/dias";
+import { loadChart } from "../lib/chartLoader";
+import type { Chart as ChartInstance } from "chart.js";
 import {
   calcMacros,
   bmrMifflinStJeor,
@@ -159,6 +161,68 @@ function macroBar(label: string, consumed: number, target: number, cls: string):
     </div>`;
 }
 
+// Línea de estado por macro: "vas bien" / "te faltan X" / "te pasaste X". El margen de
+// tolerancia es el 8% del objetivo (mínimo 8 unidades) para no marcar "te pasaste" por 3 g.
+function macroStatusLine(label: string, consumed: number, target: number, unit: string): string {
+  const tol = Math.max(8, target * 0.08);
+  const diff = Math.round(consumed - target);
+  let cls: "ok" | "under" | "over";
+  let text: string;
+  if (Math.abs(diff) <= tol) {
+    cls = "ok";
+    text = "vas bien";
+  } else if (diff < 0) {
+    cls = "under";
+    text = `te faltan ${-diff} ${unit}`;
+  } else {
+    cls = "over";
+    text = `te pasaste ${diff} ${unit}`;
+  }
+  return `<li class="nutri-mstat nutri-mstat-${cls}"><span>${label}</span><span>${text}</span></li>`;
+}
+
+function daySummaryMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
+  const daily = targetMacros(target);
+  const consumed = sumMacros(logs);
+  const overallDiff = Math.round(consumed.kcal - daily.kcal);
+  const headline =
+    logs.length === 0
+      ? "Todavía no cargaste nada hoy."
+      : overallDiff > 60
+        ? `Te pasaste ${overallDiff} kcal. Cuidá las porciones el resto del día.`
+        : overallDiff >= -120
+          ? "Estás en el objetivo. Bien ahí."
+          : `Podés sumar ~${-overallDiff} kcal más para llegar a tu objetivo.`;
+
+  return `
+    <div class="chart-card reveal" id="nutriDaySummary">
+      <h3>Resumen del día</h3>
+      <p class="chart-sub nutri-summary-headline">${escapeHtml(headline)}</p>
+      <div class="nutri-summary-grid">
+        <div class="nutri-donut-wrap">
+          <div class="chart-wrap nutri-donut"><canvas id="nutriMacroChart"></canvas></div>
+          <div class="nutri-donut-center">
+            <strong>${fmt(consumed.kcal)}</strong>
+            <span>de ${fmt(daily.kcal)} kcal</span>
+          </div>
+        </div>
+        <div class="nutri-bars nutri-summary-bars">
+          ${macroBar("Calorías", consumed.kcal, daily.kcal, "nutri-bar-kcal")}
+          ${macroBar("Proteína", consumed.protein_g, daily.protein_g, "nutri-bar-p")}
+          ${macroBar("Carbos", consumed.carbs_g, daily.carbs_g, "nutri-bar-c")}
+          ${macroBar("Grasa", consumed.fat_g, daily.fat_g, "nutri-bar-f")}
+        </div>
+      </div>
+      <ul class="nutri-macro-status">
+        ${macroStatusLine("Calorías", consumed.kcal, daily.kcal, "kcal")}
+        ${macroStatusLine("Proteína", consumed.protein_g, daily.protein_g, "g")}
+        ${macroStatusLine("Carbos", consumed.carbs_g, daily.carbs_g, "g")}
+        ${macroStatusLine("Grasa", consumed.fat_g, daily.fat_g, "g")}
+      </ul>
+    </div>
+  `;
+}
+
 function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
   const daily = targetMacros(target);
   const consumed = sumMacros(logs);
@@ -213,14 +277,9 @@ function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[]): string {
         </div>
         <button class="btn btn-outline btn-sm" id="editTargetBtn" type="button">Editar objetivo</button>
       </div>
-      <div class="nutri-bars">
-        ${macroBar("Calorías", consumed.kcal, daily.kcal, "nutri-bar-kcal")}
-        ${macroBar("Proteína", consumed.protein_g, daily.protein_g, "nutri-bar-p")}
-        ${macroBar("Carbos", consumed.carbs_g, daily.carbs_g, "nutri-bar-c")}
-        ${macroBar("Grasa", consumed.fat_g, daily.fat_g, "nutri-bar-f")}
-      </div>
     </div>
     <div class="nutri-meal-list">${meals}</div>
+    ${daySummaryMarkup(target, logs)}
   `;
 }
 
@@ -307,10 +366,14 @@ export const nutricionView: ViewModule = {
     const today = todayLocalISO();
     let target = await getActiveNutritionTarget(myId);
     let logs: NutritionLog[] = [];
+    let dayChart: ChartInstance | null = null;
+    ctx.addCleanup(() => dayChart?.destroy());
 
     async function render(): Promise<void> {
       const content = container.querySelector("#nutriContent");
       if (!content) return;
+      dayChart?.destroy();
+      dayChart = null;
       if (!target) {
         content.innerHTML = emptyMarkup();
         content.querySelector("#defineTargetBtn")?.addEventListener("click", () => void openTargetWizard(null));
@@ -324,6 +387,45 @@ export const nutricionView: ViewModule = {
       }
       content.innerHTML = dayViewMarkup(target, logs);
       wireDayView(content);
+      void drawDayChart();
+    }
+
+    async function drawDayChart(): Promise<void> {
+      const canvas = container.querySelector("#nutriMacroChart") as HTMLCanvasElement | null;
+      if (!canvas || !target) return;
+      const daily = targetMacros(target);
+      const c = sumMacros(logs);
+      const pKcal = Math.round(c.protein_g * 4);
+      const cKcal = Math.round(c.carbs_g * 4);
+      const fKcal = Math.round(c.fat_g * 9);
+      const remaining = Math.max(0, Math.round(daily.kcal) - pKcal - cKcal - fKcal);
+
+      const Chart = await loadChart();
+      dayChart?.destroy();
+      dayChart = new Chart(canvas, {
+        type: "doughnut",
+        data: {
+          labels: ["Proteína", "Carbos", "Grasa", "Te falta"],
+          datasets: [
+            {
+              data: [pKcal, cKcal, fKcal, remaining],
+              backgroundColor: ["#6fb0e0", "#e0a63c", "#c58fe0", "#262b33"],
+              borderColor: "#14171c",
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "68%",
+          plugins: {
+            legend: { position: "bottom", labels: { color: "#9aa1ac", boxWidth: 12, padding: 12 } },
+            tooltip: { callbacks: { label: (item) => `${item.label}: ${Math.round(Number(item.parsed))} kcal` } },
+          },
+        },
+      });
+      ctx.addCleanup(() => dayChart?.destroy());
     }
 
     function wireDayView(content: Element): void {
