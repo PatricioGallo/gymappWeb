@@ -305,7 +305,7 @@ function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[], viewDate: 
           <button type="button" class="btn btn-outline btn-sm nutri-add-food" data-meal="${i}">+ Agregar alimento</button>
           <div class="nutri-meal-actions-sub">
             <button type="button" class="nutri-meal-mini nutri-meal-suggest" data-meal="${i}">💡 Sugerencias</button>
-            <button type="button" class="nutri-meal-mini nutri-meal-repeat" data-meal="${i}">⟳ Repetir</button>
+            <button type="button" class="nutri-meal-mini nutri-meal-repeat" data-meal="${i}">🔁 Repetir</button>
           </div>
         </div>
       </div>`;
@@ -328,7 +328,7 @@ function dayViewMarkup(target: NutritionTarget, logs: NutritionLog[], viewDate: 
           <p class="chart-sub nutri-status nutri-status-${status.tone}">${escapeHtml(status.text)}</p>
         </div>
         <div class="nutri-target-head-actions">
-          <button class="btn btn-outline btn-sm" id="repeatDayBtn" type="button">⟳ Repetir día</button>
+          <button class="btn btn-outline btn-sm" id="repeatDayBtn" type="button">🔁 Repetir día</button>
           <button class="btn btn-outline btn-sm" id="editTargetBtn" type="button">Editar objetivo</button>
         </div>
       </div>

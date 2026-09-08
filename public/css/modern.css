@@ -3569,8 +3569,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .nutri-meal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .nutri-add-food { width: 100%; }
 .nutri-meal-actions-sub { display: flex; align-items: center; gap: 16px; }
-/* inline-flex + align-items:center + line-height:1: el emoji 💡 y el símbolo ⟳ tienen alturas
-   de glifo distintas -> sin esto "⟳ Repetir" quedaba más arriba que "💡 Sugerencias". */
+/* inline-flex + align-items:center + line-height:1: alinea el emoji con el texto y empareja
+   "🔁 Repetir" con "💡 Sugerencias" (antes "Repetir" usaba el símbolo ⟳, que en iPhone se veía
+   chico y finito al lado del emoji -> se pasó a emoji para que rendericen al mismo tamaño). */
 .nutri-meal-mini {
   display: inline-flex;
   align-items: center;
