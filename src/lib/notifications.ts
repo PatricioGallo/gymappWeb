@@ -46,8 +46,12 @@ function relativeTime(iso: string): string {
   return formatFechaCorta(iso.slice(0, 10));
 }
 
-/** Campana de notificaciones del header. No-op en paginas sin el markup (ej. marketing). */
-export function setupNotificationBell(userId: string): void {
+/**
+ * Campana de notificaciones del header. No-op en paginas sin el markup (ej. marketing).
+ * `initialUnread` (de get_nav_badges) evita el primer conteo suelto a /notifications -- viene
+ * en el mismo request que la identidad del usuario.
+ */
+export function setupNotificationBell(userId: string, initialUnread?: number): void {
   const bellBtn = document.getElementById("notifBellBtn");
   const badge = document.getElementById("notifBadge");
   const dropdown = document.getElementById("notifDropdown");
@@ -169,7 +173,12 @@ export function setupNotificationBell(userId: string): void {
     await markAllNotificationsRead();
   });
 
-  void refreshUnreadCount();
+  if (typeof initialUnread === "number") {
+    unread = initialUnread;
+    renderBadge();
+  } else {
+    void refreshUnreadCount();
+  }
 
   setInterval(() => {
     if (document.visibilityState === "visible") void refreshUnreadCount();

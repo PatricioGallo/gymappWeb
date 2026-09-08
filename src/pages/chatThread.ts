@@ -25,6 +25,7 @@ import {
   unpinMessage,
   getConversationPinnedMessageId,
   getMessageById,
+  getMessagesByIds,
   reactToMessage,
   editMessage,
   deleteMessage,
@@ -72,6 +73,10 @@ function primeVideoFrame(video: HTMLVideoElement): void {
   if (video.readyState >= 1) nudge();
   else video.addEventListener("loadedmetadata", nudge, { once: true });
 }
+
+// Patron neutro de 40 barras para el waveform de audio antes de decodificar el archivo real
+// (eso pasa recien al primer play). Deterministico -- se ve como una onda plausible, no plana.
+const AUDIO_PLACEHOLDER_LEVELS = Array.from({ length: 40 }, (_, i) => 0.3 + 0.32 * Math.abs(Math.sin(i * 1.3) + 0.4 * Math.sin(i * 0.5)));
 
 const THREAD_MARKUP = `
   <div class="chat-thread-header">
@@ -695,6 +700,10 @@ export async function mountThread(
     bubble.classList.toggle("chat-bubble-sticker-wrap", isSticker);
     bubble.classList.toggle("has-reactions", hasReactions);
     bubble.innerHTML = bubbleBodyHtml(m, isMe);
+    // El cuerpo se rearmó de cero: si trae media/audio (ej. una edición de caption), volver a
+    // engancharlos a la hidratación perezosa / repintar el placeholder de la onda.
+    observeMedia();
+    paintAudioPlaceholders();
   }
 
   // Cualquier burbuja que citaba este mensaje (responder a) tiene su propio preview embebido
@@ -1040,59 +1049,74 @@ export async function mountThread(
     return url;
   }
 
-  // Nombre generico (ya no es solo imagenes): resuelve la URL firmada tanto de <img> como de
-  // <video> marcados con .chat-bubble-img-el[data-path] (las fotos y los videos comparten esa
-  // clase para el tamano/recorte del thumbnail, ver bubbleBodyHtml).
-  async function hydrateMedia(): Promise<void> {
-    const els = messagesEl.querySelectorAll<HTMLImageElement | HTMLVideoElement>(".chat-bubble-img-el[data-path]");
-    await Promise.all(
-      Array.from(els)
-        .filter((el) => !el.src)
-        .map(async (el) => {
-          const url = await resolveAttachmentUrl(el.dataset.path!);
+  // Hidratacion PEREZOSA de fotos/videos: antes hydrateMedia() resolvia la URL firmada y
+  // asignaba .src a TODAS las <img>/<video> del historial cargado (hasta 50 mensajes) de una,
+  // apenas se pintaba el hilo -- N requests de firma en paralelo + N imagenes/videos
+  // decodificando a la vez, y iOS tiene un tope duro de decoders de video simultaneos. Ahora
+  // cada media se hidrata recien cuando se acerca al viewport. El alto de cada media ya esta
+  // fijo por CSS (.chat-bubble-img-el), asi que hidratar tarde no descoloca el scroll.
+  const mediaObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const el = entry.target as HTMLImageElement | HTMLVideoElement;
+        mediaObserver.unobserve(el);
+        if (el.src || !el.dataset.path) continue;
+        void resolveAttachmentUrl(el.dataset.path).then((url) => {
           if (!url) return;
           el.src = url;
           if (el instanceof HTMLVideoElement) primeVideoFrame(el);
-        })
-    );
+        });
+      }
+    },
+    { root: messagesEl, rootMargin: "600px 0px" }
+  );
+  ctx.addCleanup(() => mediaObserver.disconnect());
+
+  function observeMedia(): void {
+    messagesEl.querySelectorAll<HTMLImageElement | HTMLVideoElement>(".chat-bubble-img-el[data-path]").forEach((el) => {
+      if (!el.src) mediaObserver.observe(el);
+    });
   }
 
-  // Dibuja la onda de cada mensaje de audio apenas se renderiza el mensaje, en vez de esperar
-  // a que se apriete play -- mismo criterio que hydrateMedia con las fotos.
-  async function hydrateAudioWaveforms(): Promise<void> {
-    const canvases = messagesEl.querySelectorAll<HTMLCanvasElement>(".chat-audio-wave[data-id]");
-    await Promise.all(
-      Array.from(canvases)
-        .filter((canvas) => !audioWaveLevels.has(canvas.dataset.id!))
-        .map(async (canvas) => {
-          const id = canvas.dataset.id!;
-          const path = messagesEl.querySelector<HTMLButtonElement>(`.chat-audio-toggle[data-id="${id}"]`)?.dataset.path;
-          if (!path) return;
-          const url = await resolveAttachmentUrl(path);
-          if (url) await loadWaveform(id, url);
-        })
-    );
+  // Waveform de audio: se dibuja un patron neutro al instante (barato, sincrono) y el waveform
+  // real se decodifica recien al primer play (ver loadWaveform, llamado desde toggleAudioMessage).
+  // Antes esto bajaba el archivo entero + decodeAudioData + un loop sobre millones de muestras
+  // PCM por CADA nota de voz del historial, apenas se abria el hilo -- en un grupo con varias
+  // notas de voz eso clavaba el iPhone unos segundos, para mostrar una onda que no aporta nada
+  // hasta que le das play.
+  function paintAudioPlaceholders(): void {
+    messagesEl.querySelectorAll<HTMLCanvasElement>(".chat-audio-wave[data-id]").forEach((canvas) => {
+      const id = canvas.dataset.id!;
+      if (!audioWaveLevels.has(id)) drawPlaybackWave(id, 0);
+    });
   }
 
   async function hydrateMissingQuotes(): Promise<void> {
     const nodes = messagesEl.querySelectorAll<HTMLButtonElement>(".chat-bubble-quote-missing[data-quote-id]");
-    await Promise.all(
-      Array.from(new Set(Array.from(nodes).map((el) => el.dataset.quoteId!))).map(async (id) => {
-        if (!quotedMessageCache.has(id)) quotedMessageCache.set(id, await getMessageById(id));
-        const original = quotedMessageCache.get(id);
-        messagesEl.querySelectorAll<HTMLButtonElement>(`.chat-bubble-quote-missing[data-quote-id="${id}"]`).forEach((el) => {
-          if (!original) {
-            el.innerHTML = `<span class="chat-bubble-quote-text">Mensaje no disponible</span>`;
-            return;
-          }
-          el.classList.remove("chat-bubble-quote-missing");
-          el.innerHTML = `
-            <span class="chat-bubble-quote-name">${escapeHtml(senderLabel(original))}</span>
-            <span class="chat-bubble-quote-text">${escapeHtml(messageSnippet(original))}</span>
-          `;
-        });
-      })
-    );
+    const ids = [...new Set(Array.from(nodes).map((el) => el.dataset.quoteId!))];
+    const toFetch = ids.filter((id) => !quotedMessageCache.has(id));
+    // Una sola request id=in.(...) en vez de un GET /messages?id=eq.<x> por cada cita faltante
+    // (al abrir un grupo con varias respuestas a mensajes viejos eran 2-3 requests sueltas).
+    if (toFetch.length) {
+      const fetched = await getMessagesByIds(toFetch);
+      for (const id of toFetch) quotedMessageCache.set(id, fetched.get(id) ?? null);
+    }
+
+    for (const id of ids) {
+      const original = quotedMessageCache.get(id);
+      messagesEl.querySelectorAll<HTMLButtonElement>(`.chat-bubble-quote-missing[data-quote-id="${id}"]`).forEach((el) => {
+        if (!original) {
+          el.innerHTML = `<span class="chat-bubble-quote-text">Mensaje no disponible</span>`;
+          return;
+        }
+        el.classList.remove("chat-bubble-quote-missing");
+        el.innerHTML = `
+          <span class="chat-bubble-quote-name">${escapeHtml(senderLabel(original))}</span>
+          <span class="chat-bubble-quote-text">${escapeHtml(messageSnippet(original))}</span>
+        `;
+      });
+    }
   }
 
   function refreshBubbleTicks(m: ChatMessage): void {
@@ -1162,9 +1186,9 @@ export async function mountThread(
       // que hacerlo esperar solo se sentia como "aparece arriba y recien despues salta al
       // final". Se hidratan en paralelo, sin bloquear nada visible.
       scrollToBottom("instant");
-      void hydrateMedia();
+      observeMedia();
       void hydrateMissingQuotes();
-      void hydrateAudioWaveforms();
+      paintAudioPlaceholders();
       observeLoadSentinel();
       paintedFromCache = true;
     } else {
@@ -1214,9 +1238,9 @@ export async function mountThread(
         ? (olderExhausted ? "" : SENTINEL_HTML) + buildMessagesHtml(messages)
         : `<p class="notif-empty">Todavía no hay mensajes. ¡Escribí el primero!</p>`;
       scrollToBottom("instant");
-      void hydrateMedia();
+      observeMedia();
       void hydrateMissingQuotes();
-      void hydrateAudioWaveforms();
+      paintAudioPlaceholders();
       if (!olderExhausted) observeLoadSentinel();
     }
     void cacheMessages(conversationId, page);
@@ -1303,9 +1327,9 @@ export async function mountThread(
     else messagesEl.insertAdjacentHTML("afterbegin", html);
     if (olderExhausted) sentinelEl?.remove();
     else if (spinner) spinner.hidden = true;
-    await hydrateMedia();
+    observeMedia();
     void hydrateMissingQuotes();
-    void hydrateAudioWaveforms();
+    paintAudioPlaceholders();
     const target = prevScrollTop + (messagesEl.scrollHeight - prevScrollHeight);
     messagesEl.scrollTo({ top: target, left: 0, behavior: "instant" });
     if (olderExhausted) olderMessagesObserver.disconnect();
@@ -1335,9 +1359,9 @@ export async function mountThread(
     if (!prevMessage || !sameDay(prevMessage, m)) html += `<div class="chat-date-divider"><span>${dayLabel(m.created_at)}</span></div>`;
     html += bubbleHtml(m, m.sender_id === userId, isFirstInRun, true);
     messagesEl.insertAdjacentHTML("beforeend", html);
-    void hydrateMedia();
+    observeMedia();
     void hydrateMissingQuotes();
-    void hydrateAudioWaveforms();
+    paintAudioPlaceholders();
     if (wasNearBottom) scrollToBottom();
     else updateScrollBottomBtn();
   }
@@ -1414,9 +1438,10 @@ export async function mountThread(
   }
 
   function drawPlaybackWave(id: string, progress: number): void {
-    const levels = audioWaveLevels.get(id);
+    // Sin waveform real decodificado todavia (aun no se toco play): patron neutro.
+    const levels = audioWaveLevels.get(id) ?? AUDIO_PLACEHOLDER_LEVELS;
     const canvas = messagesEl.querySelector<HTMLCanvasElement>(`.chat-audio-wave[data-id="${id}"]`);
-    if (!levels || !canvas) return;
+    if (!canvas) return;
     const ctx2d = canvas.getContext("2d");
     if (!ctx2d) return;
 

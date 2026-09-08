@@ -3581,6 +3581,7 @@ export type Database = {
           status: string
         }[]
       }
+      get_nav_badges: { Args: never; Returns: Json }
       get_or_create_conversation: {
         Args: { p_other_user_id: string }
         Returns: string

@@ -205,6 +205,15 @@ export async function getMessageById(messageId: string): Promise<ChatMessage | n
   return data;
 }
 
+/** Varios mensajes por id en una sola request (para hidratar las citas "responder a" cuyo
+ * original quedó fuera de la página cargada). Devuelve un Map id -> mensaje. */
+export async function getMessagesByIds(ids: string[]): Promise<Map<string, ChatMessage>> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase.from("messages").select("*").in("id", ids);
+  if (error || !data) return new Map();
+  return new Map(data.map((m) => [m.id, m]));
+}
+
 /** Copia un adjunto ya subido a la carpeta de otra conversación, para poder reenviar el mensaje que lo trae. */
 export async function copyChatAttachment(sourcePath: string, targetConversationId: string): Promise<{ path?: string; error?: string }> {
   const ext = sourcePath.includes(".") ? sourcePath.slice(sourcePath.lastIndexOf(".")) : "";
