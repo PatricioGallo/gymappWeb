@@ -345,7 +345,9 @@ export function openFoodPicker(onPick: (picked: PickedFood) => void, userId: str
     const hasServing = food.servingGrams != null && food.servingGrams > 0;
     const initialUnit: DisplayUnit = hasServing ? "porcion" : "g";
     const suggestedG = suggestedGrams(food.kcal100, opts.remainingKcal);
-    const initialQty = initialUnit === "porcion" ? Math.max(1, Math.round((suggestedG / food.servingGrams!) * 2) / 2) : suggestedG;
+    // Con unidad "porción" arrancamos siempre en 1 (lo más común: "me comí una porción");
+    // el botón "Sugerido" sigue estando para acercarse a las kcal que faltan.
+    const initialQty = initialUnit === "porcion" ? 1 : suggestedG;
 
     const overlay = document.getElementById("fpOverlay");
     if (!overlay) return;
