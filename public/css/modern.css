@@ -5811,6 +5811,22 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
     border-radius: 0;
     padding: 22px 16px;
   }
+  /* Modal a pantalla completa como columna flex: la grilla de resultados se estira a
+     todo el alto disponible y los botones "+ Crear ejercicio nuevo" / "Cerrar" quedan
+     fijos abajo, sin hueco muerto (mismo criterio que el buscador de alimentos). */
+  .exc-pick-modal-card.modal-card-lg { display: flex; flex-direction: column; padding-top: 16px; }
+  /* flex:1 con basis 0 (no "auto"): si no, el alto real de la lista se toma como basis y
+     los items de la cabecera con overflow (las pestañas) se aplastan a 0. */
+  .exc-pick-modal-card.modal-card-lg .exc-pick-results { flex: 1; min-height: 0; max-height: none; }
+  .exc-pick-modal-card.modal-card-lg .modal-actions { margin-top: auto; padding-top: 14px; }
+  .exc-pick-modal-card.modal-card-lg > h2,
+  .exc-pick-modal-card.modal-card-lg .subtitle,
+  .exc-pick-modal-card.modal-card-lg .exc-pick-tabs,
+  .exc-pick-modal-card.modal-card-lg .exc-pick-search-row,
+  .exc-pick-modal-card.modal-card-lg .exc-pick-category-select { flex-shrink: 0; }
+  /* Cabecera mas compacta en celular para dejarle mas alto a la lista. */
+  .exc-pick-modal-card.modal-card-lg .subtitle { margin-bottom: 12px; }
+  .exc-pick-modal-card.modal-card-lg .exc-pick-category-select { margin-bottom: 12px; }
 }
 
 /* Modal de descripcion del ejercicio (ver exerciseModal.ts): mismo criterio que el
