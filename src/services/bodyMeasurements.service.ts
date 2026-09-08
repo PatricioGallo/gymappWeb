@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { calcularEdad } from "../lib/age";
 import type { Tables } from "../types/database";
 
 export type BodyWeightUnit = "kg" | "lb";
@@ -24,10 +25,21 @@ export type MeasurementKey =
   | "masaMuscular"
   | "aguaCorporal"
   | "masaOsea"
+  // Pliegues cutáneos (mm), se miden con adipómetro -- alimentan el % graso profesional.
+  | "plieguePectoral"
+  | "pliegueAxilar"
+  | "pliegueTriceps"
+  | "pliegueSubescapular"
+  | "pliegueAbdominal"
+  | "pliegueSuprailiaco"
+  | "pliegueMuslo"
+  | "pliegueBiceps"
   // Calculadas: no se cargan a mano, se derivan de las de arriba (ver attachDerivedFields).
   | "imc"
   | "ratioCinturaCadera"
-  | "ratioCinturaAltura";
+  | "ratioCinturaAltura"
+  | "grasaBasica"
+  | "grasaPliegues";
 
 export type MeasurementColumn =
   | "peso"
@@ -43,9 +55,17 @@ export type MeasurementColumn =
   | "grasa_corporal_pct"
   | "masa_muscular"
   | "agua_corporal_pct"
-  | "masa_osea";
+  | "masa_osea"
+  | "pliegue_pectoral"
+  | "pliegue_axilar"
+  | "pliegue_triceps"
+  | "pliegue_subescapular"
+  | "pliegue_abdominal"
+  | "pliegue_suprailiaco"
+  | "pliegue_muslo"
+  | "pliegue_biceps";
 
-export type MeasurementGroup = "peso" | "circunferencias" | "composicion" | "calculadas";
+export type MeasurementGroup = "peso" | "circunferencias" | "composicion" | "pliegues" | "calculadas";
 
 export interface MeasurementFieldDef {
   key: MeasurementKey;
@@ -65,6 +85,10 @@ export interface MeasurementFieldDef {
   requires?: MeasurementKey[];
   /** Solo en IMC y ratio cintura-altura: además de `requires`, necesitan profiles.altura_cm seteada (ver getAlturaCm) -- la altura NO es una medida por fecha, se carga una sola vez en Configuración. */
   requiresAltura?: boolean;
+  /** Solo en el % graso calculado: necesita profiles.genero (Hombre/Mujer) -- las fórmulas de composición corporal no están validadas para "otro". */
+  requiresGenero?: boolean;
+  /** Solo en el % graso por pliegues: necesita la edad (profiles.fecha_nacimiento) -- las ecuaciones de densidad corporal la usan. */
+  requiresEdad?: boolean;
   /** Instrucciones de cómo tomar esa medida (dónde poner la cinta, en qué postura, etc.) -- se muestran en la guía colapsable de "+Agregar medidas" (ver bwHelpMarkup en medidas.ts). Ausente en peso y en las calculadas (no aplica). */
   howTo?: string;
 }
@@ -73,6 +97,7 @@ export const GROUP_LABELS: Record<MeasurementGroup, string> = {
   peso: "Peso y altura",
   circunferencias: "Circunferencias",
   composicion: "Composición corporal",
+  pliegues: "Pliegues cutáneos (adipómetro)",
   calculadas: "Calculadas",
 };
 
@@ -210,9 +235,118 @@ export const MEASUREMENT_FIELDS: MeasurementFieldDef[] = [
     max: 500,
     howTo: "La estima el mismo dispositivo que la grasa/músculo (balanza de bioimpedancia). Cambia muy poco con el tiempo -- sirve más como referencia que como algo a modificar.",
   },
+  // Pliegues cutáneos (mm). Sitios estándar de Jackson-Pollock (7) + bíceps para Durnin-Womersley.
+  // El howTo de cada uno describe el sitio anatómico exacto; el consejo general de cómo pellizcar y
+  // leer el adipómetro va en HELP_GROUP_TIP.pliegues (medidas.ts).
+  {
+    key: "plieguePectoral",
+    column: "pliegue_pectoral",
+    label: "Pliegue pectoral",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue diagonal (siguiendo la línea del músculo pectoral): en hombres, a mitad de camino entre el pliegue de la axila y el pezón; en mujeres, a un tercio de esa distancia desde la axila.",
+  },
+  {
+    key: "pliegueAxilar",
+    column: "pliegue_axilar",
+    label: "Pliegue axilar medio",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue vertical sobre la línea axilar media (el costado del tronco), a la altura del apéndice xifoides (el extremo inferior del esternón). Brazo levemente separado del cuerpo.",
+  },
+  {
+    key: "pliegueTriceps",
+    column: "pliegue_triceps",
+    label: "Pliegue tricipital",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue vertical en la cara posterior del brazo (sobre el tríceps), justo a mitad de camino entre el hueso del hombro (acromion) y el codo (olécranon), con el brazo relajado y colgando.",
+  },
+  {
+    key: "pliegueSubescapular",
+    column: "pliegue_subescapular",
+    label: "Pliegue subescapular",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue diagonal (~45°, hacia abajo y afuera) justo debajo del ángulo inferior de la escápula (la punta de abajo del omóplato).",
+  },
+  {
+    key: "pliegueAbdominal",
+    column: "pliegue_abdominal",
+    label: "Pliegue abdominal",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue vertical a unos 2 cm al costado del ombligo (del lado derecho), con el abdomen relajado.",
+  },
+  {
+    key: "pliegueSuprailiaco",
+    column: "pliegue_suprailiaco",
+    label: "Pliegue suprailíaco",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue diagonal, siguiendo la línea natural de la piel, justo por encima de la cresta ilíaca (el hueso de la cadera), sobre la línea axilar anterior.",
+  },
+  {
+    key: "pliegueMuslo",
+    column: "pliegue_muslo",
+    label: "Pliegue del muslo",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue vertical en la cara anterior del muslo, a mitad de camino entre el pliegue de la ingle y el borde superior de la rótula. Pierna relajada, con el peso en la otra pierna.",
+  },
+  {
+    key: "pliegueBiceps",
+    column: "pliegue_biceps",
+    label: "Pliegue bicipital",
+    unit: "mm",
+    group: "pliegues",
+    max: 100,
+    howTo: "Pliegue vertical en la cara anterior del brazo (sobre el vientre del bíceps), a la misma altura que el pliegue del tríceps, con el brazo relajado.",
+  },
   { key: "imc", label: "IMC", unit: "", group: "calculadas", max: 100, computed: true, requires: ["peso"], requiresAltura: true },
   { key: "ratioCinturaCadera", label: "Ratio cintura-cadera", unit: "", group: "calculadas", max: 10, computed: true, requires: ["cintura", "cadera"] },
   { key: "ratioCinturaAltura", label: "Ratio cintura-altura", unit: "", group: "calculadas", max: 10, computed: true, requires: ["cintura"], requiresAltura: true },
+  // % graso básico (US Navy): solo cinta métrica. requires "cadera" también para cubrir a las
+  // mujeres (la fórmula femenina la usa; la masculina no, pero es una medida útil igual).
+  {
+    key: "grasaBasica",
+    label: "Grasa corporal (cinta)",
+    unit: "%",
+    group: "calculadas",
+    max: 100,
+    computed: true,
+    requires: ["cuello", "cintura", "cadera"],
+    requiresAltura: true,
+    requiresGenero: true,
+  },
+  // % graso profesional (pliegues): elige la fórmula más completa posible entre JP7 / JP3 / Durnin.
+  {
+    key: "grasaPliegues",
+    label: "Grasa corporal (pliegues)",
+    unit: "%",
+    group: "calculadas",
+    max: 100,
+    computed: true,
+    requires: [
+      "pliegueTriceps",
+      "pliegueSubescapular",
+      "pliegueSuprailiaco",
+      "pliegueAbdominal",
+      "plieguePectoral",
+      "pliegueAxilar",
+      "pliegueMuslo",
+      "pliegueBiceps",
+    ],
+    requiresGenero: true,
+    requiresEdad: true,
+  },
 ];
 
 export function fieldDef(key: MeasurementKey): MeasurementFieldDef {
@@ -355,11 +489,196 @@ export function rccWaistBoundariesCmForHip(caderaCm: number, sex: RccSex): Array
   }));
 }
 
-/** profiles.genero -- se pide en Configuración > Editar perfil (mismo campo del registro). null si no está cargado o es "otro" (la clasificación de RCC solo tiene cortes para hombre/mujer, ver RCC_CATEGORIES_BY_SEX). */
+/** profiles.genero -- se pide en Configuración > Editar perfil (mismo campo del registro). null si no está cargado o es "otro" (la clasificación de RCC y el % graso solo tienen fórmulas para hombre/mujer, ver RCC_CATEGORIES_BY_SEX / navyBodyFat). */
 export async function getGenero(userId: string): Promise<RccSex | null> {
   const { data, error } = await supabase.from("profiles").select("genero").eq("id", userId).maybeSingle();
   if (error) throw error;
   return data?.genero === "hombre" || data?.genero === "mujer" ? data.genero : null;
+}
+
+/** Edad en años a partir de profiles.fecha_nacimiento (requerida en el registro). null si no está. La usan las ecuaciones de densidad corporal del % graso por pliegues (grasaPliegues). */
+export async function getEdad(userId: string): Promise<number | null> {
+  const { data, error } = await supabase.from("profiles").select("fecha_nacimiento").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.fecha_nacimiento ? calcularEdad(data.fecha_nacimiento) : null;
+}
+
+// ---------------------------------------------------------------------------
+// % graso corporal calculado. Dos métodos, ambos derivados (no se cargan a mano):
+//   - grasaBasica  (US Navy): solo cinta métrica -- cuello, cintura, cadera (mujeres), altura, sexo.
+//   - grasaPliegues (adipómetro): elige la fórmula más completa posible entre
+//     Jackson-Pollock 7, Jackson-Pollock 3 (según sexo) y Durnin-Womersley (4 pliegues);
+//     densidad corporal -> % graso por la ecuación de Siri (495/D - 450).
+// El sexo sale de profiles.genero (getGenero) y la edad de profiles.fecha_nacimiento (getEdad).
+// Los dos resultados se clampean a [2, 75] % -- fuera de ese rango se asume entrada mala -> null.
+// Mismas fórmulas replicadas server-side en la RPC get_profile_measurement_series (widgets del perfil).
+// ---------------------------------------------------------------------------
+
+const BODYFAT_MIN_PCT = 2;
+const BODYFAT_MAX_PCT = 75;
+
+function clampBodyFat(pct: number): number | null {
+  return Number.isFinite(pct) && pct >= BODYFAT_MIN_PCT && pct <= BODYFAT_MAX_PCT ? pct : null;
+}
+
+/** Ecuación de Siri: densidad corporal (g/cm³) -> % graso. */
+function siriBodyFat(density: number): number {
+  return 495 / density - 450;
+}
+
+export interface NavyBodyFatInput {
+  sexo: RccSex;
+  alturaCm: number;
+  cuello: number;
+  cintura: number;
+  /** Obligatoria en mujeres (la fórmula femenina la usa); ignorada en hombres. */
+  cadera: number | null;
+}
+
+/**
+ * % graso por el método US Navy (versión métrica, cm). Hombre: usa cuello + cintura + altura.
+ * Mujer: además cadera. Devuelve null si falta algún dato o el argumento del logaritmo no es positivo.
+ */
+export function navyBodyFat(i: NavyBodyFatInput): number | null {
+  if (!(i.alturaCm > 0) || !(i.cuello > 0) || !(i.cintura > 0)) return null;
+  let pct: number;
+  if (i.sexo === "hombre") {
+    const d = i.cintura - i.cuello;
+    if (d <= 0) return null;
+    pct = 495 / (1.0324 - 0.19077 * Math.log10(d) + 0.15456 * Math.log10(i.alturaCm)) - 450;
+  } else {
+    if (i.cadera == null || i.cadera <= 0) return null;
+    const d = i.cintura + i.cadera - i.cuello;
+    if (d <= 0) return null;
+    pct = 495 / (1.29579 - 0.35004 * Math.log10(d) + 0.221 * Math.log10(i.alturaCm)) - 450;
+  }
+  return clampBodyFat(pct);
+}
+
+export type SkinfoldMethod = "jp7" | "jp3" | "durnin";
+
+export const SKINFOLD_METHOD_LABELS: Record<SkinfoldMethod, string> = {
+  jp7: "Jackson-Pollock (7 pliegues)",
+  jp3: "Jackson-Pollock (3 pliegues)",
+  durnin: "Durnin-Womersley (4 pliegues)",
+};
+
+export interface SkinfoldValues {
+  pectoral: number | null;
+  axilar: number | null;
+  triceps: number | null;
+  subescapular: number | null;
+  abdominal: number | null;
+  suprailiaco: number | null;
+  muslo: number | null;
+  biceps: number | null;
+}
+
+// Durnin-Womersley: densidad = c - m·log10(Σ4 pliegues). c y m por sexo y tramo de edad.
+const DURNIN_COEFFS: Record<RccSex, Array<{ maxAge: number; c: number; m: number }>> = {
+  hombre: [
+    { maxAge: 19, c: 1.162, m: 0.063 },
+    { maxAge: 29, c: 1.1631, m: 0.0632 },
+    { maxAge: 39, c: 1.1422, m: 0.0544 },
+    { maxAge: 49, c: 1.162, m: 0.07 },
+    { maxAge: Infinity, c: 1.1715, m: 0.0779 },
+  ],
+  mujer: [
+    { maxAge: 19, c: 1.1549, m: 0.0678 },
+    { maxAge: 29, c: 1.1599, m: 0.0717 },
+    { maxAge: 39, c: 1.1423, m: 0.0632 },
+    { maxAge: 49, c: 1.1333, m: 0.0612 },
+    { maxAge: Infinity, c: 1.1339, m: 0.0645 },
+  ],
+};
+
+export interface SkinfoldBodyFatResult {
+  pct: number;
+  method: SkinfoldMethod;
+}
+
+/**
+ * % graso a partir de pliegues (mm) + sexo + edad. Elige la fórmula más completa que los datos
+ * permitan, en este orden: Jackson-Pollock 7 -> Jackson-Pollock 3 (pecho/abdomen/muslo en hombres,
+ * tríceps/suprailíaco/muslo en mujeres) -> Durnin-Womersley (bíceps/tríceps/subescapular/suprailíaco).
+ * Devuelve null (con el método usado) si no alcanza para ninguna.
+ */
+export function skinfoldBodyFat(folds: SkinfoldValues, sexo: RccSex, edad: number): SkinfoldBodyFatResult | null {
+  const f = folds;
+  const ok = (...vals: Array<number | null>) => vals.every((v) => v != null && v > 0);
+
+  let density: number | null = null;
+  let method: SkinfoldMethod | null = null;
+
+  if (ok(f.pectoral, f.axilar, f.triceps, f.subescapular, f.abdominal, f.suprailiaco, f.muslo)) {
+    const s = f.pectoral! + f.axilar! + f.triceps! + f.subescapular! + f.abdominal! + f.suprailiaco! + f.muslo!;
+    density =
+      sexo === "hombre"
+        ? 1.112 - 0.00043499 * s + 0.00000055 * s * s - 0.00028826 * edad
+        : 1.097 - 0.00046971 * s + 0.00000056 * s * s - 0.00012828 * edad;
+    method = "jp7";
+  } else if (sexo === "hombre" && ok(f.pectoral, f.abdominal, f.muslo)) {
+    const s = f.pectoral! + f.abdominal! + f.muslo!;
+    density = 1.10938 - 0.0008267 * s + 0.0000016 * s * s - 0.0002574 * edad;
+    method = "jp3";
+  } else if (sexo === "mujer" && ok(f.triceps, f.suprailiaco, f.muslo)) {
+    const s = f.triceps! + f.suprailiaco! + f.muslo!;
+    density = 1.0994921 - 0.0009929 * s + 0.0000023 * s * s - 0.0001392 * edad;
+    method = "jp3";
+  } else if (ok(f.biceps, f.triceps, f.subescapular, f.suprailiaco)) {
+    const s = f.biceps! + f.triceps! + f.subescapular! + f.suprailiaco!;
+    const { c, m } = DURNIN_COEFFS[sexo].find((row) => edad <= row.maxAge)!;
+    density = c - m * Math.log10(s);
+    method = "durnin";
+  }
+
+  if (density == null || method == null || density <= 0) return null;
+  const pct = clampBodyFat(siriBodyFat(density));
+  return pct == null ? null : { pct, method };
+}
+
+// ---------------------------------------------------------------------------
+// Clasificación de % graso corporal -- cortes por sexo (escala estándar ACE / ACSM):
+// Grasa esencial / Atletas / Fitness / Aceptable / Obesidad. Se aplica igual al % graso básico
+// (Navy), al de pliegues y al cargado a mano por bioimpedancia (grasaCorporal) -- ver
+// bodyFatClassificationMarkup en medidas.ts.
+// ---------------------------------------------------------------------------
+
+export type BodyFatCategoryKey = "esencial" | "atletas" | "fitness" | "aceptable" | "obesidad";
+
+export interface BodyFatCategory {
+  key: BodyFatCategoryKey;
+  label: string;
+  /** Límite inferior de % graso, inclusive. */
+  min: number;
+  /** Límite superior, exclusivo. null = sin techo (Obesidad). */
+  max: number | null;
+}
+
+const BODYFAT_CATEGORIES_BY_SEX: Record<RccSex, BodyFatCategory[]> = {
+  hombre: [
+    { key: "esencial", label: "Grasa esencial", min: 0, max: 6 },
+    { key: "atletas", label: "Atletas", min: 6, max: 14 },
+    { key: "fitness", label: "Fitness", min: 14, max: 18 },
+    { key: "aceptable", label: "Aceptable", min: 18, max: 25 },
+    { key: "obesidad", label: "Obesidad", min: 25, max: null },
+  ],
+  mujer: [
+    { key: "esencial", label: "Grasa esencial", min: 0, max: 14 },
+    { key: "atletas", label: "Atletas", min: 14, max: 21 },
+    { key: "fitness", label: "Fitness", min: 21, max: 25 },
+    { key: "aceptable", label: "Aceptable", min: 25, max: 32 },
+    { key: "obesidad", label: "Obesidad", min: 32, max: null },
+  ],
+};
+
+export function bodyFatCategoriesFor(sexo: RccSex): BodyFatCategory[] {
+  return BODYFAT_CATEGORIES_BY_SEX[sexo];
+}
+
+export function bodyFatCategoryFor(pct: number, sexo: RccSex): BodyFatCategory {
+  const cats = BODYFAT_CATEGORIES_BY_SEX[sexo];
+  return cats.find((c) => pct >= c.min && (c.max == null || pct < c.max)) ?? cats[cats.length - 1];
 }
 
 /** Los campos que se pueden cargar a mano en el modal "+Agregar medidas" (todas menos las 3 calculadas). */
@@ -395,9 +714,19 @@ export const DEFAULT_BODY_MEASUREMENT_PREFS: BodyMeasurementPrefs = {
   masaMuscular: false,
   aguaCorporal: false,
   masaOsea: false,
+  plieguePectoral: false,
+  pliegueAxilar: false,
+  pliegueTriceps: false,
+  pliegueSubescapular: false,
+  pliegueAbdominal: false,
+  pliegueSuprailiaco: false,
+  pliegueMuslo: false,
+  pliegueBiceps: false,
   imc: false,
   ratioCinturaCadera: false,
   ratioCinturaAltura: false,
+  grasaBasica: false,
+  grasaPliegues: false,
 };
 
 export function parseBodyMeasurementPrefs(raw: unknown): BodyMeasurementPrefs {
@@ -455,10 +784,22 @@ export interface BodyMeasurementEntry {
   masaMuscular: number | null;
   aguaCorporal: number | null;
   masaOsea: number | null;
+  plieguePectoral: number | null;
+  pliegueAxilar: number | null;
+  pliegueTriceps: number | null;
+  pliegueSubescapular: number | null;
+  pliegueAbdominal: number | null;
+  pliegueSuprailiaco: number | null;
+  pliegueMuslo: number | null;
+  pliegueBiceps: number | null;
   // Calculadas -- no vienen de una columna, las llena attachDerivedFields() al listar.
   imc: number | null;
   ratioCinturaCadera: number | null;
   ratioCinturaAltura: number | null;
+  grasaBasica: number | null;
+  grasaPliegues: number | null;
+  /** Método con el que se calculó grasaPliegues ese día (jp7 / jp3 / durnin), null si no se pudo. Transitorio, no es columna. */
+  grasaPlieguesMetodo: SkinfoldMethod | null;
   /** Path en el bucket privado "measurement-photos" (no la URL -- ver getMeasurementPhotoUrl(s)). */
   fotoPath: string | null;
 }
@@ -487,9 +828,20 @@ function mapRow(r: Tables<"body_measurements">): BodyMeasurementEntry {
     masaMuscular: n(r.masa_muscular),
     aguaCorporal: n(r.agua_corporal_pct),
     masaOsea: n(r.masa_osea),
+    plieguePectoral: n(r.pliegue_pectoral),
+    pliegueAxilar: n(r.pliegue_axilar),
+    pliegueTriceps: n(r.pliegue_triceps),
+    pliegueSubescapular: n(r.pliegue_subescapular),
+    pliegueAbdominal: n(r.pliegue_abdominal),
+    pliegueSuprailiaco: n(r.pliegue_suprailiaco),
+    pliegueMuslo: n(r.pliegue_muslo),
+    pliegueBiceps: n(r.pliegue_biceps),
     imc: null,
     ratioCinturaCadera: null,
     ratioCinturaAltura: null,
+    grasaBasica: null,
+    grasaPliegues: null,
+    grasaPlieguesMetodo: null,
     fotoPath: r.foto_path,
   };
 }
@@ -522,12 +874,13 @@ export async function getLatestBodyWeightKg(userId: string): Promise<number | nu
 }
 
 /**
- * Completa las 3 medidas calculadas de cada entrada (mutando in-place). `alturaCm` es UN solo
- * valor (profiles.altura_cm, ver getAlturaCm) que se aplica por igual a todo el historial -- a
- * diferencia de las demás medidas no hay que cargarla por fecha, la altura prácticamente no
- * cambia.
+ * Completa las medidas calculadas de cada entrada (mutando in-place). `alturaCm`, `sexo` y `edad`
+ * son valores ÚNICOS del perfil (profiles.altura_cm / .genero / .fecha_nacimiento) que se aplican
+ * por igual a todo el historial -- ninguno se carga por fecha, la altura y el sexo no cambian y la
+ * edad varía tan poco entre registros que no vale la pena rastrearla por fila (mismo criterio que
+ * la altura, ver nota en MEASUREMENT_FIELDS).
  */
-function attachDerivedFields(rows: BodyMeasurementEntry[], alturaCm: number | null): BodyMeasurementEntry[] {
+function attachDerivedFields(rows: BodyMeasurementEntry[], alturaCm: number | null, sexo: RccSex | null, edad: number | null): BodyMeasurementEntry[] {
   const alturaM = alturaCm != null && alturaCm > 0 ? alturaCm / 100 : null;
   for (const r of rows) {
     const pesoKg = r.peso != null ? (r.unidad === "lb" ? r.peso * LB_TO_KG : r.peso) : null;
@@ -535,6 +888,31 @@ function attachDerivedFields(rows: BodyMeasurementEntry[], alturaCm: number | nu
     r.imc = pesoKg != null && alturaM != null ? pesoKg / (alturaM * alturaM) : null;
     r.ratioCinturaCadera = r.cintura != null && r.cadera != null && r.cadera > 0 ? r.cintura / r.cadera : null;
     r.ratioCinturaAltura = r.cintura != null && alturaCm != null && alturaCm > 0 ? r.cintura / alturaCm : null;
+
+    r.grasaBasica =
+      sexo != null && alturaCm != null && r.cuello != null && r.cintura != null
+        ? navyBodyFat({ sexo, alturaCm, cuello: r.cuello, cintura: r.cintura, cadera: r.cadera })
+        : null;
+
+    const skin =
+      sexo != null && edad != null
+        ? skinfoldBodyFat(
+            {
+              pectoral: r.plieguePectoral,
+              axilar: r.pliegueAxilar,
+              triceps: r.pliegueTriceps,
+              subescapular: r.pliegueSubescapular,
+              abdominal: r.pliegueAbdominal,
+              suprailiaco: r.pliegueSuprailiaco,
+              muslo: r.pliegueMuslo,
+              biceps: r.pliegueBiceps,
+            },
+            sexo,
+            edad
+          )
+        : null;
+    r.grasaPliegues = skin?.pct ?? null;
+    r.grasaPlieguesMetodo = skin?.method ?? null;
   }
   return rows;
 }
@@ -545,12 +923,18 @@ function fieldValue(entry: BodyMeasurementEntry, key: MeasurementKey): number | 
 
 // Historial completo, más viejo primero (así los gráficos y los cálculos de racha/diferencia
 // recorren la serie en orden cronológico sin re-ordenar) -- mismo criterio que el resto de la app.
-// alturaCm: la del perfil (ver getAlturaCm) -- se la pasa quien llama para no pegarle a la red de
-// nuevo acá adentro (medidas.ts ya la tiene en memoria junto con las preferencias).
-export async function listBodyMeasurements(userId: string, alturaCm: number | null): Promise<BodyMeasurementEntry[]> {
+// alturaCm / sexo / edad: datos del perfil (ver getAlturaCm / getGenero / getEdad) -- los pasa
+// quien llama para no pegarle a la red de nuevo acá adentro (medidas.ts ya los tiene en memoria
+// junto con las preferencias). Alimentan las medidas calculadas (ver attachDerivedFields).
+export async function listBodyMeasurements(
+  userId: string,
+  alturaCm: number | null,
+  sexo: RccSex | null = null,
+  edad: number | null = null
+): Promise<BodyMeasurementEntry[]> {
   const { data, error } = await supabase.from("body_measurements").select("*").eq("user_id", userId).order("fecha", { ascending: true });
   if (error) throw error;
-  return attachDerivedFields((data ?? []).map(mapRow), alturaCm);
+  return attachDerivedFields((data ?? []).map(mapRow), alturaCm, sexo, edad);
 }
 
 export type MeasurementValues = Partial<Record<MeasurementColumn, number | null>>;
