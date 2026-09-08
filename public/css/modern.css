@@ -3042,6 +3042,27 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .bw-row-photo { display: block; width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
 .bw-photo-lightbox-caption { margin: 0; font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
 .bw-photo-lightbox-summary { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); text-align: center; }
+/* Botón "Descargar foto" del pie del visor a pantalla completa (ver wirePhotoButtons en
+   medidas.ts) -- fondo oscuro, así que es claro-sobre-oscuro. width:fit-content + margin auto
+   lo centra sin depender de text-align del contenedor. */
+.bw-photo-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  margin: 12px auto 0;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bw-photo-download-btn svg { width: 15px; height: 15px; stroke: currentColor; }
+.bw-photo-download-btn:hover { background: rgba(255, 255, 255, 0.18); }
+.bw-photo-download-btn:disabled { opacity: 0.55; cursor: default; }
 
 /* Grilla de la pestaña "Progreso" (ver progressGalleryMarkup en medidas.ts) -- solo aparece si
    hay al menos una foto cargada. */

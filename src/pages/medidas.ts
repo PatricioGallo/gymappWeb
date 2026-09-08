@@ -39,6 +39,7 @@ import {
 import { createPost, uploadPostMedia, deletePostMedia, validatePostContent } from "../services/post.service";
 import { makeMentionEditable } from "../lib/mentionEditor";
 import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
+import { saveBlobToDevice, imageExtForType } from "../lib/download";
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
 import { openMediaLightbox } from "../lib/mediaLightbox";
@@ -62,6 +63,7 @@ const KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" 
 const EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 const SHARE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>`;
+const DOWNLOAD_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
 // ---------------------------------------------------------------------------
 // Borrador de "+Agregar medidas": si el usuario cierra el modal sin guardar (Cancelar, o
@@ -168,6 +170,19 @@ function buildShareText(entry: BodyMeasurementEntry): string {
   return [`Mis medidas del ${formatFechaCorta(entry.fecha)}`, "", ...lines].join("\n").slice(0, POST_MAX);
 }
 
+// Baja la foto de progreso de un registro al dispositivo (bucket privado -> se descarga el
+// archivo y se lo pasa a saveBlobToDevice, que en móvil abre el panel nativo de compartir y
+// en escritorio dispara un <a download>). Compartido por el ítem "Descargar foto" del menú de
+// cada fila del historial y el botón del visor a pantalla completa. Devuelve false si no se
+// pudo (sin foto, o falló la descarga) -- cada llamador muestra su propio aviso.
+async function downloadEntryPhoto(entry: BodyMeasurementEntry): Promise<boolean> {
+  if (!entry.fotoPath) return false;
+  const blob = await downloadMeasurementPhoto(entry.fotoPath);
+  if (!blob) return false;
+  await saveBlobToDevice(blob, `medida-${entry.fecha}.${imageExtForType(blob.type)}`);
+  return true;
+}
+
 function emptyMarkup(): string {
   return `
     <div class="empty-state reveal">
@@ -211,6 +226,7 @@ function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, s
         <button type="button" class="profile-menu-btn weight-menu-btn" aria-label="Más opciones" aria-expanded="false">${KEBAB_ICON}</button>
         <div class="profile-menu-panel weight-menu-panel" hidden>
           <button type="button" class="profile-menu-item bw-share" data-id="${e.id}">${SHARE_ICON}Compartir</button>
+          ${e.fotoPath ? `<button type="button" class="profile-menu-item bw-download" data-id="${e.id}">${DOWNLOAD_ICON}Descargar foto</button>` : ""}
           <button type="button" class="profile-menu-item bw-edit" data-id="${e.id}">${EDIT_ICON}Editar</button>
           <button type="button" class="profile-menu-item profile-menu-item-danger bw-delete" data-id="${e.id}">${TRASH_ICON}Borrar</button>
         </div>
@@ -879,6 +895,14 @@ export const medidasView: ViewModule = {
           if (entry) void openShareMeasurementModal(entry);
         });
       });
+      content.querySelectorAll<HTMLButtonElement>(".bw-download").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+          const entry = entries.find((e) => e.id === btn.dataset.id);
+          if (!entry) return;
+          if (!(await downloadEntryPhoto(entry))) alert("No se pudo descargar la foto. Probá de nuevo.");
+        });
+      });
       content.querySelectorAll<HTMLButtonElement>(".bw-edit").forEach((btn) => {
         btn.addEventListener("click", () => {
           btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
@@ -919,7 +943,19 @@ export const medidasView: ViewModule = {
               footerEl.innerHTML = `
                 <p class="bw-photo-lightbox-caption">${escapeHtml(formatFechaCorta(e.fecha))}</p>
                 ${summary ? `<p class="bw-photo-lightbox-summary">${escapeHtml(summary)}</p>` : ""}
+                <button type="button" class="bw-photo-download-btn" id="bwPhotoDownloadBtn">${DOWNLOAD_ICON}<span>Descargar foto</span></button>
               `;
+              const dlBtn = footerEl.querySelector<HTMLButtonElement>("#bwPhotoDownloadBtn")!;
+              const dlLabel = dlBtn.querySelector("span")!;
+              dlBtn.addEventListener("click", async () => {
+                if (dlBtn.disabled) return;
+                dlBtn.disabled = true;
+                dlLabel.textContent = "Descargando...";
+                const ok = await downloadEntryPhoto(e);
+                dlBtn.disabled = false;
+                dlLabel.textContent = ok ? "Descargar foto" : "No se pudo, reintentá";
+                if (!ok) setTimeout(() => (dlLabel.textContent = "Descargar foto"), 2500);
+              });
             },
           });
         });
