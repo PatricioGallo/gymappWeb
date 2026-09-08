@@ -4,7 +4,6 @@ import { listFollowers, listFollowing, type FollowListRow } from "../services/fo
 import {
   listConversations,
   listMessages,
-  MESSAGES_PAGE_SIZE,
   acceptMessageRequest,
   declineMessageRequest,
   getOrCreateConversation,
@@ -812,27 +811,55 @@ export const chatsView: ViewModule = {
     chatListPane.addEventListener("touchend", onPullEnd, { signal: ctx.signal });
     chatListPane.addEventListener("touchcancel", onPullEnd, { signal: ctx.signal });
 
-    const PREFETCH_CONVERSATIONS_COUNT = 30;
-    const PREFETCH_MESSAGES_PER_CHAT = MESSAGES_PAGE_SIZE;
+    // El prefetch es puro "por si acaso" (que abrir un chat pinte al instante desde el cache de
+    // IndexedDB) -- no tiene que competir por el pool de conexiones con lo que el usuario SÍ está
+    // esperando ahora: la lista misma, y el primer chat que toque. Antes disparaba 30 GET
+    // /messages (hasta 50 filas c/u) en paralelo apenas cargaba la lista, saturando las ~6
+    // conexiones del navegador en mobile durante varios segundos -- una de las causas de "abrir
+    // mensajes tarda un montón" en iPhone. Ahora: menos conversaciones, menos mensajes por
+    // conversación, en tandas chicas, y recién cuando el hilo principal queda ocioso.
+    const PREFETCH_CONVERSATIONS_COUNT = 5;
+    const PREFETCH_MESSAGES_PER_CHAT = 10;
+    const PREFETCH_BATCH_SIZE = 4;
 
     async function prefetchRecentThreads(): Promise<void> {
       const targets = conversations.filter((c) => c.status === "accepted" || c.is_initiator).slice(0, PREFETCH_CONVERSATIONS_COUNT);
-      await Promise.all(
-        targets.map(async (c) => {
-          try {
-            const page = await listMessages(c.conversation_id, undefined, PREFETCH_MESSAGES_PER_CHAT);
-            await cacheMessages(c.conversation_id, page);
-          } catch {
-            // si falla el prefetch de un chat puntual no importa, mountThread igual carga desde la red al abrirlo
-          }
-        })
-      );
+      for (let i = 0; i < targets.length; i += PREFETCH_BATCH_SIZE) {
+        if (ctx.signal.aborted) return;
+        await Promise.all(
+          targets.slice(i, i + PREFETCH_BATCH_SIZE).map(async (c) => {
+            try {
+              const page = await listMessages(c.conversation_id, undefined, PREFETCH_MESSAGES_PER_CHAT);
+              await cacheMessages(c.conversation_id, page);
+            } catch {
+              // si falla el prefetch de un chat puntual no importa, mountThread igual carga desde la red al abrirlo
+            }
+          })
+        );
+      }
+    }
+
+    /** Difiere `fn` ~1,5s (y hasta que la pestaña esté visible + el hilo ocioso) -- así la lista
+     * y, sobre todo, el primer chat que toque el usuario tienen el pool de conexiones para
+     * ellos solos; el prefetch en background nunca es urgente. */
+    function deferToBackground(fn: () => void): void {
+      const start = (): void => {
+        const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+        setTimeout(() => (ric ? ric(fn, { timeout: 3000 }) : fn()), 1500);
+      };
+      if (document.visibilityState === "visible") start();
+      else
+        document.addEventListener("visibilitychange", function once() {
+          if (document.visibilityState !== "visible") return;
+          document.removeEventListener("visibilitychange", once);
+          start();
+        });
     }
 
     conversations = await listConversations();
     renderRequests();
     renderList();
-    void prefetchRecentThreads();
+    deferToBackground(() => void prefetchRecentThreads());
 
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     ctx.addCleanup(() => clearTimeout(refreshTimer));

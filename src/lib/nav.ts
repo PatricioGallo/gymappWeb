@@ -3,16 +3,8 @@ import { logVisitOncePerSession } from "../services/visits.service";
 import { setupNotificationBell } from "./notifications";
 import { setupChatBadge } from "./chat";
 import { setupHeaderSearch } from "./search";
-import { renderVerifiedBadge } from "./verifiedBadge";
+import { renderVerifiedBadge, type UserType } from "./verifiedBadge";
 import { escapeHtml } from "./dom";
-import { getPendingFollowRequestCount } from "../services/follow.service";
-import { getPendingSubscriptionRequestCount } from "../services/subscription.service";
-import { getPendingGymMembershipRequestCount } from "../services/gymMember.service";
-import { getPendingGymTrainerRequestCount } from "../services/gymTrainer.service";
-import { getUnreadContactMessageCount } from "../services/contact.service";
-import { getUnreadErrorReportCount } from "../services/errorReport.service";
-import { getUnreadUserReportCount } from "../services/userReport.service";
-import { getPendingVerificationRequestCount } from "../services/verification.service";
 import { touchLastSeen } from "../services/profile.service";
 import { trackPwaInstallStatus, setupInstallBanner, setupPushReminderBanner } from "./pwaBanners";
 import { trackPresence } from "./presence";
@@ -61,9 +53,33 @@ export function setupNavToggle(): void {
   void populateUserMenuTrigger();
 }
 
-// Completa el trigger del menu de cuenta (foto + username) y oculta
-// "Administrar" si la sesion actual no es admin. Es un no-op en paginas que
-// no tienen ese trigger (ej. las de marketing, que siguen con el hamburger).
+/** Forma del jsonb que devuelve get_nav_badges (identidad + todos los contadores del nav). */
+interface NavBadges {
+  username: string | null;
+  avatar_url: string | null;
+  user_type: UserType | null;
+  is_verified: boolean;
+  zoom_enabled: boolean;
+  notifications: number;
+  messages: number;
+  follow_requests: number;
+  subscription_requests: number;
+  socio_requests: number;
+  handle_requests: number;
+  admin_dot: boolean;
+}
+
+/** Pinta un badge numérico del nav (lo oculta si es 0). No-op si ese markup no está en la página. */
+function paintNavBadge(id: string, count: number): void {
+  const badge = document.getElementById(id);
+  if (!badge) return;
+  badge.hidden = count <= 0;
+  badge.textContent = count > 9 ? "9+" : String(count);
+}
+
+// Completa el trigger del menu de cuenta (foto + username), oculta "Administrar" si la sesion
+// no es staff, y pinta todos los badges del nav. Es un no-op en paginas que no tienen ese
+// trigger (ej. las de marketing, que siguen con el hamburger).
 async function populateUserMenuTrigger(): Promise<void> {
   const avatarEl = document.getElementById("navMenuAvatar") as HTMLImageElement | null;
   const usernameEl = document.getElementById("navMenuUsername");
@@ -77,121 +93,51 @@ async function populateUserMenuTrigger(): Promise<void> {
   setupInstallBanner();
   void setupPushReminderBanner(userId);
 
-  const { data } = await supabase.from("profiles_public").select("username, avatar_url, user_type, is_verified").eq("id", userId).maybeSingle();
-  if (!data) return;
+  // Un solo round-trip para identidad + TODOS los contadores del nav (ver get_nav_badges).
+  // Antes eran 5 requests sueltas (usuario normal) o 9 (staff), cada una ~300-400ms en mobile,
+  // disparadas en paralelo en cada cold start -- una parte concreta de "la web se ve lenta".
+  // Los polls de 60s y las suscripciones realtime de cada feature siguen igual: esto solo
+  // reemplaza el fetch inicial.
+  const { data: raw } = await supabase.rpc("get_nav_badges");
+  const b = raw as NavBadges | null;
+  if (!b || !b.user_type) return;
 
-  if (avatarEl && data.avatar_url) avatarEl.src = data.avatar_url;
-  if (usernameEl) usernameEl.innerHTML = `${escapeHtml(data.username ?? "")}${data.user_type ? renderVerifiedBadge(data.user_type, data.is_verified ?? false) : ""}`;
-  if (data.user_type !== "admin" && data.user_type !== "colaborador") {
+  if (avatarEl && b.avatar_url) avatarEl.src = b.avatar_url;
+  if (usernameEl) usernameEl.innerHTML = `${escapeHtml(b.username ?? "")}${renderVerifiedBadge(b.user_type, b.is_verified)}`;
+
+  if (b.user_type !== "admin" && b.user_type !== "colaborador") {
     document.getElementById("adminLink")?.remove();
   } else {
-    void refreshAdminMessagesDot();
+    const dot = document.getElementById("adminLinkDot");
+    if (dot) dot.hidden = !b.admin_dot;
   }
 
-  // Las solicitudes de suscripcion solo le importan a un entrenador (los que
-  // pueden tener suscriptores).
-  if (data.user_type !== "entrenador") {
+  // Las solicitudes de suscripcion solo le importan a un entrenador.
+  if (b.user_type !== "entrenador") {
     document.getElementById("navSubscriptionRequests")?.remove();
   } else {
-    void refreshSubscriptionRequestsBadge(userId);
+    paintNavBadge("subReqBadge", b.subscription_requests);
   }
 
-  // Idem para las solicitudes de socio, pero del lado del gimnasio.
-  if (data.user_type !== "gimnasio") {
+  // Idem las de socio/handle, pero del lado del gimnasio.
+  if (b.user_type !== "gimnasio") {
     document.getElementById("navSocioRequests")?.remove();
     document.getElementById("navHandleRequests")?.remove();
   } else {
-    void refreshSocioRequestsBadge(userId);
-    void refreshHandleRequestsBadge(userId);
+    paintNavBadge("socioReqBadge", b.socio_requests);
+    paintNavBadge("handleReqBadge", b.handle_requests);
   }
 
-  setupNotificationBell(userId);
-  setupChatBadge(userId);
+  setupNotificationBell(userId, b.notifications);
+  setupChatBadge(userId, b.messages);
   setupInAppNotificationToast();
-  void applyZoomPreference(userId);
-  void refreshFollowRequestsBadge(userId);
-}
+  paintNavBadge("followReqBadge", b.follow_requests);
 
-/** Punto naranja junto a "Administrar" si hay mensajes/reportes sin leer (contacto, errores o usuarios) o solicitudes de validación pendientes. Solo se llama para staff. */
-async function refreshAdminMessagesDot(): Promise<void> {
-  const dot = document.getElementById("adminLinkDot");
-  if (!dot) return;
-  try {
-    const [contactUnread, errorUnread, userUnread, pendingVerifications] = await Promise.all([
-      getUnreadContactMessageCount(),
-      getUnreadErrorReportCount(),
-      getUnreadUserReportCount(),
-      getPendingVerificationRequestCount(),
-    ]);
-    dot.hidden = contactUnread + errorUnread + userUnread + pendingVerifications <= 0;
-  } catch {
-    // silencioso: el punto simplemente no se actualiza en este ciclo
+  // El viewport viene con zoom deshabilitado por defecto (molesta al cargar pesos desde el
+  // celular); si el usuario lo habilitó en Configuración > Personalización, se lo devolvemos.
+  if (b.zoom_enabled) {
+    document.querySelector('meta[name="viewport"]')?.setAttribute("content", "width=device-width, initial-scale=1");
   }
-}
-
-/** Numero de solicitudes de seguimiento pendientes junto al link del nav. No-op si el link no esta en esta pagina. */
-async function refreshFollowRequestsBadge(userId: string): Promise<void> {
-  const badge = document.getElementById("followReqBadge");
-  if (!badge) return;
-  try {
-    const count = await getPendingFollowRequestCount(userId);
-    badge.hidden = count <= 0;
-    badge.textContent = count > 9 ? "9+" : String(count);
-  } catch {
-    // silencioso: el badge simplemente no se actualiza en este ciclo
-  }
-}
-
-/** Numero de solicitudes de suscripcion pendientes junto al link del nav. No-op si el link no esta en esta pagina. */
-async function refreshSubscriptionRequestsBadge(userId: string): Promise<void> {
-  const badge = document.getElementById("subReqBadge");
-  if (!badge) return;
-  try {
-    const count = await getPendingSubscriptionRequestCount(userId);
-    badge.hidden = count <= 0;
-    badge.textContent = count > 9 ? "9+" : String(count);
-  } catch {
-    // silencioso: el badge simplemente no se actualiza en este ciclo
-  }
-}
-
-/** Numero de solicitudes de socio pendientes junto al link del nav. No-op si el link no esta en esta pagina. */
-async function refreshSocioRequestsBadge(userId: string): Promise<void> {
-  const badge = document.getElementById("socioReqBadge");
-  if (!badge) return;
-  try {
-    const count = await getPendingGymMembershipRequestCount(userId);
-    badge.hidden = count <= 0;
-    badge.textContent = count > 9 ? "9+" : String(count);
-  } catch {
-    // silencioso: el badge simplemente no se actualiza en este ciclo
-  }
-}
-
-/** Numero de solicitudes de handle (iniciadas por un entrenador) pendientes junto al link del
- * nav. Las invitaciones que mando el propio gimnasio no cuentan aca (getPendingGymTrainerRequestCount
- * ya filtra por initiated_by='trainer'). No-op si el link no esta en esta pagina. */
-async function refreshHandleRequestsBadge(userId: string): Promise<void> {
-  const badge = document.getElementById("handleReqBadge");
-  if (!badge) return;
-  try {
-    const count = await getPendingGymTrainerRequestCount(userId);
-    badge.hidden = count <= 0;
-    badge.textContent = count > 9 ? "9+" : String(count);
-  } catch {
-    // silencioso: el badge simplemente no se actualiza en este ciclo
-  }
-}
-
-// El viewport de todas las paginas viene con el zoom deshabilitado por defecto
-// (molesta al cargar pesos desde el celular); si el usuario lo habilito en
-// Configuracion > Personalizacion, se lo re-habilitamos aca.
-async function applyZoomPreference(userId: string): Promise<void> {
-  const { data } = await supabase.from("profiles").select("zoom_enabled").eq("id", userId).maybeSingle();
-  if (!data?.zoom_enabled) return;
-
-  const viewport = document.querySelector('meta[name="viewport"]');
-  if (viewport) viewport.setAttribute("content", "width=device-width, initial-scale=1");
 }
 
 /** Marca de una todo `.reveal` adentro de `container` como ya revelado, sin esperar a que el

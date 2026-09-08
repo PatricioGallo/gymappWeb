@@ -15,15 +15,7 @@ export interface NewMessageEventDetail {
 /** Evento global disparado cuando llega (via realtime) un mensaje nuevo de otra persona, para que el toast in-app lo muestre sin abrir una suscripcion propia. */
 export const NEW_MESSAGE_EVENT = "gs:new-message";
 
-/**
- * Refresca el badge de mensajes sin leer ya mismo, sin esperar al poll ni a un cambio
- * realtime en "conversations" (mark_conversation_read solo toca la tabla "messages", asi
- * que abrir/leer un chat no dispara esa suscripcion -- quien llama a markConversationRead
- * tiene que pedir este refresh a mano). Recibe el document del header donde vive el badge:
- * por defecto el actual, pero en el layout de escritorio chat.html corre embebido en un
- * iframe dentro de chats.html, asi que ese caller tambien pasa window.parent.document.
- */
-export async function refreshChatBadge(doc: Document = document): Promise<void> {
+async function paintChatBadge(doc: Document): Promise<void> {
   const badge = doc.getElementById("chatBadge");
   if (!badge) return;
   try {
@@ -35,12 +27,62 @@ export async function refreshChatBadge(doc: Document = document): Promise<void> 
   }
 }
 
-/** Badge de mensajes sin leer junto a la lupa del header. No-op en páginas sin el markup (ej. marketing). */
-export function setupChatBadge(userId: string): void {
+let badgeCoalesceTimer: ReturnType<typeof setTimeout> | undefined;
+let badgeInFlight: Promise<void> | null = null;
+let badgeDirtyDuringFlight = false;
+const badgePendingDocs = new Set<Document>();
+
+/**
+ * Refresca el badge de mensajes sin leer, coalesciendo ráfagas. Abrir un chat dispara varias
+ * llamadas casi simultáneas -- markConversationRead + su eco por realtime (la suscripción a
+ * conversation_participants del badge) + el poll de 60s + el caller de chats.ts -- y cada una,
+ * sin esto, era su propio POST /rpc/get_unread_conversation_count (se veían 2-3 seguidos al
+ * abrir un grupo). Ahora un burst dentro de ~250ms resuelve en una sola request.
+ *
+ * `doc`: el document del header donde vive el badge -- por defecto el actual, pero el layout de
+ * escritorio de chat.html corre en un iframe dentro de chats.html y ese caller pasa
+ * window.parent.document (por eso se acumulan en un Set: un burst puede mezclar ambos).
+ */
+export function refreshChatBadge(doc: Document = document): Promise<void> {
+  badgePendingDocs.add(doc);
+  if (badgeInFlight) {
+    badgeDirtyDuringFlight = true; // llegó un pedido mientras se pintaba -- reintentar una vez al terminar
+    return badgeInFlight;
+  }
+
+  badgeInFlight = new Promise<void>((resolve) => {
+    clearTimeout(badgeCoalesceTimer);
+    badgeCoalesceTimer = setTimeout(async () => {
+      const docs = badgePendingDocs.size ? [...badgePendingDocs] : [document];
+      badgePendingDocs.clear();
+      badgeDirtyDuringFlight = false;
+      try {
+        await Promise.all(docs.map((d) => paintChatBadge(d)));
+      } finally {
+        badgeInFlight = null;
+        resolve();
+        if (badgeDirtyDuringFlight) void refreshChatBadge();
+      }
+    }, 250);
+  });
+  return badgeInFlight;
+}
+
+/**
+ * Badge de mensajes sin leer junto a la lupa del header. No-op en páginas sin el markup (ej.
+ * marketing). `initialCount` (de get_nav_badges) evita el primer POST /rpc/get_unread_conversation_count
+ * -- el header ya trae el número en el mismo request que la identidad del usuario.
+ */
+export function setupChatBadge(userId: string, initialCount?: number): void {
   const badge = document.getElementById("chatBadge");
   if (!badge) return;
 
-  void refreshChatBadge();
+  if (typeof initialCount === "number") {
+    badge.hidden = initialCount <= 0;
+    badge.textContent = initialCount > 9 ? "9+" : String(initialCount);
+  } else {
+    void refreshChatBadge();
+  }
 
   setInterval(() => {
     if (document.visibilityState === "visible") void refreshChatBadge();
@@ -112,7 +154,11 @@ export function setupChatBadge(userId: string): void {
           return;
         }
         myConversationIds.add(row.conversation_id);
-        void refreshChatBadge();
+        // Solo un INSERT (me agregaron a un grupo/DM nuevo) puede cambiar el conteo por esta vía.
+        // Un UPDATE acá es casi siempre mi propio last_read_at moviéndose al abrir un chat -- eso
+        // ya lo refresca markReadAndRefreshBadge en chatThread.ts, y su eco por realtime volvía
+        // a disparar un get_unread_conversation_count redundante (se veían 2 seguidos al abrir).
+        if (payload.eventType === "INSERT") void refreshChatBadge();
       }
     )
     .subscribe();
