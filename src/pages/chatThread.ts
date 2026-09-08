@@ -383,6 +383,30 @@ export async function mountThread(
   renderHeaderIdentity();
   requestBannerName.textContent = conversation.other_username ?? "";
 
+  // Los cambios de integrantes (alguien agregado/eliminado, o que se fue) tienen que verse en
+  // vivo igual que el nombre/foto del grupo: el "N integrantes" del header, el autocompletado
+  // de @menciones y el panel de info leen todos de conversation.participants / participantsById.
+  // list_conversations es la única fuente del blob enriquecido (username + avatar), así que se
+  // vuelve a pedir y se reconstruye el índice EN EL LUGAR (misma referencia de Map, que los
+  // closures de senderLabel/@menciones ya capturaron).
+  let syncParticipantsTimer: number | undefined;
+  function scheduleParticipantsSync(): void {
+    if (!isGroup) return;
+    window.clearTimeout(syncParticipantsTimer);
+    syncParticipantsTimer = window.setTimeout(() => void syncGroupParticipants(), 400);
+  }
+  async function syncGroupParticipants(): Promise<void> {
+    const rows = await listConversations().catch(() => null);
+    if (!rows) return;
+    const fresh = rows.find((c) => c.conversation_id === conversationId);
+    if (!fresh) return;
+    conversation!.participants = fresh.participants;
+    participantsById.clear();
+    for (const p of groupParticipantsOf(conversation!)) participantsById.set(p.user_id, p);
+    renderHeaderIdentity();
+  }
+  ctx.addCleanup(() => window.clearTimeout(syncParticipantsTimer));
+
   let peerLastSeenAt: string | null = null;
   let peerOnline = false;
 
@@ -2531,6 +2555,10 @@ export async function mountThread(
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
       const msg = payload.new as ChatMessage;
       void appendMessage(msg);
+      // "Fulano añadió a...", "...eliminó a...", "...salió del grupo" llegan como mensaje de
+      // sistema -- aprovecharlos para re-sincronizar la lista de integrantes (respaldo por si
+      // el evento de conversation_participants de más abajo se pierde).
+      if (msg.attachment_type === "system") scheduleParticipantsSync();
       if (msg.sender_id !== userId && isThreadOnScreen()) {
         void markReadAndRefreshBadge();
       }
@@ -2570,8 +2598,15 @@ export async function mountThread(
         conversation!.group_avatar_url = updatedConversation.group_avatar_url as string;
         renderHeaderIdentity();
       }
-    })
-    .subscribe();
+    });
+  if (isGroup) {
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "conversation_participants", filter: `conversation_id=eq.${conversationId}` },
+      () => scheduleParticipantsSync()
+    );
+  }
+  channel.subscribe();
   ctx.addCleanup(() => void supabase.removeChannel(channel));
 
   return { catchUp: catchUpMessages, pauseMedia: pauseActiveMedia };

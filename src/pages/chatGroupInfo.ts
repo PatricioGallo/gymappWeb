@@ -28,10 +28,11 @@ const MEMBER_MENU_KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><ci
  *
  * Los cambios de nombre/foto del grupo llegan solos al header del hilo abierto vía la
  * suscripción realtime a "conversations" que chatThread.ts ya tiene activa -- este panel no
- * necesita avisarle de vuelta. Cambios de integrantes (agregar/eliminar/roles/salir) sí se
- * reflejan acá mismo (se vuelve a pedir list_conversations tras cada acción), pero no empujan
- * un refresh en vivo del "N integrantes" del header mientras el panel está cerrado -- se ve
- * actualizado la próxima vez que se abra el hilo o este panel.
+ * necesita avisarle de vuelta. Los cambios de integrantes (agregar/eliminar/roles/salir) se
+ * reflejan acá mismo tras cada acción (se vuelve a pedir list_conversations) y también llegan
+ * en vivo al hilo: chatThread.ts escucha conversation_participants de esta conversación y
+ * re-sincroniza su header + índice de participantes. Al abrir este panel se hace además un
+ * refresh silencioso por si el `conversation` que nos pasó el hilo venía viejo.
  */
 export function openGroupInfoPanel(conversation: ConversationSummary, userId: string, opts: { onLeft: () => void }): void {
   const loaderBody = document.getElementById("loaderBody");
@@ -51,6 +52,18 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
       opts.onLeft();
       return;
     }
+    current = fresh;
+    renderMain();
+  }
+
+  // El `conversation` que nos pasa el hilo puede venir con la lista de integrantes vieja (otra
+  // persona agregó/sacó gente hace un rato). Se pinta ya con lo que haya (rápido) y en paralelo
+  // se pide la versión fresca; si la red falla, se deja lo que estaba -- un vacío transitorio no
+  // es "me sacaron del grupo", así que acá NO se cierra el panel (a diferencia de refresh()).
+  async function refreshSilently(): Promise<void> {
+    const rows = await listConversations().catch(() => null);
+    const fresh = rows?.find((c) => c.conversation_id === current.conversation_id);
+    if (!fresh) return;
     current = fresh;
     renderMain();
   }
@@ -462,4 +475,5 @@ export function openGroupInfoPanel(conversation: ConversationSummary, userId: st
   }
 
   renderMain();
+  void refreshSilently();
 }
