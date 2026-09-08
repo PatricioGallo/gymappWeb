@@ -3176,12 +3176,13 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   gap: 10px;
   padding: 10px 0;
   border-top: 1px solid var(--border);
+  color: var(--text-muted);
 }
 .imc-range-row:first-child { border-top: none; padding-top: 0; }
-.imc-range-row-active { color: var(--text); }
-.imc-range-imc { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-muted); }
-.imc-range-row-active .imc-range-imc { color: var(--text); font-weight: 700; }
-.imc-range-weight { font-size: 13px; font-weight: 700; white-space: nowrap; }
+/* Solo la fila en la que caés se marca: texto pleno + negrita (la heredan sus dos hijos). */
+.imc-range-row-active { color: var(--text); font-weight: 700; }
+.imc-range-imc { flex: 1; min-width: 0; font-size: 12.5px; }
+.imc-range-weight { font-size: 13px; white-space: nowrap; }
 
 @media (max-width: 480px) {
   .imc-range-row { flex-wrap: wrap; }
