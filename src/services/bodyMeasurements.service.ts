@@ -502,6 +502,26 @@ export function kgToUnit(kg: number, unidad: BodyWeightUnit): number {
 }
 
 /**
+ * Peso corporal más reciente del usuario en kg (convierte de lb si el registro estaba en lb).
+ * `null` si no tiene ningún registro de peso cargado, o si no es visible (RLS -- ej. un
+ * entrenador mirando a un alumno que no comparte sus medidas). Consulta liviana: 1 fila, no
+ * baja todo el historial como listBodyMeasurements().
+ */
+export async function getLatestBodyWeightKg(userId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("body_measurements")
+    .select("peso, unidad")
+    .eq("user_id", userId)
+    .not("peso", "is", null)
+    .order("fecha", { ascending: false })
+    .limit(1);
+  const row = data?.[0];
+  if (error || row?.peso == null) return null;
+  const peso = Number(row.peso);
+  return row.unidad === "lb" ? peso * LB_TO_KG : peso;
+}
+
+/**
  * Completa las 3 medidas calculadas de cada entrada (mutando in-place). `alturaCm` es UN solo
  * valor (profiles.altura_cm, ver getAlturaCm) que se aplica por igual a todo el historial -- a
  * diferencia de las demás medidas no hay que cargarla por fecha, la altura prácticamente no

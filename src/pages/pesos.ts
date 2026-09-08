@@ -15,6 +15,7 @@ import {
   type NewWeightLog,
 } from "../services/weightLog.service";
 import { getTodayComments, upsertExerciseComment, deleteExerciseComment, MAX_COMMENT_LENGTH, type ExerciseComment } from "../services/comment.service";
+import { getLatestBodyWeightKg } from "../services/bodyMeasurements.service";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
@@ -109,6 +110,9 @@ export const pesosView: ViewModule = {
       let todayComments: Map<string, ExerciseComment> = new Map();
       let allExerciseIds: string[] = [];
       let allCatalogExerciseIds: string[] = [];
+      // Peso corporal del usuario (o del alumno, si un entrenador carga por él) -- para el
+      // estimado de kcal quemadas por día. null => se asume 75 kg (ver estimatedKcalForDay).
+      let bodyWeightKg: number | null = null;
 
       // ---------------------------------------------------------------------------
       // Borrador local: si el usuario sale de la carga de pesos sin tocar "Guardar" (ej. a
@@ -572,6 +576,17 @@ export const pesosView: ViewModule = {
         return dia.ejercicios.filter((e) => e.es_medible).reduce((sum, e) => sum + exerciseDoneSeries(e), 0);
       }
 
+      // Estimado muy aproximado de kcal quemadas en lo que YA se cargó de este día (no en la
+      // rutina completa): series hechas × ~2.5 min/serie (esfuerzo + descanso) × gasto de
+      // musculación (MET≈4) al peso corporal del usuario, o 75 kg si no tiene peso en Medidas.
+      // Solo una referencia -- se muestra siempre con "~" y redondeado a 5.
+      const KCAL_PER_DONE_SET_PER_KG = 0.175; // MET 4.0 × 3.5 / 200 kcal·kg⁻¹·min⁻¹ × 2.5 min
+      function estimatedKcalForDay(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
+        const done = dayDoneSeries(dia);
+        if (done === 0) return 0;
+        return Math.round((done * KCAL_PER_DONE_SET_PER_KG * (bodyWeightKg ?? 75)) / 5) * 5;
+      }
+
       function dayProgress(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
         const total = dayTotalSeries(dia);
         if (total === 0) return 100;
@@ -695,11 +710,13 @@ export const pesosView: ViewModule = {
             const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
             const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
             const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
+            const kcal = estimatedKcalForDay(dia);
+            const kcalTag = kcal > 0 ? ` - 🔥 ~${kcal} kcal` : "";
 
             return `
               <button class="day-row reveal ${status}" type="button" data-dia="${diaIndex}">
                 ${ringMarkup(pct)}
-                <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
+                <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}${kcalTag}</p></div>
                 <span class="day-row-status ${status}">${STATUS_LABELS[status]}</span>
                 <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
               </button>
@@ -1002,10 +1019,11 @@ export const pesosView: ViewModule = {
 
       allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
       allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
-      [latestWeights, exerciseHistory, todayComments] = await Promise.all([
+      [latestWeights, exerciseHistory, todayComments, bodyWeightKg] = await Promise.all([
         getLatestWeights(allExerciseIds),
         getExerciseHistory(allCatalogExerciseIds),
         getTodayComments(allExerciseIds, TODAY),
+        getLatestBodyWeightKg(targetUserId).catch(() => null),
       ]);
       if (isTrainingForOther) {
         const target = await getProfileBasicById(targetUserId).catch(() => null);
