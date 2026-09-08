@@ -36,6 +36,36 @@ const TAB_EMPTY_MESSAGES: Record<PickerTab, string> = {
   global: "No encontramos ejercicios con ese criterio.",
 };
 
+/** minúsculas, sin acentos, espacios colapsados -- para comparar de forma tolerante. */
+function normalizeSearch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // marcas diacríticas combinantes (acentos)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Búsqueda permisiva: cada palabra tipeada tiene que aparecer en algún lado del ejercicio
+ * (nombre, descripción, categoría o autor), sin importar el orden ni los acentos. Así
+ * "press banca", "extension triceps" o "biceps" encuentran lo esperado sin escribir el
+ * nombre exacto.
+ */
+function matchesExercise(exc: PickerItem, tokens: string[]): boolean {
+  if (tokens.length === 0) return true;
+  const haystack = normalizeSearch(
+    [exc.name, exc.info, CATEGORY_LABELS[exc.category] ?? "", exc.authorName ?? ""].join(" ")
+  );
+  return tokens.every((tok) => haystack.includes(tok));
+}
+
+/** true si todas las palabras aparecen en el nombre -- para mostrar esos primero. */
+function nameMatchesExercise(exc: PickerItem, tokens: string[]): boolean {
+  const hay = normalizeSearch(exc.name);
+  return tokens.every((tok) => hay.includes(tok));
+}
+
 /**
  * ctx es opcional (llamadores no migrados al shell todavia no lo tienen), pero si se pasa,
  * el listener de "Cerrar" se ata a ctx.signal.
@@ -89,7 +119,7 @@ export function openExercisePicker(onSelect: (exc: Exercise) => void, userId: st
       <div class="success-check-container exc-pick-overlay">
         <div class="modal-card modal-card-lg exc-pick-modal-card">
           <h2>Elegir ejercicio</h2>
-          <p class="subtitle">Buscá por nombre, filtrá por categoría, o mirá otra fuente.</p>
+          <p class="subtitle">Buscá por nombre o músculo, filtrá por categoría, o mirá otra fuente.</p>
           <div class="exc-pick-tabs" id="excPickerTabs">
             ${TAB_ORDER.map((tab) => `<button type="button" class="exc-pick-tab${tab === activeTab ? " active" : ""}" data-tab="${tab}">${escapeHtml(TAB_LABELS[tab])}</button>`).join("")}
           </div>
@@ -112,12 +142,15 @@ export function openExercisePicker(onSelect: (exc: Exercise) => void, userId: st
     const resultsEl = document.getElementById("excPickerResults")!;
 
     function render(): void {
-      const term = search.trim().toLowerCase();
+      const tokens = normalizeSearch(search).split(" ").filter(Boolean);
       const categories = activeCategory ? [activeCategory] : EXERCISE_CATEGORIES;
 
       const sections = categories
         .map((cat) => {
-          const catItems = items.filter((exc) => exc.category === cat && exc.name.toLowerCase().includes(term));
+          const catItems = items
+            .filter((exc) => exc.category === cat && matchesExercise(exc, tokens))
+            // coincidencias en el nombre arriba; el orden alfabético se mantiene dentro de cada grupo
+            .sort((a, b) => Number(nameMatchesExercise(b, tokens)) - Number(nameMatchesExercise(a, tokens)));
           if (catItems.length === 0) return "";
           return `
             <div class="exc-pick-section">
