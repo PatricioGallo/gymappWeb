@@ -3716,6 +3716,31 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
    contra el boton en vez de separarlos. */
 .routines-header-actions + .routine-tabs { margin-top: 8px; }
 
+/* Navegación de métricas de medidas.ts en DOS niveles: fila 1 = grupo (Peso / Circunferencias /
+   Índices / ...), fila 2 = medida del grupo elegido (solo si el grupo tiene más de una). Antes
+   era una sola .routine-tabs con TODAS las medidas activas -- se hacía kilométrica (~25 pills). */
+.measurement-metric-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 24px;
+}
+.measurement-metric-nav .routine-tabs { margin: 0; max-width: 100%; }
+/* Fila 2: chips .exc-pick-chip (mismo look que el picker de ejercicios / Configuración -- activo
+   = borde y letra naranja sobre fondo suave), envueltos, centrados bajo la fila de grupos. */
+.measurement-measure-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 100%;
+}
+@media (max-width: 639px) {
+  .measurement-metric-nav { align-items: stretch; }
+  .measurement-measure-row { justify-content: flex-start; }
+}
+
 /* ---------- Dueño de la rutina ---------- */
 
 .routine-owner-line {

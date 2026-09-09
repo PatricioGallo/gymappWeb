@@ -40,6 +40,7 @@ import {
   type LoggableFieldDef,
   type RccSex,
   type SkinfoldMethod,
+  type MeasurementGroup,
 } from "../services/bodyMeasurements.service";
 import { createPost, uploadPostMedia, deletePostMedia, validatePostContent } from "../services/post.service";
 import { makeMentionEditable } from "../lib/mentionEditor";
@@ -63,6 +64,21 @@ const UNIT_LABELS: Record<BodyWeightUnit, string> = { kg: "Kg", lb: "Lb" };
 // Pestaña extra de galería de fotos (ver renderMetricArea) -- no es una MeasurementKey real,
 // solo aparece cuando hay al menos una foto de progreso cargada.
 const PROGRESO_TAB_KEY = "progreso" as const;
+
+// Navegación de métricas en dos niveles (ver renderMetricArea): fila 1 = grupo, fila 2 = medida
+// del grupo. Antes era una sola fila con TODAS las medidas activas (podían ser ~25, ilegible).
+type MetricGroupKey = MeasurementGroup | typeof PROGRESO_TAB_KEY;
+const METRIC_GROUP_ORDER: MeasurementGroup[] = ["peso", "circunferencias", "composicion", "pliegues", "calculadas"];
+// Etiquetas cortas para la fila de grupos -- distintas de GROUP_LABELS de Configuración (que son
+// más largas, "Pliegues cutáneos (adipómetro)"): acá tienen que entrar varias en una fila.
+const METRIC_GROUP_LABEL: Record<MetricGroupKey, string> = {
+  peso: "Peso",
+  circunferencias: "Circunferencias",
+  composicion: "Composición",
+  pliegues: "Pliegues",
+  calculadas: "Índices",
+  progreso: "Progreso",
+};
 
 const KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
 const EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
@@ -1381,20 +1397,10 @@ export const medidasView: ViewModule = {
       });
     }
 
-    function wireMetricTabs(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): void {
-      container.querySelectorAll<HTMLButtonElement>(".measurement-metric-tab").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          selectedKey = btn.dataset.key as MeasurementKey | typeof PROGRESO_TAB_KEY;
-          void renderMetricArea(entries, photoUrls);
-        });
-      });
-    }
-
     async function renderMetricArea(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): Promise<void> {
-      // Pestañas: solo medidas activas que ya tengan al menos un registro (evita una fila de
-      // pestañas vacías apenas alguien activa 5 medidas nuevas en Configuración sin haber
-      // cargado nada todavía -- "Agregar medidas" igual ofrece las 5 como campos). "Progreso" se
-      // suma al final solo si hay alguna foto cargada (ver progressGalleryMarkup).
+      // Métricas disponibles: solo medidas activas que ya tengan al menos un registro (evita
+      // pestañas vacías apenas alguien activa 5 medidas en Configuración sin cargar nada todavía
+      // -- "Agregar medidas" igual ofrece las 5 como campos).
       // Excepción: el % graso calculado se muestra aunque el resultado dé null si YA cargaste los
       // insumos (cuello+cintura para el básico, algún pliegue para el de pliegues) -- así la
       // pestaña explica POR QUÉ no se puede calcular (ver noDataMarkup) en vez de no aparecer.
@@ -1417,21 +1423,57 @@ export const medidasView: ViewModule = {
         metricArea.innerHTML = "";
         return;
       }
+
+      // Agrupá las métricas por grupo del catálogo, en orden. La fila 1 muestra un botón por grupo
+      // presente (+ "Progreso" si hay fotos); la fila 2, las medidas del grupo elegido.
+      const byGroup = new Map<MeasurementGroup, MeasurementFieldDef[]>();
+      for (const f of tabFields) {
+        const arr = byGroup.get(f.group) ?? [];
+        arr.push(f);
+        byGroup.set(f.group, arr);
+      }
+      const groups: MetricGroupKey[] = METRIC_GROUP_ORDER.filter((g) => byGroup.has(g));
+      if (hasPhotos) groups.push(PROGRESO_TAB_KEY);
+
       const validKeys = new Set<string>(tabFields.map((f) => f.key));
       if (hasPhotos) validKeys.add(PROGRESO_TAB_KEY);
       if (!selectedKey || !validKeys.has(selectedKey)) {
         selectedKey = tabFields[0]?.key ?? PROGRESO_TAB_KEY;
       }
+      const activeGroup: MetricGroupKey = selectedKey === PROGRESO_TAB_KEY ? PROGRESO_TAB_KEY : fieldDef(selectedKey).group;
+
+      const groupFields = activeGroup === PROGRESO_TAB_KEY ? [] : (byGroup.get(activeGroup) ?? []);
+      const groupRow = groups
+        .map((g) => `<button type="button" class="routine-tab measurement-group-tab${g === activeGroup ? " active" : ""}" data-group="${g}">${escapeHtml(METRIC_GROUP_LABEL[g])}</button>`)
+        .join("");
+      // La fila de medidas solo aparece si el grupo tiene más de una (si tiene una sola, el botón
+      // de grupo ya alcanza -- ej. "Peso"). Usa .exc-pick-chip, el mismo look que los chips de
+      // categoría del picker de ejercicios / Configuración (activo = borde+letra naranja, fondo
+      // suave), no el .routine-tab relleno que usa la fila de grupos.
+      const measureRow =
+        groupFields.length > 1
+          ? `<div class="measurement-measure-row">${groupFields
+              .map((f) => `<button type="button" class="exc-pick-chip measurement-subtab${f.key === selectedKey ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>`)
+              .join("")}</div>`
+          : "";
 
       tabsWrap.hidden = false;
-      tabsWrap.innerHTML =
-        tabFields
-          .map((f) => `<button type="button" class="routine-tab measurement-metric-tab${f.key === selectedKey ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>`)
-          .join("") +
-        (hasPhotos
-          ? `<button type="button" class="routine-tab measurement-metric-tab${selectedKey === PROGRESO_TAB_KEY ? " active" : ""}" data-key="${PROGRESO_TAB_KEY}">Progreso</button>`
-          : "");
-      wireMetricTabs(entries, photoUrls);
+      tabsWrap.innerHTML = `<div class="routine-tabs measurement-group-row">${groupRow}</div>${measureRow}`;
+
+      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-group-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const g = btn.dataset.group as MetricGroupKey;
+          if (g === activeGroup) return;
+          selectedKey = g === PROGRESO_TAB_KEY ? PROGRESO_TAB_KEY : byGroup.get(g)![0].key;
+          void renderMetricArea(entries, photoUrls);
+        });
+      });
+      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-subtab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedKey = btn.dataset.key as MeasurementKey;
+          void renderMetricArea(entries, photoUrls);
+        });
+      });
 
       if (selectedKey === PROGRESO_TAB_KEY) {
         metricArea.innerHTML = progressGalleryMarkup(entries, photoUrls);
@@ -1471,7 +1513,7 @@ export const medidasView: ViewModule = {
       const photoUrls = await getMeasurementPhotoUrls(photoPaths);
 
       content.innerHTML = `
-        <div class="routine-tabs" id="measurementMetricTabs" hidden></div>
+        <div class="measurement-metric-nav" id="measurementMetricTabs" hidden></div>
         <div id="measurementMetricArea"></div>
         ${historyMarkup(entries, photoUrls)}
       `;
