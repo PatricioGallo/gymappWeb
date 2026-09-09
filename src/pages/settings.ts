@@ -953,18 +953,25 @@ export const settingsView: ViewModule = {
           <div class="field measurement-altura-field">
             <label for="alturaInput">Tu altura (cm)</label>
             <input type="text" id="alturaInput" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" placeholder="Ej: 175" value="${alturaCm != null ? fmtAltura(alturaCm) : ""}">
-            <p class="chart-sub" style="margin:6px 0 0;">Se usa para tu IMC y el ratio cintura-altura. La cargás una sola vez -- no hace falta repetirla.</p>
+            <p class="chart-sub" style="margin:5px 0 0;">Se usa para tu IMC y el ratio cintura-altura. La cargás una sola vez -- no hace falta repetirla.</p>
           </div>
         `;
       }
 
       function measurementFieldsMarkup(): string {
-        return measurementGroups
+        // La altura vive en su propio grupo, arriba del de "Peso" -- no es una medida por fecha
+        // (ver nota en MEASUREMENT_FIELDS), es profiles.altura_cm y se carga una sola vez.
+        const alturaGroup = `
+          <div class="settings-widget-group">
+            <h4>Altura</h4>
+            ${alturaFieldHtml()}
+          </div>
+        `;
+        return alturaGroup + measurementGroups
           .map(
             (g) => `
           <div class="settings-widget-group">
             <h4>${GROUP_LABELS[g]}</h4>
-            ${g === "peso" ? alturaFieldHtml() : ""}
             ${
               // Las calculadas (IMC, ratios, % graso) no se cargan a mano -- se derivan de las
               // medidas de arriba y de datos del perfil (altura, sexo, edad) cuando estén cargados.
@@ -973,6 +980,12 @@ export const settingsView: ViewModule = {
                 ? `<p class="chart-sub" style="margin:0 0 10px;">Se calculan solas a partir de las medidas de arriba -- no hace falta cargarlas a mano.</p>`
                 : g === "pliegues"
                   ? `<p class="chart-sub" style="margin:0 0 10px;">Se miden con un adipómetro (plicómetro). Habilitan el cálculo profesional de % graso -- activá "Grasa corporal (pliegues)" en Calculadas.</p>`
+                : g === "composicion"
+                  ? `<p class="chart-sub" style="margin:0 0 10px;">Se miden mediante bioimpedancia electrica, enviando una corriente imperceptible por el cuerpo para calcular agua, músculo y grasa.</p>`                  
+                : g === "peso"
+                  ? `<p class="chart-sub" style="margin:0 0 10px;">Se miden mediante cualquier balanza, trata de usar siempre la misma.</p>`
+                  : g === "circunferencias"
+                  ? `<p class="chart-sub" style="margin:0 0 10px;">Se miden rodeando la zona con la cinta métrica de sastre de manera horizontal y sin apretar demasiado.</p>`
                   : ""
             }
             <div class="exc-pick-chips">
@@ -1108,7 +1121,6 @@ export const settingsView: ViewModule = {
           <div class="settings-toggle-row">
             <div>
               <span class="switch-label">Registrar medidas corporales</span>
-              <p class="chart-sub" style="margin:4px 0 0;">Por defecto está desactivado. Activalo para poder cargar tu peso y, si querés, otras medidas (cintura, bíceps, % de grasa...) desde tu perfil.</p>
             </div>
             <label class="switch">
               <input type="checkbox" id="bodyMeasurementsEnabledToggle" ${measurementPrefs.enabled ? "checked" : ""}>
@@ -1119,8 +1131,8 @@ export const settingsView: ViewModule = {
             <p class="chart-sub">Elegí qué medidas querés seguir además del peso. Podés cambiar esto cuando quieras -- lo que ya cargaste no se borra si desactivás una medida.</p>
             <div id="bodyMeasurementFieldsList">${measurementFieldsMarkup()}</div>
             <div class="settings-widget-group">
-              <h4>Compartir con tu entrenador</h4>
-              <p class="chart-sub" style="margin:0 0 10px;">Tus entrenadores (suscripción aceptada, o un gimnasio donde seas socio y ellos den clases) pueden ver esto en "Ver progreso". No aplica a las cuentas de gimnasio en sí.</p>
+              <h4 style="margin-top: 40px;">Compartir con tu entrenador</h4>
+              <p class="chart-sub" style="margin:0 0 10px;">Personaliza hasta donde quieres compartir con tus entrenadores.</p>
               <div class="settings-toggle-row">
                 <div><span class="switch-label">Compartir mis medidas</span></div>
                 <label class="switch">
@@ -1243,7 +1255,7 @@ export const settingsView: ViewModule = {
             const field = MEASUREMENT_FIELDS.find((f) => f.key === key);
 
             // Algunas calculadas necesitan datos del perfil que NO son toggles de medidas: la
-            // altura (profiles.altura_cm, arriba en este mismo grupo), el sexo y la fecha de
+            // altura (profiles.altura_cm, en el grupo "Altura" de arriba), el sexo y la fecha de
             // nacimiento (Configuración > Editar perfil) -- el % graso usa los tres. Si falta
             // alguno se corta acá con un aviso en vez de dejar "activada" una medida que nunca
             // va a mostrar nada.

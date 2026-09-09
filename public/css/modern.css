@@ -5388,15 +5388,14 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .settings-add-widget select:disabled { opacity: 0.6; cursor: not-allowed; }
 .settings-add-widget .btn { flex: 0 0 auto; }
 
-.settings-widget-group { margin-top: 20px; padding-top: 16px; }
-.settings-widget-group:first-of-type { margin-top: 0; padding-top: 0; }
-.settings-widget-group h4 { display: flex; align-items: baseline; gap: 8px; font-size: 15px; margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+.settings-widget-group { margin-top: 27px; }
+.settings-widget-group:first-of-type { margin-top: 0; }
+.settings-widget-group h4 { display: flex; align-items: baseline; gap: 8px; font-size: 15px; margin: 0 0 5px; text-transform: uppercase; letter-spacing: 0.03em; }
 .settings-widget-group h4 .chart-sub { font-size: 12px; margin: 0; text-transform: none; letter-spacing: normal; }
 
-/* El campo de altura (grupo "Peso y altura" en Configuración) trae el margin-bottom:16px de
-   ".field" por default -- sumado a que abajo le sigue un solo chip suelto ("Peso"), ese grupo
-   terminaba leyéndose separado del de "Circunferencias" de abajo. Lo achicamos para que el chip
-   quede pegado al campo, como cualquier otro grupo de chips. */
+/* El campo de altura vive en su propio grupo "Altura" (Configuración > Personalización). Trae el
+   margin-bottom:16px de ".field" por default -- lo achicamos para que el grupo "Peso" de abajo no
+   quede tan despegado. */
 .measurement-altura-field { margin-bottom: 6px; }
 
 .settings-save-bar {

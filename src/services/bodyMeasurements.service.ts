@@ -94,7 +94,7 @@ export interface MeasurementFieldDef {
 }
 
 export const GROUP_LABELS: Record<MeasurementGroup, string> = {
-  peso: "Peso y altura",
+  peso: "Peso",
   circunferencias: "Circunferencias",
   composicion: "Composición corporal",
   pliegues: "Pliegues cutáneos (adipómetro)",
@@ -104,8 +104,8 @@ export const GROUP_LABELS: Record<MeasurementGroup, string> = {
 // Orden = el que ve el usuario en Configuración y en el selector de métrica de medidas.ts.
 // Nota: "altura" NO está acá -- no es una medida por fecha con toggle propio, es
 // profiles.altura_cm, un campo de perfil que se pide una sola vez (ver getAlturaCm/setAlturaCm
-// más abajo) porque prácticamente no cambia. Se edita en el grupo "peso" de Configuración igual,
-// solo que como campo de texto en vez de chip -- ver alturaFieldHtml en settings.ts.
+// más abajo) porque prácticamente no cambia. Se edita en su propio grupo "Altura" de
+// Configuración, como campo de texto en vez de chip -- ver alturaFieldHtml en settings.ts.
 export const MEASUREMENT_FIELDS: MeasurementFieldDef[] = [
   {
     key: "peso",
