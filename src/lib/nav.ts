@@ -107,9 +107,15 @@ async function populateUserMenuTrigger(): Promise<void> {
 
   if (b.user_type !== "admin" && b.user_type !== "colaborador") {
     document.getElementById("adminLink")?.remove();
+    document.getElementById("adminHeaderBtn")?.remove();
   } else {
     const dot = document.getElementById("adminLinkDot");
     if (dot) dot.hidden = !b.admin_dot;
+    // Acceso directo al panel desde el header (icono de escudo), no solo desde el menú de cuenta.
+    const headerBtn = document.getElementById("adminHeaderBtn");
+    if (headerBtn) headerBtn.hidden = false;
+    const headerDot = document.getElementById("adminHeaderDot");
+    if (headerDot) headerDot.hidden = !b.admin_dot;
   }
 
   // Las solicitudes de suscripcion solo le importan a un entrenador.

@@ -1194,10 +1194,11 @@ export const adminView: ViewModule = {
       if (dot) dot.hidden = !hasUnread;
     }
 
-    /** Punto naranja junto a "Administrar" en el nav: es la union de mensajes sin leer y validaciones pendientes, asi que no lo puede pisar un solo refresh parcial. Vive en el chrome persistente del shell, fuera del container de esta vista. */
+    /** Punto naranja del acceso a administración (item "Administrar" del menú de cuenta + icono de escudo del header): es la union de mensajes sin leer y validaciones pendientes, asi que no lo puede pisar un solo refresh parcial. Vive en el chrome persistente del shell, fuera del container de esta vista. */
     async function refreshAdminLinkDot(): Promise<void> {
       const navDot = document.getElementById("adminLinkDot");
-      if (!navDot) return;
+      const headerDot = document.getElementById("adminHeaderDot");
+      if (!navDot && !headerDot) return;
       try {
         const [contactUnread, errorUnread, userUnread, pendingVerifications] = await Promise.all([
           getUnreadContactMessageCount(),
@@ -1205,7 +1206,9 @@ export const adminView: ViewModule = {
           getUnreadUserReportCount(),
           getPendingVerificationRequestCount(),
         ]);
-        navDot.hidden = contactUnread + errorUnread + userUnread + pendingVerifications <= 0;
+        const hidden = contactUnread + errorUnread + userUnread + pendingVerifications <= 0;
+        if (navDot) navDot.hidden = hidden;
+        if (headerDot) headerDot.hidden = hidden;
       } catch {
         // silencioso: el punto simplemente no se actualiza en este ciclo
       }

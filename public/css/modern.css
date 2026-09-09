@@ -333,6 +333,19 @@ button:focus-visible {
 
 .notif-badge[hidden] { display: none; }
 
+/* Puntito naranja del icono de administración en el header (union de mensajes
+   sin leer + validaciones pendientes; ver refreshAdminLinkDot en admin.ts). */
+.admin-header-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-2);
+}
+.admin-header-dot[hidden] { display: none; }
+
 .notif-dropdown {
   position: absolute;
   top: calc(100% + 10px);
