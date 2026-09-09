@@ -9,6 +9,10 @@ import { listCommentsForExercises } from "../services/comment.service";
 import type { Tables } from "../types/database";
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
+import { parseBodyMeasurementPrefs, DEFAULT_BODY_MEASUREMENT_PREFS, type BodyMeasurementPrefs } from "../services/bodyMeasurements.service";
+import { parseNutritionPrefs, DEFAULT_NUTRITION_PREFS, type NutritionPrefs } from "../services/nutrition.service";
+import { renderStudentMeasurementsPanel } from "../lib/studentMeasurementsPanel";
+import { renderStudentNutritionPanel } from "../lib/studentNutritionPanel";
 
 type ExerciseComment = Tables<"exercise_comments">;
 
@@ -39,6 +43,8 @@ const VIEW_MARKUP = `
         <button class="routine-tab active" data-tab="active" type="button">Rutina activa</button>
         <button class="routine-tab" data-tab="overview" type="button">Resumen</button>
         <button class="routine-tab" data-tab="detail" type="button">Detalle por ejercicio</button>
+        <button class="routine-tab" data-tab="medidas" type="button" hidden>Medidas</button>
+        <button class="routine-tab" data-tab="nutricion" type="button" hidden>Alimentación</button>
       </div>
 
       <div id="tabPanelActive">
@@ -62,6 +68,14 @@ const VIEW_MARKUP = `
         </div>
 
         <div id="progressContent"></div>
+      </div>
+
+      <div id="tabPanelMedidas" hidden>
+        <div id="medidasContent"></div>
+      </div>
+
+      <div id="tabPanelNutricion" hidden>
+        <div id="nutricionContent"></div>
       </div>
     </div>
   </section>
@@ -297,8 +311,14 @@ function activeRoutineEmptyMarkup(): string {
   `;
 }
 
-type ProgressTab = "active" | "overview" | "detail";
-const TAB_PANELS: Record<ProgressTab, string> = { active: "tabPanelActive", overview: "tabPanelOverview", detail: "tabPanelDetail" };
+type ProgressTab = "active" | "overview" | "detail" | "medidas" | "nutricion";
+const TAB_PANELS: Record<ProgressTab, string> = {
+  active: "tabPanelActive",
+  overview: "tabPanelOverview",
+  detail: "tabPanelDetail",
+  medidas: "tabPanelMedidas",
+  nutricion: "tabPanelNutricion",
+};
 
 // mount() define render() (arma el DOM entero desde cero para cada ?uid= -- no hay estado fino
 // que preservar entre perfiles distintos) y la deja referenciada aca para que update() la reuse.
@@ -312,15 +332,22 @@ export const progressView: ViewModule = {
       container.innerHTML = VIEW_MARKUP;
 
       const targetUserId = p.get("uid") ?? myId;
+      const isTrainerView = targetUserId !== myId;
 
       // El unico flujo que trae ?uid= de otro usuario es "Tus alumnos" (entrenador viendo el
       // progreso de un suscriptor aceptado); la propia tarjeta "Progreso completo" del perfil
       // nunca pasa el uid de otra persona. Viendo el progreso propio (o el "?uid=" de uno
       // mismo) el link vuelve al perfil en vez de a la lista de alumnos.
-      if (targetUserId !== myId) {
+      if (isTrainerView) {
         container.querySelector("#backToAlumnos")?.removeAttribute("hidden");
         container.querySelector("#backToProfile")?.setAttribute("hidden", "");
       }
+
+      // Prefs de compartir del alumno (medidas / alimentación). Se leen del perfil ya traído más
+      // abajo; arrancan en el default mientras tanto. Solo importan en la vista del entrenador --
+      // el alumno ve sus propias medidas/macros en medidas.html / nutricion.html.
+      let studentBmPrefs: BodyMeasurementPrefs = { ...DEFAULT_BODY_MEASUREMENT_PREFS };
+      let studentNutriPrefs: NutritionPrefs = { ...DEFAULT_NUTRITION_PREFS };
 
       let lineChartInstance: ChartInstance | null = null;
       let sessionChartInstance: ChartInstance | null = null;
@@ -625,6 +652,17 @@ export const progressView: ViewModule = {
         loadedTabs.add(tab);
         if (tab === "active") {
           await renderActiveRoutineSection(targetUserId);
+        } else if (tab === "medidas") {
+          const host = container.querySelector<HTMLElement>("#medidasContent");
+          if (host)
+            await renderStudentMeasurementsPanel(
+              host,
+              { studentId: targetUserId, showNumbers: studentBmPrefs.shareWithTrainer, showPhotos: studentBmPrefs.sharePhotoWithTrainer },
+              ctx
+            );
+        } else if (tab === "nutricion") {
+          const host = container.querySelector<HTMLElement>("#nutricionContent");
+          if (host) await renderStudentNutritionPanel(host, { studentId: targetUserId }, ctx);
         } else {
           const groups = await ensureGroups();
           if (tab === "overview") await renderOverviewTab(groups);
@@ -666,9 +704,28 @@ export const progressView: ViewModule = {
       // El título de la página se muestra sólo cuando un entrenador está mirando el progreso de
       // un alumno (?uid=), para no perder de vista de quién es. En el progreso propio no va nada.
       const title = container.querySelector<HTMLElement>("#pageTitle");
-      if (title && targetUserId !== myId) {
+      if (title && isTrainerView) {
         title.textContent = `Progreso de ${profile.nombre}`;
         title.hidden = false;
+      }
+
+      // Pestañas "Medidas" / "Alimentación": solo en la vista del entrenador y solo si el alumno
+      // las comparte (body_measurement_prefs / nutrition_prefs). RLS igual es la barrera real --
+      // esto solo decide si mostrar la pestaña. Si no aplica, se saca el botón y su panel.
+      studentBmPrefs = parseBodyMeasurementPrefs(profile.body_measurement_prefs);
+      studentNutriPrefs = parseNutritionPrefs(profile.nutrition_prefs);
+      const showMedidasTab = isTrainerView && studentBmPrefs.enabled && (studentBmPrefs.shareWithTrainer || studentBmPrefs.sharePhotoWithTrainer);
+      const showNutriTab = isTrainerView && studentNutriPrefs.enabled && studentNutriPrefs.shareWithTrainer;
+      for (const [tab, show] of [
+        ["medidas", showMedidasTab],
+        ["nutricion", showNutriTab],
+      ] as const) {
+        if (show) {
+          container.querySelector(`#progressTabs .routine-tab[data-tab="${tab}"]`)?.removeAttribute("hidden");
+        } else {
+          container.querySelector(`#progressTabs .routine-tab[data-tab="${tab}"]`)?.remove();
+          container.querySelector(`#${TAB_PANELS[tab]}`)?.remove();
+        }
       }
 
       wireTabs();

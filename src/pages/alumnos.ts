@@ -20,6 +20,8 @@ import {
 } from "../services/subscription.service";
 import { listMyGymTrainerHandles, listGymStudentsForTrainer, type MyGymTrainerHandleRow, type GymStudentRow } from "../services/gymTrainer.service";
 import { listRecentComments, type RecentCommentRow } from "../services/comment.service";
+import { getLatestBodyWeight } from "../services/bodyMeasurements.service";
+import { getActiveNutritionTarget } from "../services/nutrition.service";
 import { renderVerifiedBadge } from "../lib/verifiedBadge";
 import { initListViewToggle } from "../lib/listViewToggle";
 
@@ -77,11 +79,20 @@ interface StudentRow extends StudentSourceRow {
   lastTrained: string | null;
   recentComments: RecentCommentRow[];
   assignedRoutinesCount: number;
+  // Solo si el alumno los comparte (RLS: trainer_can_see_measurements / _nutrition). null = no
+  // comparte, o no tiene la feature activa, o todavía no cargó nada -- en los tres casos no se muestra.
+  latestWeight: { value: number; unidad: "kg" | "lb" } | null;
+  dailyKcalTarget: number | null;
 }
 
 type AlumnosTab = "current" | "historic";
 
 const STUDENT_MENU_GEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
+
+/** 82.5 en vez de 82.50, pero 82 queda 82 -- para el "Peso actual" de la tarjeta. */
+function fmtWeight(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
 
 // La fecha mas antigua entre suscripcion directa y cada relacion de socio-de-gimnasio: "Alumno
 // desde" siempre refleja el vinculo mas viejo, sea cual sea el origen.
@@ -166,6 +177,8 @@ function studentCardMarkup(s: StudentRow): string {
         }
         <div class="stat-portrait-hide"><span>Último entreno</span><strong>${s.lastTrained ? escapeHtml(formatFechaCorta(s.lastTrained)) : "Nunca entrenó"}</strong></div>
         <div class="stat-portrait-hide"><span>Rutinas asignadas</span><strong>${s.assignedRoutinesCount}</strong></div>
+        ${s.latestWeight ? `<div><span>Peso actual</span><strong>${fmtWeight(s.latestWeight.value)} ${s.latestWeight.unidad === "lb" ? "lb" : "kg"}</strong></div>` : ""}
+        ${s.dailyKcalTarget != null ? `<div><span>Calorías / día</span><strong>${Math.round(s.dailyKcalTarget)} kcal</strong></div>` : ""}
         <div><span>Alumno desde</span><strong>${escapeHtml(formatFechaCorta(s.since))}</strong></div>
       </div>
       ${commentsMarkup}
@@ -380,15 +393,26 @@ export const alumnosView: ViewModule = {
     }
 
     async function loadStudent(s: StudentSourceRow): Promise<StudentRow> {
-      const [activeRoutines, lastTrained, recentComments, assignedRoutinesCount] = await Promise.all([
+      const [activeRoutines, lastTrained, recentComments, assignedRoutinesCount, latestWeight, nutritionTarget] = await Promise.all([
         listRoutines(s.id, "active").catch(() => []),
         getLastTrainedDate(s.id).catch(() => null),
         listRecentComments(s.id, 3).catch(() => []),
         countAssignedRoutines(myId, s.id).catch(() => 0),
+        getLatestBodyWeight(s.id).catch(() => null),
+        getActiveNutritionTarget(s.id).catch(() => null),
       ]);
       const activeRoutine = activeRoutines[0] ?? null;
       const activeRoutinePct = activeRoutine ? await getRoutineProgressPct(s.id, activeRoutine.totalRoutineExerciseIds).catch(() => 0) : 0;
-      return { ...s, activeRoutine, activeRoutinePct, lastTrained, recentComments, assignedRoutinesCount };
+      return {
+        ...s,
+        activeRoutine,
+        activeRoutinePct,
+        lastTrained,
+        recentComments,
+        assignedRoutinesCount,
+        latestWeight,
+        dailyKcalTarget: nutritionTarget?.kcal ?? null,
+      };
     }
 
     // ---------- Menu de tuerca por alumno (Ver progreso / Asignar / Finalizar / Historicas / Cancelar) ----------

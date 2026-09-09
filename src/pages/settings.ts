@@ -1118,6 +1118,24 @@ export const settingsView: ViewModule = {
           <div id="bodyMeasurementFieldsSection" ${measurementPrefs.enabled ? "" : "hidden"}>
             <p class="chart-sub">Elegí qué medidas querés seguir además del peso. Podés cambiar esto cuando quieras -- lo que ya cargaste no se borra si desactivás una medida.</p>
             <div id="bodyMeasurementFieldsList">${measurementFieldsMarkup()}</div>
+            <div class="settings-widget-group">
+              <h4>Compartir con tu entrenador</h4>
+              <p class="chart-sub" style="margin:0 0 10px;">Tus entrenadores (suscripción aceptada, o un gimnasio donde seas socio y ellos den clases) pueden ver esto en "Ver progreso". No aplica a las cuentas de gimnasio en sí.</p>
+              <div class="settings-toggle-row">
+                <div><span class="switch-label">Compartir mis medidas</span></div>
+                <label class="switch">
+                  <input type="checkbox" id="shareMeasuresToggle" ${measurementPrefs.shareWithTrainer ? "checked" : ""}>
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+              <div class="settings-toggle-row">
+                <div><span class="switch-label">Compartir mis fotos de progreso</span></div>
+                <label class="switch">
+                  <input type="checkbox" id="shareMeasurePhotosToggle" ${measurementPrefs.sharePhotoWithTrainer ? "checked" : ""}>
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+            </div>
           </div>
           <div class="alert_message" id="measurementPrefsAlert"></div>
         </div>
@@ -1133,6 +1151,18 @@ export const settingsView: ViewModule = {
               <input type="checkbox" id="nutritionEnabledToggle" ${nutritionPrefs.enabled ? "checked" : ""}>
               <span class="switch-track"></span>
             </label>
+          </div>
+          <div id="nutritionShareSection" ${nutritionPrefs.enabled ? "" : "hidden"}>
+            <div class="settings-toggle-row">
+              <div>
+                <span class="switch-label">Compartir mi alimentación con mi entrenador</span>
+                <p class="chart-sub" style="margin:4px 0 0;">Tus entrenadores (suscripción aceptada, o un gimnasio donde seas socio y ellos den clases) pueden ver tu objetivo y lo que cargás en "Ver progreso". No aplica a las cuentas de gimnasio en sí.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="shareNutritionToggle" ${nutritionPrefs.shareWithTrainer ? "checked" : ""}>
+                <span class="switch-track"></span>
+              </label>
+            </div>
           </div>
           <div class="alert_message" id="nutritionPrefsAlert"></div>
         </div>
@@ -1257,6 +1287,23 @@ export const settingsView: ViewModule = {
       }
       wireMeasurementFieldChips();
 
+      // "Compartir con tu entrenador": persisten al toque (mismo criterio que el resto de la
+      // tarjeta). shareWithTrainer arranca ON, sharePhotoWithTrainer OFF (ver migración
+      // trainer_student_shared_data). El backend (trainer_can_see_measurements[_photos]) es la
+      // barrera real -- estos toggles solo escriben el flag.
+      function wireMeasurementShareToggle(id: string, key: "shareWithTrainer" | "sharePhotoWithTrainer"): void {
+        container.querySelector(`#${id}`)?.addEventListener("change", async (e) => {
+          const toggle = e.target as HTMLInputElement;
+          const value = toggle.checked;
+          toggle.disabled = true;
+          const ok = await persistMeasurementPrefs({ ...measurementPrefs, [key]: value });
+          toggle.disabled = false;
+          if (!ok) toggle.checked = !value;
+        });
+      }
+      wireMeasurementShareToggle("shareMeasuresToggle", "shareWithTrainer");
+      wireMeasurementShareToggle("shareMeasurePhotosToggle", "sharePhotoWithTrainer");
+
       // Guarda al perder el foco (no hace falta un botón "Guardar" aparte, mismo criterio
       // inmediato que el resto de esta tarjeta) -- solo si el valor realmente cambió.
       container.querySelector("#alturaInput")?.addEventListener("change", async (e) => {
@@ -1316,6 +1363,26 @@ export const settingsView: ViewModule = {
         toggle.disabled = false;
         if (error) {
           toggle.checked = !enabled;
+          alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
+          return;
+        }
+        nutritionPrefs = next;
+        profile!.nutrition_prefs = next as unknown as Profile["nutrition_prefs"];
+        const shareSection = container.querySelector("#nutritionShareSection") as HTMLElement | null;
+        if (shareSection) shareSection.hidden = !enabled;
+      });
+
+      container.querySelector("#shareNutritionToggle")?.addEventListener("change", async (e) => {
+        const alertBox = container.querySelector("#nutritionPrefsAlert")!;
+        alertBox.innerHTML = "";
+        const toggle = e.target as HTMLInputElement;
+        const value = toggle.checked;
+        toggle.disabled = true;
+        const next = { ...nutritionPrefs, shareWithTrainer: value };
+        const { error } = await updateProfileFields(userId, { nutrition_prefs: next as unknown as Profile["nutrition_prefs"] });
+        toggle.disabled = false;
+        if (error) {
+          toggle.checked = !value;
           alertBox.innerHTML = `<p>${escapeHtml(error)}</p>`;
           return;
         }
