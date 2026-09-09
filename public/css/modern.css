@@ -3042,6 +3042,27 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .bw-row-photo { display: block; width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
 .bw-photo-lightbox-caption { margin: 0; font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
 .bw-photo-lightbox-summary { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); text-align: center; }
+/* Botón "Descargar foto" del pie del visor a pantalla completa (ver wirePhotoButtons en
+   medidas.ts) -- fondo oscuro, así que es claro-sobre-oscuro. width:fit-content + margin auto
+   lo centra sin depender de text-align del contenedor. */
+.bw-photo-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  margin: 12px auto 0;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bw-photo-download-btn svg { width: 15px; height: 15px; stroke: currentColor; }
+.bw-photo-download-btn:hover { background: rgba(255, 255, 255, 0.18); }
+.bw-photo-download-btn:disabled { opacity: 0.55; cursor: default; }
 
 /* Grilla de la pestaña "Progreso" (ver progressGalleryMarkup en medidas.ts) -- solo aparece si
    hay al menos una foto cargada. */
@@ -3176,12 +3197,13 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   gap: 10px;
   padding: 10px 0;
   border-top: 1px solid var(--border);
+  color: var(--text-muted);
 }
 .imc-range-row:first-child { border-top: none; padding-top: 0; }
-.imc-range-row-active { color: var(--text); }
-.imc-range-imc { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-muted); }
-.imc-range-row-active .imc-range-imc { color: var(--text); font-weight: 700; }
-.imc-range-weight { font-size: 13px; font-weight: 700; white-space: nowrap; }
+/* Solo la fila en la que caés se marca: texto pleno + negrita (la heredan sus dos hijos). */
+.imc-range-row-active { color: var(--text); font-weight: 700; }
+.imc-range-imc { flex: 1; min-width: 0; font-size: 12.5px; }
+.imc-range-weight { font-size: 13px; white-space: nowrap; }
 
 @media (max-width: 480px) {
   .imc-range-row { flex-wrap: wrap; }
@@ -3568,8 +3590,9 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .nutri-meal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .nutri-add-food { width: 100%; }
 .nutri-meal-actions-sub { display: flex; align-items: center; gap: 16px; }
-/* inline-flex + align-items:center + line-height:1: el emoji 💡 y el símbolo ⟳ tienen alturas
-   de glifo distintas -> sin esto "⟳ Repetir" quedaba más arriba que "💡 Sugerencias". */
+/* inline-flex + align-items:center + line-height:1: alinea el emoji con el texto y empareja
+   "🔁 Repetir" con "💡 Sugerencias" (antes "Repetir" usaba el símbolo ⟳, que en iPhone se veía
+   chico y finito al lado del emoji -> se pasó a emoji para que rendericen al mismo tamaño). */
 .nutri-meal-mini {
   display: inline-flex;
   align-items: center;
@@ -3692,6 +3715,31 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
    accion (ej. "+ Invitar entrenador" en entrenadores.ts) ese tirón hacia arriba lo pegotea
    contra el boton en vez de separarlos. */
 .routines-header-actions + .routine-tabs { margin-top: 8px; }
+
+/* Navegación de métricas de medidas.ts en DOS niveles: fila 1 = grupo (Peso / Circunferencias /
+   Índices / ...), fila 2 = medida del grupo elegido (solo si el grupo tiene más de una). Antes
+   era una sola .routine-tabs con TODAS las medidas activas -- se hacía kilométrica (~25 pills). */
+.measurement-metric-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 24px;
+}
+.measurement-metric-nav .routine-tabs { margin: 0; max-width: 100%; }
+/* Fila 2: chips .exc-pick-chip (mismo look que el picker de ejercicios / Configuración -- activo
+   = borde y letra naranja sobre fondo suave), envueltos, centrados bajo la fila de grupos. */
+.measurement-measure-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 100%;
+}
+@media (max-width: 639px) {
+  .measurement-metric-nav { align-items: stretch; }
+  .measurement-measure-row { justify-content: flex-start; }
+}
 
 /* ---------- Dueño de la rutina ---------- */
 
@@ -5788,6 +5836,22 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
     border-radius: 0;
     padding: 22px 16px;
   }
+  /* Modal a pantalla completa como columna flex: la grilla de resultados se estira a
+     todo el alto disponible y los botones "+ Crear ejercicio nuevo" / "Cerrar" quedan
+     fijos abajo, sin hueco muerto (mismo criterio que el buscador de alimentos). */
+  .exc-pick-modal-card.modal-card-lg { display: flex; flex-direction: column; padding-top: 16px; }
+  /* flex:1 con basis 0 (no "auto"): si no, el alto real de la lista se toma como basis y
+     los items de la cabecera con overflow (las pestañas) se aplastan a 0. */
+  .exc-pick-modal-card.modal-card-lg .exc-pick-results { flex: 1; min-height: 0; max-height: none; }
+  .exc-pick-modal-card.modal-card-lg .modal-actions { margin-top: auto; padding-top: 14px; }
+  .exc-pick-modal-card.modal-card-lg > h2,
+  .exc-pick-modal-card.modal-card-lg .subtitle,
+  .exc-pick-modal-card.modal-card-lg .exc-pick-tabs,
+  .exc-pick-modal-card.modal-card-lg .exc-pick-search-row,
+  .exc-pick-modal-card.modal-card-lg .exc-pick-category-select { flex-shrink: 0; }
+  /* Cabecera mas compacta en celular para dejarle mas alto a la lista. */
+  .exc-pick-modal-card.modal-card-lg .subtitle { margin-bottom: 12px; }
+  .exc-pick-modal-card.modal-card-lg .exc-pick-category-select { margin-bottom: 12px; }
 }
 
 /* Modal de descripcion del ejercicio (ver exerciseModal.ts): mismo criterio que el

@@ -938,7 +938,11 @@ export const settingsView: ViewModule = {
       // Altura: NO es un toggle (ver nota en MEASUREMENT_FIELDS) -- profiles.altura_cm, se pide
       // una sola vez acá mismo (campo de texto, no chip) porque prácticamente no cambia.
       let alturaCm = profile!.altura_cm != null ? Number(profile!.altura_cm) : null;
-      const measurementGroups: MeasurementGroup[] = ["peso", "circunferencias", "composicion", "calculadas"];
+      const measurementGroups: MeasurementGroup[] = ["peso", "circunferencias", "composicion", "pliegues", "calculadas"];
+      // profiles.genero / .fecha_nacimiento -- las fórmulas de % graso los usan. "otro" no sirve
+      // (las ecuaciones solo están validadas para hombre/mujer), se trata como no cargado.
+      const generoSet = profile!.genero === "hombre" || profile!.genero === "mujer";
+      const fechaNacSet = !!profile!.fecha_nacimiento;
 
       function fmtAltura(cm: number): string {
         return String(Math.round(cm * 100) / 100);
@@ -962,12 +966,14 @@ export const settingsView: ViewModule = {
             <h4>${GROUP_LABELS[g]}</h4>
             ${g === "peso" ? alturaFieldHtml() : ""}
             ${
-              // Las calculadas (IMC, ratios) no se cargan a mano -- se derivan de peso/altura/
-              // cintura/cadera cuando estén cargados, este aviso evita que activarlas sin más se
-              // sienta como que "no hacen nada".
+              // Las calculadas (IMC, ratios, % graso) no se cargan a mano -- se derivan de las
+              // medidas de arriba y de datos del perfil (altura, sexo, edad) cuando estén cargados.
+              // Este aviso evita que activarlas sin más se sienta como que "no hacen nada".
               g === "calculadas"
                 ? `<p class="chart-sub" style="margin:0 0 10px;">Se calculan solas a partir de las medidas de arriba -- no hace falta cargarlas a mano.</p>`
-                : ""
+                : g === "pliegues"
+                  ? `<p class="chart-sub" style="margin:0 0 10px;">Se miden con un adipómetro (plicómetro). Habilitan el cálculo profesional de % graso -- activá "Grasa corporal (pliegues)" en Calculadas.</p>`
+                  : ""
             }
             <div class="exc-pick-chips">
               ${MEASUREMENT_FIELDS.filter((f) => f.group === g)
@@ -1206,14 +1212,21 @@ export const settingsView: ViewModule = {
             const turningOn = !measurementPrefs[key];
             const field = MEASUREMENT_FIELDS.find((f) => f.key === key);
 
-            // IMC / ratio cintura-altura no se pueden calcular sin altura, y la altura no es un
-            // toggle que se pueda encender solo (es profiles.altura_cm, arriba en este mismo
-            // grupo) -- si todavía no la cargó, se corta acá con un aviso en vez de dejar
-            // "activada" una medida que nunca va a mostrar nada.
-            if (turningOn && field?.requiresAltura && alturaCm == null) {
-              const alertBox = container.querySelector("#measurementPrefsAlert")!;
-              alertBox.innerHTML = `<p>Para activar "${escapeHtml(field.label)}" primero tenés que cargar tu altura, un poco más arriba.</p>`;
-              return;
+            // Algunas calculadas necesitan datos del perfil que NO son toggles de medidas: la
+            // altura (profiles.altura_cm, arriba en este mismo grupo), el sexo y la fecha de
+            // nacimiento (Configuración > Editar perfil) -- el % graso usa los tres. Si falta
+            // alguno se corta acá con un aviso en vez de dejar "activada" una medida que nunca
+            // va a mostrar nada.
+            if (turningOn && field) {
+              const missing: string[] = [];
+              if (field.requiresAltura && alturaCm == null) missing.push("tu altura, un poco más arriba");
+              if (field.requiresGenero && !generoSet) missing.push("tu sexo (Hombre o Mujer) en Editar perfil");
+              if (field.requiresEdad && !fechaNacSet) missing.push("tu fecha de nacimiento en Editar perfil");
+              if (missing.length > 0) {
+                const alertBox = container.querySelector("#measurementPrefsAlert")!;
+                alertBox.innerHTML = `<p>Para activar "${escapeHtml(field.label)}" primero tenés que cargar ${escapeHtml(missing.join(" y "))}.</p>`;
+                return;
+              }
             }
 
             const next: BodyMeasurementPrefs = { ...measurementPrefs, [key]: turningOn };

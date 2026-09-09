@@ -20,7 +20,11 @@ import {
   rccCategoryFor,
   rccCategoriesFor,
   rccWaistBoundariesCmForHip,
+  bodyFatCategoryFor,
+  bodyFatCategoriesFor,
+  SKINFOLD_METHOD_LABELS,
   getGenero,
+  getEdad,
   uploadMeasurementPhoto,
   deleteMeasurementPhoto,
   downloadMeasurementPhoto,
@@ -35,10 +39,13 @@ import {
   type MeasurementValues,
   type LoggableFieldDef,
   type RccSex,
+  type SkinfoldMethod,
+  type MeasurementGroup,
 } from "../services/bodyMeasurements.service";
 import { createPost, uploadPostMedia, deletePostMedia, validatePostContent } from "../services/post.service";
 import { makeMentionEditable } from "../lib/mentionEditor";
 import { attachMentionAutocomplete } from "../lib/mentionAutocomplete";
+import { saveBlobToDevice, imageExtForType } from "../lib/download";
 import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
 import { openMediaLightbox } from "../lib/mediaLightbox";
@@ -58,10 +65,26 @@ const UNIT_LABELS: Record<BodyWeightUnit, string> = { kg: "Kg", lb: "Lb" };
 // solo aparece cuando hay al menos una foto de progreso cargada.
 const PROGRESO_TAB_KEY = "progreso" as const;
 
+// Navegación de métricas en dos niveles (ver renderMetricArea): fila 1 = grupo, fila 2 = medida
+// del grupo. Antes era una sola fila con TODAS las medidas activas (podían ser ~25, ilegible).
+type MetricGroupKey = MeasurementGroup | typeof PROGRESO_TAB_KEY;
+const METRIC_GROUP_ORDER: MeasurementGroup[] = ["peso", "circunferencias", "composicion", "pliegues", "calculadas"];
+// Etiquetas cortas para la fila de grupos -- distintas de GROUP_LABELS de Configuración (que son
+// más largas, "Pliegues cutáneos (adipómetro)"): acá tienen que entrar varias en una fila.
+const METRIC_GROUP_LABEL: Record<MetricGroupKey, string> = {
+  peso: "Peso",
+  circunferencias: "Circunferencias",
+  composicion: "Composición",
+  pliegues: "Pliegues",
+  calculadas: "Índices",
+  progreso: "Progreso",
+};
+
 const KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
 const EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 const SHARE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>`;
+const DOWNLOAD_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
 // ---------------------------------------------------------------------------
 // Borrador de "+Agregar medidas": si el usuario cierra el modal sin guardar (Cancelar, o
@@ -143,6 +166,28 @@ function unitSuffix(unit: string): string {
   return unit ? ` ${unit}` : "";
 }
 
+// Valor de ejemplo (placeholder) plausible por medida, para que no se copie el mismo número en
+// todos los campos (un cuello de 82 cm rompía el cálculo de % graso US Navy -- ver noDataMarkup).
+const FIELD_PLACEHOLDER: Partial<Record<MeasurementKey, string>> = {
+  peso: "Ej: 78.5",
+  cuello: "Ej: 38",
+  pecho: "Ej: 100",
+  cintura: "Ej: 90",
+  cadera: "Ej: 100",
+  biceps: "Ej: 35",
+  antebrazo: "Ej: 28",
+  muslo: "Ej: 55",
+  pantorrilla: "Ej: 38",
+  muneca: "Ej: 17",
+  grasaCorporal: "Ej: 18",
+  masaMuscular: "Ej: 35",
+  aguaCorporal: "Ej: 55",
+  masaOsea: "Ej: 3.2",
+};
+function fieldPlaceholder(f: MeasurementFieldDef): string {
+  return FIELD_PLACEHOLDER[f.key] ?? (f.group === "pliegues" ? "Ej: 12" : "Ej: 20");
+}
+
 // Texto de una medida puntual dentro de un registro, ej. "Cintura: 82 cm" / "Peso: 78.5 Kg" / "IMC: 23.4".
 function fieldValueLabel(entry: BodyMeasurementEntry, field: MeasurementFieldDef): string | null {
   const value = entry[field.key];
@@ -166,6 +211,19 @@ function entryMeasurementSummary(entry: BodyMeasurementEntry): string {
 function buildShareText(entry: BodyMeasurementEntry): string {
   const lines = MEASUREMENT_FIELDS.map((f) => fieldValueLabel(entry, f)).filter((s): s is string => s !== null);
   return [`Mis medidas del ${formatFechaCorta(entry.fecha)}`, "", ...lines].join("\n").slice(0, POST_MAX);
+}
+
+// Baja la foto de progreso de un registro al dispositivo (bucket privado -> se descarga el
+// archivo y se lo pasa a saveBlobToDevice, que en móvil abre el panel nativo de compartir y
+// en escritorio dispara un <a download>). Compartido por el ítem "Descargar foto" del menú de
+// cada fila del historial y el botón del visor a pantalla completa. Devuelve false si no se
+// pudo (sin foto, o falló la descarga) -- cada llamador muestra su propio aviso.
+async function downloadEntryPhoto(entry: BodyMeasurementEntry): Promise<boolean> {
+  if (!entry.fotoPath) return false;
+  const blob = await downloadMeasurementPhoto(entry.fotoPath);
+  if (!blob) return false;
+  await saveBlobToDevice(blob, `medida-${entry.fecha}.${imageExtForType(blob.type)}`);
+  return true;
 }
 
 function emptyMarkup(): string {
@@ -211,6 +269,7 @@ function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, s
         <button type="button" class="profile-menu-btn weight-menu-btn" aria-label="Más opciones" aria-expanded="false">${KEBAB_ICON}</button>
         <div class="profile-menu-panel weight-menu-panel" hidden>
           <button type="button" class="profile-menu-item bw-share" data-id="${e.id}">${SHARE_ICON}Compartir</button>
+          ${e.fotoPath ? `<button type="button" class="profile-menu-item bw-download" data-id="${e.id}">${DOWNLOAD_ICON}Descargar foto</button>` : ""}
           <button type="button" class="profile-menu-item bw-edit" data-id="${e.id}">${EDIT_ICON}Editar</button>
           <button type="button" class="profile-menu-item profile-menu-item-danger bw-delete" data-id="${e.id}">${TRASH_ICON}Borrar</button>
         </div>
@@ -269,11 +328,15 @@ export const medidasView: ViewModule = {
     // Altura: no es una medida por fecha, es profiles.altura_cm (se pide una sola vez en
     // Configuración, ver getAlturaCm) -- IMC/ratio cintura-altura la usan para todo el historial.
     let alturaCm = await getAlturaCm(myId);
-    // Género: profiles.genero (Configuración > Editar perfil) -- solo lo usa la clasificación de
+    // Género: profiles.genero (Configuración > Editar perfil) -- lo usan la clasificación de
     // riesgo del ratio cintura-cadera (los cortes son distintos para hombre/mujer, ver
-    // rccClassificationMarkup). null si no está cargado o es "otro" -- en ese caso la pestaña
-    // sigue mostrando el ratio y sus estadísticas, solo se omite el badge/tabla de riesgo.
+    // rccClassificationMarkup) y el % graso calculado (grasaBasica / grasaPliegues). null si no
+    // está cargado o es "otro" -- en ese caso el ratio sigue mostrándose sin badge de riesgo, y
+    // el % graso directamente no se puede calcular (ver attachDerivedFields).
     let genero = await getGenero(myId);
+    // Edad: profiles.fecha_nacimiento (getEdad) -- solo la usan las ecuaciones de densidad
+    // corporal del % graso por pliegues (grasaPliegues).
+    let edad = await getEdad(myId);
 
     // Cierra cualquier menú de tres puntos abierto al tocar afuera (mismo patrón que pesos.ts).
     document.addEventListener(
@@ -300,6 +363,11 @@ export const medidasView: ViewModule = {
     // renderMetricArea/PROGRESO_TAB_KEY más abajo.
     let selectedKey: MeasurementKey | typeof PROGRESO_TAB_KEY | null = null;
 
+    // Último historial traído por render() -- lo usa openMeasurementModal para prellenar el
+    // formulario cuando la fecha elegida YA tiene un registro (así guardar sin tocar un campo no
+    // lo borra: la carga es un upsert por (user_id, fecha)).
+    let loadedEntries: BodyMeasurementEntry[] = [];
+
     // Las 3 calculadas (IMC, ratios) nunca entran acá -- no se cargan a mano, ver loggableFields().
     function loggableActiveFields(): LoggableFieldDef[] {
       return loggableFields().filter((f) => prefs[f.key]);
@@ -308,16 +376,19 @@ export const medidasView: ViewModule = {
     // Encabezado por grupo dentro de la guía de "cómo medirme" -- distinto del GROUP_LABELS de
     // Configuración porque acá "peso" nunca incluye altura (no es un campo de este modal, ver
     // nota en MEASUREMENT_FIELDS), así que "Peso y altura" sería confuso.
-    const HELP_GROUP_LABELS: Record<"peso" | "circunferencias" | "composicion", string> = {
+    const HELP_GROUP_LABELS: Record<"peso" | "circunferencias" | "composicion" | "pliegues", string> = {
       peso: "Peso",
       circunferencias: "Circunferencias",
       composicion: "Composición corporal",
+      pliegues: "Pliegues cutáneos",
     };
-    // Solo circunferencias necesita esta aclaración de "cómo" en general -- peso y composición
+    // Circunferencias y pliegues necesitan una aclaración general de "cómo" -- peso y composición
     // corporal ya la traen implícita en el howTo de cada campo (una sola medida cada uno).
-    const HELP_GROUP_TIP: Partial<Record<"peso" | "circunferencias" | "composicion", string>> = {
+    const HELP_GROUP_TIP: Partial<Record<"peso" | "circunferencias" | "composicion" | "pliegues", string>> = {
       circunferencias:
         "Usá una cinta métrica flexible (de costura), no elástica. Tiene que quedar ajustada contra la piel, sin apretarla ni hundirla, y paralela al piso. Medí siempre del mismo lado del cuerpo.",
+      pliegues:
+        "Se miden con un adipómetro (plicómetro). Pellizcá firme la piel + la grasa de abajo (sin agarrar músculo) a 1 cm del punto marcado, apoyá el adipómetro en el punto y leé a los 2 segundos. Tomá cada pliegue 2 o 3 veces y anotá el promedio. Medí siempre del lado derecho del cuerpo, sin haber entrenado antes (el ejercicio infla el pliegue).",
     };
 
     // Guía de "cómo medirme", colapsada por default (ver bwHelpToggle) -- solo con los campos que
@@ -327,7 +398,7 @@ export const medidasView: ViewModule = {
     // del modal, y como estos arrancan ocultos (dentro de #bwHelpPanel[hidden]) esa animación de
     // 0.9s recién arranca al togglear la guía, dejando el texto invisible un rato cada vez que se abre.
     function bwHelpMarkup(fields: LoggableFieldDef[]): string {
-      const groups: Array<keyof typeof HELP_GROUP_LABELS> = ["peso", "circunferencias", "composicion"];
+      const groups: Array<keyof typeof HELP_GROUP_LABELS> = ["peso", "circunferencias", "composicion", "pliegues"];
       const sections = groups
         .map((g) => {
           const groupFields = fields.filter((f) => f.group === g && f.howTo);
@@ -355,18 +426,35 @@ export const medidasView: ViewModule = {
       const fields = loggableActiveFields();
       // El borrador solo aplica a una entrada NUEVA (ver nota junto a loadDraft más arriba).
       const draft = existing ? null : loadDraft(myId);
-      const fecha = existing?.fecha ?? draft?.fecha ?? todayLocalISO();
-      const unidad: BodyWeightUnit = existing?.unidad ?? draft?.unidad ?? "kg";
+
+      // Registro real para una fecha dada -- en modo edición es siempre `existing`; en modo
+      // "Agregar", el del historial que caiga en esa fecha (o null). Si hay uno, el formulario
+      // arranca PRELLENADO con sus valores: la carga es un upsert por (user_id, fecha), así que
+      // guardar sin tocar un campo lo pondría en null y borraría lo que hubiera ese día.
+      const entryForFecha = (f: string): BodyMeasurementEntry | null =>
+        existing ? existing : (loadedEntries.find((e) => e.fecha === f) ?? null);
+
+      let currentFecha = existing?.fecha ?? draft?.fecha ?? todayLocalISO();
+      let prefill = entryForFecha(currentFecha);
+      // El borrador solo se usa si la fecha elegida NO tiene todavía un registro real.
+      const useDraft = !existing && !prefill && !!draft;
+
+      const unidad: BodyWeightUnit = prefill?.unidad ?? (useDraft ? draft!.unidad : "kg");
       // Bucket privado -- hay que resolver la URL firmada ANTES de armar el HTML del preview
-      // (no se puede usar el path directo como src, ver getMeasurementPhotoUrl).
-      const existingPhotoPath = existing?.fotoPath ?? null;
-      const existingPhotoUrl = existingPhotoPath ? await getMeasurementPhotoUrl(existingPhotoPath) : null;
+      // (no se puede usar el path directo como src, ver getMeasurementPhotoUrl). `basePhotoPath`
+      // se re-evalúa si cambia la fecha (ver más abajo).
+      let basePhotoPath = prefill?.fotoPath ?? null;
+      let basePhotoUrl = basePhotoPath ? await getMeasurementPhotoUrl(basePhotoPath) : null;
+
+      const fieldInitial = (f: LoggableFieldDef): string => {
+        const v = prefill?.[f.key];
+        if (v != null) return fmt(v);
+        return useDraft ? (draft!.values[f.column] ?? "") : "";
+      };
 
       const fieldRowsHtml = fields
         .map((f) => {
-          const existingValue = existing?.[f.key];
-          const draftValue = draft?.values[f.column];
-          const initial = existingValue != null ? fmt(existingValue) : (draftValue ?? "");
+          const initial = fieldInitial(f);
           if (f.key === "peso") {
             return `
               <div class="field">
@@ -383,7 +471,7 @@ export const medidasView: ViewModule = {
           return `
             <div class="field">
               <label for="bwField-${f.column}">${escapeHtml(f.label)}${f.unit ? ` (${f.unit})` : ""}</label>
-              <input type="text" id="bwField-${f.column}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" placeholder="Ej: 82" value="${escapeHtml(initial)}">
+              <input type="text" id="bwField-${f.column}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" placeholder="${fieldPlaceholder(f)}" value="${escapeHtml(initial)}">
             </div>
           `;
         })
@@ -392,32 +480,33 @@ export const medidasView: ViewModule = {
       loaderBody.innerHTML = `
         <div class="success-check-container">
           <div class="modal-card modal-card-lg">
-            <h2>${existing ? "Editar medidas" : "Agregar medidas"}</h2>
-            <p class="subtitle">Registrá tus medidas para una fecha. Dejá vacío lo que no quieras cargar hoy.</p>
+            <h2 id="bwModalTitle">${existing || prefill ? "Editar medidas" : "Agregar medidas"}</h2>
+            <p class="subtitle">Registrá tus medidas para una fecha. Un campo vacío queda sin cargar (y si ya tenía un valor ese día, se borra).</p>
             ${
-              draft
+              useDraft
                 ? `<div class="bw-draft-notice" id="bwDraftNotice">Recuperamos lo que habías empezado a cargar la última vez. <button type="button" id="bwDraftDiscard">Descartar</button></div>`
                 : ""
             }
+            <div class="bw-draft-notice" id="bwSameDateNotice" ${existing || !prefill ? "hidden" : ""}>Ya cargaste medidas para esta fecha. Vas a editar ese registro -- los valores de abajo son los que ya tenés guardados.</div>
             <button type="button" class="btn btn-outline btn-sm bw-help-toggle" id="bwHelpToggle">¿Cómo me mido? Ver guía</button>
             <div class="bw-help-panel" id="bwHelpPanel" hidden>${bwHelpMarkup(fields)}</div>
             <div class="field">
               <label for="bwFecha">Fecha</label>
-              <input type="date" id="bwFecha" max="${todayLocalISO()}" value="${escapeHtml(fecha)}">
+              <input type="date" id="bwFecha" max="${todayLocalISO()}" value="${escapeHtml(currentFecha)}">
             </div>
             ${fieldRowsHtml}
             <div class="field">
               <label for="bwPhotoFile">Foto de progreso (opcional)</label>
               <div class="dropzone" id="bwPhotoDropzone">
                 <input type="file" id="bwPhotoFile" accept="image/*" class="dropzone-input" aria-label="Foto de progreso">
-                <div class="dropzone-empty" id="bwPhotoEmpty" ${existingPhotoUrl ? "hidden" : ""}>
+                <div class="dropzone-empty" id="bwPhotoEmpty" ${basePhotoUrl ? "hidden" : ""}>
                   <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                   <p><strong>Hacé clic para subir</strong> o arrastrá una foto acá</p>
                   <span class="field-hint">JPG, PNG o WEBP · hasta 10MB</span>
                 </div>
-                <div class="dropzone-preview" id="bwPhotoPreview" ${existingPhotoUrl ? "" : "hidden"}>
-                  <img id="bwPhotoPreviewImg" class="bw-photo-preview-img" alt="" src="${existingPhotoUrl ? escapeHtml(existingPhotoUrl) : ""}">
-                  <span class="dropzone-filename" id="bwPhotoFileName">${existingPhotoUrl ? "Foto actual" : ""}</span>
+                <div class="dropzone-preview" id="bwPhotoPreview" ${basePhotoUrl ? "" : "hidden"}>
+                  <img id="bwPhotoPreviewImg" class="bw-photo-preview-img" alt="" src="${basePhotoUrl ? escapeHtml(basePhotoUrl) : ""}">
+                  <span class="dropzone-filename" id="bwPhotoFileName">${basePhotoUrl ? "Foto actual" : ""}</span>
                   <button type="button" class="dropzone-remove" id="bwPhotoRemove" title="Quitar foto">×</button>
                 </div>
               </div>
@@ -449,11 +538,14 @@ export const medidasView: ViewModule = {
         void openMeasurementModal(null);
       });
 
-      // Autoguardado del borrador en cada cambio -- solo para una entrada NUEVA (ver nota junto
-      // a loadDraft). Cancelar/cerrar el modal NO lo borra a propósito, solo un guardado exitoso.
+      // Autoguardado del borrador en cada cambio -- solo para una entrada NUEVA cuya fecha NO
+      // tiene todavía un registro real (si lo tiene, `prefill` != null y el formulario está
+      // editando datos ya guardados, ver nota junto a loadDraft). Cancelar/cerrar el modal NO
+      // lo borra a propósito, solo un guardado exitoso.
       if (!existing) {
         const modalCard = loaderBody.querySelector(".modal-card")!;
         const persistDraft = () => {
+          if (prefill) return;
           const fechaVal = (document.getElementById("bwFecha") as HTMLInputElement).value;
           const unidadVal = (document.getElementById("bwUnidad") as HTMLSelectElement | null)?.value as BodyWeightUnit | undefined;
           const values: Partial<Record<MeasurementColumn, string>> = {};
@@ -525,6 +617,71 @@ export const medidasView: ViewModule = {
         if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
       });
 
+      // Muestra en el preview una foto que YA está en el servidor (no un File recién elegido) --
+      // se usa al abrir con una fecha que ya tenía foto y al cambiar de fecha.
+      function showServerPhoto(url: string): void {
+        if (previewObjectUrl) {
+          URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = null;
+        }
+        if (photoInput) photoInput.value = "";
+        if (photoPreviewImg) photoPreviewImg.src = url;
+        if (photoFileName) photoFileName.textContent = "Foto actual";
+        photoDropzone?.classList.remove("has-file");
+        photoEmpty?.setAttribute("hidden", "");
+        photoPreview?.removeAttribute("hidden");
+        pendingPhotoFile = null;
+        photoRemoved = false;
+      }
+      function resetPhotoToEmpty(): void {
+        if (previewObjectUrl) {
+          URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = null;
+        }
+        if (photoInput) photoInput.value = "";
+        photoDropzone?.classList.remove("has-file");
+        photoPreview?.setAttribute("hidden", "");
+        photoEmpty?.removeAttribute("hidden");
+        pendingPhotoFile = null;
+        photoRemoved = false;
+      }
+
+      // Cambiar la fecha en modo "Agregar": si esa fecha ya tiene un registro, el formulario pasa
+      // a editarlo (campos + foto se recargan con lo guardado); si no, se limpia. Evita que
+      // guardar una fecha ya cargada borre lo que no se tocó (la carga es un upsert por fecha).
+      if (!existing) {
+        const fechaInput = document.getElementById("bwFecha") as HTMLInputElement;
+        fechaInput.addEventListener("change", async () => {
+          const newFecha = fechaInput.value;
+          if (!newFecha || newFecha === currentFecha) return;
+          currentFecha = newFecha;
+          prefill = loadedEntries.find((e) => e.fecha === newFecha) ?? null;
+
+          for (const f of fields) {
+            const input = document.getElementById(`bwField-${f.column}`) as HTMLInputElement | null;
+            if (!input) continue;
+            const v = prefill?.[f.key];
+            input.value = v != null ? fmt(v) : "";
+          }
+          const unidadSel = document.getElementById("bwUnidad") as HTMLSelectElement | null;
+          if (unidadSel && prefill) unidadSel.value = prefill.unidad;
+
+          if (!pendingPhotoFile) {
+            basePhotoPath = prefill?.fotoPath ?? null;
+            basePhotoUrl = basePhotoPath ? await getMeasurementPhotoUrl(basePhotoPath) : null;
+            if (basePhotoUrl) showServerPhoto(basePhotoUrl);
+            else resetPhotoToEmpty();
+          }
+
+          const titleEl = document.getElementById("bwModalTitle");
+          if (titleEl) titleEl.textContent = prefill ? "Editar medidas" : "Agregar medidas";
+          const sameDateNotice = document.getElementById("bwSameDateNotice") as HTMLElement | null;
+          if (sameDateNotice) sameDateNotice.hidden = !prefill;
+          const draftNotice = document.getElementById("bwDraftNotice") as HTMLElement | null;
+          if (draftNotice && prefill) draftNotice.hidden = true;
+        });
+      }
+
       document.getElementById("bwSave")?.addEventListener("click", async () => {
         const alertEl = document.getElementById("bwAlert")!;
         alertEl.innerHTML = "";
@@ -567,8 +724,9 @@ export const medidasView: ViewModule = {
         saveBtn.disabled = true;
 
         // La foto se resuelve al final (después de validar todo lo demás) para no subir un
-        // archivo y descartarlo si algún campo numérico todavía tiene un error.
-        let finalFotoPath = existingPhotoPath;
+        // archivo y descartarlo si algún campo numérico todavía tiene un error. `basePhotoPath` es
+        // la foto que ya tiene ese día (se actualiza si cambia la fecha, ver el handler de #bwFecha).
+        let finalFotoPath = basePhotoPath;
         if (pendingPhotoFile) {
           const { path, error } = await uploadMeasurementPhoto(myId, pendingPhotoFile);
           if (error) {
@@ -589,8 +747,8 @@ export const medidasView: ViewModule = {
         }
         // Recién ahora que el registro quedó guardado con el path nuevo/null: si había una foto
         // vieja distinta, se borra del storage para no dejar un archivo huérfano.
-        if (existingPhotoPath && existingPhotoPath !== finalFotoPath) {
-          void deleteMeasurementPhoto(existingPhotoPath);
+        if (basePhotoPath && basePhotoPath !== finalFotoPath) {
+          void deleteMeasurementPhoto(basePhotoPath);
         }
         if (!existing) clearDraft(myId);
 
@@ -879,6 +1037,14 @@ export const medidasView: ViewModule = {
           if (entry) void openShareMeasurementModal(entry);
         });
       });
+      content.querySelectorAll<HTMLButtonElement>(".bw-download").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+          const entry = entries.find((e) => e.id === btn.dataset.id);
+          if (!entry) return;
+          if (!(await downloadEntryPhoto(entry))) alert("No se pudo descargar la foto. Probá de nuevo.");
+        });
+      });
       content.querySelectorAll<HTMLButtonElement>(".bw-edit").forEach((btn) => {
         btn.addEventListener("click", () => {
           btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
@@ -919,7 +1085,19 @@ export const medidasView: ViewModule = {
               footerEl.innerHTML = `
                 <p class="bw-photo-lightbox-caption">${escapeHtml(formatFechaCorta(e.fecha))}</p>
                 ${summary ? `<p class="bw-photo-lightbox-summary">${escapeHtml(summary)}</p>` : ""}
+                <button type="button" class="bw-photo-download-btn" id="bwPhotoDownloadBtn">${DOWNLOAD_ICON}<span>Descargar foto</span></button>
               `;
+              const dlBtn = footerEl.querySelector<HTMLButtonElement>("#bwPhotoDownloadBtn")!;
+              const dlLabel = dlBtn.querySelector("span")!;
+              dlBtn.addEventListener("click", async () => {
+                if (dlBtn.disabled) return;
+                dlBtn.disabled = true;
+                dlLabel.textContent = "Descargando...";
+                const ok = await downloadEntryPhoto(e);
+                dlBtn.disabled = false;
+                dlLabel.textContent = ok ? "Descargar foto" : "No se pudo, reintentá";
+                if (!ok) setTimeout(() => (dlLabel.textContent = "Descargar foto"), 2500);
+              });
             },
           });
         });
@@ -953,9 +1131,9 @@ export const medidasView: ViewModule = {
     // categorías distinto) -- ok=verde, warning=amarillo, danger=rojo. Ver .imc-badge-ok/-warning/
     // -danger en modern.css (reemplazan las clases por-categoría que tenía antes solo IMC).
     function badgeTone(key: string): "ok" | "warning" | "danger" {
-      if (key === "normal" || key === "saludable" || key === "bajoRiesgo") return "ok";
+      if (key === "normal" || key === "saludable" || key === "bajoRiesgo" || key === "atletas" || key === "fitness") return "ok";
       if (key === "obesidad" || key === "riesgoAlto") return "danger";
-      return "warning"; // bajoPeso, sobrepeso, riesgoModerado
+      return "warning"; // bajoPeso, sobrepeso, riesgoModerado, esencial, aceptable
     }
 
     // Rango en texto genérico para las 3 medidas calculadas: "menos de X" / "X – Y" / "X o más".
@@ -1067,11 +1245,70 @@ export const medidasView: ViewModule = {
   `;
     }
 
-function noDataMarkup(field: MeasurementFieldDef): string {
+    // Badge de "dónde estoy parado" + tabla de rangos de % graso por sexo (escala ACE / ACSM).
+    // La comparten las 3 pestañas de % graso: básico (cinta), pliegues (adipómetro) y el cargado
+    // a mano por bioimpedancia. `method` solo viene en la de pliegues -- aclara qué fórmula se usó.
+    function bodyFatClassificationMarkup(currentPct: number, sex: RccSex, method: SkinfoldMethod | null): string {
+      const current = bodyFatCategoryFor(currentPct, sex);
+      const rows = bodyFatCategoriesFor(sex)
+        .map(
+          (category) => `
+        <div class="imc-range-row${category.key === current.key ? " imc-range-row-active" : ""}">
+          <span class="imc-badge imc-badge-${badgeTone(category.key)}">${escapeHtml(category.label)}</span>
+          <span class="imc-range-imc">${escapeHtml(rangeLabel(category.min, category.max, 0.1))} %</span>
+        </div>`
+        )
+        .join("");
+
+      return `
+    <div class="chart-card reveal">
+      <div class="imc-classify-row">
+        <span class="imc-badge imc-badge-${badgeTone(current.key)}">${escapeHtml(current.label)}</span>
+        <span class="imc-classify-value">Tu porcentaje graso es ${fmt(currentPct)}%</span>
+      </div>
+      ${method ? `<p class="chart-sub" style="margin:-10px 0 16px;">Calculado con el método ${escapeHtml(SKINFOLD_METHOD_LABELS[method])}.</p>` : ""}
+      <h3>Rangos de referencia (${sex === "hombre" ? "hombres" : "mujeres"})</h3>
+      <p class="chart-sub">Escala estándar de ACE / ACSM. Ojo: un valor demasiado bajo (grasa esencial) también es un riesgo para la salud.</p>
+      <div class="imc-range-list">${rows}</div>
+    </div>
+  `;
+    }
+
+    function noDataMarkup(field: MeasurementFieldDef, entries: BodyMeasurementEntry[]): string {
       if (field.computed) {
+        // El % graso por pliegues acepta varios protocolos -- explicarlos por separado en vez de
+        // listar los 8 pliegues como si hicieran falta todos.
+        if (field.key === "grasaPliegues") {
+          return `<p class="chart-sub">Todavía no se puede calcular "Grasa corporal (pliegues)". Hace falta tu sexo y tu fecha de nacimiento en el perfil (Configuración &gt; Editar perfil), más los pliegues de alguno de estos protocolos:<br>&bull; <strong>Jackson-Pollock 7</strong>: pectoral, axilar medio, tricipital, subescapular, abdominal, suprailíaco y muslo.<br>&bull; <strong>Jackson-Pollock 3</strong>: pectoral + abdominal + muslo (hombres) o tricipital + suprailíaco + muslo (mujeres).<br>&bull; <strong>Durnin-Womersley</strong>: bicipital + tricipital + subescapular + suprailíaco.</p>`;
+        }
+
+        // % graso US Navy: si YA cargaste cuello + cintura pero el cálculo sigue sin salir, casi
+        // siempre es porque los valores no son plausibles (la fórmula necesita cintura > cuello en
+        // hombres, y cadera cargada en mujeres). Explicar exactamente qué revisar.
+        if (field.key === "grasaBasica") {
+          const row = [...entries].reverse().find((e) => e.cuello != null && e.cintura != null);
+          if (row) {
+            if (genero == null) {
+              return `<p class="chart-sub">Cargaste cuello y cintura, pero falta tu sexo (Hombre o Mujer) en Configuración &gt; Editar perfil -- la fórmula de % graso lo necesita.</p>`;
+            }
+            if (genero === "hombre" && row.cintura! <= row.cuello!) {
+              return `<p class="chart-sub">El método US Navy necesita que tu <strong>cintura sea mayor que tu cuello</strong>, y en tu último registro cargaste cintura ${fmt(row.cintura!)} cm y cuello ${fmt(row.cuello!)} cm. Revisá esas medidas: un cuello suele medir <strong>35–45 cm</strong> (se mide justo debajo de la nuez) y una cintura <strong>70–120 cm</strong>. Editá el registro desde el menú de tres puntos del historial.</p>`;
+            }
+            if (genero === "mujer" && row.cadera == null) {
+              return `<p class="chart-sub">En mujeres, el método US Navy además necesita la <strong>cadera</strong> cargada el mismo día que el cuello y la cintura. Editá ese registro y agregá tu cadera.</p>`;
+            }
+            if (genero === "mujer" && row.cintura! + row.cadera! <= row.cuello!) {
+              return `<p class="chart-sub">Los valores cargados no son plausibles para el cálculo (cintura ${fmt(row.cintura!)} + cadera ${fmt(row.cadera!)} tiene que ser mayor que cuello ${fmt(row.cuello!)}). Revisá esas medidas desde el historial -- un cuello suele medir 30–40 cm.</p>`;
+            }
+          }
+        }
+
         const parts = (field.requires ?? []).map((k) => fieldDef(k).label);
         if (field.requiresAltura) parts.push("tu altura (Configuración > Personalización)");
-        return `<p class="chart-sub">Todavía no se puede calcular "${escapeHtml(field.label)}" -- necesitás cargar ${escapeHtml(parts.join(" + "))} al menos una vez.</p>`;
+        if (field.requiresGenero) parts.push("tu sexo (Configuración > Editar perfil)");
+        if (field.requiresEdad) parts.push("tu fecha de nacimiento (Configuración > Editar perfil)");
+        const extra = field.key === "grasaBasica" ? " Todo tiene que estar cargado en el MISMO registro (misma fecha)." : "";
+        return `<p class="chart-sub">Todavía no se puede calcular "${escapeHtml(field.label)}" -- necesitás cargar ${escapeHtml(parts.join(" + "))} al menos una vez.${extra}</p>`;
       }
       return `<p class="chart-sub">Todavía no cargaste "${escapeHtml(field.label)}". Tocá "Agregar medidas" para sumar tu primer registro.</p>`;
     }
@@ -1080,13 +1317,14 @@ function noDataMarkup(field: MeasurementFieldDef): string {
       const computed = computeMeasurementStats(entries, field.key);
       chartInstance?.destroy();
       chartInstance = null;
-      if (!computed) return noDataMarkup(field);
+      if (!computed) return noDataMarkup(field, entries);
 
       const unit = field.key === "peso" ? UNIT_LABELS[computed.unidad!] : field.unit;
       const series = entries.filter((e) => e[field.key] != null && (field.key !== "peso" || e.unidad === computed.unidad));
 
-      // Badge + tabla de fronteras, solo en las 3 pestañas calculadas -- cada una necesita un
-      // dato distinto para poder mostrarla (altura de perfil las dos primeras, género la última).
+      // Badge + tabla de fronteras/rangos -- en las pestañas calculadas (IMC, ratios, % graso) y
+      // en el % graso cargado a mano. Cada una necesita un dato del perfil distinto: altura (IMC /
+      // ratio cintura-altura), género (ratio cintura-cadera / % graso).
       let classificationExtra = "";
       if (field.key === "imc" && alturaCm != null) {
         classificationExtra = imcClassificationMarkup(computed.stats.current.value, alturaCm, computeMeasurementStats(entries, "peso")?.unidad ?? "kg");
@@ -1097,6 +1335,12 @@ function noDataMarkup(field: MeasurementFieldDef): string {
         // computed.stats.current (series viene ordenada ascendente, ver computeMeasurementStats).
         const lastCadera = series[series.length - 1]?.cadera ?? null;
         classificationExtra = rccClassificationMarkup(computed.stats.current.value, genero, lastCadera);
+      } else if ((field.key === "grasaBasica" || field.key === "grasaPliegues" || field.key === "grasaCorporal") && genero != null) {
+        // Las 3 pestañas de % graso (básico por cinta, profesional por pliegues y el cargado a
+        // mano) comparten la misma tabla de rangos por sexo. En la de pliegues, además, se aclara
+        // qué protocolo se usó para el registro más reciente.
+        const method = field.key === "grasaPliegues" ? (series[series.length - 1]?.grasaPlieguesMetodo ?? null) : null;
+        classificationExtra = bodyFatClassificationMarkup(computed.stats.current.value, genero, method);
       }
 
       const html = `
@@ -1153,21 +1397,22 @@ function noDataMarkup(field: MeasurementFieldDef): string {
       });
     }
 
-    function wireMetricTabs(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): void {
-      container.querySelectorAll<HTMLButtonElement>(".measurement-metric-tab").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          selectedKey = btn.dataset.key as MeasurementKey | typeof PROGRESO_TAB_KEY;
-          void renderMetricArea(entries, photoUrls);
-        });
-      });
-    }
-
     async function renderMetricArea(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): Promise<void> {
-      // Pestañas: solo medidas activas que ya tengan al menos un registro (evita una fila de
-      // pestañas vacías apenas alguien activa 5 medidas nuevas en Configuración sin haber
-      // cargado nada todavía -- "Agregar medidas" igual ofrece las 5 como campos). "Progreso" se
-      // suma al final solo si hay alguna foto cargada (ver progressGalleryMarkup).
-      const tabFields = MEASUREMENT_FIELDS.filter((f) => prefs[f.key] && entries.some((e) => e[f.key] != null));
+      // Métricas disponibles: solo medidas activas que ya tengan al menos un registro (evita
+      // pestañas vacías apenas alguien activa 5 medidas en Configuración sin cargar nada todavía
+      // -- "Agregar medidas" igual ofrece las 5 como campos).
+      // Excepción: el % graso calculado se muestra aunque el resultado dé null si YA cargaste los
+      // insumos (cuello+cintura para el básico, algún pliegue para el de pliegues) -- así la
+      // pestaña explica POR QUÉ no se puede calcular (ver noDataMarkup) en vez de no aparecer.
+      const hasComputedInputs = (f: MeasurementFieldDef): boolean => {
+        if (f.key === "grasaBasica") return entries.some((e) => e.cuello != null && e.cintura != null);
+        if (f.key === "grasaPliegues")
+          return entries.some((e) =>
+            [e.plieguePectoral, e.pliegueAxilar, e.pliegueTriceps, e.pliegueSubescapular, e.pliegueAbdominal, e.pliegueSuprailiaco, e.pliegueMuslo, e.pliegueBiceps].some((v) => v != null)
+          );
+        return false;
+      };
+      const tabFields = MEASUREMENT_FIELDS.filter((f) => prefs[f.key] && (entries.some((e) => e[f.key] != null) || hasComputedInputs(f)));
       const hasPhotos = entries.some((e) => e.fotoPath != null);
       const tabsWrap = container.querySelector("#measurementMetricTabs") as HTMLElement | null;
       const metricArea = container.querySelector("#measurementMetricArea") as HTMLElement | null;
@@ -1178,21 +1423,57 @@ function noDataMarkup(field: MeasurementFieldDef): string {
         metricArea.innerHTML = "";
         return;
       }
+
+      // Agrupá las métricas por grupo del catálogo, en orden. La fila 1 muestra un botón por grupo
+      // presente (+ "Progreso" si hay fotos); la fila 2, las medidas del grupo elegido.
+      const byGroup = new Map<MeasurementGroup, MeasurementFieldDef[]>();
+      for (const f of tabFields) {
+        const arr = byGroup.get(f.group) ?? [];
+        arr.push(f);
+        byGroup.set(f.group, arr);
+      }
+      const groups: MetricGroupKey[] = METRIC_GROUP_ORDER.filter((g) => byGroup.has(g));
+      if (hasPhotos) groups.push(PROGRESO_TAB_KEY);
+
       const validKeys = new Set<string>(tabFields.map((f) => f.key));
       if (hasPhotos) validKeys.add(PROGRESO_TAB_KEY);
       if (!selectedKey || !validKeys.has(selectedKey)) {
         selectedKey = tabFields[0]?.key ?? PROGRESO_TAB_KEY;
       }
+      const activeGroup: MetricGroupKey = selectedKey === PROGRESO_TAB_KEY ? PROGRESO_TAB_KEY : fieldDef(selectedKey).group;
+
+      const groupFields = activeGroup === PROGRESO_TAB_KEY ? [] : (byGroup.get(activeGroup) ?? []);
+      const groupRow = groups
+        .map((g) => `<button type="button" class="routine-tab measurement-group-tab${g === activeGroup ? " active" : ""}" data-group="${g}">${escapeHtml(METRIC_GROUP_LABEL[g])}</button>`)
+        .join("");
+      // La fila de medidas solo aparece si el grupo tiene más de una (si tiene una sola, el botón
+      // de grupo ya alcanza -- ej. "Peso"). Usa .exc-pick-chip, el mismo look que los chips de
+      // categoría del picker de ejercicios / Configuración (activo = borde+letra naranja, fondo
+      // suave), no el .routine-tab relleno que usa la fila de grupos.
+      const measureRow =
+        groupFields.length > 1
+          ? `<div class="measurement-measure-row">${groupFields
+              .map((f) => `<button type="button" class="exc-pick-chip measurement-subtab${f.key === selectedKey ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>`)
+              .join("")}</div>`
+          : "";
 
       tabsWrap.hidden = false;
-      tabsWrap.innerHTML =
-        tabFields
-          .map((f) => `<button type="button" class="routine-tab measurement-metric-tab${f.key === selectedKey ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>`)
-          .join("") +
-        (hasPhotos
-          ? `<button type="button" class="routine-tab measurement-metric-tab${selectedKey === PROGRESO_TAB_KEY ? " active" : ""}" data-key="${PROGRESO_TAB_KEY}">Progreso</button>`
-          : "");
-      wireMetricTabs(entries, photoUrls);
+      tabsWrap.innerHTML = `<div class="routine-tabs measurement-group-row">${groupRow}</div>${measureRow}`;
+
+      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-group-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const g = btn.dataset.group as MetricGroupKey;
+          if (g === activeGroup) return;
+          selectedKey = g === PROGRESO_TAB_KEY ? PROGRESO_TAB_KEY : byGroup.get(g)![0].key;
+          void renderMetricArea(entries, photoUrls);
+        });
+      });
+      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-subtab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedKey = btn.dataset.key as MeasurementKey;
+          void renderMetricArea(entries, photoUrls);
+        });
+      });
 
       if (selectedKey === PROGRESO_TAB_KEY) {
         metricArea.innerHTML = progressGalleryMarkup(entries, photoUrls);
@@ -1211,11 +1492,12 @@ function noDataMarkup(field: MeasurementFieldDef): string {
 
       let entries: BodyMeasurementEntry[];
       try {
-        entries = await listBodyMeasurements(myId, alturaCm);
+        entries = await listBodyMeasurements(myId, alturaCm, genero, edad);
       } catch {
         content.innerHTML = `<p class="chart-sub">No se pudo cargar tu historial de medidas. Probá recargar la página.</p>`;
         return;
       }
+      loadedEntries = entries;
 
       chartInstance?.destroy();
       chartInstance = null;
@@ -1231,7 +1513,7 @@ function noDataMarkup(field: MeasurementFieldDef): string {
       const photoUrls = await getMeasurementPhotoUrls(photoPaths);
 
       content.innerHTML = `
-        <div class="routine-tabs" id="measurementMetricTabs" hidden></div>
+        <div class="measurement-metric-nav" id="measurementMetricTabs" hidden></div>
         <div id="measurementMetricArea"></div>
         ${historyMarkup(entries, photoUrls)}
       `;
@@ -1265,6 +1547,7 @@ function noDataMarkup(field: MeasurementFieldDef): string {
         }
         alturaCm = await getAlturaCm(myId);
         genero = await getGenero(myId);
+        edad = await getEdad(myId);
         await render();
       })();
     };

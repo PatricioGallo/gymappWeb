@@ -1,7 +1,7 @@
 import type { ViewModule } from "../shell/router";
 import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel, dateToLocalISO, todayLocalISO } from "../lib/dias";
-import { getRoutineDetail, type RoutineDetail } from "../services/routine.service";
+import { getRoutineDetail, updateRoutineExercise, type RoutineDetail, type RoutineExerciseWithAuthor } from "../services/routine.service";
 import { getProfileBasicById, getProfilesBasicByIds } from "../services/profile.service";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
 import {
@@ -15,8 +15,10 @@ import {
   type NewWeightLog,
 } from "../services/weightLog.service";
 import { getTodayComments, upsertExerciseComment, deleteExerciseComment, MAX_COMMENT_LENGTH, type ExerciseComment } from "../services/comment.service";
+import { getLatestBodyWeightKg } from "../services/bodyMeasurements.service";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
+import { openExercisePicker } from "../lib/exercisePicker";
 import { submitErrorReport, validateErrorReport } from "../services/errorReport.service";
 
 const UNIT_LABELS: Record<WeightUnit, string> = { kg: "Kg", lb: "Lb", bloques: "Bloques" };
@@ -32,6 +34,7 @@ const WEIGHT_MENU_KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><ci
 const WEIGHT_MENU_TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 const WEIGHT_MENU_REPORT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>`;
 const WEIGHT_MENU_COMMENT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+const WEIGHT_MENU_EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 
 const VIEW_MARKUP = `
   <section class="page-hero">
@@ -104,11 +107,18 @@ export const pesosView: ViewModule = {
       if (isTrainingForOther) container.querySelector("#backToAlumnos")?.removeAttribute("hidden");
 
       let routine: RoutineDetail | null = null;
+      // ¿Puede el usuario editar la definición de los ejercicios de esta rutina? Mismo criterio
+      // que la RLS can_access_routine / la pantalla "Modificar rutina": quien asignó la rutina, el
+      // dueño de una rutina propia o pública, o un admin. Habilita "Modificar ejercicio" en el menú.
+      let canEditRoutine = false;
       let latestWeights: LatestWeightsMap = new Map();
       let exerciseHistory: LatestWeightsMap = new Map();
       let todayComments: Map<string, ExerciseComment> = new Map();
       let allExerciseIds: string[] = [];
       let allCatalogExerciseIds: string[] = [];
+      // Peso corporal del usuario (o del alumno, si un entrenador carga por él) -- para el
+      // estimado de kcal quemadas por día. null => se asume 75 kg (ver estimatedKcalForDay).
+      let bodyWeightKg: number | null = null;
 
       // ---------------------------------------------------------------------------
       // Borrador local: si el usuario sale de la carga de pesos sin tocar "Guardar" (ej. a
@@ -507,6 +517,232 @@ export const pesosView: ViewModule = {
         });
       }
 
+      // Editar la definición de un ejercicio (qué ejercicio es, series, repeticiones, rango, nota,
+      // "sin peso" / "mismo peso") sin salir de la carga de pesos. Si la rutina tiene más de una
+      // semana, pregunta si el cambio va solo a esta semana o a toda la rutina. Reusa
+      // updateRoutineExercise -- la RLS igual corta si el usuario no puede editar esta rutina.
+      function openEditExerciseModal(exc: RoutineExerciseWithAuthor, weekIndex: number, diaIndex: number): void {
+        const loaderBody = document.getElementById("loaderBody");
+        if (!loaderBody) return;
+
+        const dia = routine!.semanas[weekIndex].dias[diaIndex];
+        const weekNumber = routine!.semanas[weekIndex].numero;
+        const multiWeek = routine!.semanas.length > 1;
+
+        // Borrador mutable: sobrevive a abrir el buscador de ejercicios (que pisa #loaderBody) para
+        // repintar el formulario con lo que ya se había tipeado.
+        const draft = {
+          exercise_id: exc.exercise_id,
+          nombre: exc.nombre_snapshot,
+          info: exc.info_snapshot,
+          serie: String(exc.serie),
+          repe: String(exc.repe),
+          repeMax: exc.repe_max != null ? String(exc.repe_max) : "",
+          sinPeso: !exc.es_medible,
+          mismoPeso: exc.mismo_peso,
+          nota: exc.nota ?? "",
+          scope: "week" as "week" | "all",
+        };
+
+        function captureForm(): void {
+          const root = document.getElementById("editExcModal");
+          if (!root) return;
+          draft.serie = (root.querySelector("#editExcSerie") as HTMLInputElement).value;
+          draft.repe = (root.querySelector("#editExcRepe") as HTMLInputElement).value;
+          draft.repeMax = (root.querySelector("#editExcRepeMax") as HTMLInputElement).value;
+          draft.sinPeso = (root.querySelector("#editExcSinPeso") as HTMLInputElement).checked;
+          draft.mismoPeso = (root.querySelector("#editExcMismoPeso") as HTMLInputElement).checked;
+          draft.nota = (root.querySelector("#editExcNota") as HTMLInputElement).value;
+          const scopeEl = root.querySelector<HTMLInputElement>('input[name="editExcScope"]:checked');
+          if (scopeEl) draft.scope = scopeEl.value as "week" | "all";
+        }
+
+        function renderModal(): void {
+          loaderBody!.innerHTML = `
+            <div class="success-check-container">
+              <div class="modal-card" id="editExcModal">
+                <h2>Modificar ejercicio</h2>
+                <p class="subtitle">${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))} · Semana ${weekNumber}</p>
+
+                <div class="field">
+                  <label>Ejercicio</label>
+                  <button type="button" class="btn btn-outline btn-block" id="editExcPicker">${escapeHtml(draft.nombre)}</button>
+                </div>
+                <div class="field">
+                  <label for="editExcSerie">Series</label>
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" id="editExcSerie" value="${escapeHtml(draft.serie)}" placeholder="Ej: 3">
+                </div>
+                <div class="field">
+                  <label for="editExcRepe">Repeticiones</label>
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" id="editExcRepe" value="${escapeHtml(draft.repe)}" placeholder="Ej: 10">
+                </div>
+                <div class="field">
+                  <label for="editExcRepeMax">Hasta (opcional)</label>
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" id="editExcRepeMax" value="${escapeHtml(draft.repeMax)}" placeholder="Solo si es un rango (ej: 8 a 12)">
+                </div>
+                <label class="member-accept-option">
+                  <input type="checkbox" id="editExcSinPeso" ${draft.sinPeso ? "checked" : ""}>
+                  Sin peso (no registrar kilos)
+                </label>
+                <label class="member-accept-option">
+                  <input type="checkbox" id="editExcMismoPeso" ${draft.mismoPeso ? "checked" : ""}>
+                  Mismo peso en todas las series
+                </label>
+                <div class="field">
+                  <label for="editExcNota">Nota (opcional)</label>
+                  <input type="text" id="editExcNota" maxlength="140" value="${escapeHtml(draft.nota)}" placeholder="Nota para este ejercicio">
+                </div>
+                ${
+                  multiWeek
+                    ? `<div class="field">
+                        <label>¿A qué aplicar el cambio?</label>
+                        <label class="member-accept-option">
+                          <input type="radio" name="editExcScope" value="week" ${draft.scope === "week" ? "checked" : ""}>
+                          Solo esta semana (Semana ${weekNumber})
+                        </label>
+                        <label class="member-accept-option">
+                          <input type="radio" name="editExcScope" value="all" ${draft.scope === "all" ? "checked" : ""}>
+                          Toda la rutina (las ${routine!.semanas.length} semanas)
+                        </label>
+                      </div>`
+                    : ""
+                }
+                <div class="alert_message" id="editExcAlert"></div>
+                <div class="modal-actions">
+                  <button class="btn btn-primary" id="editExcSave" type="button">Guardar</button>
+                  <button class="btn btn-outline" id="editExcCancel" type="button">Cancelar</button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.getElementById("editExcCancel")?.addEventListener("click", () => {
+            loaderBody!.innerHTML = "";
+          });
+
+          document.getElementById("editExcPicker")?.addEventListener("click", () => {
+            captureForm();
+            openExercisePicker(
+              (picked) => {
+                draft.exercise_id = picked.id;
+                draft.nombre = picked.name;
+                draft.info = picked.info;
+                // el picker hace loaderBody.innerHTML="" justo después de este callback -- diferimos
+                // el repintado del modal para que no lo borre.
+                setTimeout(renderModal, 0);
+              },
+              myId,
+              ctx
+            );
+            // Si se cierra el buscador sin elegir, volvemos al modal en vez de dejar la pantalla vacía.
+            document
+              .getElementById("excPickerClose")
+              ?.addEventListener("click", () => setTimeout(renderModal, 0), { once: true });
+          });
+
+          document.getElementById("editExcSave")?.addEventListener("click", () => void save());
+        }
+
+        async function save(): Promise<void> {
+          captureForm();
+          const alertEl = document.getElementById("editExcAlert")!;
+          const serie = parseInt(draft.serie, 10);
+          const repe = parseInt(draft.repe, 10);
+          const repeMax = draft.repeMax.trim() ? parseInt(draft.repeMax, 10) : null;
+          const nota = draft.nota.trim();
+
+          if (!draft.exercise_id) {
+            alertEl.innerHTML = "<p>Elegí un ejercicio.</p>";
+            return;
+          }
+          if (!serie || serie < 1 || serie > 10) {
+            alertEl.innerHTML = "<p>Las series tienen que ser un número entre 1 y 10.</p>";
+            return;
+          }
+          if (!repe || repe < 1 || repe > 30) {
+            alertEl.innerHTML = "<p>Las repeticiones tienen que ser un número entre 1 y 30.</p>";
+            return;
+          }
+          if (repeMax !== null && (repeMax < 1 || repeMax > 30 || repeMax < repe)) {
+            alertEl.innerHTML = '<p>El "hasta" tiene que ser mayor o igual a las repeticiones y como máximo 30.</p>';
+            return;
+          }
+          if (nota.length > 140) {
+            alertEl.innerHTML = "<p>La nota es muy larga: dejala en 140 caracteres o menos.</p>";
+            return;
+          }
+
+          const fields = {
+            exercise_id: draft.exercise_id,
+            nombre_snapshot: draft.nombre,
+            info_snapshot: draft.info,
+            serie,
+            repe,
+            repe_max: repeMax,
+            es_medible: !draft.sinPeso,
+            mismo_peso: draft.mismoPeso,
+            nota,
+          };
+
+          const applyAll = multiWeek && draft.scope === "all";
+
+          loaderBody!.innerHTML = `<div class="loader-container"><div class="modern-spinner"></div><p>Guardando cambios...</p></div>`;
+
+          try {
+            if (applyAll) {
+              // Mismo día (por índice) en cada semana: buscamos el ejercicio equivalente por
+              // posición + ejercicio original, con fallbacks por si una semana fue retocada suelta.
+              const targetIds: string[] = [];
+              routine!.semanas.forEach((sem) => {
+                const otherDia = sem.dias[diaIndex];
+                if (!otherDia) return;
+                const match =
+                  otherDia.ejercicios.find((e) => e.orden === exc.orden && e.exercise_id === exc.exercise_id) ??
+                  otherDia.ejercicios.find((e) => e.orden === exc.orden) ??
+                  otherDia.ejercicios.find((e) => e.exercise_id === exc.exercise_id);
+                if (match) targetIds.push(match.id);
+              });
+              await Promise.all(targetIds.map((id) => updateRoutineExercise(id, fields)));
+            } else {
+              await updateRoutineExercise(exc.id, fields);
+            }
+
+            // Repintar con los valores nuevos: pudo cambiar la cantidad de series, el nombre, si es
+            // medible, etc. -- hay que releer la rutina y los pesos antes de volver a openDay.
+            const fresh = await getRoutineDetail(routineId!);
+            if (fresh) {
+              routine = fresh;
+              allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
+              allCatalogExerciseIds = [
+                ...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id)))),
+              ];
+              [latestWeights, exerciseHistory, todayComments] = await Promise.all([
+                getLatestWeights(allExerciseIds),
+                getExerciseHistory(allCatalogExerciseIds),
+                getTodayComments(allExerciseIds, TODAY),
+              ]);
+            }
+
+            loaderBody!.innerHTML = `
+              <div class="success-check-container">
+                <div class="success-icon"><svg viewBox="0 0 52 52" class="success-svg"><circle cx="26" cy="26" r="25" fill="none" class="success-circle" /><path fill="none" d="M14 27l7 7 16-16" class="success-check" /></svg></div>
+                <p>Ejercicio actualizado con éxito.</p>
+              </div>
+            `;
+            const t = setTimeout(() => {
+              loaderBody!.innerHTML = "";
+              openDay(weekIndex, diaIndex);
+            }, 1200);
+            ctx.addCleanup(() => clearTimeout(t));
+          } catch {
+            loaderBody!.innerHTML = "";
+            alert("No se pudo modificar el ejercicio. Intentá de nuevo.");
+          }
+        }
+
+        renderModal();
+      }
+
       // Muestra el ultimo valor guardado por unidad, sin importar la fecha: puede ser de
       // otra semana de la rutina o de hoy mismo (si ya se cargo en otra ocurrencia del ejercicio).
       function previousValuesText(entries: LatestWeightEntry[] | undefined): string {
@@ -570,6 +806,17 @@ export const pesosView: ViewModule = {
 
       function dayDoneSeries(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
         return dia.ejercicios.filter((e) => e.es_medible).reduce((sum, e) => sum + exerciseDoneSeries(e), 0);
+      }
+
+      // Estimado muy aproximado de kcal quemadas en lo que YA se cargó de este día (no en la
+      // rutina completa): series hechas × ~2.5 min/serie (esfuerzo + descanso) × gasto de
+      // musculación (MET≈4) al peso corporal del usuario, o 75 kg si no tiene peso en Medidas.
+      // Solo una referencia -- se muestra siempre con "~" y redondeado a 5.
+      const KCAL_PER_DONE_SET_PER_KG = 0.175; // MET 4.0 × 3.5 / 200 kcal·kg⁻¹·min⁻¹ × 2.5 min
+      function estimatedKcalForDay(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
+        const done = dayDoneSeries(dia);
+        if (done === 0) return 0;
+        return Math.round((done * KCAL_PER_DONE_SET_PER_KG * (bodyWeightKg ?? 75)) / 5) * 5;
       }
 
       function dayProgress(dia: RoutineDetail["semanas"][number]["dias"][number]): number {
@@ -695,11 +942,13 @@ export const pesosView: ViewModule = {
             const trackableCount = dia.ejercicios.filter((e) => e.es_medible).length;
             const doneCount = dia.ejercicios.filter((e) => e.es_medible && isExerciseDone(e)).length;
             const subtitle = trackableCount === 0 ? "Sin ejercicios con peso" : `${doneCount} de ${trackableCount} ejercicios con peso cargado`;
+            const kcal = estimatedKcalForDay(dia);
+            const kcalTag = kcal > 0 ? ` - 🔥 ~${kcal} kcal` : "";
 
             return `
               <button class="day-row reveal ${status}" type="button" data-dia="${diaIndex}">
                 ${ringMarkup(pct)}
-                <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}</p></div>
+                <div class="day-row-info"><h3>${escapeHtml(dayDisplayLabel(dia.dia_semana, dia.nombre))}</h3><p>${subtitle}${kcalTag}</p></div>
                 <span class="day-row-status ${status}">${STATUS_LABELS[status]}</span>
                 <svg class="day-row-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
               </button>
@@ -830,6 +1079,7 @@ export const pesosView: ViewModule = {
                   <div class="weight-menu-wrap">
                     <button type="button" class="profile-menu-btn weight-menu-btn" data-exc-idx="${idx}" aria-label="Más opciones" aria-expanded="false">${WEIGHT_MENU_KEBAB_ICON}</button>
                     <div class="profile-menu-panel weight-menu-panel" hidden>
+                      ${canEditRoutine ? `<button type="button" class="profile-menu-item weight-menu-edit" data-exc-idx="${idx}">${WEIGHT_MENU_EDIT_ICON}Modificar ejercicio</button>` : ""}
                       <button type="button" class="profile-menu-item weight-menu-comment" data-exc-idx="${idx}">${WEIGHT_MENU_COMMENT_ICON}${todayComments.has(exc.id) ? "Editar comentario" : "Agregar comentario"}</button>
                       <button type="button" class="profile-menu-item profile-menu-item-danger weight-menu-delete" data-exc-idx="${idx}" ${hasTodayLoad ? "" : "disabled"}>${WEIGHT_MENU_TRASH_ICON}Borrar carga actual</button>
                       <button type="button" class="profile-menu-item weight-menu-report" data-exc-idx="${idx}">${WEIGHT_MENU_REPORT_ICON}Reportar un error</button>
@@ -887,6 +1137,14 @@ export const pesosView: ViewModule = {
             panel.hidden = !willOpen;
             btn.classList.toggle("open", willOpen);
             btn.setAttribute("aria-expanded", String(willOpen));
+          });
+        });
+
+        weekContent.querySelectorAll<HTMLButtonElement>(".weight-menu-edit").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const exc = trackable[Number(btn.dataset.excIdx)];
+            btn.closest<HTMLElement>(".weight-menu-panel")!.hidden = true;
+            openEditExerciseModal(exc, weekIndex, diaIndex);
           });
         });
 
@@ -1002,11 +1260,18 @@ export const pesosView: ViewModule = {
 
       allExerciseIds = routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.id)));
       allCatalogExerciseIds = [...new Set(routine.semanas.flatMap((s) => s.dias.flatMap((d) => d.ejercicios.map((e) => e.exercise_id))))];
-      [latestWeights, exerciseHistory, todayComments] = await Promise.all([
+      let myProfileForEdit: Awaited<ReturnType<typeof getProfileBasicById>> = null;
+      [latestWeights, exerciseHistory, todayComments, bodyWeightKg, myProfileForEdit] = await Promise.all([
         getLatestWeights(allExerciseIds),
         getExerciseHistory(allCatalogExerciseIds),
         getTodayComments(allExerciseIds, TODAY),
+        getLatestBodyWeightKg(targetUserId).catch(() => null),
+        getProfileBasicById(myId).catch(() => null),
       ]);
+      canEditRoutine =
+        routine.assigned_by === myId ||
+        (routine.user_id === myId && (!routine.assigned_by || routine.is_public)) ||
+        myProfileForEdit?.user_type === "admin";
       if (isTrainingForOther) {
         const target = await getProfileBasicById(targetUserId).catch(() => null);
         targetName = target?.nombre ?? null;

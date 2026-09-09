@@ -224,6 +224,14 @@ export type Database = {
           pantorrilla: number | null
           pecho: number | null
           peso: number | null
+          pliegue_abdominal: number | null
+          pliegue_axilar: number | null
+          pliegue_biceps: number | null
+          pliegue_muslo: number | null
+          pliegue_pectoral: number | null
+          pliegue_subescapular: number | null
+          pliegue_suprailiaco: number | null
+          pliegue_triceps: number | null
           unidad: string
           user_id: string
         }
@@ -246,6 +254,14 @@ export type Database = {
           pantorrilla?: number | null
           pecho?: number | null
           peso?: number | null
+          pliegue_abdominal?: number | null
+          pliegue_axilar?: number | null
+          pliegue_biceps?: number | null
+          pliegue_muslo?: number | null
+          pliegue_pectoral?: number | null
+          pliegue_subescapular?: number | null
+          pliegue_suprailiaco?: number | null
+          pliegue_triceps?: number | null
           unidad?: string
           user_id: string
         }
@@ -268,6 +284,14 @@ export type Database = {
           pantorrilla?: number | null
           pecho?: number | null
           peso?: number | null
+          pliegue_abdominal?: number | null
+          pliegue_axilar?: number | null
+          pliegue_biceps?: number | null
+          pliegue_muslo?: number | null
+          pliegue_pectoral?: number | null
+          pliegue_subescapular?: number | null
+          pliegue_suprailiaco?: number | null
+          pliegue_triceps?: number | null
           unidad?: string
           user_id?: string
         }
