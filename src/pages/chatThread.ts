@@ -7,6 +7,7 @@ import { AudioRecorder, formatDuration } from "../lib/audioRecorder";
 import { getPostsByIds, type FeedPost } from "../services/post.service";
 import { getGymPostsByIds, type GymPostChatPreview } from "../services/gymPost.service";
 import { getSharedRoutinesByIds, type SharedRoutineChatPreview } from "../services/routine.service";
+import { getSharedExercisesByIds, CATEGORY_LABELS, type SharedExerciseChatPreview } from "../services/exercise.service";
 import { getProfilesBasicByIds, type ProfileBasic } from "../services/profile.service";
 import {
   listConversations,
@@ -309,6 +310,7 @@ export async function mountThread(
   const sharedPostsCache = new Map<string, FeedPost>();
   const sharedGymPostsCache = new Map<string, GymPostChatPreview>();
   const sharedRoutinesCache = new Map<string, SharedRoutineChatPreview>();
+  const sharedExercisesCache = new Map<string, SharedExerciseChatPreview>();
   const sharedProfilesCache = new Map<string, ProfileBasic>();
   const audioPlayers = new Map<string, HTMLAudioElement>();
   const audioWaveLevels = new Map<string, number[]>();
@@ -756,17 +758,20 @@ export async function mountThread(
     const ids = [...new Set(list.map((m) => m.shared_post_id).filter((id): id is string => !!id))].filter((id) => !sharedPostsCache.has(id));
     const gymIds = [...new Set(list.map((m) => m.shared_gym_post_id).filter((id): id is string => !!id))].filter((id) => !sharedGymPostsCache.has(id));
     const routineIds = [...new Set(list.map((m) => m.shared_routine_id).filter((id): id is string => !!id))].filter((id) => !sharedRoutinesCache.has(id));
+    const exerciseIds = [...new Set(list.map((m) => m.shared_exercise_id).filter((id): id is string => !!id))].filter((id) => !sharedExercisesCache.has(id));
     const profileIds = [...new Set(list.map((m) => m.shared_profile_id).filter((id): id is string => !!id))].filter((id) => !sharedProfilesCache.has(id));
-    if (ids.length === 0 && gymIds.length === 0 && routineIds.length === 0 && profileIds.length === 0) return;
-    const [map, gymMap, routineMap, profileMap] = await Promise.all([
+    if (ids.length === 0 && gymIds.length === 0 && routineIds.length === 0 && exerciseIds.length === 0 && profileIds.length === 0) return;
+    const [map, gymMap, routineMap, exerciseMap, profileMap] = await Promise.all([
       ids.length ? getPostsByIds(ids) : Promise.resolve(new Map<string, FeedPost>()),
       gymIds.length ? getGymPostsByIds(gymIds) : Promise.resolve(new Map<string, GymPostChatPreview>()),
       routineIds.length ? getSharedRoutinesByIds(routineIds) : Promise.resolve(new Map<string, SharedRoutineChatPreview>()),
+      exerciseIds.length ? getSharedExercisesByIds(exerciseIds) : Promise.resolve(new Map<string, SharedExerciseChatPreview>()),
       profileIds.length ? getProfilesBasicByIds(profileIds) : Promise.resolve(new Map<string, ProfileBasic>()),
     ]);
     map.forEach((post, id) => sharedPostsCache.set(id, post));
     gymMap.forEach((post, id) => sharedGymPostsCache.set(id, post));
     routineMap.forEach((routine, id) => sharedRoutinesCache.set(id, routine));
+    exerciseMap.forEach((exercise, id) => sharedExercisesCache.set(id, exercise));
     profileMap.forEach((profile, id) => sharedProfilesCache.set(id, profile));
   }
 
@@ -865,6 +870,30 @@ export async function mountThread(
     `;
   }
 
+  // Card de ejercicio compartido: link al visor público showExc.html?exId= (el ejercicio se
+  // marca is_public al compartirlo, así que es legible por RLS para cualquiera). Datos del
+  // preview batch (getSharedExercisesByIds).
+  function sharedExercisePreviewHtml(exerciseId: string): string {
+    const exc = sharedExercisesCache.get(exerciseId);
+    if (!exc) return `<div class="chat-shared-post chat-shared-post-missing">Ejercicio no disponible</div>`;
+    const thumb = exc.thumbUrl
+      ? exc.isVideoThumb
+        ? `<video class="chat-shared-post-thumb" src="${escapeHtml(exc.thumbUrl)}" muted playsinline autoplay loop preload="metadata"></video>`
+        : `<img class="chat-shared-post-thumb" src="${escapeHtml(exc.thumbUrl)}" alt="">`
+      : "";
+    const meta = [CATEGORY_LABELS[exc.category], exc.authorUsername ? `@${exc.authorUsername}` : null].filter(Boolean).join(" · ");
+    return `
+      <a class="chat-shared-post" href="showExc.html?exId=${encodeURIComponent(exc.id)}">
+        <div class="chat-shared-post-head">
+          <span class="chat-shared-post-name">💪 Ejercicio</span>
+        </div>
+        <p class="chat-shared-post-text">${escapeHtml(exc.name)}</p>
+        ${meta ? `<p class="chat-shared-post-text" style="opacity:.7">${escapeHtml(meta)}</p>` : ""}
+        ${thumb}
+      </a>
+    `;
+  }
+
   function messageSnippet(m: ChatMessage): string {
     if (m.deleted_at) return "Mensaje eliminado";
     if (m.attachment_type === "sticker") return `${m.content ?? ""} Sticker`;
@@ -872,6 +901,7 @@ export async function mountThread(
     if (m.shared_post_id) return "🔁 Rep compartido";
     if (m.shared_gym_post_id) return "📌 Publicación compartida";
     if (m.shared_routine_id) return "🏋️ Rutina compartida";
+    if (m.shared_exercise_id) return "💪 Ejercicio compartido";
     if (m.shared_profile_id) return "👤 Perfil compartido";
     if (m.attachment_type === "image") return m.view_once ? "📷 Foto efímera" : "📷 Foto";
     if (m.attachment_type === "video") return m.view_once ? "🎥 Video efímero" : "🎥 Video";
@@ -951,6 +981,8 @@ export async function mountThread(
       mediaHtml = sharedGymPostPreviewHtml(m.shared_gym_post_id);
     } else if (m.shared_routine_id) {
       mediaHtml = sharedRoutinePreviewHtml(m.shared_routine_id);
+    } else if (m.shared_exercise_id) {
+      mediaHtml = sharedExercisePreviewHtml(m.shared_exercise_id);
     } else if (m.shared_profile_id) {
       mediaHtml = sharedProfilePreviewHtml(m.shared_profile_id);
     } else if (m.attachment_type === "image" && m.attachment_path) {
@@ -1779,6 +1811,7 @@ export async function mountThread(
       !message.shared_post_id &&
       !message.shared_gym_post_id &&
       !message.shared_routine_id &&
+      !message.shared_exercise_id &&
       !message.shared_profile_id &&
       message.attachment_type !== "sticker";
     const menu = document.createElement("div");
@@ -2010,6 +2043,7 @@ export async function mountThread(
             sharedPostId: message.shared_post_id ?? undefined,
             sharedGymPostId: message.shared_gym_post_id ?? undefined,
             sharedRoutineId: message.shared_routine_id ?? undefined,
+            sharedExerciseId: message.shared_exercise_id ?? undefined,
             sharedProfileId: message.shared_profile_id ?? undefined,
             isForwarded: true,
           });

@@ -3,10 +3,13 @@ import { escapeHtml } from "../lib/dom";
 import { dayDisplayLabel } from "../lib/dias";
 import { getRoutineDetail, getSharedRoutine, type RoutineDetail } from "../services/routine.service";
 import { getProfilesBasicByIds } from "../services/profile.service";
+import { getSharedExerciseById, CATEGORY_LABELS } from "../services/exercise.service";
+import { isVideoUrl } from "../lib/imageDropzone";
 import { routineOwnerLineMarkup } from "../lib/routineOwner";
 import { formatRepe } from "../lib/reps";
 import { openExerciseModal } from "../lib/exerciseModal";
 import { openShareRoutineModal, type ShareableRoutine } from "../lib/routineShareModal";
+import { openShareExerciseModal } from "../lib/exerciseShareModal";
 
 const VIEW_MARKUP = `
   <section class="page-hero">
@@ -258,12 +261,73 @@ export const showExcView: ViewModule = {
       initShare(async () => window.location.href, routine.nombre, ownerName);
     }
 
+    // ---------- Visor de un ejercicio compartido (?exId=) ----------
+
+    async function renderExercise(exId: string): Promise<void> {
+      const DEFAULT_IMG = "/images/icon-512.png";
+      const exc = await getSharedExerciseById(exId);
+      if (!exc) {
+        showNotFound("No se encontró este ejercicio o el link ya no es válido.");
+        return;
+      }
+
+      const urls = exc.mediaUrls.length > 0 ? exc.mediaUrls : [DEFAULT_IMG];
+      const mediaHtml = urls
+        .map((url) =>
+          url !== DEFAULT_IMG && isVideoUrl(url)
+            ? `<div class="exc-modal-image-item"><video class="exc-modal-image" src="${escapeHtml(url)}" controls playsinline loop></video></div>`
+            : `<div class="exc-modal-image-item"><img class="exc-modal-image${url === DEFAULT_IMG ? " exc-modal-image-default" : ""}" src="${escapeHtml(url)}" alt="${escapeHtml(exc.name)}" loading="lazy"></div>`
+        )
+        .join("");
+
+      const isAuthor = isLoggedIn && exc.authorId === authUserId;
+      const authorLine = exc.authorUsername
+        ? `Ejercicio de <a href="profile.html?u=${encodeURIComponent(exc.authorUsername)}">@${escapeHtml(exc.authorUsername)}</a>`
+        : "Ejercicio de Gym Social";
+
+      container.innerHTML = `
+        <section class="page-hero">
+          <div class="container">
+            <span class="eyebrow">Ejercicio</span>
+            <h1>${escapeHtml(exc.name)}</h1>
+            <div class="exc-share-hero-meta">
+              <span class="hero-badge">${escapeHtml(CATEGORY_LABELS[exc.category])}</span>
+              ${isAuthor ? `<button class="btn btn-outline" id="shareExcBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5"/></svg>
+                Compartir ejercicio
+              </button>` : ""}
+            </div>
+          </div>
+        </section>
+        <section class="features">
+          <div class="container">
+            <div class="exc-modal-images">${mediaHtml}</div>
+            <p class="subtitle">${escapeHtml(exc.info || "Sin descripción cargada.")}</p>
+            <p class="auth-foot" style="text-align:left;margin-top:16px;">${authorLine}</p>
+          </div>
+        </section>
+      `;
+
+      if (isAuthor) {
+        container.querySelector("#shareExcBtn")?.addEventListener(
+          "click",
+          () => void openShareExerciseModal({ id: exc.id, name: exc.name, category: exc.category, is_public: true }, authUserId!),
+          { signal: ctx.signal }
+        );
+      }
+    }
+
     async function render(p: URLSearchParams): Promise<void> {
       container.innerHTML = VIEW_MARKUP;
 
       const routineId = p.get("rid");
       const shareToken = p.get("token");
+      const exId = p.get("exId");
 
+      if (exId) {
+        await renderExercise(exId);
+        return;
+      }
       if (shareToken) {
         await renderShared(shareToken);
         return;

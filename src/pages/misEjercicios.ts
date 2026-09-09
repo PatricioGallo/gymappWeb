@@ -12,6 +12,7 @@ import { escapeHtml } from "../lib/dom";
 import { formatFechaCorta } from "../lib/dias";
 import { openCreateExerciseModal } from "../lib/createExerciseModal";
 import { openExerciseModal } from "../lib/exerciseModal";
+import { openShareExerciseModal } from "../lib/exerciseShareModal";
 import { exerciseThumbMediaHtml } from "../lib/imageDropzone";
 
 const DUMBBELL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M2 9v6M22 9v6M6 12h12"/></svg>`;
@@ -76,6 +77,7 @@ export const misEjerciciosView: ViewModule = {
                   </div>
                   <div class="exc-admin-actions">
                     <button type="button" class="exc-admin-edit" data-id="${exc.id}">Editar</button>
+                    <button type="button" class="exc-admin-share" data-id="${exc.id}">Compartir</button>
                     <button type="button" class="exc-admin-delete" data-id="${exc.id}">Eliminar</button>
                   </div>
                 </div>
@@ -109,6 +111,17 @@ export const misEjerciciosView: ViewModule = {
           () => {
             const exc = exercises.find((e) => e.id === btn.dataset.id);
             if (exc) openCreateExerciseModal(userId, exc, ctx, load);
+          },
+          { signal: ctx.signal }
+        );
+      });
+
+      resultsEl.querySelectorAll<HTMLButtonElement>(".exc-admin-share").forEach((btn) => {
+        btn.addEventListener(
+          "click",
+          () => {
+            const exc = exercises.find((e) => e.id === btn.dataset.id);
+            if (exc) void openShareExerciseModal({ id: exc.id, name: exc.name, category: exc.category, is_public: exc.is_public }, userId);
           },
           { signal: ctx.signal }
         );

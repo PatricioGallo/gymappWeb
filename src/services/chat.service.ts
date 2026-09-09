@@ -96,6 +96,7 @@ export interface SendMessageInput {
   sharedGymPostId?: string;
   sharedRoutineId?: string;
   sharedProfileId?: string;
+  sharedExerciseId?: string;
   replyToMessageId?: string;
   isForwarded?: boolean;
   /** Foto/video que se puede abrir una sola vez -- solo se respeta en chats 1 a 1 (ver send_message). */
@@ -119,9 +120,11 @@ export async function sendMessage(conversationId: string, input: SendMessageInpu
     // CUALQUIER mensaje de texto/emoji normal, no solo los efimeros.
     p_view_once: input.viewOnce ?? false,
     // Idem: mandamos SIEMPRE estas claves (null cuando no aplican) para forzar la resolucion al
-    // overload de 13 args -- ver migraciones share_routine_in_chat / share_profile_in_chat.
+    // overload de 14 args -- ver migraciones share_routine_in_chat / share_profile_in_chat /
+    // share_exercise_in_chat.
     p_shared_routine_id: input.sharedRoutineId ?? null,
     p_shared_profile_id: input.sharedProfileId ?? null,
+    p_shared_exercise_id: input.sharedExerciseId ?? null,
   });
   if (error) return { error: friendlyError(error, "No se pudo enviar el mensaje. Probá de nuevo.") };
   return { message: data as ChatMessage };

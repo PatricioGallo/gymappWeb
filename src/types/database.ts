@@ -824,6 +824,62 @@ export type Database = {
           },
         ]
       }
+      follows: {
+        Row: {
+          created_at: string
+          followed_id: string
+          follower_id: string
+          id: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          followed_id: string
+          follower_id: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          followed_id?: string
+          follower_id?: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follows_followed_id_fkey"
+            columns: ["followed_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_followed_id_fkey"
+            columns: ["followed_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       food_items: {
         Row: {
           author_id: string | null
@@ -896,62 +952,6 @@ export type Database = {
           {
             foreignKeyName: "food_items_author_id_fkey"
             columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      follows: {
-        Row: {
-          created_at: string
-          followed_id: string
-          follower_id: string
-          id: string
-          responded_at: string | null
-          status: string
-        }
-        Insert: {
-          created_at?: string
-          followed_id: string
-          follower_id: string
-          id?: string
-          responded_at?: string | null
-          status?: string
-        }
-        Update: {
-          created_at?: string
-          followed_id?: string
-          follower_id?: string
-          id?: string
-          responded_at?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "follows_followed_id_fkey"
-            columns: ["followed_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "follows_followed_id_fkey"
-            columns: ["followed_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "follows_follower_id_fkey"
-            columns: ["follower_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "follows_follower_id_fkey"
-            columns: ["follower_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
             referencedColumns: ["id"]
@@ -1625,6 +1625,7 @@ export type Database = {
           read_at: string | null
           reply_to_message_id: string | null
           sender_id: string
+          shared_exercise_id: string | null
           shared_gym_post_id: string | null
           shared_post_id: string | null
           shared_profile_id: string | null
@@ -1649,6 +1650,7 @@ export type Database = {
           read_at?: string | null
           reply_to_message_id?: string | null
           sender_id: string
+          shared_exercise_id?: string | null
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
           shared_profile_id?: string | null
@@ -1673,6 +1675,7 @@ export type Database = {
           read_at?: string | null
           reply_to_message_id?: string | null
           sender_id?: string
+          shared_exercise_id?: string | null
           shared_gym_post_id?: string | null
           shared_post_id?: string | null
           shared_profile_id?: string | null
@@ -1708,6 +1711,13 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_shared_exercise_id_fkey"
+            columns: ["shared_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
           {
@@ -3447,6 +3457,7 @@ export type Database = {
           read_at: string | null
           reply_to_message_id: string | null
           sender_id: string
+          shared_exercise_id: string | null
           shared_gym_post_id: string | null
           shared_post_id: string | null
           shared_profile_id: string | null
@@ -3480,6 +3491,7 @@ export type Database = {
           read_at: string | null
           reply_to_message_id: string | null
           sender_id: string
+          shared_exercise_id: string | null
           shared_gym_post_id: string | null
           shared_post_id: string | null
           shared_profile_id: string | null
@@ -3550,6 +3562,13 @@ export type Database = {
         }[]
       }
       get_follow_status: { Args: { p_target_id: string }; Returns: string }
+      get_food_popularity: {
+        Args: never
+        Returns: {
+          food_id: string
+          uses: number
+        }[]
+      }
       get_gym_membership_status: { Args: { p_gym_id: string }; Returns: string }
       get_gym_posts_by_ids: {
         Args: { p_ids: string[] }
@@ -3579,16 +3598,34 @@ export type Database = {
           status: string
         }[]
       }
-      get_food_popularity: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          food_id: string
-          uses: number
-        }[]
-      }
       get_meal_suggestion_foods: {
-        Args: { p_meal_tags: string[]; p_limit?: number }
-        Returns: Database["public"]["Tables"]["food_items"]["Row"][]
+        Args: { p_limit?: number; p_meal_tags: string[] }
+        Returns: {
+          author_id: string | null
+          brand: string | null
+          carbs_100g: number
+          created_at: string
+          fat_100g: number
+          fiber_100g: number | null
+          id: string
+          image_url: string | null
+          is_public: boolean
+          kcal_100g: number
+          meal_tags: string[]
+          name: string
+          off_barcode: string | null
+          off_data: Json | null
+          protein_100g: number
+          serving_grams: number | null
+          source: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "food_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_my_exercises_usage_counts: {
         Args: never
@@ -3655,14 +3692,6 @@ export type Database = {
           value: number
         }[]
       }
-      get_student_progress_photos: {
-        Args: { p_student: string }
-        Returns: {
-          created_at: string
-          fecha: string
-          foto_path: string
-        }[]
-      }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       get_shared_routines_by_ids: {
         Args: { p_ids: string[] }
@@ -3679,6 +3708,14 @@ export type Database = {
         }[]
       }
       get_socio_count: { Args: { p_gym_id: string }; Returns: number }
+      get_student_progress_photos: {
+        Args: { p_student: string }
+        Returns: {
+          created_at: string
+          fecha: string
+          foto_path: string
+        }[]
+      }
       get_subscriber_count: { Args: { p_user_id: string }; Returns: number }
       get_subscription_status: {
         Args: { p_target_id: string }
@@ -3732,6 +3769,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_coach_of: {
+        Args: { p_student: string; p_trainer: string }
+        Returns: boolean
+      }
       is_conversation_admin: {
         Args: { p_conversation_id: string }
         Returns: boolean
@@ -4027,6 +4068,8 @@ export type Database = {
         Returns: string
       }
       notify_follow_birthdays: { Args: never; Returns: undefined }
+      notify_measurements_reminder: { Args: never; Returns: undefined }
+      notify_nutrition_reminder: { Args: never; Returns: undefined }
       open_view_once_message: {
         Args: { p_message_id: string }
         Returns: {
@@ -4056,6 +4099,7 @@ export type Database = {
           read_at: string | null
           reply_to_message_id: string | null
           sender_id: string
+          shared_exercise_id: string | null
           shared_gym_post_id: string | null
           shared_post_id: string | null
           shared_profile_id: string | null
@@ -4199,6 +4243,7 @@ export type Database = {
               read_at: string | null
               reply_to_message_id: string | null
               sender_id: string
+              shared_exercise_id: string | null
               shared_gym_post_id: string | null
               shared_post_id: string | null
               shared_profile_id: string | null
@@ -4244,6 +4289,7 @@ export type Database = {
               read_at: string | null
               reply_to_message_id: string | null
               sender_id: string
+              shared_exercise_id: string | null
               shared_gym_post_id: string | null
               shared_post_id: string | null
               shared_profile_id: string | null
@@ -4290,6 +4336,7 @@ export type Database = {
               read_at: string | null
               reply_to_message_id: string | null
               sender_id: string
+              shared_exercise_id: string | null
               shared_gym_post_id: string | null
               shared_post_id: string | null
               shared_profile_id: string | null
@@ -4337,6 +4384,56 @@ export type Database = {
               read_at: string | null
               reply_to_message_id: string | null
               sender_id: string
+              shared_exercise_id: string | null
+              shared_gym_post_id: string | null
+              shared_post_id: string | null
+              shared_profile_id: string | null
+              shared_routine_id: string | null
+              view_once: boolean
+              viewed_once_at: string | null
+              viewed_once_by: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "messages"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_attachment_duration_seconds?: number
+              p_attachment_filename?: string
+              p_attachment_path?: string
+              p_attachment_type?: string
+              p_content?: string
+              p_conversation_id: string
+              p_is_forwarded?: boolean
+              p_reply_to_message_id?: string
+              p_shared_exercise_id?: string
+              p_shared_gym_post_id?: string
+              p_shared_post_id?: string
+              p_shared_profile_id?: string
+              p_shared_routine_id?: string
+              p_view_once?: boolean
+            }
+            Returns: {
+              attachment_duration_seconds: number | null
+              attachment_filename: string | null
+              attachment_path: string | null
+              attachment_type: string | null
+              content: string | null
+              conversation_id: string
+              created_at: string
+              deleted_at: string | null
+              edited_at: string | null
+              id: string
+              is_forwarded: boolean
+              reactions: Json
+              read_at: string | null
+              reply_to_message_id: string | null
+              sender_id: string
+              shared_exercise_id: string | null
               shared_gym_post_id: string | null
               shared_post_id: string | null
               shared_profile_id: string | null
@@ -4381,6 +4478,18 @@ export type Database = {
       touch_profile_visit: {
         Args: { p_visited_id: string }
         Returns: undefined
+      }
+      trainer_can_see_measurement_photos: {
+        Args: { p_student: string }
+        Returns: boolean
+      }
+      trainer_can_see_measurements: {
+        Args: { p_student: string }
+        Returns: boolean
+      }
+      trainer_can_see_nutrition: {
+        Args: { p_student: string }
+        Returns: boolean
       }
       unpin_message: { Args: { p_conversation_id: string }; Returns: undefined }
       vote_in_poll: {

@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { isVideoUrl } from "../lib/imageDropzone";
 import type { Enums, Tables } from "../types/database";
 
 export type Exercise = Tables<"exercises">;
@@ -253,6 +254,93 @@ export async function updateExercise(id: string, fields: EditableExerciseFields)
     return { error: "No se pudo guardar el ejercicio. Probá de nuevo." };
   }
   return {};
+}
+
+// ---------------------------------------------------------------------------
+// Compartir un ejercicio (chat / Rep / link) -- ver exerciseShareModal.ts
+// ---------------------------------------------------------------------------
+
+/** Vista previa mínima de un ejercicio compartido en el chat (card en chatThread.ts). */
+export interface SharedExerciseChatPreview {
+  id: string;
+  name: string;
+  category: ExerciseCategory;
+  thumbUrl: string | null;
+  isVideoThumb: boolean;
+  authorUsername: string | null;
+}
+
+/**
+ * Batch de ejercicios por id para la card de "ejercicio compartido" en el chat. No hace falta
+ * un RPC SECURITY DEFINER como con las rutinas: la policy exercises_select ya deja leer
+ * cualquier ejercicio con is_public = true (o builtin) a cualquiera, incluso anónimo.
+ */
+export async function getSharedExercisesByIds(ids: string[]): Promise<Map<string, SharedExerciseChatPreview>> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("id, name, category, media_urls, profiles ( username )")
+    .in("id", uniqueIds);
+  if (error) throw error;
+  const map = new Map<string, SharedExerciseChatPreview>();
+  for (const row of (data ?? []) as unknown as Array<{
+    id: string;
+    name: string;
+    category: ExerciseCategory;
+    media_urls: string[] | null;
+    profiles: { username: string } | null;
+  }>) {
+    const url = row.media_urls?.[0];
+    map.set(row.id, {
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      thumbUrl: url ?? null,
+      isVideoThumb: url ? isVideoUrl(url) : false,
+      authorUsername: row.profiles?.username ?? null,
+    });
+  }
+  return map;
+}
+
+export interface SharedExerciseDetail {
+  id: string;
+  name: string;
+  info: string;
+  category: ExerciseCategory;
+  mediaUrls: string[];
+  authorId: string | null;
+  authorUsername: string | null;
+}
+
+/** Un ejercicio para la página pública showExc.html?exId= (visor del link compartido). Devuelve
+ * null si el ejercicio no existe o no es visible para quien mira (RLS: solo público/builtin/propio). */
+export async function getSharedExerciseById(id: string): Promise<SharedExerciseDetail | null> {
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("id, name, info, category, media_urls, author_id, profiles ( username )")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as unknown as {
+    id: string;
+    name: string;
+    info: string;
+    category: ExerciseCategory;
+    media_urls: string[] | null;
+    author_id: string | null;
+    profiles: { username: string } | null;
+  };
+  return {
+    id: row.id,
+    name: row.name,
+    info: row.info,
+    category: row.category,
+    mediaUrls: row.media_urls ?? [],
+    authorId: row.author_id,
+    authorUsername: row.profiles?.username ?? null,
+  };
 }
 
 export async function deleteExercise(id: string): Promise<{ error?: string }> {

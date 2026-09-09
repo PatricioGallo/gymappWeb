@@ -2895,6 +2895,17 @@ a.profile-stat:hover { color: var(--accent-2); }
 #routineActions { justify-content: center; }
 #routineActions .btn { flex: none; }
 
+/* showExc.html?exId= (visor de un ejercicio compartido): categoria + boton "Compartir"
+   centrados bajo el titulo, sin estirarse a todo el ancho. */
+.exc-share-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.exc-share-hero-meta .btn { flex: none; padding: 11px 20px; font-size: 13.5px; }
+
 @media (max-width: 639px) {
   .avatar-wrap { min-height: 76px; max-height: 130px; }
   .profile-top { gap: 16px; }
@@ -4208,10 +4219,12 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   cursor: default;
 }
 
-.exc-admin-actions { display: flex; gap: 6px; }
+.exc-admin-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .exc-admin-actions button {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 68px;
+  white-space: nowrap;
   border: 1px solid var(--border);
   background: none;
   border-radius: var(--radius-sm);
