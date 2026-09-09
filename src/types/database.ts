@@ -3655,6 +3655,14 @@ export type Database = {
           value: number
         }[]
       }
+      get_student_progress_photos: {
+        Args: { p_student: string }
+        Returns: {
+          created_at: string
+          fecha: string
+          foto_path: string
+        }[]
+      }
       get_shared_routine: { Args: { p_token: string }; Returns: Json }
       get_shared_routines_by_ids: {
         Args: { p_ids: string[] }

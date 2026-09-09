@@ -694,12 +694,22 @@ export function loggableFields(): LoggableFieldDef[] {
 // "enabled" es el interruptor general (por defecto apagado); con él prendido,
 // cada medida se activa/desactiva individualmente -- "peso" viene prendida por
 // default, el resto no (ver migración body_measurements_expand).
+// "shareWithTrainer" / "sharePhotoWithTrainer": si sus entrenadores (suscripción
+// aceptada o gimnasio donde el entrenador es handle) pueden ver las medidas y las
+// fotos de progreso en "Ver progreso" -- medidas ON por default, fotos OFF (ver
+// migración trainer_student_shared_data y trainer_can_see_measurements[_photos]).
 // ---------------------------------------------------------------------------
 
-export type BodyMeasurementPrefs = Record<MeasurementKey, boolean> & { enabled: boolean };
+export type BodyMeasurementPrefs = Record<MeasurementKey, boolean> & {
+  enabled: boolean;
+  shareWithTrainer: boolean;
+  sharePhotoWithTrainer: boolean;
+};
 
 export const DEFAULT_BODY_MEASUREMENT_PREFS: BodyMeasurementPrefs = {
   enabled: false,
+  shareWithTrainer: true,
+  sharePhotoWithTrainer: false,
   peso: true,
   cuello: false,
   pecho: false,
@@ -874,6 +884,24 @@ export async function getLatestBodyWeightKg(userId: string): Promise<number | nu
 }
 
 /**
+ * Peso corporal más reciente en la unidad EN QUE LO CARGÓ el usuario (kg o lb, sin convertir) --
+ * para mostrarlo tal cual en la tarjeta de "Tus alumnos". `null` si no hay registro o no es
+ * visible (RLS: entrenador de un alumno que no comparte sus medidas). Consulta liviana (1 fila).
+ */
+export async function getLatestBodyWeight(userId: string): Promise<{ value: number; unidad: BodyWeightUnit } | null> {
+  const { data, error } = await supabase
+    .from("body_measurements")
+    .select("peso, unidad")
+    .eq("user_id", userId)
+    .not("peso", "is", null)
+    .order("fecha", { ascending: false })
+    .limit(1);
+  const row = data?.[0];
+  if (error || row?.peso == null) return null;
+  return { value: Number(row.peso), unidad: row.unidad === "lb" ? "lb" : "kg" };
+}
+
+/**
  * Completa las medidas calculadas de cada entrada (mutando in-place). `alturaCm`, `sexo` y `edad`
  * son valores ÚNICOS del perfil (profiles.altura_cm / .genero / .fecha_nacimiento) que se aplican
  * por igual a todo el historial -- ninguno se carga por fecha, la altura y el sexo no cambian y la
@@ -1012,6 +1040,25 @@ export async function getMeasurementPhotoUrls(paths: string[]): Promise<Map<stri
     if (d.signedUrl && d.path) map.set(d.path, d.signedUrl);
   });
   return map;
+}
+
+export interface ProgressPhotoRef {
+  fecha: string; // "YYYY-MM-DD"
+  fotoPath: string;
+  createdAt: string;
+}
+
+/**
+ * Fechas + paths de las fotos de progreso de un usuario, sin los números. Lo usa el panel del
+ * entrenador en "Ver progreso": cuando el alumno comparte las FOTOS pero no las medidas,
+ * body_measurements queda ilegible por RLS, así que se pasa por la RPC get_student_progress_photos
+ * (SECURITY DEFINER, gateada por trainer_can_see_measurement_photos). El archivo sigue protegido
+ * por la política de storage. Devuelve [] si no hay acceso o no hay fotos.
+ */
+export async function listStudentProgressPhotos(userId: string): Promise<ProgressPhotoRef[]> {
+  const { data, error } = await supabase.rpc("get_student_progress_photos", { p_student: userId });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ fecha: r.fecha, fotoPath: r.foto_path, createdAt: r.created_at }));
 }
 
 export async function deleteBodyMeasurement(id: string): Promise<{ error?: string }> {

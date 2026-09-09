@@ -16,16 +16,18 @@ export type NutritionTargetRow = Tables<"nutrition_targets">;
 export type NutritionLogRow = Tables<"nutrition_logs">;
 
 // ---------------------------------------------------------------------------
-// Preferencias (profiles.nutrition_prefs) -- por ahora solo el interruptor
-// general (apagado por defecto). Se activa/desactiva en Configuración >
-// Personalización.
+// Preferencias (profiles.nutrition_prefs) -- el interruptor general (apagado por
+// defecto) y si los entrenadores del usuario pueden ver su alimentación en "Ver
+// progreso" (encendido por defecto, ver migración trainer_student_shared_data /
+// trainer_can_see_nutrition). Se configuran en Configuración > Personalización.
 // ---------------------------------------------------------------------------
 
 export interface NutritionPrefs {
   enabled: boolean;
+  shareWithTrainer: boolean;
 }
 
-export const DEFAULT_NUTRITION_PREFS: NutritionPrefs = { enabled: false };
+export const DEFAULT_NUTRITION_PREFS: NutritionPrefs = { enabled: false, shareWithTrainer: true };
 
 export function parseNutritionPrefs(raw: unknown): NutritionPrefs {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -430,6 +432,25 @@ export async function listNutritionLogs(userId: string, logDate: string): Promis
     .select("*")
     .eq("user_id", userId)
     .eq("log_date", logDate)
+    .order("meal_index")
+    .order("created_at");
+  if (error) throw error;
+  return (data ?? []).map(mapLog);
+}
+
+/**
+ * Todos los logs de un rango de fechas (ambas inclusive, "YYYY-MM-DD"), ordenados por fecha y
+ * comida. Lo usa el panel del entrenador en "Ver progreso" para el gráfico de "últimos N días"
+ * sin pegar N veces a la red (una sola query en vez de una por día).
+ */
+export async function listNutritionLogsRange(userId: string, fromISO: string, toISO: string): Promise<NutritionLog[]> {
+  const { data, error } = await supabase
+    .from("nutrition_logs")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("log_date", fromISO)
+    .lte("log_date", toISO)
+    .order("log_date")
     .order("meal_index")
     .order("created_at");
   if (error) throw error;

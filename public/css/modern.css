@@ -3372,6 +3372,16 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 .nutri-meal-targets .nutri-mt-f,
 .nutri-meal-targets .nutri-mt-f strong { color: #c58fe0; }
 
+/* Reparto de comidas del objetivo -- solo lectura, panel del entrenador (studentNutritionPanel). */
+.nutri-meal-split { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nutri-meal-split li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: 13px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.nutri-meal-split li > span:last-child { color: var(--text-muted); font-size: 12px; text-align: right; }
+.nutri-meal-split small { color: var(--text-muted); }
+
 /* Asistente ---------------------------------------------------------------- */
 .nutri-mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
 .nutri-mode-toggle .exc-pick-tab { flex: 1; text-align: center; }
@@ -3884,9 +3894,13 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
 }
 
 /* Version compacta del progreso, para listados con muchas tarjetas (ej. Tus alumnos):
-   una barrita chica en linea con el %, en vez del bloque ancho de .routine-progress. */
-.mini-progress-value { display: flex; align-items: center; gap: 8px; }
-.mini-progress-track {
+   una barrita chica en linea con el %, en vez del bloque ancho de .routine-progress.
+   Va scopeada a .routine-stats a proposito: ahi `.routine-stats span/strong { display:block }`
+   le gana por especificidad a `.mini-progress-*` a secas y aplasta el layout flex (la barra
+   quedaba pegada a la izquierda, sobre todo en modo Retrato con la tarjeta centrada). */
+.routine-stats .mini-progress-value { display: flex; align-items: center; gap: 8px; }
+.routine-stats .mini-progress-track {
+  display: block;
   width: 44px;
   height: 6px;
   border-radius: 999px;
@@ -3894,7 +3908,7 @@ button.quick-card { width: 100%; text-align: left; cursor: pointer; font-family:
   overflow: hidden;
   flex: none;
 }
-.mini-progress-fill {
+.routine-stats .mini-progress-fill {
   display: block;
   height: 100%;
   border-radius: 999px;
