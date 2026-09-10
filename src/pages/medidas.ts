@@ -50,6 +50,7 @@ import type { Chart as ChartInstance } from "chart.js";
 import { loadChart } from "../lib/chartLoader";
 import { openMediaLightbox } from "../lib/mediaLightbox";
 import { openMeasurementsIntroModal } from "../lib/measurementsIntroModal";
+import { openDatePickerModal } from "../lib/datePickerModal";
 
 // Límite de caracteres de un Rep (coincide con POST_MAX en feed.ts / POST_CONTENT_MAX en
 // post.service.ts, que no lo exporta). Usado por el modal "Compartir como Rep".
@@ -61,8 +62,9 @@ const SHARE_PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 
 const UNIT_LABELS: Record<BodyWeightUnit, string> = { kg: "Kg", lb: "Lb" };
 
-// Pestaña extra de galería de fotos (ver renderMetricArea) -- no es una MeasurementKey real,
-// solo aparece cuando hay al menos una foto de progreso cargada.
+// Pestaña "Historial" (ver renderMetricArea) -- no es una MeasurementKey real. Aloja la lista de
+// registros con su filtro por fecha y, si hay fotos de progreso cargadas, la galería. El nombre
+// interno quedó "progreso" (era una pestaña solo-fotos), la etiqueta visible es "Historial".
 const PROGRESO_TAB_KEY = "progreso" as const;
 
 // Navegación de métricas en dos niveles (ver renderMetricArea): fila 1 = grupo, fila 2 = medida
@@ -77,7 +79,7 @@ const METRIC_GROUP_LABEL: Record<MetricGroupKey, string> = {
   composicion: "Composición",
   pliegues: "Pliegues",
   calculadas: "Índices",
-  progreso: "Progreso",
+  progreso: "Historial",
 };
 
 const KEBAB_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
@@ -250,10 +252,15 @@ function statsMarkup(field: MeasurementFieldDef, unit: string, s: MeasurementSta
   `;
 }
 
-function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): string {
+// Lista del historial -- sub-pestaña "Trayectoria" de "Historial" (ver renderMetricArea). Con
+// `filterDate` (una fecha "YYYY-MM-DD" elegida en el calendario, ver wireHistoryFilter) se
+// muestra solo el registro de ese día; sin filtro, todos del más nuevo al más viejo. El
+// calendario es el mismo modal que usa Alimentación (openDatePickerModal).
+function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>, filterDate: string | null): string {
   // Más reciente primero en la lista (entries viene ascendente para los cálculos).
-  const rows = [...entries]
-    .reverse()
+  const ordered = [...entries].reverse();
+  const shown = filterDate ? ordered.filter((e) => e.fecha === filterDate) : ordered;
+  const rows = shown
     .map((e) => {
       const summary = entryMeasurementSummary(e);
       const photoUrl = e.fotoPath ? photoUrls.get(e.fotoPath) : undefined;
@@ -280,9 +287,21 @@ function historyMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, s
 
   return `
     <div class="chart-card reveal">
-      <h3>Historial</h3>
-      <p class="chart-sub">Todos tus registros, del más nuevo al más viejo.</p>
-      <div class="bw-list">${rows}</div>
+      <div class="bw-history-head">
+        <p class="chart-sub bw-history-sub">${filterDate ? "Mostrando una sola fecha." : "Todos tus registros, del más nuevo al más viejo."}</p>
+        <div class="bw-history-filter">
+          <button type="button" class="bw-history-datebtn" id="bwHistoryDateBtn" aria-label="Filtrar el historial por fecha">
+            <strong>${filterDate ? escapeHtml(formatFechaCorta(filterDate)) : "Todas las fechas"}</strong>
+            <svg class="bw-history-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          ${filterDate ? `<button type="button" class="btn btn-outline btn-sm" id="bwHistoryClearDate">Ver todas</button>` : ""}
+        </div>
+      </div>
+      ${
+        shown.length
+          ? `<div class="bw-list">${rows}</div>`
+          : `<p class="chart-sub bw-history-empty">No cargaste medidas el ${escapeHtml(formatFechaCorta(filterDate!))}. Tocá "Ver todas" para volver al historial completo.</p>`
+      }
     </div>
   `;
 }
@@ -359,14 +378,24 @@ export const medidasView: ViewModule = {
     // Métrica elegida en el selector de pestañas (peso, cintura, etc.) -- se recalcula el set de
     // pestañas disponibles en cada render (activar una medida nueva en otra pestaña de la app y
     // volver acá la debería sumar sin recargar).
-    // "progreso" es una pestaña extra (galería de fotos), no una medida real -- ver
-    // renderMetricArea/PROGRESO_TAB_KEY más abajo.
+    // "progreso" es la pestaña "Historial" (lista + filtro por fecha + galería de fotos), no una
+    // medida real -- ver renderMetricArea/PROGRESO_TAB_KEY más abajo.
     let selectedKey: MeasurementKey | typeof PROGRESO_TAB_KEY | null = null;
 
     // Último historial traído por render() -- lo usa openMeasurementModal para prellenar el
     // formulario cuando la fecha elegida YA tiene un registro (así guardar sin tocar un campo no
     // lo borra: la carga es un upsert por (user_id, fecha)).
     let loadedEntries: BodyMeasurementEntry[] = [];
+
+    // Filtro por fecha del historial (pestaña "Historial"): null = ver todo junto; una fecha
+    // "YYYY-MM-DD" = ver solo ese registro. Se elige con el mismo calendario modal que Alimentación
+    // (ver wireHistoryFilter). Se resetea en cada render() completo (tras guardar/borrar).
+    let historyFilterDate: string | null = null;
+
+    // Sub-pestaña activa dentro de "Historial" (fila 2): "trayectoria" = lista de registros +
+    // filtro por fecha; "fotos" = galería de fotos de progreso. Persiste entre re-renders como
+    // selectedKey (no se fuerza a "trayectoria" en cada render()).
+    let historyView: "trayectoria" | "fotos" = "trayectoria";
 
     // Las 3 calculadas (IMC, ratios) nunca entran acá -- no se cargan a mano, ver loggableFields().
     function loggableActiveFields(): LoggableFieldDef[] {
@@ -1061,14 +1090,39 @@ export const medidasView: ViewModule = {
       });
     }
 
+    // Filtro por fecha del historial: "Todas las fechas" (default) o una fecha puntual elegida con
+    // el calendario modal de Alimentación (openDatePickerModal). Al elegir/limpiar se re-renderiza
+    // el área de métricas (seguimos en la pestaña "Historial"), que vuelve a llamar a historyMarkup
+    // con el nuevo `historyFilterDate`.
+    function wireHistoryFilter(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): void {
+      const area = container.querySelector("#measurementMetricArea");
+      if (!area) return;
+      area.querySelector("#bwHistoryDateBtn")?.addEventListener("click", () => {
+        const oldest = entries.reduce((a, e) => (e.fecha < a ? e.fecha : a), entries[0]?.fecha ?? todayLocalISO());
+        openDatePickerModal({
+          value: historyFilterDate ?? todayLocalISO(),
+          max: todayLocalISO(),
+          min: oldest,
+          onPick: (v) => {
+            historyFilterDate = v;
+            void renderMetricArea(entries, photoUrls);
+          },
+        });
+      });
+      area.querySelector("#bwHistoryClearDate")?.addEventListener("click", () => {
+        historyFilterDate = null;
+        void renderMetricArea(entries, photoUrls);
+      });
+    }
+
     // Abre el visor a pantalla completa (mismo componente que Reps/chat, ver mediaLightbox.ts)
     // con la cola de TODAS las fotos de progreso, de la más nueva a la más vieja -- MISMO orden
     // en que se ven en el historial y en la grilla de Progreso (ambos muestran la más nueva
     // primero), para que deslizar vaya siempre hacia la foto físicamente vecina en pantalla, no al
     // revés. horizontalNav: deslizar a la izquierda avanza (más vieja), a la derecha vuelve (más
     // nueva) -- en vez del gesto vertical de siempre, que acá no tendría "cerrar" natural (se
-    // cierra con la cruz). Compartido por las miniaturas del historial (.bw-row-photo-btn) y la
-    // grilla de la pestaña Progreso (.bw-gallery-item).
+    // cierra con la cruz). Compartido por las miniaturas de las filas (.bw-row-photo-btn) y la
+    // grilla de fotos (.bw-gallery-item), las dos en la pestaña "Historial".
     function wirePhotoButtons(root: ParentNode, selector: string, entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): void {
       const withPhotos = [...entries].reverse().filter((e) => e.fotoPath && photoUrls.has(e.fotoPath));
       root.querySelectorAll<HTMLButtonElement>(selector).forEach((btn) => {
@@ -1104,8 +1158,9 @@ export const medidasView: ViewModule = {
       });
     }
 
-    // Grilla de la pestaña "Progreso" -- todas las fotos, de la más nueva a la más vieja (mismo
-    // criterio que el historial). Solo se llega acá si hay al menos una (ver renderMetricArea).
+    // Grilla de fotos -- sub-pestaña "Fotos" de "Historial" (ver renderMetricArea). Todas las
+    // fotos, de la más nueva a la más vieja (mismo criterio que la lista). Solo se llama si hay
+    // al menos una.
     function progressGalleryMarkup(entries: BodyMeasurementEntry[], photoUrls: Map<string, string>): string {
       const cells = [...entries]
         .reverse()
@@ -1418,14 +1473,9 @@ export const medidasView: ViewModule = {
       const metricArea = container.querySelector("#measurementMetricArea") as HTMLElement | null;
       if (!tabsWrap || !metricArea) return;
 
-      if (tabFields.length === 0 && !hasPhotos) {
-        tabsWrap.hidden = true;
-        metricArea.innerHTML = "";
-        return;
-      }
-
       // Agrupá las métricas por grupo del catálogo, en orden. La fila 1 muestra un botón por grupo
-      // presente (+ "Progreso" si hay fotos); la fila 2, las medidas del grupo elegido.
+      // presente + "Historial" (siempre: aloja la lista de registros y, si hay, la galería de
+      // fotos); la fila 2, las medidas del grupo elegido.
       const byGroup = new Map<MeasurementGroup, MeasurementFieldDef[]>();
       for (const f of tabFields) {
         const arr = byGroup.get(f.group) ?? [];
@@ -1433,10 +1483,10 @@ export const medidasView: ViewModule = {
         byGroup.set(f.group, arr);
       }
       const groups: MetricGroupKey[] = METRIC_GROUP_ORDER.filter((g) => byGroup.has(g));
-      if (hasPhotos) groups.push(PROGRESO_TAB_KEY);
+      groups.push(PROGRESO_TAB_KEY);
 
       const validKeys = new Set<string>(tabFields.map((f) => f.key));
-      if (hasPhotos) validKeys.add(PROGRESO_TAB_KEY);
+      validKeys.add(PROGRESO_TAB_KEY);
       if (!selectedKey || !validKeys.has(selectedKey)) {
         selectedKey = tabFields[0]?.key ?? PROGRESO_TAB_KEY;
       }
@@ -1446,16 +1496,22 @@ export const medidasView: ViewModule = {
       const groupRow = groups
         .map((g) => `<button type="button" class="routine-tab measurement-group-tab${g === activeGroup ? " active" : ""}" data-group="${g}">${escapeHtml(METRIC_GROUP_LABEL[g])}</button>`)
         .join("");
-      // La fila de medidas solo aparece si el grupo tiene más de una (si tiene una sola, el botón
-      // de grupo ya alcanza -- ej. "Peso"). Usa .exc-pick-chip, el mismo look que los chips de
-      // categoría del picker de ejercicios / Configuración (activo = borde+letra naranja, fondo
+      // Fila 2. En "Historial" son dos sub-vistas fijas (Trayectoria / Fotos, ver historyView); en
+      // el resto de los grupos, las medidas del grupo -- y solo si hay más de una (si hay una sola,
+      // el botón de grupo ya alcanza, ej. "Peso"). Usa .exc-pick-chip, el mismo look que los chips
+      // de categoría del picker de ejercicios / Configuración (activo = borde+letra naranja, fondo
       // suave), no el .routine-tab relleno que usa la fila de grupos.
       const measureRow =
-        groupFields.length > 1
-          ? `<div class="measurement-measure-row">${groupFields
-              .map((f) => `<button type="button" class="exc-pick-chip measurement-subtab${f.key === selectedKey ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>`)
-              .join("")}</div>`
-          : "";
+        activeGroup === PROGRESO_TAB_KEY
+          ? `<div class="measurement-measure-row">
+              <button type="button" class="exc-pick-chip measurement-subtab${historyView === "trayectoria" ? " active" : ""}" data-histview="trayectoria">Trayectoria</button>
+              <button type="button" class="exc-pick-chip measurement-subtab${historyView === "fotos" ? " active" : ""}" data-histview="fotos">Fotos</button>
+            </div>`
+          : groupFields.length > 1
+            ? `<div class="measurement-measure-row">${groupFields
+                .map((f) => `<button type="button" class="exc-pick-chip measurement-subtab${f.key === selectedKey ? " active" : ""}" data-key="${f.key}">${escapeHtml(f.label)}</button>`)
+                .join("")}</div>`
+            : "";
 
       tabsWrap.hidden = false;
       tabsWrap.innerHTML = `<div class="routine-tabs measurement-group-row">${groupRow}</div>${measureRow}`;
@@ -1468,16 +1524,31 @@ export const medidasView: ViewModule = {
           void renderMetricArea(entries, photoUrls);
         });
       });
-      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-subtab").forEach((btn) => {
+      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-subtab[data-key]").forEach((btn) => {
         btn.addEventListener("click", () => {
           selectedKey = btn.dataset.key as MeasurementKey;
           void renderMetricArea(entries, photoUrls);
         });
       });
+      tabsWrap.querySelectorAll<HTMLButtonElement>(".measurement-subtab[data-histview]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          historyView = btn.dataset.histview as "trayectoria" | "fotos";
+          void renderMetricArea(entries, photoUrls);
+        });
+      });
 
       if (selectedKey === PROGRESO_TAB_KEY) {
-        metricArea.innerHTML = progressGalleryMarkup(entries, photoUrls);
-        wirePhotoButtons(metricArea, ".bw-gallery-item", entries, photoUrls);
+        if (historyView === "fotos") {
+          metricArea.innerHTML = hasPhotos
+            ? progressGalleryMarkup(entries, photoUrls)
+            : `<div class="chart-card reveal"><p class="chart-sub">Todavía no subiste fotos de progreso. Podés adjuntar una foto al cargar tus medidas del día ("+ Agregar medidas").</p></div>`;
+          if (hasPhotos) wirePhotoButtons(metricArea, ".bw-gallery-item", entries, photoUrls);
+        } else {
+          metricArea.innerHTML = historyMarkup(entries, photoUrls, historyFilterDate);
+          wireHistoryFilter(entries, photoUrls);
+          wireHistoryMenus(entries);
+          wirePhotoButtons(metricArea, ".bw-row-photo-btn", entries, photoUrls);
+        }
         return;
       }
 
@@ -1498,6 +1569,9 @@ export const medidasView: ViewModule = {
         return;
       }
       loadedEntries = entries;
+      // Cada render() completo (montaje, o vuelta tras guardar/borrar) arranca con el historial
+      // sin filtrar -- el filtro por fecha es un estado efímero de navegación dentro de la pestaña.
+      historyFilterDate = null;
 
       chartInstance?.destroy();
       chartInstance = null;
@@ -1512,14 +1586,13 @@ export const medidasView: ViewModule = {
       const photoPaths = entries.filter((e): e is BodyMeasurementEntry & { fotoPath: string } => e.fotoPath != null).map((e) => e.fotoPath);
       const photoUrls = await getMeasurementPhotoUrls(photoPaths);
 
+      // El historial ya no vive acá: es el contenido de la pestaña "Historial" (ver
+      // renderMetricArea), junto con la galería de fotos y el filtro por fecha.
       content.innerHTML = `
         <div class="measurement-metric-nav" id="measurementMetricTabs" hidden></div>
         <div id="measurementMetricArea"></div>
-        ${historyMarkup(entries, photoUrls)}
       `;
 
-      wireHistoryMenus(entries);
-      wirePhotoButtons(content, ".bw-row-photo-btn", entries, photoUrls);
       await renderMetricArea(entries, photoUrls);
     }
 
