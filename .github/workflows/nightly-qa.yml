@@ -1,0 +1,71 @@
+name: Nightly QA
+
+# 06:00 UTC = 03:00 en Argentina (UTC-3) -- fuera de horario, corre contra la cuenta de QA
+# dedicada (ver tests/e2e/fixtures.ts), no contra una cuenta real.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build (producción -- mismo bundle que se despliega)
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+
+      - name: Chequear tamaño del bundle
+        run: npm run check:bundle-size
+
+      - name: Levantar el preview del build
+        run: npx vite preview --port 4173 --strictPort &
+
+      - name: Esperar a que el preview responda
+        run: npx wait-on http://localhost:4173
+
+      - name: Tests E2E (Playwright)
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:4173
+          QA_TEST_USERNAME: ${{ secrets.QA_TEST_USERNAME }}
+          QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+          QA_TEST_CHAT_GROUP_ID: ${{ secrets.QA_TEST_CHAT_GROUP_ID }}
+
+      - name: Lighthouse (páginas públicas)
+        if: always()
+        run: npm run check:lighthouse
+        env:
+          BASE_URL: http://localhost:4173
+
+      - name: Subir reportes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
+          path: |
+            playwright-report/
+            lighthouse-report-*.json
+          retention-days: 14

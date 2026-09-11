@@ -6,3 +6,10 @@ dist/
 .DS_Store
 repdb-bundle-indie.zip
 .tmp-import/
+
+# Playwright / Lighthouse (nightly QA, ver tests/e2e/fixtures.ts y .github/workflows/nightly-qa.yml)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+lighthouse-report-*.json
