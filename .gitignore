@@ -7,6 +7,10 @@ dist/
 repdb-bundle-indie.zip
 .tmp-import/
 
+# Herramientas locales que no son parte del sitio (ver tools/feed-simulator/README.md) --
+# no se despliegan y no van al repo.
+/tools/
+
 # Playwright / Lighthouse (nightly QA, ver tests/e2e/fixtures.ts y .github/workflows/nightly-qa.yml)
 /test-results/
 /playwright-report/
