@@ -43,8 +43,20 @@ async function auditPage(chrome, path) {
   return result;
 }
 
+// En el runner de GitHub Actions (Ubuntu 24.04) el sandbox de Chrome no puede crear el user
+// namespace sin privilegios que necesita -- Ubuntu 23.10+ lo restringe por AppArmor por default
+// (kernel.apparmor_restrict_unprivileged_userns=1) -- y chrome-launcher no lo detecta ni lo
+// reintenta: el proceso de Chrome muere al arrancar y lighthouse termina con ECONNREFUSED contra
+// el puerto de debugging, que nunca llegó a abrirse. --disable-dev-shm-usage evita un segundo
+// crash aparte por el /dev/shm chico de estos runners. Solo en CI: localmente conviene mantener el
+// sandbox real.
+const CHROME_FLAGS = ["--headless=new"];
+if (process.env.CI) {
+  CHROME_FLAGS.push("--no-sandbox", "--disable-dev-shm-usage");
+}
+
 async function main() {
-  const chrome = await launch({ chromeFlags: ["--headless=new"], chromePath: resolveChromePath() });
+  const chrome = await launch({ chromeFlags: CHROME_FLAGS, chromePath: resolveChromePath() });
   let failed = false;
 
   try {
