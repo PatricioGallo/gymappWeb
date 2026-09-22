@@ -12,6 +12,47 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// "Heartbeat" de visibilidad que manda la pagina (ver sendVisibilityHeartbeat en shell/boot.ts).
+// clients.matchAll()/WindowClient.visibilityState (mas abajo, en el handler de push) es la señal
+// "oficial" para saber si la app esta abierta, pero en iOS a veces no refleja el estado real de
+// la pestaña justo en el instante en que llega un push -- ese es el bug que se esta viendo:
+// notificacion del sistema con la PWA abierta y visible, duplicando el toast interno (que SI usa
+// document.visibilityState leido directo en la pagina, sin cruzar al service worker, y por eso no
+// tiene este problema -- ver isActivelyViewing en inAppNotificationToast.ts). Este heartbeat es
+// una segunda señal, mandada por la propia pagina, que se usa ademas de (no en vez de)
+// clients.matchAll(). Se guarda en Cache Storage y no en una variable de modulo porque iOS mata
+// el service worker seguido entre pushes -- una variable en memoria se perderia con cada reinicio.
+const STATE_CACHE = "app-state-v1";
+const VISIBILITY_KEY = "/__visibility_state__";
+// Bastante mas que el intervalo de ping (ver HEARTBEAT_INTERVAL_MS en boot.ts) para tolerar algun
+// ping perdido sin dejar de confiar en el heartbeat mientras la app sigue realmente abierta.
+const HEARTBEAT_MAX_AGE_MS = 45_000;
+
+async function readVisibilityHeartbeat() {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    const res = await cache.match(VISIBILITY_KEY);
+    return res ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+self.addEventListener("message", (event) => {
+  const data = event.data;
+  if (!data || data.type !== "visibility") return;
+  event.waitUntil(
+    (async () => {
+      try {
+        const cache = await caches.open(STATE_CACHE);
+        await cache.put(VISIBILITY_KEY, new Response(JSON.stringify({ state: data.state, at: Date.now() })));
+      } catch {
+        // Sin Cache Storage disponible, se pierde el heartbeat -- queda solo clients.matchAll() de abajo.
+      }
+    })()
+  );
+});
+
 // Android (Chrome/PWA instalada) muestra el "icon" de la notificación tal cual, sin
 // redondearlo -- a diferencia de WhatsApp, que recorta la foto de perfil en un círculo.
 // Como acá el icon suele ser una foto de perfil (ver actor_id / avatar_url en
@@ -66,13 +107,25 @@ self.addEventListener("push", (event) => {
       // notificación en CADA push, asi que no hacerlo tambien explica esa rotación tan
       // seguida). "focused" es una señal de foco de teclado/input, no de si la pestaña esta
       // realmente en pantalla -- visibilityState es la señal correcta para esto (spec de
-      // WindowClient) y WebKit SI la reporta bien: "visible" solo cuando la pagina esta
-      // realmente al frente, "hidden" apenas se bloquea la pantalla o se pasa a otra app. Si
-      // algun cliente no expusiera visibilityState (navegador viejo), se cae a focused para
-      // no perder la supresión ahi, aunque en la práctica todo lo que soporta Push la expone.
+      // WindowClient) y WebKit SI la reporta bien en la mayoria de los casos: "visible" solo
+      // cuando la pagina esta realmente al frente, "hidden" apenas se bloquea la pantalla o se
+      // pasa a otra app. Si algun cliente no expusiera visibilityState (navegador viejo), se cae
+      // a focused para no perder la supresión ahi, aunque en la práctica todo lo que soporta Push
+      // la expone.
+      //
+      // Pero WindowClient.visibilityState se lee cruzando al contexto del service worker, y en
+      // iOS ese cruce a veces no llega a reflejar el estado real justo en el instante en que
+      // llega el push (con la PWA genuinamente abierta y visible, clients.matchAll() puede
+      // devolver "hidden" igual) -- de ahi el bug real reportado: notificación del sistema
+      // duplicando el toast interno mientras se esta mirando la app. El heartbeat de arriba es la
+      // misma señal pero mandada por la propia pagina (document.visibilityState leido directo, sin
+      // cruzar contexto -- el mismo que usa el toast interno, que no tiene este problema), asi que
+      // se usa como señal adicional: alcanza con que UNA de las dos diga "visible".
       const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const isClientVisible = (c) => (typeof c.visibilityState === "string" ? c.visibilityState === "visible" : c.focused);
-      if (clients.some(isClientVisible)) return;
+      const heartbeat = await readVisibilityHeartbeat();
+      const heartbeatSaysVisible = !!heartbeat && heartbeat.state === "visible" && Date.now() - heartbeat.at < HEARTBEAT_MAX_AGE_MS;
+      if (clients.some(isClientVisible) || heartbeatSaysVisible) return;
 
       // El logo por defecto (avisos del sistema, sin actor) ya viene diseñado cuadrado,
       // así que solo redondeamos cuando el icon es una foto de perfil real.

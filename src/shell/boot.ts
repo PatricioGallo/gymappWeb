@@ -7,6 +7,34 @@ import { registerShellRoutes } from "./routes";
 
 let booted = false;
 
+const HEARTBEAT_INTERVAL_MS = 20_000;
+
+/**
+ * Le avisa al service worker si la pagina esta visible ahora mismo, para que sw.js pueda usarlo
+ * como señal adicional al decidir si suprimir la notificación del sistema en un push (ver el
+ * heartbeat ahi -- clients.matchAll()/WindowClient.visibilityState a veces no refleja el estado
+ * real en iOS justo en el instante de un push). document.visibilityState aca es confiable porque
+ * se lee directo en la pagina sin cruzar al contexto del service worker -- la misma señal que ya
+ * usa el toast interno (ver isActivelyViewing en inAppNotificationToast.ts).
+ */
+function sendVisibilityHeartbeat(): void {
+  navigator.serviceWorker.controller?.postMessage({ type: "visibility", state: document.visibilityState });
+}
+
+function setupVisibilityHeartbeat(): void {
+  if (!("serviceWorker" in navigator)) return;
+  sendVisibilityHeartbeat();
+  navigator.serviceWorker.addEventListener("controllerchange", sendVisibilityHeartbeat);
+  document.addEventListener("visibilitychange", sendVisibilityHeartbeat);
+  // Mientras esta visible, refresca el heartbeat cada rato -- sin esto, una sesión larga sin
+  // cambios de pestaña (el caso normal: la app abierta y en uso) terminaría pareciendo "vieja"
+  // para sw.js (ver HEARTBEAT_MAX_AGE_MS ahi) y dejaría de suprimir la notificación aunque siga
+  // abierta.
+  setInterval(() => {
+    if (document.visibilityState === "visible") sendVisibilityHeartbeat();
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
 // Al tocar una notificación con la app ya abierta en otra pantalla, el service worker (sw.js,
 // notificationclick) le manda este mensaje a esa pestaña en vez de abrir/navegar una ventana
 // nueva (eso reinicializaria el shell entero de cero) -- aca la recibimos y navegamos client-side
@@ -48,6 +76,7 @@ export function bootShell(): void {
   setupPasswordToggles();
   setupLinkInterceptor();
   listenForSwNavigation();
+  setupVisibilityHeartbeat();
   void logVisitOncePerSession();
 }
 
